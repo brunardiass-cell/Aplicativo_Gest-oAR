@@ -1,15 +1,16 @@
 
 import React from 'react';
-import { DashboardStats, Task } from '../types';
+import { DashboardStats, Task, ProjectData, MacroTask } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { CheckCircle2, Clock, AlertCircle, Layers, Calendar } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, Layers, Calendar, Target, FolderKanban } from 'lucide-react';
 
 interface DashboardOverviewProps {
   stats: DashboardStats;
   tasks: Task[];
+  projects: ProjectData[];
 }
 
-const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, tasks }) => {
+const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, tasks, projects }) => {
   const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444'];
 
   const statusData = [
@@ -26,103 +27,93 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, tasks }) =
     { name: 'Baixa', count: tasks.filter(t => t.priority === 'Baixa').length },
   ];
 
+  const calculateProjectProgress = (project: ProjectData) => {
+    const allMacros = [...(project.trackingMacroTasks || []), ...(project.regulatoryMacroTasks || [])];
+    if (allMacros.length === 0) return 0;
+    
+    const progressSum = allMacros.reduce((acc, macro) => {
+      if (!macro.microTasks || macro.microTasks.length === 0) return acc;
+      const completed = macro.microTasks.filter(m => m.status === 'Concluído').length;
+      const validated = macro.microTasks.filter(m => m.status === 'Validado').length;
+      const macroProgress = ((completed + validated * 0.8) / macro.microTasks.length) * 100;
+      return acc + macroProgress;
+    }, 0);
+
+    return Math.round(progressSum / allMacros.length);
+  };
+
+  const activeProjects = projects.filter(p => p.status !== 'Concluído');
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
-          label="Tarefas Últimos 30 dias" 
-          value={stats.totalLastMonth} 
+          label="Volume Total" 
+          value={tasks.length} 
           icon={<Calendar className="text-indigo-600" size={24} />}
           color="bg-indigo-50"
         />
         <StatCard 
-          label="Em Andamento" 
+          label="Em Execução" 
           value={stats.inProgress} 
           icon={<Clock className="text-amber-600" size={24} />}
           color="bg-amber-50"
         />
         <StatCard 
-          label="Concluídas" 
+          label="Entregas Mês" 
           value={stats.completed} 
           icon={<CheckCircle2 className="text-emerald-600" size={24} />}
           color="bg-emerald-50"
         />
         <StatCard 
-          label="Progresso Médio" 
+          label="Média de Progresso" 
           value={`${stats.avgProgress}%`} 
-          icon={<AlertCircle className="text-blue-600" size={24} />}
+          icon={<Target className="text-blue-600" size={24} />}
           color="bg-blue-50"
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <h3 className="text-lg font-semibold mb-6">Atividades do Mês por Prioridade</h3>
-          <div className="h-72">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+            <FolderKanban size={14} className="text-indigo-600" /> Saúde dos Projetos Estratégicos
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {activeProjects.length > 0 ? activeProjects.map(proj => {
+              const prog = calculateProjectProgress(proj);
+              return (
+                <div key={proj.id} className="p-4 bg-slate-50 rounded-xl border border-slate-100 hover:shadow-md transition">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-black text-slate-700 uppercase tracking-tight truncate max-w-[180px]">{proj.name}</span>
+                    <span className="text-[10px] font-black text-indigo-600 bg-white px-2 py-0.5 rounded border border-indigo-100">{prog}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-indigo-600 transition-all duration-1000" style={{width: `${prog}%`}}></div>
+                  </div>
+                  <p className="text-[9px] font-bold text-slate-400 mt-2 uppercase">Status: {proj.status}</p>
+                </div>
+              );
+            }) : (
+              <div className="col-span-full py-10 text-center border-2 border-dashed border-slate-100 rounded-xl">
+                <p className="text-[10px] font-bold text-slate-300 uppercase italic">Sem projetos ativos.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="lg:col-span-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Carga por Prioridade</h3>
+          <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={priorityData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              <BarChart data={priorityData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
+                <XAxis type="number" hide />
+                <YAxis dataKey="name" type="category" fontSize={10} fontWeight="black" axisLine={false} tickLine={false} width={60} />
+                <Tooltip cursor={{fill: 'transparent'}} contentStyle={{borderRadius: '12px', border: 'none'}} />
+                <Bar dataKey="count" fill="#6366f1" radius={[0, 6, 6, 0]} barSize={20} />
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-          <h3 className="text-lg font-semibold mb-6">Status do Mês</h3>
-          <div className="h-72 flex items-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex flex-col gap-2 ml-4">
-              {statusData.map((d, i) => (
-                <div key={d.name} className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
-                  <span className="text-sm text-slate-600">{d.name}: {d.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <h3 className="text-lg font-semibold mb-4 text-slate-400 uppercase tracking-widest text-xs">Tarefas do Mês</h3>
-        <div className="space-y-4">
-          {tasks.slice(0, 5).map(task => (
-            <div key={task.id} className="flex items-start gap-4 p-4 rounded-lg hover:bg-slate-50 transition border border-transparent hover:border-slate-100">
-              <div className={`mt-1 p-2 rounded-full ${task.priority === 'Urgente' ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
-                <AlertCircle size={16} />
-              </div>
-              <div className="flex-1">
-                <div className="flex justify-between">
-                  <h4 className="font-medium text-slate-900">{task.activity}</h4>
-                  <span className="text-[10px] font-bold text-indigo-600 px-2 py-0.5 bg-indigo-50 rounded uppercase">{task.project}</span>
-                </div>
-                <p className="text-sm text-slate-500 mt-1 line-clamp-1 italic">{task.description}</p>
-              </div>
-            </div>
-          ))}
-          {tasks.length === 0 && <p className="text-center py-8 text-slate-400">Nenhuma tarefa registrada nos últimos 30 dias.</p>}
         </div>
       </div>
     </div>
@@ -130,12 +121,12 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, tasks }) =
 };
 
 const StatCard: React.FC<{ label: string; value: string | number; icon: React.ReactNode; color: string }> = ({ label, value, icon, color }) => (
-  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between group hover:shadow-md transition-all">
     <div>
-      <p className="text-[11px] uppercase tracking-widest font-bold text-slate-400">{label}</p>
-      <h3 className="text-3xl font-extrabold text-slate-900 mt-1">{value}</h3>
+      <p className="text-[9px] uppercase tracking-[0.2em] font-black text-slate-400 mb-1">{label}</p>
+      <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{value}</h3>
     </div>
-    <div className={`p-4 rounded-2xl ${color} shadow-sm`}>
+    <div className={`p-4 rounded-2xl ${color} transition-transform group-hover:scale-110 shadow-sm`}>
       {icon}
     </div>
   </div>

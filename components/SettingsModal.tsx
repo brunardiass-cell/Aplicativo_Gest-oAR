@@ -30,12 +30,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
       return;
     }
     
+    // Fix: Updated property names to match ProjectData interface (trackingMacroTasks and regulatoryMacroTasks)
     const newProject: ProjectData = {
       id: Math.random().toString(36).substring(2, 9),
       name: newProjectName.trim(),
       status: 'Em Planejamento',
-      trackingChecklist: [],
-      regulatoryChecklist: []
+      trackingMacroTasks: [],
+      regulatoryMacroTasks: []
     };
 
     setLocalConfig({

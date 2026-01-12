@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Task } from '../types';
-import { Edit2, Trash2, Eye, Calendar, ArrowRight, User, Circle } from 'lucide-react';
+import { Edit2, Trash2, Eye, Calendar, ArrowRight, User, AlertTriangle } from 'lucide-react';
 
 interface TaskBoardProps {
   tasks: Task[];
@@ -12,6 +12,16 @@ interface TaskBoardProps {
 }
 
 const TaskBoard: React.FC<TaskBoardProps> = ({ tasks, canEdit, onEdit, onDelete, onViewDetails }) => {
+  
+  const isNearDeadline = (dateStr: string) => {
+    if (!dateStr) return false;
+    const deadline = new Date(dateStr);
+    const today = new Date();
+    const diffTime = deadline.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 && diffDays <= 3;
+  };
+
   const getPriorityInfo = (priority: string) => {
     switch (priority) {
       case 'Urgente': return { color: 'bg-red-500', text: 'Urgente' };
@@ -34,8 +44,10 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ tasks, canEdit, onEdit, onDelete,
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       {tasks.map((task) => {
         const priority = getPriorityInfo(task.priority);
+        const nearDeadline = isNearDeadline(task.completionDate) && task.status !== 'Concluída';
+        
         return (
-          <div key={task.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group overflow-hidden">
+          <div key={task.id} className={`bg-white rounded-2xl border ${nearDeadline ? 'border-amber-400 ring-2 ring-amber-400 ring-opacity-20' : 'border-slate-200'} shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group overflow-hidden`}>
             {/* Top Bar */}
             <div className={`h-1.5 w-full ${priority.color}`}></div>
             
@@ -44,9 +56,16 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ tasks, canEdit, onEdit, onDelete,
                 <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-widest rounded border border-indigo-100">
                   {task.project}
                 </span>
-                <span className={`text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-full border ${getStatusStyle(task.status)}`}>
-                  {task.status}
-                </span>
+                <div className="flex gap-2">
+                   {nearDeadline && (
+                    <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-black uppercase tracking-widest rounded flex items-center gap-1 animate-pulse">
+                      <AlertTriangle size={10} /> Prazo Próximo
+                    </span>
+                  )}
+                  <span className={`text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-full border ${getStatusStyle(task.status)}`}>
+                    {task.status}
+                  </span>
+                </div>
               </div>
 
               <h3 className="text-lg font-black text-slate-900 leading-tight mb-2 line-clamp-2">
@@ -92,7 +111,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({ tasks, canEdit, onEdit, onDelete,
                   </div>
                 </div>
                 
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-1">
                   <button 
                     onClick={() => onViewDetails(task)}
                     className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"

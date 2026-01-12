@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Task } from '../types';
-import { X, Calendar, User, Tag, ArrowRight, MessageCircle, Clock } from 'lucide-react';
+import { X, Calendar, User, Tag, ArrowRight, MessageCircle, Clock, History } from 'lucide-react';
 
 interface TaskDetailsModalProps {
   task: Task;
@@ -11,8 +11,8 @@ interface TaskDetailsModalProps {
 const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) => {
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
-        <div className="p-8 border-b border-slate-100 relative bg-gradient-to-br from-indigo-50/30 to-white">
+      <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+        <div className="p-8 border-b border-slate-100 relative bg-gradient-to-br from-indigo-50/50 to-white">
           <button 
             onClick={onClose} 
             className="absolute top-6 right-6 p-2 hover:bg-slate-200 rounded-full transition"
@@ -20,7 +20,7 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
             <X size={20} className="text-slate-400" />
           </button>
           
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex flex-wrap items-center gap-2 mb-4">
             <span className="px-3 py-1 bg-indigo-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm">
               {task.project}
             </span>
@@ -29,12 +29,12 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
             }`}>
               {task.status}
             </span>
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-auto">
-              ID: {task.id.toUpperCase()}
+            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-slate-200 text-slate-500 bg-white`}>
+              Prioridade {task.priority}
             </span>
           </div>
           
-          <h2 className="text-3xl font-black text-slate-900 mb-2 leading-tight">
+          <h2 className="text-3xl font-black text-slate-900 mb-2 leading-tight tracking-tighter uppercase">
             {task.activity}
           </h2>
           
@@ -43,89 +43,78 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
           </p>
         </div>
 
-        <div className="p-8 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
-          {/* Timeline Section */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+        <div className="p-10 space-y-10 flex-1 overflow-y-auto custom-scrollbar">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <InfoBlock label="Solicitação" value={task.requestDate} icon={<Calendar size={14}/>} />
+            <InfoBlock label="Prazo Final" value={task.completionDate} icon={<Clock size={14}/>} highlight />
+            <InfoBlock label="Líder" value={task.projectLead} icon={<User size={14}/>} />
             <div className="space-y-1">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Solicitação</span>
-              <p className="text-slate-900 font-bold text-sm">{task.requestDate ? new Date(task.requestDate).toLocaleDateString('pt-BR') : '-'}</p>
-            </div>
-            <div className="space-y-1">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Início Planejado</span>
-              <p className="text-slate-900 font-bold text-sm">{task.plannedStartDate ? new Date(task.plannedStartDate).toLocaleDateString('pt-BR') : '-'}</p>
-            </div>
-            <div className="space-y-1">
-              <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Início Real</span>
-              <p className="text-emerald-700 font-bold text-sm">{task.realStartDate ? new Date(task.realStartDate).toLocaleDateString('pt-BR') : '-'}</p>
-            </div>
-            <div className="space-y-1">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Conclusão Alvo</span>
-              <p className="text-slate-900 font-bold text-sm">{task.completionDate ? new Date(task.completionDate).toLocaleDateString('pt-BR') : '-'}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-1">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                <User size={12} /> Responsável Principal
-              </span>
-              <div className="flex items-center gap-2">
-                 <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-bold text-white">
-                  {task.projectLead.charAt(0)}
-                </div>
-                <p className="text-slate-900 font-bold">{task.projectLead}</p>
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Progresso</span>
+              <div className="h-2 bg-slate-100 rounded-full overflow-hidden mt-2">
+                <div className="h-full bg-indigo-600" style={{width: `${task.progress}%`}}></div>
               </div>
+              <p className="text-[10px] font-black text-indigo-600 mt-1">{task.progress}% concluído</p>
             </div>
-            <div className="space-y-1">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                <Clock size={12} /> Progresso Atual
-              </span>
-              <div className="w-full bg-slate-100 h-2.5 rounded-full mt-2 overflow-hidden">
-                <div className="bg-indigo-600 h-full transition-all" style={{width: `${task.progress}%`}}></div>
-              </div>
-              <p className="text-xs font-black text-indigo-600 mt-1">{task.progress}% concluído</p>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-             <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
-                <ArrowRight size={12} /> Próximo Passo Estratégico
-              </span>
-              <div className="p-5 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100">
-                {task.nextStep || 'Nenhum próximo passo definido.'}
-              </div>
           </div>
 
           <div className="space-y-4">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-              <MessageCircle size={12} /> Histórico de Atualizações
-            </span>
-            <div className="space-y-3">
-              {task.updates.length > 0 ? task.updates.map(update => (
-                <div key={update.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-100 transition">
-                  <span className="text-[10px] font-bold text-slate-400 block mb-1">
-                    {new Date(update.date).toLocaleDateString('pt-BR')}
-                  </span>
-                  <p className="text-slate-700 text-sm font-medium">{update.note}</p>
+             <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
+                <ArrowRight size={12} /> Próximo Passo Estratégico
+              </span>
+              <div className="p-6 bg-slate-900 text-white rounded-3xl font-bold shadow-xl shadow-slate-200 text-sm italic">
+                "{task.nextStep || 'Não definido'}"
+              </div>
+          </div>
+
+          <div className="space-y-6">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-2">
+              <History size={14} className="text-indigo-500" /> Linha do Tempo de Atualizações
+            </h3>
+            <div className="relative pl-8 space-y-8 before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-100">
+              {task.updates && task.updates.length > 0 ? [...task.updates].reverse().map((update, idx) => (
+                <div key={update.id} className="relative">
+                  <div className={`absolute -left-[33px] top-1 w-5 h-5 rounded-full border-4 border-white shadow-sm ${idx === 0 ? 'bg-indigo-600 animate-pulse' : 'bg-slate-300'}`}></div>
+                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 hover:border-indigo-100 transition shadow-sm">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">
+                        {new Date(update.date).toLocaleDateString('pt-BR')}
+                      </span>
+                      {update.user && <span className="text-[9px] font-bold text-slate-400 uppercase italic">Por {update.user}</span>}
+                    </div>
+                    <p className="text-slate-700 text-sm font-medium leading-relaxed">{update.note}</p>
+                  </div>
                 </div>
               )) : (
-                <p className="text-slate-400 text-sm italic text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">Nenhuma atualização registrada até o momento.</p>
+                <div className="text-center py-10 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                  <p className="text-slate-400 text-xs font-bold uppercase tracking-widest italic">Sem registros no histórico</p>
+                </div>
               )}
             </div>
           </div>
         </div>
 
-        <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-center">
+        <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-center">
            <button 
             onClick={onClose}
-            className="px-16 py-3 bg-slate-900 text-white rounded-2xl shadow-xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition active:scale-95"
+            className="px-16 py-4 bg-slate-900 text-white rounded-2xl shadow-xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition active:scale-95"
           >
-            Fechar Detalhes
+            Fechar Visualização
           </button>
         </div>
       </div>
     </div>
   );
 };
+
+const InfoBlock: React.FC<{ label: string; value: string; icon: React.ReactNode; highlight?: boolean }> = ({ label, value, icon, highlight }) => (
+  <div className="space-y-1">
+    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+      {icon} {label}
+    </span>
+    <p className={`font-bold text-sm ${highlight ? 'text-indigo-600' : 'text-slate-900'}`}>
+      {label.includes('Data') || label.includes('Prazo') || label.includes('Solicitação') ? (value ? new Date(value).toLocaleDateString('pt-BR') : '-') : value}
+    </p>
+  </div>
+);
 
 export default TaskDetailsModal;

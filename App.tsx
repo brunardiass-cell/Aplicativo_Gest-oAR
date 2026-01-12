@@ -1,23 +1,30 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { Task, Person, ProjectData, ViewMode, AppConfig, DashboardStats, ActivityLog, AppUser } from './types';
+import React, { useState, useMemo, useEffect, Suspense, lazy } from 'react';
+import { Task, ActivityLog, AppUser, AppConfig, ViewMode, DashboardStats, ProjectData, Person } from './types';
 import { INITIAL_TASKS } from './constants';
 import Sidebar from './components/Sidebar';
-import DashboardOverview from './components/DashboardOverview';
-import TaskBoard from './components/TaskBoard';
-import TaskModal from './components/TaskModal';
-import TaskDetailsModal from './components/TaskDetailsModal';
-import DeletionModal from './components/DeletionModal';
-import ReportView from './components/ReportView';
 import SelectionView from './components/SelectionView';
-import ProjectsManager from './components/ProjectsManager';
-import PeopleManager from './components/PeopleManager';
-import ActivityLogView from './components/ActivityLogView';
-import AccessControl from './components/AccessControl';
-import { Plus, FileText, ShieldCheck, Bell } from 'lucide-react';
+import { Plus, FileText, ShieldCheck, Bell, Loader2, Search, Filter } from 'lucide-react';
+
+const DashboardOverview = lazy(() => import('./components/DashboardOverview'));
+const TaskBoard = lazy(() => import('./components/TaskBoard'));
+const ProjectsManager = lazy(() => import('./components/ProjectsManager'));
+const PeopleManager = lazy(() => import('./components/PeopleManager'));
+const ActivityLogView = lazy(() => import('./components/ActivityLogView'));
+const AccessControl = lazy(() => import('./components/AccessControl'));
+const TaskModal = lazy(() => import('./components/TaskModal'));
+const TaskDetailsModal = lazy(() => import('./components/TaskDetailsModal'));
+const DeletionModal = lazy(() => import('./components/DeletionModal'));
+const ReportView = lazy(() => import('./components/ReportView'));
+
+const LoadingFallback = () => (
+  <div className="flex-1 flex flex-col items-center justify-center space-y-4 min-h-[400px]">
+    <Loader2 className="w-12 h-12 text-indigo-600 animate-spin" />
+    <p className="text-slate-400 font-black uppercase text-[10px] tracking-widest animate-pulse">Carregando Módulo...</p>
+  </div>
+);
 
 const App: React.FC = () => {
-  // Estado inicial carregado do LocalStorage ou constantes
   const [tasks, setTasks] = useState<Task[]>(() => {
     const saved = localStorage.getItem('ar_tasks');
     return saved ? JSON.parse(saved) : INITIAL_TASKS;
@@ -31,7 +38,7 @@ const App: React.FC = () => {
   const [config, setConfig] = useState<AppConfig>(() => {
     const saved = localStorage.getItem('ar_config');
     return saved ? JSON.parse(saved) : {
-      notificationEmail: 'graziella.lider@empresa.com',
+      notificationEmail: 'graziella.lider@ctvacinas.br',
       people: [
         { id: '1', name: 'Graziella', email: 'graziella@ctvacinas.br', notificationsEnabled: true },
         { id: '2', name: 'Bruna', email: 'bruna@ctvacinas.br', notificationsEnabled: true },
@@ -40,18 +47,11 @@ const App: React.FC = () => {
         { id: '5', name: 'Ana Luiza', email: 'analuiza@ctvacinas.br', notificationsEnabled: true },
         { id: '6', name: 'Ana Terzian', email: 'anaterzian@ctvacinas.br', notificationsEnabled: true }
       ],
-      projectsData: [
-        { id: 'p1', name: 'Registro de Vacinas', status: 'Ativo', trackingChecklist: [], regulatoryChecklist: [] },
-        { id: 'p2', name: 'Estudos de Estabilidade', status: 'Em Planejamento', trackingChecklist: [], regulatoryChecklist: [] },
-        { id: 'p3', name: 'Dossiê Técnico', status: 'Ativo', trackingChecklist: [], regulatoryChecklist: [] }
-      ],
-      users: [
-        { username: 'Graziella', role: 'admin', passwordHash: 'admin' }
-      ]
+      projectsData: [],
+      users: [{ username: 'Graziella', role: 'admin', passwordHash: 'admin', canViewAll: true }]
     };
   });
 
-  // Persistir dados sempre que houver mudança
   useEffect(() => { localStorage.setItem('ar_tasks', JSON.stringify(tasks)); }, [tasks]);
   useEffect(() => { localStorage.setItem('ar_logs', JSON.stringify(logs)); }, [logs]);
   useEffect(() => { localStorage.setItem('ar_config', JSON.stringify(config)); }, [config]);
@@ -63,6 +63,7 @@ const App: React.FC = () => {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todos');
+  const [projectFilter, setProjectFilter] = useState('Todos');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
@@ -70,49 +71,59 @@ const App: React.FC = () => {
   const [taskToDelete, setTaskToDelete] = useState<Task | undefined>(undefined);
   const [isReportOpen, setIsReportOpen] = useState(false);
 
-  const canEdit = currentUser?.role !== 'visitor';
-  const isAdmin = currentUser?.role === 'admin';
+  // Apenas usuários logados com role diferente de visitor podem editar
+  const canEdit = useMemo(() => {
+    if (!isLoggedIn || !currentUser) return false;
+    return currentUser.role !== 'visitor';
+  }, [isLoggedIn, currentUser]);
 
-  const memberTasks = useMemo(() => {
-    if (selectedMember === 'Todos') return tasks;
-    return tasks.filter(t => 
-      t.projectLead === selectedMember || t.collaborators.includes(selectedMember)
-    );
-  }, [tasks, selectedMember]);
+  // Visitantes veem tudo mas não editam
+  const hasGlobalView = useMemo(() => {
+    return currentUser?.role === 'admin' || currentUser?.canViewAll || currentUser?.role === 'visitor';
+  }, [currentUser]);
 
+  // Filtragem unificada por membro e projeto
   const filteredTasks = useMemo(() => {
-    return memberTasks.filter(t => {
-      const matchesSearch = 
-        t.activity.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.project.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const effectiveMember = hasGlobalView ? selectedMember : (currentUser?.username || 'Todos');
+    
+    return tasks.filter(t => {
+      const matchesMember = effectiveMember === 'Todos' || t.projectLead === effectiveMember || t.collaborators.includes(effectiveMember);
+      const matchesSearch = t.activity.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          t.project.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'Todos' || t.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesProject = projectFilter === 'Todos' || t.project === projectFilter;
+      
+      return matchesMember && matchesSearch && matchesStatus && matchesProject;
     });
-  }, [memberTasks, searchTerm, statusFilter]);
+  }, [tasks, selectedMember, hasGlobalView, currentUser, searchTerm, statusFilter, projectFilter]);
 
   const stats: DashboardStats = useMemo(() => {
-    const total = memberTasks.length;
-    const completed = memberTasks.filter(t => t.status === 'Concluída').length;
-    const inProgress = memberTasks.filter(t => t.status === 'Em Andamento').length;
-    const blocked = memberTasks.filter(t => t.status === 'Bloqueada').length;
-    const avgProgress = total > 0 
-      ? Math.round(memberTasks.reduce((acc, curr) => acc + curr.progress, 0) / total) 
-      : 0;
+    const total = filteredTasks.length;
+    const completed = filteredTasks.filter(t => t.status === 'Concluída').length;
+    const inProgress = filteredTasks.filter(t => t.status === 'Em Andamento').length;
+    const blocked = filteredTasks.filter(t => t.status === 'Bloqueada').length;
+    const avgProgress = total > 0 ? Math.round(filteredTasks.reduce((acc, curr) => acc + curr.progress, 0) / total) : 0;
     return { totalLastMonth: total, completed, inProgress, blocked, avgProgress };
-  }, [memberTasks]);
+  }, [filteredTasks]);
 
-  const handleLogin = (user: AppUser) => {
-    setCurrentUser(user);
-    setIsLoggedIn(true);
-    setSelectedMember(user.role === 'visitor' ? 'Todos' : user.username);
+  const handleLogin = (user: AppUser | string) => {
+    if (user === 'Todos') {
+      const visitorUser: AppUser = { username: 'Visitante', role: 'visitor', passwordHash: '' };
+      setCurrentUser(visitorUser);
+      setIsLoggedIn(true);
+      setSelectedMember('Todos');
+    } else {
+      const fullUser = config.users.find(u => u.username === (user as AppUser).username) || (user as AppUser);
+      setCurrentUser(fullUser);
+      setIsLoggedIn(true);
+      setSelectedMember(fullUser.canViewAll || fullUser.role === 'admin' ? 'Todos' : fullUser.username);
+    }
     setViewMode('dashboard');
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
     setCurrentUser(null);
-    setSelectedMember('Todos');
     setViewMode('selection');
   };
 
@@ -129,7 +140,6 @@ const App: React.FC = () => {
 
   const handleConfirmDeletion = (reason: string) => {
     if (!taskToDelete || !canEdit) return;
-
     const newLog: ActivityLog = {
       id: Math.random().toString(36).substring(2, 9),
       taskId: taskToDelete.id,
@@ -139,56 +149,33 @@ const App: React.FC = () => {
       reason: reason,
       action: 'EXCLUSÃO'
     };
-
     setLogs(prev => [newLog, ...prev]);
     setTasks(prev => prev.filter(t => t.id !== taskToDelete.id));
     setTaskToDelete(undefined);
   };
 
-  const nextPendingTask = useMemo(() => {
-    return [...memberTasks]
-      .filter(t => t.status !== 'Concluída' && t.nextStep)
-      .sort((a, b) => new Date(a.completionDate).getTime() - new Date(b.completionDate).getTime())[0];
-  }, [memberTasks]);
-
   if (!isLoggedIn) {
-    return (
-      <SelectionView 
-        onSelect={(member) => {
-          handleLogin({ username: member, role: 'visitor', passwordHash: '' });
-        }}
-        onLogin={handleLogin}
-        people={config.people}
-        users={config.users}
-      />
-    );
+    return <SelectionView onSelect={handleLogin} onLogin={handleLogin} people={config.people} users={config.users} />;
   }
 
   return (
     <div className="flex min-h-screen bg-slate-50">
       <Sidebar 
-        currentView={viewMode} 
-        onViewChange={setViewMode} 
-        selectedMember={selectedMember} 
-        onMemberChange={setSelectedMember}
-        onGoHome={() => setViewMode('dashboard')}
-        onLogout={handleLogout}
-        people={config.people}
-        currentUser={currentUser}
+        currentView={viewMode} onViewChange={setViewMode} 
+        selectedMember={selectedMember} onMemberChange={setSelectedMember}
+        onGoHome={() => setViewMode('dashboard')} onLogout={handleLogout}
+        people={config.people} currentUser={currentUser}
       />
 
       <main className="flex-1 ml-64 min-h-screen flex flex-col">
         <header className="bg-slate-900 text-white p-6 shadow-md flex justify-between items-center sticky top-0 z-40 border-b border-slate-800">
           <div className="flex items-center gap-4">
-            <div className="bg-indigo-600 p-2 rounded-lg">
-              <ShieldCheck size={28} className="text-white" />
-            </div>
+            <div className="bg-indigo-600 p-2 rounded-lg"><ShieldCheck size={28} className="text-white" /></div>
             <div>
-              <h1 className="text-xl font-black tracking-tighter uppercase">Assuntos Regulatórios CTVacinas</h1>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">SISTEMA INTEGRADO DE GESTÃO</p>
+              <h1 className="text-xl font-black tracking-tighter uppercase">AR CTVacinas</h1>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Gestão Setorial</p>
             </div>
           </div>
-          
           <div className="flex gap-3">
              <button onClick={() => setIsReportOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition text-xs font-black uppercase tracking-widest">
               <FileText size={16} /> Relatório IA
@@ -202,76 +189,89 @@ const App: React.FC = () => {
         </header>
 
         <div className="p-8 space-y-6 flex-1">
-          {nextPendingTask && viewMode === 'dashboard' && (
-            <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-4">
-                <div className="bg-indigo-600 p-2 rounded-xl text-white"><Bell size={20} /></div>
-                <div>
-                  <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Próximo Prazo</p>
-                  <p className="text-sm font-bold text-slate-900">{nextPendingTask.activity}: <span className="text-slate-600 font-medium">Prazo em {new Date(nextPendingTask.completionDate).toLocaleDateString('pt-BR')}</span></p>
+          <Suspense fallback={<LoadingFallback />}>
+            {viewMode === 'dashboard' && (
+              <div className="space-y-6">
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center">
+                   <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filtrar Projeto:</span>
+                    <select 
+                      value={projectFilter} 
+                      onChange={(e) => setProjectFilter(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-slate-600 outline-none"
+                    >
+                      <option value="Todos">Todos Projetos</option>
+                      {config.projectsData.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  {hasGlobalView && (
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filtrar Pessoa:</span>
+                      <select 
+                        value={selectedMember} 
+                        onChange={(e) => setSelectedMember(e.target.value)}
+                        className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-slate-600 outline-none"
+                      >
+                        <option value="Todos">Toda Equipe</option>
+                        {config.people.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      </select>
+                    </div>
+                  )}
                 </div>
+                <DashboardOverview stats={stats} tasks={filteredTasks} projects={config.projectsData} />
               </div>
-              <button onClick={() => setViewingTask(nextPendingTask)} className="px-4 py-2 bg-white text-indigo-600 border border-indigo-200 rounded-xl hover:bg-indigo-50 transition text-xs font-black uppercase tracking-widest shadow-sm">Ver Detalhes</button>
-            </div>
-          )}
-
-          {viewMode === 'dashboard' && <DashboardOverview stats={stats} tasks={filteredTasks} />}
-          {viewMode === 'tasks' && (
-            <TaskBoard 
-              tasks={filteredTasks} 
-              canEdit={canEdit}
-              onEdit={(t) => { setEditingTask(t); setIsModalOpen(true); }}
-              onDelete={(id) => setTaskToDelete(tasks.find(t => t.id === id))}
-              onViewDetails={setViewingTask}
-            />
-          )}
-          {viewMode === 'projects' && (
-             <ProjectsManager 
-              projects={config.projectsData} 
-              tasks={tasks}
-              canEdit={canEdit}
-              onUpdate={(newProjects) => setConfig({ ...config, projectsData: newProjects })} 
-            />
-          )}
-          {viewMode === 'people' && (
-            <PeopleManager 
-              people={config.people}
-              canEdit={canEdit}
-              onUpdate={(newPeople) => setConfig({ ...config, people: newPeople })}
-            />
-          )}
-          {viewMode === 'logs' && isAdmin && (
-            <ActivityLogView logs={logs} />
-          )}
-          {viewMode === 'access-control' && isAdmin && (
-            <AccessControl 
-              config={config} 
-              onUpdateConfig={(newConfig) => setConfig(newConfig)} 
-              currentUser={currentUser!}
-            />
-          )}
+            )}
+            {viewMode === 'tasks' && (
+              <div className="space-y-6">
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center">
+                  <div className="flex-1 min-w-[300px] relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input 
+                      type="text" 
+                      placeholder="Buscar por nome da atividade ou projeto..." 
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-medium"
+                    />
+                  </div>
+                </div>
+                <TaskBoard tasks={filteredTasks} canEdit={canEdit} onEdit={(t) => { setEditingTask(t); setIsModalOpen(true); }} onDelete={(id) => setTaskToDelete(tasks.find(t => t.id === id))} onViewDetails={setViewingTask} />
+              </div>
+            )}
+            {viewMode === 'projects' && (
+              <ProjectsManager 
+                projects={config.projectsData} 
+                tasks={tasks} 
+                people={config.people} 
+                canEdit={canEdit} 
+                onUpdate={(newProjects) => setConfig(prev => ({ ...prev, projectsData: newProjects }))} 
+              />
+            )}
+            {viewMode === 'people' && (
+              <PeopleManager 
+                people={config.people} 
+                canEdit={canEdit} 
+                onUpdate={(newPeople) => setConfig(prev => ({ ...prev, people: newPeople }))} 
+              />
+            )}
+            {viewMode === 'logs' && currentUser?.role === 'admin' && <ActivityLogView logs={logs} />}
+            {viewMode === 'access-control' && currentUser?.role === 'admin' && (
+              <AccessControl 
+                config={config} 
+                onUpdateConfig={(newConfig) => setConfig(newConfig)} 
+                currentUser={currentUser!} 
+              />
+            )}
+          </Suspense>
         </div>
       </main>
 
-      {isModalOpen && canEdit && (
-        <TaskModal 
-          isOpen={isModalOpen} 
-          onClose={() => setIsModalOpen(false)} 
-          onSave={handleSaveTask} 
-          initialData={editingTask}
-          availableProjects={config.projectsData.map(p => p.name)}
-          availablePeople={config.people.map(p => p.name)}
-        />
-      )}
-      {viewingTask && <TaskDetailsModal task={viewingTask} onClose={() => setViewingTask(undefined)} />}
-      {taskToDelete && canEdit && (
-        <DeletionModal 
-          taskName={taskToDelete.activity} 
-          onClose={() => setTaskToDelete(undefined)} 
-          onConfirm={handleConfirmDeletion}
-        />
-      )}
-      {isReportOpen && <ReportView isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} tasks={filteredTasks} userName={selectedMember} />}
+      <Suspense fallback={null}>
+        {isModalOpen && canEdit && <TaskModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveTask} initialData={editingTask} availableProjects={config.projectsData.map(p => p.name)} availablePeople={config.people.map(p => p.name)} />}
+        {viewingTask && <TaskDetailsModal task={viewingTask} onClose={() => setViewingTask(undefined)} />}
+        {taskToDelete && canEdit && <DeletionModal taskName={taskToDelete.activity} onClose={() => setTaskToDelete(undefined)} onConfirm={handleConfirmDeletion} />}
+        {isReportOpen && <ReportView isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} tasks={filteredTasks} userName={selectedMember} />}
+      </Suspense>
     </div>
   );
 };

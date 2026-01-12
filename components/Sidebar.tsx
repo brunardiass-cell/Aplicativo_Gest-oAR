@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Person, ViewMode, AppUser } from '../types';
-import { LayoutDashboard, ListTodo, Users, User, FolderKanban, LogOut, Home, UserPlus, History, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, ListTodo, Users, User, FolderKanban, LogOut, Home, UserPlus, History, ShieldCheck, ChevronDown } from 'lucide-react';
 
 interface SidebarProps {
   currentView: ViewMode;
@@ -25,6 +25,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   currentUser
 }) => {
   const isAdmin = currentUser?.role === 'admin';
+  const hasGlobalView = currentUser?.role === 'admin' || currentUser?.canViewAll;
 
   return (
     <aside className="w-64 bg-slate-900 text-slate-400 fixed h-full flex flex-col shadow-2xl z-50 border-r border-slate-800">
@@ -90,29 +91,32 @@ const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      <div className="px-6 py-4 flex-1 overflow-y-auto custom-scrollbar">
+      <div className="px-6 py-4 flex-1">
         <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.2em] mb-4 px-4">
-          Visualizar Por
+          Filtro Setorial
         </h3>
-        <div className="space-y-1">
-          <button 
-            onClick={() => onMemberChange('Todos')}
-            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition text-xs font-bold uppercase tracking-wider ${selectedMember === 'Todos' ? 'text-indigo-400' : 'hover:text-white'}`}
-          >
-            <Users size={16} className={selectedMember === 'Todos' ? 'text-indigo-400' : 'text-slate-700'} />
-            Geral
-          </button>
-          {people.map(person => (
-            <button 
-              key={person.id}
-              onClick={() => onMemberChange(person.name)}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition text-xs font-bold uppercase tracking-wider ${selectedMember === person.name ? 'text-indigo-400' : 'hover:text-white'}`}
+        
+        {hasGlobalView ? (
+          <div className="px-4 relative group">
+            <select 
+              value={selectedMember}
+              onChange={(e) => onMemberChange(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 text-xs font-bold uppercase tracking-widest outline-none appearance-none focus:ring-2 focus:ring-indigo-500"
             >
-              <User size={16} className={selectedMember === person.name ? 'text-indigo-400' : 'text-slate-700'} />
-              {person.name}
-            </button>
-          ))}
-        </div>
+              <option value="Todos">Visão Geral</option>
+              {people.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+            </select>
+            <ChevronDown size={14} className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+          </div>
+        ) : (
+          <div className="px-4">
+            <div className="w-full bg-slate-800/50 border border-slate-700/50 text-indigo-400 rounded-xl px-4 py-3 text-xs font-bold uppercase tracking-widest flex items-center gap-3">
+              <User size={16} />
+              {currentUser?.username}
+            </div>
+            <p className="text-[8px] text-slate-500 mt-2 px-2 uppercase font-bold tracking-widest">Acesso Restrito às suas atividades</p>
+          </div>
+        )}
       </div>
 
       <div className="p-6 border-t border-slate-800">

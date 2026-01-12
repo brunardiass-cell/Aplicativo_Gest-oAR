@@ -2,11 +2,13 @@
 export type Priority = 'Baixa' | 'Média' | 'Alta' | 'Urgente';
 export type Status = 'Não Iniciada' | 'Em Andamento' | 'Bloqueada' | 'Concluída';
 export type ProjectStatus = 'Em Planejamento' | 'Ativo' | 'Suspenso' | 'Concluído' | 'Atrasado';
+export type ItemStatus = 'Pendente' | 'Em Andamento' | 'Validado' | 'Concluído';
 
 export interface TaskUpdate {
   id: string;
   date: string;
   note: string;
+  user?: string;
 }
 
 export interface ActivityLog {
@@ -16,7 +18,7 @@ export interface ActivityLog {
   user: string;
   timestamp: string;
   reason: string;
-  action: 'EXCLUSÃO';
+  action: 'EXCLUSÃO' | 'ALTERAÇÃO_STATUS';
 }
 
 export interface Task {
@@ -46,18 +48,35 @@ export interface Person {
   notificationsEnabled: boolean;
 }
 
-export interface ChecklistItem {
+export interface MicroTask {
   id: string;
   text: string;
-  completed: boolean;
+  status: ItemStatus;
+  owner: string;
+  deadline: string;
+}
+
+export interface MacroTask {
+  id: string;
+  title: string;
+  description?: string;
+  microTasks: MicroTask[];
+}
+
+export interface RegulatoryNorm {
+  id: string;
+  title: string;
+  link: string;
+  lastVerifiedDate: string;
 }
 
 export interface ProjectData {
   id: string;
   name: string;
   status: ProjectStatus;
-  trackingChecklist: ChecklistItem[];
-  regulatoryChecklist: ChecklistItem[];
+  trackingMacroTasks: MacroTask[];
+  regulatoryMacroTasks: MacroTask[];
+  norms?: RegulatoryNorm[];
 }
 
 export interface DashboardStats {
@@ -72,6 +91,7 @@ export interface AppUser {
   username: string;
   role: 'admin' | 'user' | 'visitor';
   passwordHash: string;
+  canViewAll?: boolean;
 }
 
 export interface AppConfig {
