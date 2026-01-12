@@ -71,18 +71,15 @@ const App: React.FC = () => {
   const [taskToDelete, setTaskToDelete] = useState<Task | undefined>(undefined);
   const [isReportOpen, setIsReportOpen] = useState(false);
 
-  // Apenas usuários logados com role diferente de visitor podem editar
   const canEdit = useMemo(() => {
     if (!isLoggedIn || !currentUser) return false;
     return currentUser.role !== 'visitor';
   }, [isLoggedIn, currentUser]);
 
-  // Visitantes veem tudo mas não editam
   const hasGlobalView = useMemo(() => {
     return currentUser?.role === 'admin' || currentUser?.canViewAll || currentUser?.role === 'visitor';
   }, [currentUser]);
 
-  // Filtragem unificada por membro e projeto
   const filteredTasks = useMemo(() => {
     const effectiveMember = hasGlobalView ? selectedMember : (currentUser?.username || 'Todos');
     
@@ -105,6 +102,19 @@ const App: React.FC = () => {
     const avgProgress = total > 0 ? Math.round(filteredTasks.reduce((acc, curr) => acc + curr.progress, 0) / total) : 0;
     return { totalLastMonth: total, completed, inProgress, blocked, avgProgress };
   }, [filteredTasks]);
+
+  const handleAddLog = (taskId: string, title: string, reason: string, action: 'EXCLUSÃO' | 'ALTERAÇÃO_STATUS' = 'EXCLUSÃO') => {
+    const newLog: ActivityLog = {
+      id: Math.random().toString(36).substring(2, 9),
+      taskId: taskId,
+      taskTitle: title,
+      user: currentUser?.username || 'Sistema',
+      timestamp: new Date().toISOString(),
+      reason: reason,
+      action: action
+    };
+    setLogs(prev => [newLog, ...prev]);
+  };
 
   const handleLogin = (user: AppUser | string) => {
     if (user === 'Todos') {
@@ -140,16 +150,7 @@ const App: React.FC = () => {
 
   const handleConfirmDeletion = (reason: string) => {
     if (!taskToDelete || !canEdit) return;
-    const newLog: ActivityLog = {
-      id: Math.random().toString(36).substring(2, 9),
-      taskId: taskToDelete.id,
-      taskTitle: taskToDelete.activity,
-      user: currentUser?.username || 'Sistema',
-      timestamp: new Date().toISOString(),
-      reason: reason,
-      action: 'EXCLUSÃO'
-    };
-    setLogs(prev => [newLog, ...prev]);
+    handleAddLog(taskToDelete.id, taskToDelete.activity, reason);
     setTasks(prev => prev.filter(t => t.id !== taskToDelete.id));
     setTaskToDelete(undefined);
   };
@@ -245,6 +246,7 @@ const App: React.FC = () => {
                 people={config.people} 
                 canEdit={canEdit} 
                 onUpdate={(newProjects) => setConfig(prev => ({ ...prev, projectsData: newProjects }))} 
+                onAddLog={handleAddLog}
               />
             )}
             {viewMode === 'people' && (

@@ -1,7 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ProjectData, MacroTask, MicroTask, Task, ProjectStatus, ItemStatus, Person, RegulatoryNorm } from '../types';
-import { Plus, Trash2, FolderKanban, ChevronDown, ChevronUp, Edit3, Check, ExternalLink, FileText, X, MoreVertical } from 'lucide-react';
+import DeletionModal from './DeletionModal';
+import { 
+  Plus, Trash2, FolderKanban, ChevronRight, Edit3, Check, 
+  ExternalLink, FileText, X, Calendar, User, LayoutList, 
+  Settings2, ArrowLeft, Clock, CheckCircle2, AlertTriangle
+} from 'lucide-react';
 
 interface ProjectsManagerProps {
   projects: ProjectData[];
@@ -9,42 +14,35 @@ interface ProjectsManagerProps {
   people: Person[];
   canEdit: boolean;
   onUpdate: (projects: ProjectData[]) => void;
+  onAddLog: (id: string, title: string, reason: string) => void;
 }
 
 const PROJECT_STATUSES: ProjectStatus[] = ['Em Planejamento', 'Ativo', 'Suspenso', 'Concluído', 'Atrasado'];
 const ITEM_STATUSES: ItemStatus[] = ['Pendente', 'Em Andamento', 'Validado', 'Concluído'];
 
-const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, people, canEdit, onUpdate }) => {
+const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, people, canEdit, onUpdate, onAddLog }) => {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projects[0]?.id || null);
-  const [newProjectName, setNewProjectName] = useState('');
-  const [expandedMacros, setExpandedMacros] = useState<string[]>([]);
+  const [activeMacroId, setActiveMacroId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'tracking' | 'regulatory' | 'norms'>('tracking');
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  
-  const [newMacroTitle, setNewMacroTitle] = useState('');
-  const [newMicroInputs, setNewMicroInputs] = useState<Record<string, string>>({});
-  
-  const [editingMacroId, setEditingMacroId] = useState<string | null>(null);
-  const [tempMacroTitle, setTempMacroTitle] = useState('');
+  const [detailTab, setDetailTab] = useState<'items' | 'config'>('items');
 
-  const [editingMicroId, setEditingMicroId] = useState<string | null>(null);
-  const [tempMicroText, setTempMicroText] = useState('');
-  
+  // Estado para controle de exclusão com Auditoria
+  const [pendingDeletion, setPendingDeletion] = useState<{
+    id: string;
+    name: string;
+    type: 'macro' | 'micro';
+  } | null>(null);
+
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newMacroTitle, setNewMacroTitle] = useState('');
+  const [newMicroText, setNewMicroText] = useState('');
   const [newNorm, setNewNorm] = useState({ title: '', link: '' });
 
   const activeProject = projects.find(p => p.id === selectedProjectId);
+  const activeMacro = (activeTab === 'tracking' ? activeProject?.trackingMacroTasks : activeProject?.regulatoryMacroTasks)
+    ?.find(m => m.id === activeMacroId);
 
-  // Fecha menus ao clicar fora
-  useEffect(() => {
-    const handleClickOutside = () => setOpenMenuId(null);
-    window.addEventListener('click', handleClickOutside);
-    return () => window.removeEventListener('click', handleClickOutside);
-  }, []);
-
-  const toggleMacro = (id: string) => {
-    setExpandedMacros(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
-  };
-
+  // --- Handlers de Projeto ---
   const addProject = () => {
     if (!newProjectName.trim() || !canEdit) return;
     const newProj: ProjectData = {
@@ -60,7 +58,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
     setSelectedProjectId(newProj.id);
   };
 
-  const addMacroTask = (type: 'tracking' | 'regulatory') => {
+  // --- Handlers de Macrotarefa ---
+  const addMacroTask = () => {
     if (!newMacroTitle.trim() || !selectedProjectId || !canEdit) return;
     const newMacro: MacroTask = {
       id: Math.random().toString(36).substring(2, 9),
@@ -68,151 +67,106 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
       microTasks: []
     };
     
-    const updatedProjects = projects.map(p => {
+    onUpdate(projects.map(p => {
       if (p.id === selectedProjectId) {
-        const key = type === 'tracking' ? 'trackingMacroTasks' : 'regulatoryMacroTasks';
+        const key = activeTab === 'tracking' ? 'trackingMacroTasks' : 'regulatoryMacroTasks';
         return { ...p, [key]: [...(p[key] || []), newMacro] };
       }
       return p;
-    });
-    
-    onUpdate(updatedProjects);
+    }));
     setNewMacroTitle('');
-    setExpandedMacros(prev => [...prev, newMacro.id]);
   };
 
-  const startEditMacro = (macro: MacroTask) => {
-    setEditingMacroId(macro.id);
-    setTempMacroTitle(macro.title);
-  };
-
-  const saveEditMacro = (macroId: string, type: 'tracking' | 'regulatory') => {
-    if (!tempMacroTitle.trim() || !canEdit) return;
-    const updatedProjects = projects.map(p => {
-      if (p.id === selectedProjectId) {
-        const key = type === 'tracking' ? 'trackingMacroTasks' : 'regulatoryMacroTasks';
-        return {
-          ...p,
-          [key]: (p[key] || []).map(m => m.id === macroId ? { ...m, title: tempMacroTitle.trim() } : m)
-        };
-      }
-      return p;
-    });
-    onUpdate(updatedProjects);
-    setEditingMacroId(null);
-  };
-
-  const removeMacroAction = (macroId: string, type: 'tracking' | 'regulatory') => {
-    if (!canEdit) return;
-    const label = type === 'tracking' ? 'Acompanhamento' : 'Fluxo Regulatório';
-    if (!window.confirm(`Tem certeza que deseja excluir esta MACROTAREFA de ${label}? Todas as microtarefas internas serão apagadas.`)) return;
-
-    const key = type === 'tracking' ? 'trackingMacroTasks' : 'regulatoryMacroTasks';
-    const updatedProjects = projects.map(p => {
-      if (p.id === selectedProjectId) {
-        return {
-          ...p,
-          [key]: (p[key] || []).filter(m => m.id !== macroId)
-        };
-      }
-      return p;
-    });
+  const handleConfirmDeletion = (reason: string) => {
+    if (!pendingDeletion || !canEdit) return;
     
-    onUpdate(updatedProjects);
-    setOpenMenuId(null);
+    // Log da auditoria
+    onAddLog(pendingDeletion.id, `PROJETO: ${pendingDeletion.name}`, reason);
+
+    if (pendingDeletion.type === 'macro') {
+      onUpdate(projects.map(p => {
+        if (p.id === selectedProjectId) {
+          const key = activeTab === 'tracking' ? 'trackingMacroTasks' : 'regulatoryMacroTasks';
+          return { ...p, [key]: (p[key] || []).filter(m => m.id !== pendingDeletion.id) };
+        }
+        return p;
+      }));
+      setActiveMacroId(null);
+    } else if (pendingDeletion.type === 'micro') {
+      onUpdate(projects.map(p => {
+        if (p.id === selectedProjectId) {
+          const key = activeTab === 'tracking' ? 'trackingMacroTasks' : 'regulatoryMacroTasks';
+          return {
+            ...p,
+            [key]: (p[key] || []).map(m => m.id === activeMacroId ? {
+              ...m,
+              microTasks: (m.microTasks || []).filter(mt => mt.id !== pendingDeletion.id)
+            } : m)
+          };
+        }
+        return p;
+      }));
+    }
+    
+    setPendingDeletion(null);
   };
 
-  const addMicroTask = (macroId: string, type: 'tracking' | 'regulatory') => {
-    const text = newMicroInputs[macroId];
-    if (!text?.trim() || !canEdit) return;
+  const updateMacroTitle = (macroId: string, newTitle: string) => {
+    if (!canEdit || !newTitle.trim()) return;
+    onUpdate(projects.map(p => {
+      if (p.id === selectedProjectId) {
+        const key = activeTab === 'tracking' ? 'trackingMacroTasks' : 'regulatoryMacroTasks';
+        return {
+          ...p,
+          [key]: (p[key] || []).map(m => m.id === macroId ? { ...m, title: newTitle } : m)
+        };
+      }
+      return p;
+    }));
+  };
+
+  // --- Handlers de Microtarefa ---
+  const addMicroTask = () => {
+    if (!newMicroText.trim() || !activeMacroId || !canEdit) return;
     const newMicro: MicroTask = {
       id: Math.random().toString(36).substring(2, 9),
-      text: text.trim(),
+      text: newMicroText.trim(),
       status: 'Pendente',
       owner: people[0]?.name || '',
-      deadline: ''
+      deadline: new Date().toISOString().split('T')[0]
     };
-    const updatedProjects = projects.map(p => {
+
+    onUpdate(projects.map(p => {
       if (p.id === selectedProjectId) {
-        const key = type === 'tracking' ? 'trackingMacroTasks' : 'regulatoryMacroTasks';
+        const key = activeTab === 'tracking' ? 'trackingMacroTasks' : 'regulatoryMacroTasks';
         return {
           ...p,
-          [key]: (p[key] || []).map(m => m.id === macroId ? { ...m, microTasks: [...(m.microTasks || []), newMicro] } : m)
+          [key]: (p[key] || []).map(m => m.id === activeMacroId ? { ...m, microTasks: [...(m.microTasks || []), newMicro] } : m)
         };
       }
       return p;
-    });
-    onUpdate(updatedProjects);
-    setNewMicroInputs(prev => ({ ...prev, [macroId]: '' }));
+    }));
+    setNewMicroText('');
   };
 
-  const updateMicroTask = (macroId: string, microId: string, type: 'tracking' | 'regulatory', updates: Partial<MicroTask>) => {
+  const updateMicroTask = (microId: string, updates: Partial<MicroTask>) => {
     if (!canEdit) return;
-    const updatedProjects = projects.map(p => {
+    onUpdate(projects.map(p => {
       if (p.id === selectedProjectId) {
-        const key = type === 'tracking' ? 'trackingMacroTasks' : 'regulatoryMacroTasks';
+        const key = activeTab === 'tracking' ? 'trackingMacroTasks' : 'regulatoryMacroTasks';
         return {
           ...p,
-          [key]: (p[key] || []).map(m => m.id === macroId ? {
+          [key]: (p[key] || []).map(m => m.id === activeMacroId ? {
             ...m,
             microTasks: (m.microTasks || []).map(mt => mt.id === microId ? { ...mt, ...updates } : mt)
           } : m)
         };
       }
       return p;
-    });
-    onUpdate(updatedProjects);
+    }));
   };
 
-  const removeMicroAction = (macroId: string, microId: string, type: 'tracking' | 'regulatory') => {
-    if (!canEdit) return;
-    if (!window.confirm("Deseja realmente excluir esta microtarefa?")) return;
-
-    const key = type === 'tracking' ? 'trackingMacroTasks' : 'regulatoryMacroTasks';
-    const updatedProjects = projects.map(p => {
-      if (p.id === selectedProjectId) {
-        return {
-          ...p,
-          [key]: (p[key] || []).map(m => m.id === macroId ? {
-            ...m,
-            microTasks: (m.microTasks || []).filter(mt => mt.id !== microId)
-          } : m)
-        };
-      }
-      return p;
-    });
-    
-    onUpdate(updatedProjects);
-    setOpenMenuId(null);
-  };
-
-  const startEditMicro = (micro: MicroTask) => {
-    setEditingMicroId(micro.id);
-    setTempMicroText(micro.text);
-  };
-
-  const saveEditMicro = (macroId: string, microId: string, type: 'tracking' | 'regulatory') => {
-    if (!tempMicroText.trim() || !canEdit) return;
-    updateMicroTask(macroId, microId, type, { text: tempMicroText.trim() });
-    setEditingMicroId(null);
-  };
-
-  const removeNorm = (normId: string) => {
-    if (!canEdit || !selectedProjectId) return;
-    if (!confirm("Tem certeza que deseja remover esta norma?")) return;
-
-    const updatedProjects = projects.map(p => {
-      if (p.id === selectedProjectId) {
-        return {
-          ...p,
-          norms: (p.norms || []).filter(n => n.id !== normId)
-        };
-      }
-      return p;
-    });
-    onUpdate(updatedProjects);
-  };
-
+  // --- Handlers de Normas ---
   const addNorm = () => {
     if (!newNorm.title.trim() || !selectedProjectId || !canEdit) return;
     const norm: RegulatoryNorm = {
@@ -221,20 +175,16 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
       link: newNorm.link.trim(),
       lastVerifiedDate: new Date().toISOString().split('T')[0]
     };
-
-    const updatedProjects = projects.map(p => {
-      if (p.id === selectedProjectId) {
-        return {
-          ...p,
-          norms: [...(p.norms || []), norm]
-        };
-      }
-      return p;
-    });
-    onUpdate(updatedProjects);
+    onUpdate(projects.map(p => p.id === selectedProjectId ? { ...p, norms: [...(p.norms || []), norm] } : p));
     setNewNorm({ title: '', link: '' });
   };
 
+  const removeNorm = (normId: string) => {
+    if (!canEdit || !confirm("Remover norma do projeto?")) return;
+    onUpdate(projects.map(p => p.id === selectedProjectId ? { ...p, norms: (p.norms || []).filter(n => n.id !== normId) } : p));
+  };
+
+  // --- Helpers Visuais ---
   const calculateMacroProgress = (macro: MacroTask) => {
     if (!macro.microTasks || macro.microTasks.length === 0) return 0;
     const completed = macro.microTasks.filter(m => m.status === 'Concluído').length;
@@ -253,34 +203,36 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in duration-500">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[600px] animate-in fade-in duration-500 relative">
+      
+      {/* 1. Sidebar de Projetos (Portfólio) */}
       <div className="lg:col-span-3 space-y-4">
         {canEdit && (
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Novo Projeto</h3>
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Novo Projeto Estratégico</h3>
             <div className="flex gap-2">
               <input 
-                type="text" 
-                placeholder="Nome..." 
-                value={newProjectName} 
+                type="text" placeholder="Nome do projeto..." value={newProjectName} 
                 onChange={e => setNewProjectName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && addProject()}
                 className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all" 
               />
-              <button onClick={addProject} className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg hover:bg-indigo-500 transition active:scale-95"><Plus size={18}/></button>
+              <button onClick={addProject} className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg hover:bg-indigo-500 transition active:scale-95">
+                <Plus size={18}/>
+              </button>
             </div>
           </div>
         )}
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
+          <div className="p-4 bg-slate-900 text-white">
             <h3 className="text-[10px] font-black uppercase tracking-widest">Lista de Projetos</h3>
           </div>
           <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto custom-scrollbar">
             {projects.map(p => (
               <button 
                 key={p.id} 
-                onClick={() => setSelectedProjectId(p.id)} 
+                onClick={() => { setSelectedProjectId(p.id); setActiveMacroId(null); }} 
                 className={`w-full text-left p-4 transition-all ${selectedProjectId === p.id ? 'bg-indigo-50 border-l-4 border-indigo-600' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
               >
                 <span className={`text-xs font-black uppercase tracking-tight block ${selectedProjectId === p.id ? 'text-indigo-900' : 'text-slate-600'}`}>{p.name}</span>
@@ -291,14 +243,18 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
         </div>
       </div>
 
+      {/* 2. Área Central: Dashboard de Macrotarefas */}
       <div className="lg:col-span-9 space-y-6">
         {activeProject ? (
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
-              <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
-                <FolderKanban className="text-indigo-600" size={32} /> 
-                {activeProject.name}
-              </h2>
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 min-h-[600px]">
+            <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
+              <div>
+                <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
+                  <FolderKanban className="text-indigo-600" size={32} /> 
+                  {activeProject.name}
+                </h2>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Acompanhamento de Macrotarefas e Fluxos</p>
+              </div>
               <div className="flex items-center gap-3">
                 <select 
                   value={activeProject.status} 
@@ -309,213 +265,119 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
                   {PROJECT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
-            </div>
+            </header>
 
-            <div className="flex gap-4 mb-8 border-b border-slate-100">
-              <button onClick={() => setActiveTab('tracking')} className={`pb-4 px-2 text-xs font-black uppercase tracking-widest border-b-2 transition ${activeTab === 'tracking' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Acompanhamento</button>
-              <button onClick={() => setActiveTab('regulatory')} className={`pb-4 px-2 text-xs font-black uppercase tracking-widest border-b-2 transition ${activeTab === 'regulatory' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Fluxo Regulatório</button>
-              <button onClick={() => setActiveTab('norms')} className={`pb-4 px-2 text-xs font-black uppercase tracking-widest border-b-2 transition ${activeTab === 'norms' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Normas</button>
-            </div>
+            <nav className="flex gap-4 mb-8 border-b border-slate-100">
+              <button onClick={() => { setActiveTab('tracking'); setActiveMacroId(null); }} className={`pb-4 px-2 text-xs font-black uppercase tracking-widest border-b-2 transition ${activeTab === 'tracking' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Acompanhamento</button>
+              <button onClick={() => { setActiveTab('regulatory'); setActiveMacroId(null); }} className={`pb-4 px-2 text-xs font-black uppercase tracking-widest border-b-2 transition ${activeTab === 'regulatory' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Fluxo Regulatório</button>
+              <button onClick={() => { setActiveTab('norms'); setActiveMacroId(null); }} className={`pb-4 px-2 text-xs font-black uppercase tracking-widest border-b-2 transition ${activeTab === 'norms' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>Normas Aplicáveis</button>
+            </nav>
 
             {activeTab !== 'norms' ? (
-              <div className="space-y-4">
-                <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-2">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fluxo de Macrotarefas</h3>
+              <div className="space-y-6">
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                  <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Macrotarefas Ativas</h3>
                   {canEdit && (
                     <div className="flex w-full md:w-auto gap-2">
                       <input 
-                        type="text" 
-                        placeholder="Nome da Macro..." 
-                        value={newMacroTitle} 
+                        type="text" placeholder="Nome da Macrotarefa..." value={newMacroTitle} 
                         onChange={e => setNewMacroTitle(e.target.value)} 
-                        onKeyDown={e => e.key === 'Enter' && addMacroTask(activeTab as any)} 
+                        onKeyDown={e => e.key === 'Enter' && addMacroTask()} 
                         className="flex-1 md:w-64 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" 
                       />
-                      <button onClick={() => addMacroTask(activeTab as any)} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition shadow-lg">Cadastrar Macro</button>
+                      <button onClick={addMacroTask} className="px-6 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition shadow-lg shadow-slate-200">Criar Macro</button>
                     </div>
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {(activeTab === 'tracking' ? activeProject.trackingMacroTasks : activeProject.regulatoryMacroTasks).map(macro => (
-                    <div key={macro.id} className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition">
-                      <div className="bg-slate-50 p-4 flex items-center justify-between group/macro">
-                        <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => toggleMacro(macro.id)}>
-                          {expandedMacros.includes(macro.id) ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
-                          {editingMacroId === macro.id ? (
-                            <div className="flex items-center gap-2 flex-1 max-w-md" onClick={e => e.stopPropagation()}>
-                              <input 
-                                autoFocus 
-                                value={tempMacroTitle} 
-                                onChange={e => setTempMacroTitle(e.target.value)} 
-                                onKeyDown={e => e.key === 'Enter' && saveEditMacro(macro.id, activeTab as any)} 
-                                className="flex-1 px-3 py-1 bg-white border border-indigo-300 rounded-lg text-sm font-bold uppercase outline-none" 
-                              />
-                              <button onClick={() => saveEditMacro(macro.id, activeTab as any)} className="text-emerald-500 p-1 hover:bg-emerald-50 rounded"><Check size={18}/></button>
-                              <button onClick={() => setEditingMacroId(null)} className="text-slate-400 p-1 hover:bg-slate-100 rounded"><X size={18}/></button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2 group/title">
-                              <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{macro.title}</p>
-                              {canEdit && (
-                                <button 
-                                  onClick={(e) => { e.stopPropagation(); startEditMacro(macro); }} 
-                                  className="opacity-0 group-hover/macro:opacity-100 text-slate-400 hover:text-indigo-600 transition p-1"
-                                >
-                                  <Edit3 size={14}/>
-                                </button>
-                              )}
-                              <p className="text-[10px] font-bold text-indigo-600 ml-4">{calculateMacroProgress(macro)}%</p>
-                            </div>
-                          )}
+                    <button 
+                      key={macro.id} 
+                      onClick={() => { setActiveMacroId(macro.id); setDetailTab('items'); }}
+                      className={`group text-left p-6 border rounded-[2rem] transition-all relative overflow-hidden bg-white ${activeMacroId === macro.id ? 'border-indigo-600 ring-4 ring-indigo-500/10' : 'border-slate-200 hover:border-indigo-300 hover:shadow-xl'}`}
+                    >
+                      <div className="flex justify-between items-start mb-6">
+                        <div className={`p-3 rounded-2xl transition ${activeMacroId === macro.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-slate-100 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600'}`}>
+                          <LayoutList size={24} />
                         </div>
-                        <div className="flex items-center gap-4 relative">
-                          {canEdit && (
-                            <div className="relative">
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === macro.id ? null : macro.id); }}
-                                className="p-2 text-slate-400 hover:text-slate-900 transition-colors rounded-lg hover:bg-slate-200"
-                              >
-                                <MoreVertical size={20} />
-                              </button>
-                              
-                              {openMenuId === macro.id && (
-                                <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-100 rounded-xl shadow-2xl z-[60] overflow-hidden animate-in zoom-in-95 duration-200 ring-1 ring-slate-900/5">
-                                  <button 
-                                    onClick={(e) => { e.stopPropagation(); removeMacroAction(macro.id, activeTab as any); }}
-                                    className="w-full text-left px-4 py-3 text-[10px] font-black uppercase text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
-                                  >
-                                    <Trash2 size={14} /> Excluir Macrotarefa
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                        <ChevronRight size={20} className={`text-slate-300 transition-transform ${activeMacroId === macro.id ? 'translate-x-1 text-indigo-600' : 'group-hover:translate-x-1'}`} />
                       </div>
-
-                      {expandedMacros.includes(macro.id) && (
-                        <div className="p-4 bg-white space-y-4 border-t border-slate-100">
-                          {canEdit && (
-                            <div className="flex gap-2 pb-2">
-                              <input 
-                                type="text" 
-                                placeholder="Nova Microtarefa..." 
-                                value={newMicroInputs[macro.id] || ''} 
-                                onChange={e => setNewMicroInputs({ ...newMicroInputs, [macro.id]: e.target.value })} 
-                                onKeyDown={e => e.key === 'Enter' && addMicroTask(macro.id, activeTab as any)} 
-                                className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" 
-                              />
-                              <button onClick={() => addMicroTask(macro.id, activeTab as any)} className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 transition shadow-md"><Plus size={16}/></button>
-                            </div>
-                          )}
-                          <div className="space-y-2">
-                            {(macro.microTasks || []).map(micro => (
-                              <div key={micro.id} className="flex flex-wrap items-center gap-4 p-4 bg-slate-50 border border-slate-100 rounded-xl hover:border-indigo-200 transition group/micro">
-                                <div className="flex-1 min-w-[200px]">
-                                  {editingMicroId === micro.id ? (
-                                    <div className="flex items-center gap-2">
-                                      <input 
-                                        autoFocus 
-                                        value={tempMicroText} 
-                                        onChange={e => setTempMicroText(e.target.value)} 
-                                        onKeyDown={e => e.key === 'Enter' && saveEditMicro(macro.id, micro.id, activeTab as any)}
-                                        className="flex-1 px-2 py-1 bg-white border border-indigo-300 rounded text-xs font-bold uppercase outline-none"
-                                      />
-                                      <button onClick={() => saveEditMicro(macro.id, micro.id, activeTab as any)} className="text-emerald-500"><Check size={14}/></button>
-                                      <button onClick={() => setEditingMicroId(null)} className="text-slate-400"><X size={14}/></button>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-2">
-                                      <p className={`text-xs font-bold uppercase tracking-tight ${micro.status === 'Concluído' ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
-                                        {micro.text}
-                                      </p>
-                                      {canEdit && (
-                                        <button onClick={() => startEditMicro(micro)} className="opacity-0 group-hover/micro:opacity-100 text-slate-300 hover:text-indigo-600 transition">
-                                          <Edit3 size={12}/>
-                                        </button>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-4">
-                                  <select value={micro.status} onChange={e => updateMicroTask(macro.id, micro.id, activeTab as any, { status: e.target.value as ItemStatus })} disabled={!canEdit} className={`text-[9px] font-black uppercase border rounded px-1 py-0.5 outline-none ${getStatusColor(micro.status)}`}>
-                                    {ITEM_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                                  </select>
-                                  <select value={micro.owner} onChange={e => updateMicroTask(macro.id, micro.id, activeTab as any, { owner: e.target.value })} disabled={!canEdit} className="text-[9px] font-bold border rounded px-1 py-0.5 bg-white text-slate-600 outline-none">
-                                    {people.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
-                                  </select>
-                                  {canEdit && (
-                                    <div className="relative">
-                                      <button 
-                                        onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === micro.id ? null : micro.id); }}
-                                        className="p-1 text-slate-400 hover:text-slate-900 transition-colors rounded-md hover:bg-slate-200"
-                                      >
-                                        <MoreVertical size={16} />
-                                      </button>
-                                      
-                                      {openMenuId === micro.id && (
-                                        <div className="absolute right-0 top-full mt-2 w-40 bg-white border border-slate-100 rounded-xl shadow-2xl z-[60] overflow-hidden ring-1 ring-slate-900/5">
-                                          <button 
-                                            onClick={(e) => { e.stopPropagation(); removeMicroAction(macro.id, micro.id, activeTab as any); }}
-                                            className="w-full text-left px-3 py-2 text-[9px] font-black uppercase text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
-                                          >
-                                            <Trash2 size={12} /> Excluir Micro
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
+                      
+                      <h4 className="text-base font-black text-slate-900 uppercase tracking-tight mb-2 leading-tight">{macro.title}</h4>
+                      
+                      <div className="flex items-center gap-3 mt-4">
+                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-600 transition-all duration-700" style={{ width: `${calculateMacroProgress(macro)}%` }}></div>
                         </div>
-                      )}
-                    </div>
+                        <span className="text-[10px] font-black text-indigo-600">{calculateMacroProgress(macro)}%</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-4 mt-6 pt-4 border-t border-slate-50">
+                        <span className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                          <CheckCircle2 size={12} className="text-emerald-500" /> {macro.microTasks?.length || 0} Microtarefas
+                        </span>
+                      </div>
+                    </button>
                   ))}
+                  {(activeTab === 'tracking' ? activeProject.trackingMacroTasks : activeProject.regulatoryMacroTasks).length === 0 && (
+                    <div className="col-span-full py-24 text-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2.5rem]">
+                       <LayoutList size={40} className="mx-auto text-slate-200 mb-4" />
+                       <p className="text-slate-400 font-black uppercase text-[10px] tracking-widest italic">Nenhuma macrotarefa cadastrada para este fluxo.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
               <div className="space-y-6">
                 {canEdit && (
-                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex flex-col md:flex-row gap-4 items-end">
-                    <div className="flex-1 space-y-1 w-full">
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Título da Norma</label>
                       <input 
-                        type="text" 
-                        placeholder="Ex: RDC 44/2009" 
-                        value={newNorm.title} 
+                        type="text" placeholder="Ex: RDC 44/2009" value={newNorm.title} 
                         onChange={e => setNewNorm({ ...newNorm, title: e.target.value })}
-                        className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" 
+                        className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500" 
                       />
                     </div>
-                    <div className="flex-1 space-y-1 w-full">
+                    <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Link de Acesso</label>
                       <input 
-                        type="text" 
-                        placeholder="https://..." 
-                        value={newNorm.link} 
+                        type="text" placeholder="https://..." value={newNorm.link} 
                         onChange={e => setNewNorm({ ...newNorm, link: e.target.value })}
-                        className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" 
+                        className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500" 
                       />
                     </div>
-                    <button onClick={addNorm} className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 transition shadow-lg h-[38px]">Adicionar</button>
+                    <button onClick={addNorm} className="px-6 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition shadow-lg h-[38px]">Vincular Norma</button>
                   </div>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {(activeProject.norms || []).map(norm => (
-                    <div key={norm.id} className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-blue-200 transition group">
+                    <div key={norm.id} className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-blue-200 transition group relative">
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center gap-3">
                           <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><FileText size={20}/></div>
-                          <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight">{norm.title}</h4>
+                          <div>
+                            <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight">{norm.title}</h4>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1 flex items-center gap-1">
+                              <Clock size={10} /> Verificado em: {new Date(norm.lastVerifiedDate).toLocaleDateString('pt-BR')}
+                            </p>
+                          </div>
                         </div>
                         {canEdit && (
-                          <button onClick={(e) => { e.preventDefault(); removeNorm(norm.id); }} className="p-2 text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+                          <button onClick={() => removeNorm(norm.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
+                            <Trash2 size={16}/>
+                          </button>
                         )}
                       </div>
-                      {norm.link && <a href={norm.link} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black text-indigo-600 uppercase flex items-center gap-1 hover:underline"><ExternalLink size={12}/> Acessar Norma</a>}
+                      {norm.link && (
+                        <a 
+                          href={norm.link} target="_blank" rel="noopener noreferrer" 
+                          className="mt-4 w-full py-2 bg-slate-50 text-indigo-600 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-indigo-50 transition border border-slate-100 font-bold"
+                        >
+                          <ExternalLink size={12}/> Abrir Normativa
+                        </a>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -523,12 +385,202 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
             )}
           </div>
         ) : (
-          <div className="bg-white rounded-3xl border border-slate-200 border-dashed p-32 text-center shadow-inner">
-            <FolderKanban size={40} className="mx-auto text-slate-200 mb-6" />
-            <p className="text-slate-400 font-black uppercase text-[10px] tracking-[0.3em] italic">Selecione um projeto para gerenciar os fluxos.</p>
+          <div className="bg-white rounded-[3rem] border border-slate-200 border-dashed p-32 text-center shadow-inner">
+            <FolderKanban size={64} className="mx-auto text-slate-100 mb-8" />
+            <p className="text-slate-400 font-black uppercase text-sm tracking-[0.3em] italic">Selecione um projeto para detalhar os fluxos.</p>
           </div>
         )}
       </div>
+
+      {/* 3. Painel de Detalhes (Slide-over) */}
+      {activeMacro && (
+        <div className="fixed inset-0 z-[100] flex justify-end">
+          {/* Overlay com Blur */}
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md animate-in fade-in" onClick={() => setActiveMacroId(null)}></div>
+          
+          {/* Painel Lateral */}
+          <div className="w-full max-w-2xl bg-white h-full shadow-2xl relative animate-in slide-in-from-right duration-500 flex flex-col border-l border-slate-100">
+            
+            <header className="px-10 py-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-5">
+                <button onClick={() => setActiveMacroId(null)} className="p-3 bg-white rounded-2xl shadow-sm text-slate-400 hover:text-slate-900 transition border border-slate-100"><ArrowLeft size={24} /></button>
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">{activeMacro.title}</h3>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest px-2 py-0.5 bg-indigo-50 rounded">{calculateMacroProgress(activeMacro)}% CONCLUÍDO</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex bg-white p-1 rounded-2xl border border-slate-100 shadow-sm">
+                <button 
+                  onClick={() => setDetailTab('items')} 
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${detailTab === 'items' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:bg-slate-50'}`}
+                >
+                  <LayoutList size={16} /> Microtarefas
+                </button>
+                <button 
+                  onClick={() => setDetailTab('config')} 
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${detailTab === 'config' ? 'bg-slate-900 text-white shadow-lg shadow-slate-200' : 'text-slate-400 hover:bg-slate-50'}`}
+                >
+                  <Settings2 size={16} /> Detalhes Macro
+                </button>
+              </div>
+            </header>
+
+            <div className="flex-1 overflow-y-auto p-10 custom-scrollbar space-y-10">
+              {detailTab === 'items' ? (
+                <div className="space-y-10">
+                  {/* Gestão de Microtarefas com Adição Rápida */}
+                  {canEdit && (
+                    <section className="space-y-4">
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Novo Item de Verificação</h4>
+                      <div className="flex gap-2 p-3 bg-slate-50 border border-slate-100 rounded-[1.5rem] shadow-sm">
+                        <input 
+                          type="text" placeholder="Descreva a atividade..." value={newMicroText} 
+                          onChange={e => setNewMicroText(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && addMicroTask()}
+                          className="flex-1 px-5 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold uppercase tracking-tight outline-none focus:ring-2 focus:ring-indigo-500" 
+                        />
+                        <button onClick={addMicroTask} className="px-5 bg-indigo-600 text-white rounded-2xl shadow-lg hover:bg-indigo-500 transition active:scale-95">
+                          <Plus size={24}/>
+                        </button>
+                      </div>
+                    </section>
+                  )}
+
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2 flex justify-between">
+                      Checklist do Fluxo <span>{activeMacro.microTasks?.length || 0} Itens</span>
+                    </h4>
+                    
+                    <div className="space-y-3">
+                      {activeMacro.microTasks?.map(micro => (
+                        <div key={micro.id} className="p-5 border border-slate-100 rounded-3xl bg-white hover:border-indigo-100 transition-all shadow-sm hover:shadow-md">
+                          <div className="flex flex-col gap-4">
+                            {/* Linha Superior: Texto e Botão Excluir (Padronizado Fig 1) */}
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-3 flex-1">
+                                <input 
+                                  type="text" value={micro.text} 
+                                  onChange={e => updateMicroTask(micro.id, { text: e.target.value })}
+                                  disabled={!canEdit}
+                                  className={`flex-1 bg-transparent border-none outline-none text-xs font-black uppercase tracking-tight focus:ring-0 ${micro.status === 'Concluído' ? 'text-slate-400 line-through' : 'text-slate-800'}`}
+                                />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <select 
+                                  value={micro.status} 
+                                  onChange={e => updateMicroTask(micro.id, { status: e.target.value as ItemStatus })}
+                                  disabled={!canEdit}
+                                  className={`text-[10px] font-black uppercase border rounded-xl px-3 py-1 outline-none transition-all shadow-sm ${getStatusColor(micro.status)}`}
+                                >
+                                  {ITEM_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                                {canEdit && (
+                                  <button 
+                                    onClick={() => setPendingDeletion({ id: micro.id, name: micro.text, type: 'micro' })}
+                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                                    title="Excluir"
+                                  >
+                                    <Trash2 size={18} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Linha Inferior: Responsável e Prazo */}
+                            <div className="flex items-center gap-6 px-1 border-t border-slate-50 pt-4 mt-1">
+                              <div className="flex items-center gap-2 group/owner">
+                                <User size={14} className="text-slate-300 group-hover/owner:text-indigo-400 transition" />
+                                <select 
+                                  value={micro.owner} 
+                                  onChange={e => updateMicroTask(micro.id, { owner: e.target.value })}
+                                  disabled={!canEdit}
+                                  className="bg-transparent border-none text-[10px] font-black text-slate-500 uppercase p-0 focus:ring-0 cursor-pointer hover:text-indigo-600 transition"
+                                >
+                                  {people.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                                </select>
+                              </div>
+
+                              <div className="flex items-center gap-2 group/date">
+                                <Calendar size={14} className="text-slate-300 group-hover/date:text-amber-400 transition" />
+                                <input 
+                                  type="date" value={micro.deadline} 
+                                  onChange={e => updateMicroTask(micro.id, { deadline: e.target.value })}
+                                  disabled={!canEdit}
+                                  className="bg-transparent border-none text-[10px] font-black text-slate-500 p-0 focus:ring-0 cursor-pointer hover:text-amber-600 transition"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      
+                      {(!activeMacro.microTasks || activeMacro.microTasks.length === 0) && (
+                        <div className="text-center py-16 border-2 border-dashed border-slate-100 rounded-[2rem]">
+                          <LayoutList size={48} className="mx-auto text-slate-100 mb-4" />
+                          <p className="text-[11px] font-black text-slate-300 uppercase tracking-[0.2em] italic">Aguardando definição de itens.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <section className="space-y-4">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2 flex items-center gap-2">
+                      <Edit3 size={14} className="text-indigo-500" /> Renomear Macrotarefa
+                    </h4>
+                    <input 
+                      type="text" value={activeMacro.title} 
+                      onChange={e => updateMacroTitle(activeMacro.id, e.target.value)}
+                      disabled={!canEdit}
+                      className="w-full px-8 py-6 bg-slate-50 border border-slate-200 rounded-[2rem] text-base font-black uppercase tracking-tight outline-none focus:ring-4 focus:ring-indigo-500/10 shadow-inner"
+                    />
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-4">O novo nome será atualizado em tempo real no dashboard.</p>
+                  </section>
+
+                  <section className="space-y-4 pt-12 border-t border-slate-100">
+                    <h4 className="text-[10px] font-black text-red-400 uppercase tracking-[0.2em] ml-2 flex items-center gap-2">
+                      <AlertTriangle size={14} /> Zona Crítica de Exclusão
+                    </h4>
+                    <div className="p-8 bg-red-50 border border-red-100 rounded-[2rem] shadow-sm">
+                      <p className="text-sm text-red-900 font-bold mb-6 leading-relaxed">
+                        Ao excluir esta Macrotarefa, todo o progresso do fluxo e os {activeMacro.microTasks?.length || 0} itens de verificação associados serão removidos permanentemente.
+                      </p>
+                      <button 
+                        onClick={() => setPendingDeletion({ id: activeMacro.id, name: activeMacro.title, type: 'macro' })}
+                        disabled={!canEdit}
+                        className="w-full py-5 bg-red-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-red-700 transition shadow-xl shadow-red-200 active:scale-[0.98] flex items-center justify-center gap-3"
+                      >
+                        <Trash2 size={18} /> Excluir Macrotarefa Permanentemente
+                      </button>
+                    </div>
+                  </section>
+                </div>
+              )}
+            </div>
+
+            <footer className="px-10 py-8 border-t border-slate-50 flex justify-center bg-white">
+              <button 
+                onClick={() => setActiveMacroId(null)}
+                className="px-20 py-5 bg-slate-900 text-white rounded-[2rem] text-[10px] font-black uppercase tracking-widest hover:bg-black transition active:scale-95 shadow-2xl"
+              >
+                Salvar e Fechar
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Exclusão com Auditoria (Igual ao Dashboard) */}
+      {pendingDeletion && (
+        <DeletionModal 
+          taskName={pendingDeletion.name} 
+          onClose={() => setPendingDeletion(null)} 
+          onConfirm={handleConfirmDeletion} 
+        />
+      )}
     </div>
   );
 };
