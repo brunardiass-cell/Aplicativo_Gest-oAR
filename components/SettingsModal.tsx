@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { AppConfig } from '../types';
+import { AppConfig, ProjectData } from '../types';
 import { X, Mail, Save, BellRing, FolderKanban, Plus, Trash2, Edit3, Check } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -25,23 +25,33 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
   const addProject = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!newProjectName.trim()) return;
-    if (localConfig.projects.includes(newProjectName.trim())) {
+    if (localConfig.projectsData.some(p => p.name === newProjectName.trim())) {
       alert('Este projeto já existe.');
       return;
     }
+    
+    const newProject: ProjectData = {
+      id: Math.random().toString(36).substring(2, 9),
+      name: newProjectName.trim(),
+      status: 'Em Planejamento',
+      trackingChecklist: [],
+      regulatoryChecklist: []
+    };
+
     setLocalConfig({
       ...localConfig,
-      projects: [...localConfig.projects, newProjectName.trim()]
+      projectsData: [...localConfig.projectsData, newProject]
     });
     setNewProjectName('');
   };
 
-  const removeProject = (e: React.MouseEvent, projectName: string) => {
+  const removeProject = (e: React.MouseEvent, projectId: string) => {
     e.preventDefault();
-    if (window.confirm(`Tem certeza que deseja remover o projeto "${projectName}"?`)) {
+    const project = localConfig.projectsData.find(p => p.id === projectId);
+    if (window.confirm(`Tem certeza que deseja remover o projeto "${project?.name}"?`)) {
       setLocalConfig({
         ...localConfig,
-        projects: localConfig.projects.filter(p => p !== projectName)
+        projectsData: localConfig.projectsData.filter(p => p.id !== projectId)
       });
     }
   };
@@ -58,9 +68,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
       setEditingProjectIndex(null);
       return;
     };
-    const updatedProjects = [...localConfig.projects];
-    updatedProjects[editingProjectIndex!] = editingProjectName.trim();
-    setLocalConfig({ ...localConfig, projects: updatedProjects });
+    const updatedProjects = [...localConfig.projectsData];
+    updatedProjects[editingProjectIndex!] = {
+      ...updatedProjects[editingProjectIndex!],
+      name: editingProjectName.trim()
+    };
+    setLocalConfig({ ...localConfig, projectsData: updatedProjects });
     setEditingProjectIndex(null);
     setEditingProjectName('');
   };
@@ -130,8 +143,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {localConfig.projects.map((project, index) => (
-                      <tr key={index} className="hover:bg-slate-50/50 transition">
+                    {localConfig.projectsData.map((project, index) => (
+                      <tr key={project.id} className="hover:bg-slate-50/50 transition">
                         <td className="px-4 py-3">
                           {editingProjectIndex === index ? (
                             <div className="flex gap-1">
@@ -145,7 +158,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
                               />
                             </div>
                           ) : (
-                            <span className="font-semibold text-slate-700">{project}</span>
+                            <span className="font-semibold text-slate-700">{project.name}</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -163,7 +176,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
                               <>
                                 <button 
                                   type="button" 
-                                  onClick={(e) => startEditProject(e, index, project)}
+                                  onClick={(e) => startEditProject(e, index, project.name)}
                                   className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
                                   title="Editar"
                                 >
@@ -171,7 +184,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
                                 </button>
                                 <button 
                                   type="button" 
-                                  onClick={(e) => removeProject(e, project)}
+                                  onClick={(e) => removeProject(e, project.id)}
                                   className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
                                   title="Remover"
                                 >
@@ -183,7 +196,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
                         </td>
                       </tr>
                     ))}
-                    {localConfig.projects.length === 0 && (
+                    {localConfig.projectsData.length === 0 && (
                       <tr>
                         <td colSpan={2} className="px-4 py-8 text-center text-slate-400 italic">Nenhum projeto cadastrado. Adicione um acima.</td>
                       </tr>

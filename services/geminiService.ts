@@ -2,6 +2,13 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { Task } from "../types";
 
+// Declare process to satisfy TypeScript compiler for environment variables injected by Vite
+declare var process: {
+  env: {
+    API_KEY: string;
+  };
+};
+
 export const generateExecutiveReport = async (tasks: Task[], contextName: string): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   

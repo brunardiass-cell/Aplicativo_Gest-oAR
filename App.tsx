@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Task, Person, ProjectData, ViewMode, AppConfig, DashboardStats, ActivityLog, AppUser } from './types';
 import { INITIAL_TASKS } from './constants';
 import Sidebar from './components/Sidebar';
@@ -17,8 +17,45 @@ import AccessControl from './components/AccessControl';
 import { Plus, FileText, ShieldCheck, Bell } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
-  const [logs, setLogs] = useState<ActivityLog[]>([]);
+  // Estado inicial carregado do LocalStorage ou constantes
+  const [tasks, setTasks] = useState<Task[]>(() => {
+    const saved = localStorage.getItem('ar_tasks');
+    return saved ? JSON.parse(saved) : INITIAL_TASKS;
+  });
+
+  const [logs, setLogs] = useState<ActivityLog[]>(() => {
+    const saved = localStorage.getItem('ar_logs');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [config, setConfig] = useState<AppConfig>(() => {
+    const saved = localStorage.getItem('ar_config');
+    return saved ? JSON.parse(saved) : {
+      notificationEmail: 'graziella.lider@empresa.com',
+      people: [
+        { id: '1', name: 'Graziella', email: 'graziella@ctvacinas.br', notificationsEnabled: true },
+        { id: '2', name: 'Bruna', email: 'bruna@ctvacinas.br', notificationsEnabled: true },
+        { id: '3', name: 'Ester', email: 'ester@ctvacinas.br', notificationsEnabled: true },
+        { id: '4', name: 'Marjorie', email: 'marjorie@ctvacinas.br', notificationsEnabled: true },
+        { id: '5', name: 'Ana Luiza', email: 'analuiza@ctvacinas.br', notificationsEnabled: true },
+        { id: '6', name: 'Ana Terzian', email: 'anaterzian@ctvacinas.br', notificationsEnabled: true }
+      ],
+      projectsData: [
+        { id: 'p1', name: 'Registro de Vacinas', status: 'Ativo', trackingChecklist: [], regulatoryChecklist: [] },
+        { id: 'p2', name: 'Estudos de Estabilidade', status: 'Em Planejamento', trackingChecklist: [], regulatoryChecklist: [] },
+        { id: 'p3', name: 'Dossiê Técnico', status: 'Ativo', trackingChecklist: [], regulatoryChecklist: [] }
+      ],
+      users: [
+        { username: 'Graziella', role: 'admin', passwordHash: 'admin' }
+      ]
+    };
+  });
+
+  // Persistir dados sempre que houver mudança
+  useEffect(() => { localStorage.setItem('ar_tasks', JSON.stringify(tasks)); }, [tasks]);
+  useEffect(() => { localStorage.setItem('ar_logs', JSON.stringify(logs)); }, [logs]);
+  useEffect(() => { localStorage.setItem('ar_config', JSON.stringify(config)); }, [config]);
+
   const [viewMode, setViewMode] = useState<ViewMode>('selection');
   const [selectedMember, setSelectedMember] = useState<string | 'Todos'>('Todos');
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
@@ -32,26 +69,6 @@ const App: React.FC = () => {
   const [viewingTask, setViewingTask] = useState<Task | undefined>(undefined);
   const [taskToDelete, setTaskToDelete] = useState<Task | undefined>(undefined);
   const [isReportOpen, setIsReportOpen] = useState(false);
-  
-  const [config, setConfig] = useState<AppConfig>({
-    notificationEmail: 'graziella.lider@empresa.com',
-    people: [
-      { id: '1', name: 'Graziella', email: 'graziella@ctvacinas.br', notificationsEnabled: true },
-      { id: '2', name: 'Bruna', email: 'bruna@ctvacinas.br', notificationsEnabled: true },
-      { id: '3', name: 'Ester', email: 'ester@ctvacinas.br', notificationsEnabled: true },
-      { id: '4', name: 'Marjorie', email: 'marjorie@ctvacinas.br', notificationsEnabled: true },
-      { id: '5', name: 'Ana Luiza', email: 'analuiza@ctvacinas.br', notificationsEnabled: true },
-      { id: '6', name: 'Ana Terzian', email: 'anaterzian@ctvacinas.br', notificationsEnabled: true }
-    ],
-    projectsData: [
-      { id: 'p1', name: 'Registro de Vacinas', status: 'Ativo', trackingChecklist: [], regulatoryChecklist: [] },
-      { id: 'p2', name: 'Estudos de Estabilidade', status: 'Em Planejamento', trackingChecklist: [], regulatoryChecklist: [] },
-      { id: 'p3', name: 'Dossiê Técnico', status: 'Ativo', trackingChecklist: [], regulatoryChecklist: [] }
-    ],
-    users: [
-      { username: 'Graziella', role: 'admin', passwordHash: 'admin' }
-    ]
-  });
 
   const canEdit = currentUser?.role !== 'visitor';
   const isAdmin = currentUser?.role === 'admin';
