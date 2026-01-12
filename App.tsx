@@ -4,8 +4,9 @@ import { Task, ActivityLog, AppUser, AppConfig, ViewMode, DashboardStats, Projec
 import { INITIAL_TASKS } from './constants';
 import Sidebar from './components/Sidebar';
 import SelectionView from './components/SelectionView';
-import { Plus, FileText, ShieldCheck, Bell, Loader2, Search, Filter } from 'lucide-react';
+import { Plus, FileText, ShieldCheck, Bell, Loader2, Search, Filter, Cloud, ShieldAlert } from 'lucide-react';
 import { sendSimulatedEmail } from './services/emailService';
+import { MicrosoftGraphService } from './services/microsoftGraphService';
 
 const DashboardOverview = lazy(() => import('./components/DashboardOverview'));
 const TaskBoard = lazy(() => import('./components/TaskBoard'));
@@ -21,59 +22,97 @@ const ReportView = lazy(() => import('./components/ReportView'));
 const LoadingFallback = () => (
   <div className="flex-1 flex flex-col items-center justify-center space-y-4 min-h-[400px]">
     <Loader2 className="w-12 h-12 text-indigo-600 animate-spin" />
-    <p className="text-slate-400 font-black uppercase text-[10px] tracking-widest animate-pulse">Carregando Módulo...</p>
+    <p className="text-slate-400 font-black uppercase text-[10px] tracking-widest animate-pulse">Sincronizando com SharePoint...</p>
   </div>
 );
 
 const App: React.FC = () => {
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    const saved = localStorage.getItem('ar_tasks');
-    return saved ? JSON.parse(saved) : INITIAL_TASKS;
-  });
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [sharepointError, setSharepointError] = useState<string | null>(null);
 
-  const [logs, setLogs] = useState<ActivityLog[]>(() => {
-    const saved = localStorage.getItem('ar_logs');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // Lógica de Carregamento Inicial (Prioridade: SharePoint -> Local)
+  useEffect(() => {
+    const initData = async () => {
+      setIsSyncing(true);
+      const token = localStorage.getItem('ms_access_token');
+      
+      if (token) {
+        const hasAccess = await MicrosoftGraphService.checkAccess();
+        if (hasAccess) {
+          const remoteData = await MicrosoftGraphService.loadDatabase();
+          if (remoteData) {
+            setTasks(remoteData.tasks);
+            setConfig(remoteData.config);
+            setIsSyncing(false);
+            return;
+          }
+        } else {
+          setSharepointError("Sua conta Microsoft não tem permissão de acesso ao SharePoint de Assuntos Regulatórios.");
+        }
+      }
 
-  const [config, setConfig] = useState<AppConfig>(() => {
-    const saved = localStorage.getItem('ar_config');
-    const initialConfig: AppConfig = {
-      notificationEmail: 'graziella.lider@ctvacinas.br',
-      people: [
-        { id: '1', name: 'Graziella', email: 'graziella@ctvacinas.br', notificationsEnabled: true, active: true },
-        { id: '2', name: 'Bruna', email: 'bruna@ctvacinas.br', notificationsEnabled: true, active: true },
-        { id: '3', name: 'Ester', email: 'ester@ctvacinas.br', notificationsEnabled: true, active: true },
-        { id: '4', name: 'Marjorie', email: 'marjorie@ctvacinas.br', notificationsEnabled: true, active: true },
-        { id: '5', name: 'Ana Luiza', email: 'analuiza@ctvacinas.br', notificationsEnabled: true, active: true },
-        { id: '6', name: 'Ana Terzian', email: 'anaterzian@ctvacinas.br', notificationsEnabled: true, active: true }
-      ],
-      projectsData: [],
-      users: [{ username: 'Graziella', role: 'admin', passwordHash: 'admin', canViewAll: true }]
+      // Fallback para LocalStorage se não houver SharePoint ou falhar
+      const savedTasks = localStorage.getItem('ar_tasks');
+      const savedConfig = localStorage.getItem('ar_config');
+      const savedLogs = localStorage.getItem('ar_logs');
+
+      setTasks(savedTasks ? JSON.parse(savedTasks) : INITIAL_TASKS);
+      setLogs(savedLogs ? JSON.parse(savedLogs) : []);
+      
+      const initialConfig: AppConfig = {
+        notificationEmail: 'graziella.lider@ctvacinas.br',
+        people: [
+          { id: '1', name: 'Graziella', email: 'graziella@ctvacinas.br', notificationsEnabled: true, active: true },
+          { id: '2', name: 'Bruna', email: 'bruna@ctvacinas.br', notificationsEnabled: true, active: true },
+          { id: '3', name: 'Ester', email: 'ester@ctvacinas.br', notificationsEnabled: true, active: true },
+          { id: '4', name: 'Marjorie', email: 'marjorie@ctvacinas.br', notificationsEnabled: true, active: true },
+          { id: '5', name: 'Ana Luiza', email: 'analuiza@ctvacinas.br', notificationsEnabled: true, active: true },
+          { id: '6', name: 'Ana Terzian', email: 'anaterzian@ctvacinas.br', notificationsEnabled: true, active: true }
+        ],
+        projectsData: [],
+        users: [{ username: 'Graziella', role: 'admin', passwordHash: 'admin', canViewAll: true }]
+      };
+
+      if (savedConfig) {
+        const parsed = JSON.parse(savedConfig);
+        parsed.people = (parsed.people || []).map((p: any) => ({ ...p, active: p.active !== undefined ? p.active : true }));
+        parsed.projectsData = (parsed.projectsData || []).map((proj: any) => ({
+          ...proj,
+          trackingMacroTasks: proj.trackingMacroTasks || [],
+          regulatoryMacroTasks: proj.regulatoryMacroTasks || [],
+          norms: proj.norms || []
+        }));
+        setConfig(parsed);
+      } else {
+        setConfig(initialConfig);
+      }
+      setIsSyncing(false);
     };
 
-    if (!saved) return initialConfig;
-    const parsed = JSON.parse(saved);
-    
-    // MIGRAÇÃO CRÍTICA: Garante que dados antigos não quebrem a aplicação (Solução para tela em branco)
-    parsed.people = (parsed.people || []).map((p: any) => ({ 
-      ...p, 
-      active: p.active !== undefined ? p.active : true 
-    }));
+    initData();
+  }, []);
 
-    parsed.projectsData = (parsed.projectsData || []).map((proj: any) => ({
-      ...proj,
-      trackingMacroTasks: proj.trackingMacroTasks || [],
-      regulatoryMacroTasks: proj.regulatoryMacroTasks || [],
-      norms: proj.norms || []
-    }));
+  // Salvamento Automático
+  useEffect(() => {
+    if (tasks.length > 0) {
+      localStorage.setItem('ar_tasks', JSON.stringify(tasks));
+      if (config) MicrosoftGraphService.saveDatabase(tasks, config);
+    }
+  }, [tasks]);
 
-    return parsed;
-  });
+  useEffect(() => {
+    if (config) {
+      localStorage.setItem('ar_config', JSON.stringify(config));
+      MicrosoftGraphService.saveDatabase(tasks, config);
+    }
+  }, [config]);
 
-  useEffect(() => { localStorage.setItem('ar_tasks', JSON.stringify(tasks)); }, [tasks]);
-  useEffect(() => { localStorage.setItem('ar_logs', JSON.stringify(logs)); }, [logs]);
-  useEffect(() => { localStorage.setItem('ar_config', JSON.stringify(config)); }, [config]);
+  useEffect(() => {
+    localStorage.setItem('ar_logs', JSON.stringify(logs));
+  }, [logs]);
 
   const [viewMode, setViewMode] = useState<ViewMode>('selection');
   const [selectedMember, setSelectedMember] = useState<string | 'Todos'>('Todos');
@@ -142,7 +181,7 @@ const App: React.FC = () => {
       setIsLoggedIn(true);
       setSelectedMember('Todos');
     } else {
-      const fullUser = config.users.find(u => u.username === (user as AppUser).username) || (user as AppUser);
+      const fullUser = config?.users.find(u => u.username === (user as AppUser).username) || (user as AppUser);
       setCurrentUser(fullUser);
       setIsLoggedIn(true);
       setSelectedMember(fullUser.canViewAll || fullUser.role === 'admin' ? 'Todos' : fullUser.username);
@@ -159,9 +198,8 @@ const App: React.FC = () => {
   const handleSaveTask = (newTask: Task) => {
     if (!canEdit) return;
     
-    // GATILHO DE E-MAIL: Se for uma nova tarefa ou edição e a opção de notificar início estiver ligada
     if (newTask.emailOnJoin) {
-      const lead = config.people.find(p => p.name === newTask.projectLead);
+      const lead = config?.people.find(p => p.name === newTask.projectLead);
       if (lead && lead.notificationsEnabled && lead.active) {
         sendSimulatedEmail(newTask, lead.email, 'JOIN');
       }
@@ -183,6 +221,8 @@ const App: React.FC = () => {
     setTaskToDelete(undefined);
   };
 
+  if (!config) return <LoadingFallback />;
+
   if (!isLoggedIn) {
     return <SelectionView onSelect={handleLogin} onLogin={handleLogin} people={config.people} users={config.users} />;
   }
@@ -202,11 +242,26 @@ const App: React.FC = () => {
             <div className="bg-indigo-600 p-2 rounded-lg"><ShieldCheck size={28} className="text-white" /></div>
             <div>
               <h1 className="text-xl font-black tracking-tighter uppercase">{currentUser?.username}</h1>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                {currentUser?.role === 'admin' ? 'Administrador' : 'Membro da Equipe'}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  {currentUser?.role === 'admin' ? 'Administrador' : 'Membro da Equipe'}
+                </p>
+                {localStorage.getItem('ms_access_token') && (
+                  <div className="flex items-center gap-1 text-[9px] font-bold text-sky-400 uppercase tracking-widest bg-sky-400/10 px-2 py-0.5 rounded border border-sky-400/20">
+                    <Cloud size={10} /> SharePoint Ativo
+                  </div>
+                )}
+              </div>
             </div>
           </div>
+          
+          {sharepointError && (
+             <div className="bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-xl flex items-center gap-3 animate-pulse">
+                <ShieldAlert className="text-red-500" size={16} />
+                <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">{sharepointError}</p>
+             </div>
+          )}
+
           <div className="flex gap-3">
              <button onClick={() => setIsReportOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition text-xs font-black uppercase tracking-widest">
               <FileText size={16} /> Relatório IA
@@ -275,7 +330,7 @@ const App: React.FC = () => {
                 tasks={tasks} 
                 people={config.people} 
                 canEdit={canEdit} 
-                onUpdate={(newProjects) => setConfig(prev => ({ ...prev, projectsData: newProjects }))} 
+                onUpdate={(newProjects) => setConfig(prev => prev ? ({ ...prev, projectsData: newProjects }) : null)} 
                 onAddLog={handleAddLog}
               />
             )}
@@ -283,7 +338,7 @@ const App: React.FC = () => {
               <PeopleManager 
                 people={config.people} 
                 canEdit={canEdit} 
-                onUpdate={(newPeople) => setConfig(prev => ({ ...prev, people: newPeople }))} 
+                onUpdate={(newPeople) => setConfig(prev => prev ? ({ ...prev, people: newPeople }) : null)} 
                 onAddLog={handleAddLog}
               />
             )}
