@@ -5,6 +5,7 @@ import { INITIAL_TASKS } from './constants';
 import Sidebar from './components/Sidebar';
 import SelectionView from './components/SelectionView';
 import { Plus, FileText, ShieldCheck, Bell, Loader2, Search, Filter } from 'lucide-react';
+import { sendSimulatedEmail } from './services/emailService';
 
 const DashboardOverview = lazy(() => import('./components/DashboardOverview'));
 const TaskBoard = lazy(() => import('./components/TaskBoard'));
@@ -37,7 +38,7 @@ const App: React.FC = () => {
 
   const [config, setConfig] = useState<AppConfig>(() => {
     const saved = localStorage.getItem('ar_config');
-    const initialConfig = {
+    const initialConfig: AppConfig = {
       notificationEmail: 'graziella.lider@ctvacinas.br',
       people: [
         { id: '1', name: 'Graziella', email: 'graziella@ctvacinas.br', notificationsEnabled: true, active: true },
@@ -50,10 +51,23 @@ const App: React.FC = () => {
       projectsData: [],
       users: [{ username: 'Graziella', role: 'admin', passwordHash: 'admin', canViewAll: true }]
     };
+
     if (!saved) return initialConfig;
     const parsed = JSON.parse(saved);
-    // Ensure active property exists for migration
-    parsed.people = parsed.people.map((p: any) => ({ ...p, active: p.active !== undefined ? p.active : true }));
+    
+    // MIGRAÇÃO CRÍTICA: Garante que dados antigos não quebrem a aplicação (Solução para tela em branco)
+    parsed.people = (parsed.people || []).map((p: any) => ({ 
+      ...p, 
+      active: p.active !== undefined ? p.active : true 
+    }));
+
+    parsed.projectsData = (parsed.projectsData || []).map((proj: any) => ({
+      ...proj,
+      trackingMacroTasks: proj.trackingMacroTasks || [],
+      regulatoryMacroTasks: proj.regulatoryMacroTasks || [],
+      norms: proj.norms || []
+    }));
+
     return parsed;
   });
 
@@ -144,6 +158,15 @@ const App: React.FC = () => {
 
   const handleSaveTask = (newTask: Task) => {
     if (!canEdit) return;
+    
+    // GATILHO DE E-MAIL: Se for uma nova tarefa ou edição e a opção de notificar início estiver ligada
+    if (newTask.emailOnJoin) {
+      const lead = config.people.find(p => p.name === newTask.projectLead);
+      if (lead && lead.notificationsEnabled && lead.active) {
+        sendSimulatedEmail(newTask, lead.email, 'JOIN');
+      }
+    }
+
     if (editingTask) {
       setTasks(prev => prev.map(t => t.id === editingTask.id ? newTask : t));
     } else {

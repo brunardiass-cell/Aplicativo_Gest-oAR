@@ -43,8 +43,13 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
   const [newNorm, setNewNorm] = useState({ title: '', link: '' });
 
   const activeProject = projects.find(p => p.id === selectedProjectId);
-  const activeMacro = (activeTab === 'tracking' ? activeProject?.trackingMacroTasks : activeProject?.regulatoryMacroTasks)
-    ?.find(m => m.id === activeMacroId);
+  
+  // Robustez: Fallback para arrays vazios se a estrutura do projeto estiver corrompida no storage
+  const trackingMacros = activeProject?.trackingMacroTasks || [];
+  const regulatoryMacros = activeProject?.regulatoryMacroTasks || [];
+  
+  const activeMacrosList = activeTab === 'tracking' ? trackingMacros : regulatoryMacros;
+  const activeMacro = activeMacrosList.find(m => m.id === activeMacroId);
 
   // --- Handlers de Projeto ---
   const addProject = () => {
@@ -108,7 +113,6 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
     setPendingDeletion(null);
   };
 
-  // Fix: Added missing addMacroTask function to handle the creation of macro tasks within projects
   const addMacroTask = () => {
     if (!newMacroTitle.trim() || !selectedProjectId || !canEdit) return;
     const newMacro: MacroTask = {
@@ -203,7 +207,6 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
     onUpdate(projects.map(p => p.id === selectedProjectId ? { ...p, norms: (p.norms || []).filter(n => n.id !== normId) } : p));
   };
 
-  // --- Helpers Visuais ---
   const calculateMacroProgress = (macro: MacroTask) => {
     if (!macro.microTasks || macro.microTasks.length === 0) return 0;
     const completed = macro.microTasks.filter(m => m.status === 'Concluído').length;
@@ -223,8 +226,6 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[600px] animate-in fade-in duration-500 relative">
-      
-      {/* 1. Sidebar de Projetos (Portfólio) */}
       <div className="lg:col-span-3 space-y-4">
         {canEdit && (
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
@@ -299,7 +300,6 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
         </div>
       </div>
 
-      {/* 2. Área Central: Dashboard de Macrotarefas */}
       <div className="lg:col-span-9 space-y-6">
         {activeProject ? (
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 min-h-[600px]">
@@ -347,7 +347,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {(activeTab === 'tracking' ? activeProject.trackingMacroTasks : activeProject.regulatoryMacroTasks).map(macro => (
+                  {activeMacrosList.map(macro => (
                     <button 
                       key={macro.id} 
                       onClick={() => { setActiveMacroId(macro.id); setDetailTab('items'); }}
@@ -371,12 +371,12 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
                       
                       <div className="flex items-center gap-4 mt-6 pt-4 border-t border-slate-50">
                         <span className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                          <CheckCircle2 size={12} className="text-emerald-500" /> {macro.microTasks?.length || 0} Microtarefas
+                          <CheckCircle2 size={12} className="text-emerald-500" /> {(macro.microTasks || []).length} Microtarefas
                         </span>
                       </div>
                     </button>
                   ))}
-                  {(activeTab === 'tracking' ? activeProject.trackingMacroTasks : activeProject.regulatoryMacroTasks).length === 0 && (
+                  {activeMacrosList.length === 0 && (
                     <div className="col-span-full py-24 text-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2.5rem]">
                        <LayoutList size={40} className="mx-auto text-slate-200 mb-4" />
                        <p className="text-slate-400 font-black uppercase text-[10px] tracking-widest italic">Nenhuma macrotarefa cadastrada para este fluxo.</p>
@@ -448,15 +448,10 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
         )}
       </div>
 
-      {/* 3. Painel de Detalhes (Slide-over) */}
       {activeMacro && (
         <div className="fixed inset-0 z-[100] flex justify-end">
-          {/* Overlay com Blur */}
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md animate-in fade-in" onClick={() => setActiveMacroId(null)}></div>
-          
-          {/* Painel Lateral */}
           <div className="w-full max-w-2xl bg-white h-full shadow-2xl relative animate-in slide-in-from-right duration-500 flex flex-col border-l border-slate-100">
-            
             <header className="px-10 py-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-5">
                 <button onClick={() => setActiveMacroId(null)} className="p-3 bg-white rounded-2xl shadow-sm text-slate-400 hover:text-slate-900 transition border border-slate-100"><ArrowLeft size={24} /></button>
@@ -468,115 +463,60 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
                 </div>
               </div>
               <div className="flex bg-white p-1 rounded-2xl border border-slate-100 shadow-sm">
-                <button 
-                  onClick={() => setDetailTab('items')} 
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${detailTab === 'items' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:bg-slate-50'}`}
-                >
-                  <LayoutList size={16} /> Microtarefas
-                </button>
-                <button 
-                  onClick={() => setDetailTab('config')} 
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${detailTab === 'config' ? 'bg-slate-900 text-white shadow-lg shadow-slate-200' : 'text-slate-400 hover:bg-slate-50'}`}
-                >
-                  <Settings2 size={16} /> Detalhes Macro
-                </button>
+                <button onClick={() => setDetailTab('items')} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${detailTab === 'items' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400 hover:bg-slate-50'}`}><LayoutList size={16} /> Microtarefas</button>
+                <button onClick={() => setDetailTab('config')} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${detailTab === 'config' ? 'bg-slate-900 text-white shadow-lg shadow-slate-200' : 'text-slate-400 hover:bg-slate-50'}`}><Settings2 size={16} /> Detalhes Macro</button>
               </div>
             </header>
 
             <div className="flex-1 overflow-y-auto p-10 custom-scrollbar space-y-10">
               {detailTab === 'items' ? (
                 <div className="space-y-10">
-                  {/* Gestão de Microtarefas com Adição Rápida */}
                   {canEdit && (
                     <section className="space-y-4">
                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Novo Item de Verificação</h4>
                       <div className="flex gap-2 p-3 bg-slate-50 border border-slate-100 rounded-[1.5rem] shadow-sm">
-                        <input 
-                          type="text" placeholder="Descreva a atividade..." value={newMicroText} 
-                          onChange={e => setNewMicroText(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && addMicroTask()}
-                          className="flex-1 px-5 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold uppercase tracking-tight outline-none focus:ring-2 focus:ring-indigo-500" 
-                        />
-                        <button onClick={addMicroTask} className="px-5 bg-indigo-600 text-white rounded-2xl shadow-lg hover:bg-indigo-500 transition active:scale-95">
-                          <Plus size={24}/>
-                        </button>
+                        <input type="text" placeholder="Descreva a atividade..." value={newMicroText} onChange={e => setNewMicroText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addMicroTask()} className="flex-1 px-5 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold uppercase tracking-tight outline-none focus:ring-2 focus:ring-indigo-500" />
+                        <button onClick={addMicroTask} className="px-5 bg-indigo-600 text-white rounded-2xl shadow-lg hover:bg-indigo-500 transition active:scale-95"><Plus size={24}/></button>
                       </div>
                     </section>
                   )}
 
                   <div className="space-y-4">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2 flex justify-between">
-                      Checklist do Fluxo <span>{activeMacro.microTasks?.length || 0} Itens</span>
-                    </h4>
-                    
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2 flex justify-between">Checklist do Fluxo <span>{(activeMacro.microTasks || []).length} Itens</span></h4>
                     <div className="space-y-3">
-                      {activeMacro.microTasks?.map(micro => (
+                      {(activeMacro.microTasks || []).map(micro => (
                         <div key={micro.id} className="p-5 border border-slate-100 rounded-3xl bg-white hover:border-indigo-100 transition-all shadow-sm hover:shadow-md">
                           <div className="flex flex-col gap-4">
-                            {/* Linha Superior: Texto e Botão Excluir (Padronizado Fig 1) */}
                             <div className="flex items-center justify-between gap-4">
                               <div className="flex items-center gap-3 flex-1">
-                                <input 
-                                  type="text" value={micro.text} 
-                                  onChange={e => updateMicroTask(micro.id, { text: e.target.value })}
-                                  disabled={!canEdit}
-                                  className={`flex-1 bg-transparent border-none outline-none text-xs font-black uppercase tracking-tight focus:ring-0 ${micro.status === 'Concluído' ? 'text-slate-400 line-through' : 'text-slate-800'}`}
-                                />
+                                <input type="text" value={micro.text} onChange={e => updateMicroTask(micro.id, { text: e.target.value })} disabled={!canEdit} className={`flex-1 bg-transparent border-none outline-none text-xs font-black uppercase tracking-tight focus:ring-0 ${micro.status === 'Concluído' ? 'text-slate-400 line-through' : 'text-slate-800'}`} />
                               </div>
                               <div className="flex items-center gap-2">
-                                <select 
-                                  value={micro.status} 
-                                  onChange={e => updateMicroTask(micro.id, { status: e.target.value as ItemStatus })}
-                                  disabled={!canEdit}
-                                  className={`text-[10px] font-black uppercase border rounded-xl px-3 py-1 outline-none transition-all shadow-sm ${getStatusColor(micro.status)}`}
-                                >
+                                <select value={micro.status} onChange={e => updateMicroTask(micro.id, { status: e.target.value as ItemStatus })} disabled={!canEdit} className={`text-[10px] font-black uppercase border rounded-xl px-3 py-1 outline-none transition-all shadow-sm ${getStatusColor(micro.status)}`}>
                                   {ITEM_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                                 {canEdit && (
-                                  <button 
-                                    onClick={() => setPendingDeletion({ id: micro.id, name: micro.text, type: 'micro' })}
-                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                                    title="Excluir"
-                                  >
-                                    <Trash2 size={18} />
-                                  </button>
+                                  <button onClick={() => setPendingDeletion({ id: micro.id, name: micro.text, type: 'micro' })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Excluir"><Trash2 size={18} /></button>
                                 )}
                               </div>
                             </div>
-
-                            {/* Linha Inferior: Responsável e Prazo */}
                             <div className="flex items-center gap-6 px-1 border-t border-slate-50 pt-4 mt-1">
                               <div className="flex items-center gap-2 group/owner">
                                 <User size={14} className="text-slate-300 group-hover/owner:text-indigo-400 transition" />
-                                <select 
-                                  value={micro.owner} 
-                                  onChange={e => updateMicroTask(micro.id, { owner: e.target.value })}
-                                  disabled={!canEdit}
-                                  className="bg-transparent border-none text-[10px] font-black text-slate-500 uppercase p-0 focus:ring-0 cursor-pointer hover:text-indigo-600 transition"
-                                >
+                                <select value={micro.owner} onChange={e => updateMicroTask(micro.id, { owner: e.target.value })} disabled={!canEdit} className="bg-transparent border-none text-[10px] font-black text-slate-500 uppercase p-0 focus:ring-0 cursor-pointer hover:text-indigo-600 transition">
                                   {people.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                                 </select>
                               </div>
-
                               <div className="flex items-center gap-2 group/date">
                                 <Calendar size={14} className="text-slate-300 group-hover/date:text-amber-400 transition" />
-                                <input 
-                                  type="date" value={micro.deadline} 
-                                  onChange={e => updateMicroTask(micro.id, { deadline: e.target.value })}
-                                  disabled={!canEdit}
-                                  className="bg-transparent border-none text-[10px] font-black text-slate-500 p-0 focus:ring-0 cursor-pointer hover:text-amber-600 transition"
-                                />
+                                <input type="date" value={micro.deadline} onChange={e => updateMicroTask(micro.id, { deadline: e.target.value })} disabled={!canEdit} className="bg-transparent border-none text-[10px] font-black text-slate-500 p-0 focus:ring-0 cursor-pointer hover:text-amber-600 transition" />
                               </div>
                             </div>
                           </div>
                         </div>
                       ))}
-                      
                       {(!activeMacro.microTasks || activeMacro.microTasks.length === 0) && (
-                        <div className="text-center py-16 border-2 border-dashed border-slate-100 rounded-[2rem]">
-                          <LayoutList size={48} className="mx-auto text-slate-100 mb-4" />
-                          <p className="text-[11px] font-black text-slate-300 uppercase tracking-[0.2em] italic">Aguardando definição de itens.</p>
-                        </div>
+                        <div className="text-center py-16 border-2 border-dashed border-slate-100 rounded-[2rem]"><LayoutList size={48} className="mx-auto text-slate-100 mb-4" /><p className="text-[11px] font-black text-slate-300 uppercase tracking-[0.2em] italic">Aguardando definição de itens.</p></div>
                       )}
                     </div>
                   </div>
@@ -584,59 +524,25 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
               ) : (
                 <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <section className="space-y-4">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2 flex items-center gap-2">
-                      <Edit3 size={14} className="text-indigo-500" /> Renomear Macrotarefa
-                    </h4>
-                    <input 
-                      type="text" value={activeMacro.title} 
-                      onChange={e => updateMacroTitle(activeMacro.id, e.target.value)}
-                      disabled={!canEdit}
-                      className="w-full px-8 py-6 bg-slate-50 border border-slate-200 rounded-[2rem] text-base font-black uppercase tracking-tight outline-none focus:ring-4 focus:ring-indigo-500/10 shadow-inner"
-                    />
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-4">O novo nome será atualizado em tempo real no dashboard.</p>
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2 flex items-center gap-2"><Edit3 size={14} className="text-indigo-500" /> Renomear Macrotarefa</h4>
+                    <input type="text" value={activeMacro.title} onChange={e => updateMacroTitle(activeMacro.id, e.target.value)} disabled={!canEdit} className="w-full px-8 py-6 bg-slate-50 border border-slate-200 rounded-[2rem] text-base font-black uppercase tracking-tight outline-none focus:ring-4 focus:ring-indigo-500/10 shadow-inner" />
                   </section>
-
                   <section className="space-y-4 pt-12 border-t border-slate-100">
-                    <h4 className="text-[10px] font-black text-red-400 uppercase tracking-[0.2em] ml-2 flex items-center gap-2">
-                      <AlertTriangle size={14} /> Zona Crítica de Exclusão
-                    </h4>
+                    <h4 className="text-[10px] font-black text-red-400 uppercase tracking-[0.2em] ml-2 flex items-center gap-2"><AlertTriangle size={14} /> Zona Crítica de Exclusão</h4>
                     <div className="p-8 bg-red-50 border border-red-100 rounded-[2rem] shadow-sm">
-                      <p className="text-sm text-red-900 font-bold mb-6 leading-relaxed">
-                        Ao excluir esta Macrotarefa, todo o progresso do fluxo e os {activeMacro.microTasks?.length || 0} itens de verificação associados serão removidos permanentemente.
-                      </p>
-                      <button 
-                        onClick={() => setPendingDeletion({ id: activeMacro.id, name: activeMacro.title, type: 'macro' })}
-                        disabled={!canEdit}
-                        className="w-full py-5 bg-red-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-red-700 transition shadow-xl shadow-red-200 active:scale-[0.98] flex items-center justify-center gap-3"
-                      >
-                        <Trash2 size={18} /> Excluir Macrotarefa Permanentemente
-                      </button>
+                      <p className="text-sm text-red-900 font-bold mb-6 leading-relaxed">Ao excluir esta Macrotarefa, todo o progresso do fluxo e os {(activeMacro.microTasks || []).length} itens de verificação associados serão removidos permanentemente.</p>
+                      <button onClick={() => setPendingDeletion({ id: activeMacro.id, name: activeMacro.title, type: 'macro' })} disabled={!canEdit} className="w-full py-5 bg-red-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-red-700 transition shadow-xl shadow-red-200 active:scale-[0.98] flex items-center justify-center gap-3"><Trash2 size={18} /> Excluir Macrotarefa Permanentemente</button>
                     </div>
                   </section>
                 </div>
               )}
             </div>
-
-            <footer className="px-10 py-8 border-t border-slate-50 flex justify-center bg-white">
-              <button 
-                onClick={() => setActiveMacroId(null)}
-                className="px-20 py-5 bg-slate-900 text-white rounded-[2rem] text-[10px] font-black uppercase tracking-widest hover:bg-black transition active:scale-95 shadow-2xl"
-              >
-                Salvar e Fechar
-              </button>
-            </footer>
+            <footer className="px-10 py-8 border-t border-slate-50 flex justify-center bg-white"><button onClick={() => setActiveMacroId(null)} className="px-20 py-5 bg-slate-900 text-white rounded-[2rem] text-[10px] font-black uppercase tracking-widest hover:bg-black transition active:scale-95 shadow-2xl">Salvar e Fechar</button></footer>
           </div>
         </div>
       )}
 
-      {/* Modal de Exclusão com Auditoria (Igual ao Dashboard) */}
-      {pendingDeletion && (
-        <DeletionModal 
-          taskName={pendingDeletion.name} 
-          onClose={() => setPendingDeletion(null)} 
-          onConfirm={handleConfirmDeletion} 
-        />
-      )}
+      {pendingDeletion && <DeletionModal taskName={pendingDeletion.name} onClose={() => setPendingDeletion(null)} onConfirm={handleConfirmDeletion} />}
     </div>
   );
 };
