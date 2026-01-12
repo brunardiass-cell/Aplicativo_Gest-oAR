@@ -25,7 +25,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
   const addProject = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!newProjectName.trim()) return;
-    if (localConfig.projectsData.some(p => p.name === newProjectName.trim())) {
+    if (localConfig.projectsData.some((p: ProjectData) => p.name === newProjectName.trim())) {
       alert('Este projeto já existe.');
       return;
     }
@@ -47,11 +47,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
 
   const removeProject = (e: React.MouseEvent, projectId: string) => {
     e.preventDefault();
-    const project = localConfig.projectsData.find(p => p.id === projectId);
+    const project = localConfig.projectsData.find((p: ProjectData) => p.id === projectId);
     if (window.confirm(`Tem certeza que deseja remover o projeto "${project?.name}"?`)) {
       setLocalConfig({
         ...localConfig,
-        projectsData: localConfig.projectsData.filter(p => p.id !== projectId)
+        projectsData: localConfig.projectsData.filter((p: ProjectData) => p.id !== projectId)
       });
     }
   };
@@ -64,13 +64,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
 
   const saveEditProject = (e?: React.FormEvent | React.FocusEvent | React.KeyboardEvent) => {
     if (e && 'preventDefault' in e) e.preventDefault();
-    if (!editingProjectName.trim()) {
+    if (!editingProjectName.trim() || editingProjectIndex === null) {
       setEditingProjectIndex(null);
       return;
     };
     const updatedProjects = [...localConfig.projectsData];
-    updatedProjects[editingProjectIndex!] = {
-      ...updatedProjects[editingProjectIndex!],
+    updatedProjects[editingProjectIndex] = {
+      ...updatedProjects[editingProjectIndex],
       name: editingProjectName.trim()
     };
     setLocalConfig({ ...localConfig, projectsData: updatedProjects });
@@ -143,7 +143,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {localConfig.projectsData.map((project, index) => (
+                    {localConfig.projectsData.map((project: ProjectData, index: number) => (
                       <tr key={project.id} className="hover:bg-slate-50/50 transition">
                         <td className="px-4 py-3">
                           {editingProjectIndex === index ? (

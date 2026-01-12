@@ -2,8 +2,8 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { Task } from "../types";
 
-// Declare process to satisfy TypeScript compiler for environment variables injected by Vite
-declare var process: {
+// Explicit declaration of process for TypeScript compiler in browser environment
+declare const process: {
   env: {
     API_KEY: string;
   };
