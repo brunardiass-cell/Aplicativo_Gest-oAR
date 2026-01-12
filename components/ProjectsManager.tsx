@@ -26,11 +26,15 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
   const [activeTab, setActiveTab] = useState<'tracking' | 'regulatory' | 'norms'>('tracking');
   const [detailTab, setDetailTab] = useState<'items' | 'config'>('items');
 
+  // Estado para edição de nome de projeto
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [tempProjectName, setTempProjectName] = useState('');
+
   // Estado para controle de exclusão com Auditoria
   const [pendingDeletion, setPendingDeletion] = useState<{
     id: string;
     name: string;
-    type: 'macro' | 'micro';
+    type: 'macro' | 'micro' | 'project';
   } | null>(null);
 
   const [newProjectName, setNewProjectName] = useState('');
@@ -58,32 +62,25 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
     setSelectedProjectId(newProj.id);
   };
 
-  // --- Handlers de Macrotarefa ---
-  const addMacroTask = () => {
-    if (!newMacroTitle.trim() || !selectedProjectId || !canEdit) return;
-    const newMacro: MacroTask = {
-      id: Math.random().toString(36).substring(2, 9),
-      title: newMacroTitle.trim(),
-      microTasks: []
-    };
-    
-    onUpdate(projects.map(p => {
-      if (p.id === selectedProjectId) {
-        const key = activeTab === 'tracking' ? 'trackingMacroTasks' : 'regulatoryMacroTasks';
-        return { ...p, [key]: [...(p[key] || []), newMacro] };
-      }
-      return p;
-    }));
-    setNewMacroTitle('');
+  const handleRenameProject = (projectId: string) => {
+    if (!tempProjectName.trim()) return;
+    onUpdate(projects.map(p => p.id === projectId ? { ...p, name: tempProjectName.trim() } : p));
+    setEditingProjectId(null);
   };
 
   const handleConfirmDeletion = (reason: string) => {
     if (!pendingDeletion || !canEdit) return;
     
     // Log da auditoria
-    onAddLog(pendingDeletion.id, `PROJETO: ${pendingDeletion.name}`, reason);
+    onAddLog(pendingDeletion.id, `${pendingDeletion.type.toUpperCase()}: ${pendingDeletion.name}`, reason);
 
-    if (pendingDeletion.type === 'macro') {
+    if (pendingDeletion.type === 'project') {
+      const updatedProjects = projects.filter(p => p.id !== pendingDeletion.id);
+      onUpdate(updatedProjects);
+      if (selectedProjectId === pendingDeletion.id) {
+        setSelectedProjectId(updatedProjects[0]?.id || null);
+      }
+    } else if (pendingDeletion.type === 'macro') {
       onUpdate(projects.map(p => {
         if (p.id === selectedProjectId) {
           const key = activeTab === 'tracking' ? 'trackingMacroTasks' : 'regulatoryMacroTasks';
@@ -109,6 +106,28 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
     }
     
     setPendingDeletion(null);
+  };
+
+  // Fix: Added missing addMacroTask function to handle the creation of macro tasks within projects
+  const addMacroTask = () => {
+    if (!newMacroTitle.trim() || !selectedProjectId || !canEdit) return;
+    const newMacro: MacroTask = {
+      id: Math.random().toString(36).substring(2, 9),
+      title: newMacroTitle.trim(),
+      microTasks: []
+    };
+
+    onUpdate(projects.map(p => {
+      if (p.id === selectedProjectId) {
+        const key = activeTab === 'tracking' ? 'trackingMacroTasks' : 'regulatoryMacroTasks';
+        return {
+          ...p,
+          [key]: [...(p[key] || []), newMacro]
+        };
+      }
+      return p;
+    }));
+    setNewMacroTitle('');
   };
 
   const updateMacroTitle = (macroId: string, newTitle: string) => {
@@ -230,14 +249,51 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({ projects, tasks, peop
           </div>
           <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto custom-scrollbar">
             {projects.map(p => (
-              <button 
-                key={p.id} 
-                onClick={() => { setSelectedProjectId(p.id); setActiveMacroId(null); }} 
-                className={`w-full text-left p-4 transition-all ${selectedProjectId === p.id ? 'bg-indigo-50 border-l-4 border-indigo-600' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
+              <div 
+                key={p.id}
+                className={`group relative transition-all ${selectedProjectId === p.id ? 'bg-indigo-50 border-l-4 border-indigo-600' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
               >
-                <span className={`text-xs font-black uppercase tracking-tight block ${selectedProjectId === p.id ? 'text-indigo-900' : 'text-slate-600'}`}>{p.name}</span>
-                <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border mt-1 inline-block ${getStatusColor(p.status)}`}>{p.status}</span>
-              </button>
+                <div className="flex items-center justify-between p-4 pr-2">
+                  <div className="flex-1 mr-2 overflow-hidden" onClick={() => { setSelectedProjectId(p.id); setActiveMacroId(null); }}>
+                    {editingProjectId === p.id ? (
+                      <input 
+                        autoFocus
+                        value={tempProjectName}
+                        onChange={e => setTempProjectName(e.target.value)}
+                        onBlur={() => handleRenameProject(p.id)}
+                        onKeyDown={e => e.key === 'Enter' && handleRenameProject(p.id)}
+                        className="w-full bg-white border border-indigo-300 rounded px-2 py-1 text-xs font-bold uppercase outline-none"
+                      />
+                    ) : (
+                      <>
+                        <span className={`text-xs font-black uppercase tracking-tight block truncate ${selectedProjectId === p.id ? 'text-indigo-900' : 'text-slate-600'}`}>
+                          {p.name}
+                        </span>
+                        <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border mt-1 inline-block ${getStatusColor(p.status)}`}>
+                          {p.status}
+                        </span>
+                      </>
+                    )}
+                  </div>
+
+                  {canEdit && !editingProjectId && (
+                    <div className={`flex gap-1 transition-opacity ${selectedProjectId === p.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setEditingProjectId(p.id); setTempProjectName(p.name); }}
+                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-100/50 rounded-lg transition"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setPendingDeletion({ id: p.id, name: p.name, type: 'project' }); }}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-100/50 rounded-lg transition"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
         </div>

@@ -46,6 +46,7 @@ export interface Person {
   name: string;
   email: string;
   notificationsEnabled: boolean;
+  active: boolean;
 }
 
 export interface MicroTask {

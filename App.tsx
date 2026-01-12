@@ -37,19 +37,24 @@ const App: React.FC = () => {
 
   const [config, setConfig] = useState<AppConfig>(() => {
     const saved = localStorage.getItem('ar_config');
-    return saved ? JSON.parse(saved) : {
+    const initialConfig = {
       notificationEmail: 'graziella.lider@ctvacinas.br',
       people: [
-        { id: '1', name: 'Graziella', email: 'graziella@ctvacinas.br', notificationsEnabled: true },
-        { id: '2', name: 'Bruna', email: 'bruna@ctvacinas.br', notificationsEnabled: true },
-        { id: '3', name: 'Ester', email: 'ester@ctvacinas.br', notificationsEnabled: true },
-        { id: '4', name: 'Marjorie', email: 'marjorie@ctvacinas.br', notificationsEnabled: true },
-        { id: '5', name: 'Ana Luiza', email: 'analuiza@ctvacinas.br', notificationsEnabled: true },
-        { id: '6', name: 'Ana Terzian', email: 'anaterzian@ctvacinas.br', notificationsEnabled: true }
+        { id: '1', name: 'Graziella', email: 'graziella@ctvacinas.br', notificationsEnabled: true, active: true },
+        { id: '2', name: 'Bruna', email: 'bruna@ctvacinas.br', notificationsEnabled: true, active: true },
+        { id: '3', name: 'Ester', email: 'ester@ctvacinas.br', notificationsEnabled: true, active: true },
+        { id: '4', name: 'Marjorie', email: 'marjorie@ctvacinas.br', notificationsEnabled: true, active: true },
+        { id: '5', name: 'Ana Luiza', email: 'analuiza@ctvacinas.br', notificationsEnabled: true, active: true },
+        { id: '6', name: 'Ana Terzian', email: 'anaterzian@ctvacinas.br', notificationsEnabled: true, active: true }
       ],
       projectsData: [],
       users: [{ username: 'Graziella', role: 'admin', passwordHash: 'admin', canViewAll: true }]
     };
+    if (!saved) return initialConfig;
+    const parsed = JSON.parse(saved);
+    // Ensure active property exists for migration
+    parsed.people = parsed.people.map((p: any) => ({ ...p, active: p.active !== undefined ? p.active : true }));
+    return parsed;
   });
 
   useEffect(() => { localStorage.setItem('ar_tasks', JSON.stringify(tasks)); }, [tasks]);
@@ -173,8 +178,10 @@ const App: React.FC = () => {
           <div className="flex items-center gap-4">
             <div className="bg-indigo-600 p-2 rounded-lg"><ShieldCheck size={28} className="text-white" /></div>
             <div>
-              <h1 className="text-xl font-black tracking-tighter uppercase">AR CTVacinas</h1>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Gestão Setorial</p>
+              <h1 className="text-xl font-black tracking-tighter uppercase">{currentUser?.username}</h1>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                {currentUser?.role === 'admin' ? 'Administrador' : 'Membro da Equipe'}
+              </p>
             </div>
           </div>
           <div className="flex gap-3">
@@ -254,6 +261,7 @@ const App: React.FC = () => {
                 people={config.people} 
                 canEdit={canEdit} 
                 onUpdate={(newPeople) => setConfig(prev => ({ ...prev, people: newPeople }))} 
+                onAddLog={handleAddLog}
               />
             )}
             {viewMode === 'logs' && currentUser?.role === 'admin' && <ActivityLogView logs={logs} />}
