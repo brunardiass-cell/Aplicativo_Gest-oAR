@@ -81,11 +81,11 @@ export interface ProjectData {
 }
 
 export interface DashboardStats {
-  totalLastMonth: number;
-  completed: number;
-  inProgress: number;
-  blocked: number;
+  totalTasks: number;
+  monthlyDeliveries: number;
+  inExecution: number;
   avgProgress: number;
+  blockedCount: number;
 }
 
 export interface AppUser {

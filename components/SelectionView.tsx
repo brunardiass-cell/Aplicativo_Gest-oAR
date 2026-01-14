@@ -1,45 +1,33 @@
 
 import React, { useState } from 'react';
-import { Person, AppUser } from '../types';
-import { Users, User, ArrowRight, ShieldCheck, Lock, LogIn } from 'lucide-react';
+import { AppUser } from '../types';
+import { User, ArrowRight, ShieldCheck, Lock, LogIn } from 'lucide-react';
 
 interface SelectionViewProps {
   onSelect: (member: string | 'Todos') => void;
   onLogin: (user: AppUser) => void;
-  people: Person[];
   users: AppUser[];
 }
 
-const SelectionView: React.FC<SelectionViewProps> = ({ onSelect, onLogin, people, users }) => {
-  const [showLogin, setShowLogin] = useState<string | null>(null);
+const SelectionView: React.FC<SelectionViewProps> = ({ onSelect, onLogin, users }) => {
+  const [showLogin, setShowLogin] = useState<AppUser | null>(null);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const user = users.find(u => u.username === showLogin);
-    if (user && user.passwordHash === password) {
-      onLogin(user);
+    if (showLogin && showLogin.passwordHash === password) {
+      onLogin(showLogin);
     } else {
-      setError('Senha incorreta. Tente novamente.');
+      setError('Senha incorreta.');
       setPassword('');
-    }
-  };
-
-  const handlePersonClick = (name: string) => {
-    const isUser = users.some(u => u.username === name);
-    if (isUser) {
-      setShowLogin(name);
-      setError('');
-    } else {
-      onSelect(name);
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/20 via-slate-900 to-slate-900 overflow-hidden relative">
       
-      {/* Background decoration */}
+      {/* Decoração */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-20">
         <div className="absolute -top-24 -left-24 w-96 h-96 bg-indigo-500 rounded-full blur-[100px]"></div>
         <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-blue-500 rounded-full blur-[100px]"></div>
@@ -50,56 +38,44 @@ const SelectionView: React.FC<SelectionViewProps> = ({ onSelect, onLogin, people
           <div className="max-w-5xl w-full text-center mb-16 animate-in fade-in slide-in-from-top-4 duration-700 z-10">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 rounded-full text-xs font-black uppercase tracking-widest mb-8">
               <ShieldCheck size={16} />
-              Assuntos Regulatórios CTVacinas
+              Setor de Assuntos Regulatórios
             </div>
             <h1 className="text-6xl font-black text-white tracking-tighter mb-4 uppercase">
-              Controle de <span className="text-indigo-500">Acesso</span>
+              Quem está <span className="text-indigo-500">Acessando?</span>
             </h1>
-            <p className="text-xl text-slate-400 max-w-2xl mx-auto font-medium">
-              Identifique-se para acessar o painel de gestão setorial.
+            <p className="text-lg text-slate-400 max-w-2xl mx-auto font-medium">
+              Acesse com seu perfil cadastrado pela liderança.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200 z-10">
-            <button
-              onClick={() => onSelect('Todos')}
-              className="group relative bg-indigo-600 p-8 rounded-3xl shadow-2xl shadow-indigo-900/50 hover:shadow-indigo-500/30 transition-all hover:-translate-y-2 flex flex-col items-start text-left overflow-hidden border border-indigo-400/20"
-            >
-              <div className="absolute top-0 right-0 p-8 text-white/5 group-hover:scale-110 transition-transform">
-                <Users size={120} />
+            {users.map((user) => (
+              <button
+                key={user.username}
+                onClick={() => setShowLogin(user)}
+                className="group bg-slate-800/50 p-8 rounded-[2.5rem] border border-slate-700 hover:border-indigo-500/50 hover:bg-slate-800 transition-all hover:-translate-y-1 flex flex-col items-start text-left relative overflow-hidden"
+              >
+                <div className={`p-4 rounded-2xl mb-8 ${user.role === 'admin' ? 'bg-amber-600/10 text-amber-500 border border-amber-500/20' : 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20'}`}>
+                  <User size={32} />
+                </div>
+                <h3 className="text-xl font-black text-white mb-1 uppercase tracking-tight flex items-center gap-2">
+                  {user.username}
+                  {user.role === 'admin' && <ShieldCheck size={16} className="text-amber-500" />}
+                </h3>
+                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-8">
+                  {user.role === 'admin' ? 'Administradora' : 'Equipe PAR'}
+                </p>
+                <div className="mt-auto flex items-center gap-2 text-indigo-500 font-black text-[10px] uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                  Acessar <ArrowRight size={18} />
+                </div>
+              </button>
+            ))}
+            
+            {users.length === 0 && (
+              <div className="col-span-full py-10 bg-slate-800/20 border border-dashed border-slate-700 rounded-[2.5rem] text-center">
+                <p className="text-slate-500 font-black uppercase text-xs tracking-widest italic">Nenhum membro cadastrado.</p>
               </div>
-              <div className="bg-white/10 p-4 rounded-2xl text-white mb-8 border border-white/20">
-                <Users size={32} />
-              </div>
-              <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-tight">Visitante</h3>
-              <p className="text-indigo-100/70 mb-8 max-w-[200px] text-sm font-medium">Acesso rápido apenas para visualização geral.</p>
-              <div className="mt-auto flex items-center gap-2 text-white font-black text-xs uppercase tracking-widest">
-                Entrar como Convidado <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-              </div>
-            </button>
-
-            {people.map((person) => {
-              const isAdmin = users.find(u => u.username === person.name)?.role === 'admin';
-              return (
-                <button
-                  key={person.id}
-                  onClick={() => handlePersonClick(person.name)}
-                  className="group bg-slate-800/50 p-8 rounded-3xl shadow-sm border border-slate-700 hover:border-indigo-500/50 hover:bg-slate-800 transition-all hover:-translate-y-1 flex flex-col items-start text-left relative overflow-hidden"
-                >
-                  <div className={`p-4 rounded-2xl mb-8 ${isAdmin ? 'bg-amber-600/10 text-amber-500 border border-amber-500/20' : 'bg-slate-700/50 text-slate-500 border border-slate-700'}`}>
-                    <User size={32} />
-                  </div>
-                  <h3 className="text-xl font-black text-white mb-1 uppercase tracking-tight flex items-center gap-2">
-                    {person.name}
-                    {isAdmin && <ShieldCheck size={16} className="text-amber-500" />}
-                  </h3>
-                  <p className="text-slate-500 text-sm mb-8 font-medium italic">{person.email}</p>
-                  <div className="mt-auto flex items-center gap-2 text-indigo-500 font-black text-xs uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
-                    {users.some(u => u.username === person.name) ? 'Autenticar' : 'Ver Atividades'} <ArrowRight size={18} />
-                  </div>
-                </button>
-              );
-            })}
+            )}
           </div>
         </>
       ) : (
@@ -109,8 +85,8 @@ const SelectionView: React.FC<SelectionViewProps> = ({ onSelect, onLogin, people
               <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center text-white mb-6 shadow-xl shadow-indigo-200">
                 <Lock size={36} />
               </div>
-              <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter text-center">Acesso Restrito</h2>
-              <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em] mt-2">Olá, {showLogin}</p>
+              <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter text-center leading-none">Autenticação</h2>
+              <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-3">Perfil: {showLogin.username}</p>
             </div>
 
             <form onSubmit={handleLoginSubmit} className="space-y-6">
@@ -131,7 +107,7 @@ const SelectionView: React.FC<SelectionViewProps> = ({ onSelect, onLogin, people
                 type="submit"
                 className="w-full py-5 bg-slate-900 text-white rounded-2xl shadow-xl hover:bg-black transition font-black uppercase text-xs tracking-widest flex items-center justify-center gap-3"
               >
-                <LogIn size={20} /> Entrar no Sistema
+                <LogIn size={20} /> Confirmar Entrada
               </button>
 
               <button 
