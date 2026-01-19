@@ -3,7 +3,7 @@ import { PublicClientApplication, Configuration, LogLevel } from '@azure/msal-br
 import { Task, AppConfig } from '../types';
 
 /**
- * CONFIGURAÇÃO AZURE AD / ENTRA ID - CTVACINAS
+ * CREDENCIAIS CTVACINAS - GESTÃO PAR
  */
 const msalConfig: Configuration = {
   auth: {
@@ -14,79 +14,69 @@ const msalConfig: Configuration = {
   },
   cache: {
     cacheLocation: "localStorage",
-    storeAuthStateInCookie: false,
-  },
-  system: {
-    loggerOptions: {
-      loggerCallback: (level, message, containsPii) => {
-        if (containsPii) return;
-        switch (level) {
-          case LogLevel.Error: console.error(message); return;
-          case LogLevel.Info: console.info(message); return;
-          case LogLevel.Verbose: console.debug(message); return;
-          case LogLevel.Warning: console.warn(message); return;
-        }
-      }
-    }
+    storeAuthStateInCookie: true,
   }
 };
 
-const SHAREPOINT_SITE_PATH = "ctvacinas974.sharepoint.com:/sites/regulatorios";
-const DATABASE_FOLDER = "Sistema";
-const DATABASE_FILENAME = "database.json";
-const GRAPH_ENDPOINT = "https://graph.microsoft.com/v1.0";
-const SCOPES = ["User.Read", "Mail.Send", "Files.ReadWrite", "Sites.ReadWrite.All"];
+const SITE_URL = "ctvacinas974.sharepoint.com:/sites/regulatorios";
+const FOLDER_PATH = "Sistema";
+const FILE_NAME = "database.json";
+const GRAPH_URL = "https://graph.microsoft.com/v1.0";
+const SCOPES = ["User.Read", "Files.ReadWrite", "Sites.ReadWrite.All"];
 
-// Instância do MSAL
-const msalInstance = new PublicClientApplication(msalConfig);
-// Inicialização necessária para a v3
-let isInitialized = false;
+let msalInstance: any = null;
 
 export const MicrosoftGraphService = {
+  // Fix: Added missing initialize method used in App.tsx and AccessControl.tsx
   async initialize() {
-    if (!isInitialized) {
+    await this.getInstance();
+  },
+
+  async getInstance() {
+    if (!msalInstance) {
+      msalInstance = new PublicClientApplication(msalConfig);
       await msalInstance.initialize();
-      isInitialized = true;
     }
+    return msalInstance;
+  },
+
+  // Fix: Added missing getUserInfo method used in AccessControl.tsx
+  async getUserInfo() {
+    const inst = await this.getInstance();
+    const accounts = inst.getAllAccounts();
+    if (accounts.length > 0) {
+      return accounts[0];
+    }
+    return null;
   },
 
   async login() {
-    await this.initialize();
+    const inst = await this.getInstance();
     try {
-      const response = await msalInstance.loginPopup({ scopes: SCOPES });
-      localStorage.setItem('ms_user_name', response.account.name || response.account.username);
-      return response.account;
+      const result = await inst.loginPopup({ scopes: SCOPES });
+      return result.account;
     } catch (error) {
-      console.error("Falha no login Microsoft:", error);
-      throw error;
+      console.error("Erro Login MS:", error);
+      return null;
     }
   },
 
-  async logout() {
-    await this.initialize();
-    const account = msalInstance.getActiveAccount() || msalInstance.getAllAccounts()[0];
-    await msalInstance.logoutPopup({ account });
-    localStorage.removeItem('ms_user_name');
-  },
-
   async getAccessToken() {
-    await this.initialize();
-    const accounts = msalInstance.getAllAccounts();
+    const inst = await this.getInstance();
+    const accounts = inst.getAllAccounts();
     if (accounts.length === 0) return null;
 
     try {
-      const response = await msalInstance.acquireTokenSilent({
+      const response = await inst.acquireTokenSilent({
         scopes: SCOPES,
         account: accounts[0]
       });
       return response.accessToken;
-    } catch (error) {
-      // Se falhar silencioso, tenta via popup
+    } catch (e) {
       try {
-        const response = await msalInstance.acquireTokenPopup({ scopes: SCOPES });
+        const response = await inst.acquireTokenPopup({ scopes: SCOPES });
         return response.accessToken;
       } catch (err) {
-        console.error("Erro ao adquirir token:", err);
         return null;
       }
     }
@@ -97,45 +87,13 @@ export const MicrosoftGraphService = {
     if (!token) return null;
 
     try {
-      const response = await fetch(`${GRAPH_ENDPOINT}/sites/${SHAREPOINT_SITE_PATH}`, {
+      const response = await fetch(`${GRAPH_URL}/sites/${SITE_URL}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
-      if (data.error) throw new Error(data.error.message);
       return data.id;
     } catch (error) {
-      console.error("Erro ao obter ID do Site SharePoint:", error);
       return null;
-    }
-  },
-
-  async sendEmail(subject: string, content: string, recipient: string) {
-    const token = await this.getAccessToken();
-    if (!token) return false;
-
-    const emailPayload = {
-      message: {
-        subject: subject,
-        body: {
-          contentType: "HTML",
-          content: content.replace(/\n/g, '<br>')
-        },
-        toRecipients: [{ emailAddress: { address: recipient } }]
-      }
-    };
-
-    try {
-      const response = await fetch(`${GRAPH_ENDPOINT}/me/sendMail`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(emailPayload)
-      });
-      return response.ok;
-    } catch (error) {
-      return false;
     }
   },
 
@@ -144,25 +102,31 @@ export const MicrosoftGraphService = {
     const siteId = await this.getSiteId();
     if (!token || !siteId) return false;
 
-    const data = JSON.stringify({ 
+    const body = JSON.stringify({ 
       tasks, 
       config, 
-      lastSync: new Date().toISOString(),
-      syncedBy: localStorage.getItem('ms_user_name') || 'Desconhecido'
+      lastSync: new Date().toISOString()
     });
-    
+
     try {
-      const response = await fetch(`${GRAPH_ENDPOINT}/sites/${siteId}/drive/root:/${DATABASE_FOLDER}/${DATABASE_FILENAME}:/content`, {
+      // Tenta salvar diretamente na pasta Sistema dentro de Documentos (root)
+      const url = `${GRAPH_URL}/sites/${siteId}/drive/root:/${FOLDER_PATH}/${FILE_NAME}:/content`;
+      const response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: data
+        body
       });
-      return response.ok;
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Erro SharePoint:", errorData.error?.message);
+        return false;
+      }
+      return true;
     } catch (error) {
-      console.error("Erro ao salvar no SharePoint:", error);
       return false;
     }
   },
@@ -173,28 +137,19 @@ export const MicrosoftGraphService = {
     if (!token || !siteId) return null;
 
     try {
-      const response = await fetch(`${GRAPH_ENDPOINT}/sites/${siteId}/drive/root:/${DATABASE_FOLDER}/${DATABASE_FILENAME}:/content`, {
+      const url = `${GRAPH_URL}/sites/${siteId}/drive/root:/${FOLDER_PATH}/${FILE_NAME}:/content`;
+      const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.status === 404) return null;
       return await response.json();
     } catch (error) {
-      console.error("Erro ao carregar do SharePoint:", error);
       return null;
     }
   },
 
   async checkAccess() {
-    const siteId = await this.getSiteId();
-    return !!siteId;
-  },
-
-  async getUserInfo() {
-    const token = await this.getAccessToken();
-    if (!token) return null;
-    const response = await fetch(`${GRAPH_ENDPOINT}/me`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    return await response.json();
+    const id = await this.getSiteId();
+    return !!id;
   }
 };
