@@ -33,10 +33,10 @@ const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-8">
         <div className="flex items-center gap-3 mb-10 cursor-pointer group" onClick={onGoHome}>
           <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black text-2xl shadow-lg transition-transform group-hover:scale-105">
-            A
+            P
           </div>
           <div>
-            <h2 className="text-white font-black text-lg leading-tight uppercase tracking-tighter">Assuntos Regulatórios</h2>
+            <h2 className="text-white font-black text-lg leading-tight uppercase tracking-tighter">Gestão Atividades</h2>
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Equipe PAR</p>
           </div>
         </div>

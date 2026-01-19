@@ -24,10 +24,9 @@ const FILE_NAME = "database.json";
 const GRAPH_URL = "https://graph.microsoft.com/v1.0";
 const SCOPES = ["User.Read", "Files.ReadWrite", "Sites.ReadWrite.All"];
 
-let msalInstance: any = null;
+let msalInstance: PublicClientApplication | null = null;
 
 export const MicrosoftGraphService = {
-  // Fix: Added missing initialize method used in App.tsx and AccessControl.tsx
   async initialize() {
     await this.getInstance();
   },
@@ -40,7 +39,6 @@ export const MicrosoftGraphService = {
     return msalInstance;
   },
 
-  // Fix: Added missing getUserInfo method used in AccessControl.tsx
   async getUserInfo() {
     const inst = await this.getInstance();
     const accounts = inst.getAllAccounts();
@@ -109,7 +107,6 @@ export const MicrosoftGraphService = {
     });
 
     try {
-      // Tenta salvar diretamente na pasta Sistema dentro de Documentos (root)
       const url = `${GRAPH_URL}/sites/${siteId}/drive/root:/${FOLDER_PATH}/${FILE_NAME}:/content`;
       const response = await fetch(url, {
         method: 'PUT',
