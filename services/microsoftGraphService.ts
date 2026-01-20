@@ -1,6 +1,6 @@
 
 import { PublicClientApplication, Configuration, InteractionRequiredAuthError } from '@azure/msal-browser';
-import { Task, AppConfig } from '../types';
+import { Task, AppConfig, ActivityLog } from '../types';
 
 export class AdminConsentError extends Error {
   constructor(message: string) {
@@ -153,7 +153,7 @@ export const MicrosoftGraphService = {
     } catch { return null; }
   },
 
-  async save(data: { tasks: Task[], config: AppConfig }) {
+  async save(data: { tasks: Task[], config: AppConfig, activityLogs: ActivityLog[] }) {
     const token = await this.getToken(APP_SCOPES);
     const siteId = await this.getSiteId();
     if (!token || !siteId) return false;

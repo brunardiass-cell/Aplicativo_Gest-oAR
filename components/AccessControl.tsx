@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AppConfig, AppUser } from '../types';
 import { 
@@ -33,34 +34,41 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
     checkConnection();
   }, []);
 
-  // Fix: Replaced call to non-existent 'getAccessToken' with 'getUserInfo'.
-  // 'getUserInfo' handles token acquisition internally and serves as a check for an active session.
   const checkConnection = async () => {
     setIsLoading(true);
     await MicrosoftGraphService.initialize();
-    const info = await MicrosoftGraphService.getUserInfo();
+    const info = await MicrosoftGraphService.getUserInfo(); // Use getUserInfo for initial check
     if (info) {
       setMsAccount(info);
-      const access = await MicrosoftGraphService.checkAccess();
-      setHasAccess(access);
+      try {
+        const access = await MicrosoftGraphService.checkAccess();
+        setHasAccess(access);
+      } catch (error) {
+        setHasAccess(false);
+      }
     }
     setIsLoading(false);
   };
 
-  // Fix: Correctly handle the result object from `login()` and fetch user info after successful authentication.
   const handleMsConnect = async () => {
     setIsLoading(true);
     const result = await MicrosoftGraphService.login();
     if (result.success && result.account) {
       const info = await MicrosoftGraphService.getUserInfo();
       setMsAccount(info);
-      const access = await MicrosoftGraphService.checkAccess();
-      setHasAccess(access);
-      if (access) {
-        setMessage({ type: 'success', text: 'Conectado ao SharePoint corporativo!' });
-      } else {
-        setMessage({ type: 'error', text: 'Sua conta não tem acesso ao site "regulatorios".' });
+      try {
+        const access = await MicrosoftGraphService.checkAccess();
+        setHasAccess(access);
+        if (access) {
+          setMessage({ type: 'success', text: 'Conectado ao SharePoint corporativo!' });
+        } else {
+          setMessage({ type: 'error', text: 'Sua conta não tem acesso ao site "regulatorios".' });
+        }
+      } catch (error) {
+        setMessage({ type: 'error', text: 'Consentimento de administrador necessário.' });
       }
+    } else {
+       setMessage({ type: 'error', text: 'Login cancelado ou falhou.' });
     }
     setIsLoading(false);
     setTimeout(() => setMessage(null), 3000);
