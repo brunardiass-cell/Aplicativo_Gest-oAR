@@ -2,165 +2,137 @@
 import { PublicClientApplication, Configuration, LogLevel } from '@azure/msal-browser';
 import { Task, AppConfig } from '../types';
 
-/**
- * CONFIGURAÇÃO CORPORATIVA - GESTÃO DE ATIVIDADES PAR
- */
 const msalConfig: Configuration = {
   auth: {
     clientId: "609422c2-d648-4b50-b1fe-ca614b77ffb5",
-    // Authority usando o Directory (Tenant) ID fornecido
     authority: "https://login.microsoftonline.com/f51c2ea8-6e50-4e8f-a3e3-30c69e99d323",
     redirectUri: window.location.origin,
-    postLogoutRedirectUri: window.location.origin,
   },
-  cache: {
-    cacheLocation: "localStorage",
-    storeAuthStateInCookie: true,
-  }
+  cache: { cacheLocation: "localStorage", storeAuthStateInCookie: true }
 };
 
-const SHAREPOINT_SITE_PATH = "ctvacinas974.sharepoint.com:/sites/regulatorios";
-const DATABASE_FOLDER = "Sistema";
-const DATABASE_FILENAME = "database.json";
-const GRAPH_ENDPOINT = "https://graph.microsoft.com/v1.0";
-const SCOPES = ["User.Read", "Mail.Send", "Files.ReadWrite", "Sites.ReadWrite.All"];
+const SITE_PATH = "ctvacinas974.sharepoint.com:/sites/regulatorios";
+const DB_PATH = "root:/Sistema/database.json";
+const SCOPES = ["User.Read", "Files.ReadWrite", "Sites.ReadWrite.All"];
 
-let msalInstance: PublicClientApplication | null = null;
+let pca: PublicClientApplication | null = null;
 
 export const MicrosoftGraphService = {
-  async getInstance() {
-    if (!msalInstance) {
-      msalInstance = new PublicClientApplication(msalConfig);
-      await msalInstance.initialize();
+  // Fix: Initialization logic for MSAL
+  async init() {
+    if (!pca) {
+      pca = new PublicClientApplication(msalConfig);
+      await pca.initialize();
     }
-    return msalInstance;
+    return pca;
   },
 
+  // Fix: Added initialize method as used in SelectionView and AccessControl components
   async initialize() {
-    await this.getInstance();
+    return this.init();
   },
 
   async login() {
-    const inst = await this.getInstance();
+    const inst = await this.init();
     try {
-      const response = await inst.loginPopup({ 
-        scopes: SCOPES,
-        prompt: "select_account" 
-      });
-      localStorage.setItem('ms_user_name', response.account.name || response.account.username);
-      return response.account;
-    } catch (error: any) {
-      console.error("Falha no login Microsoft:", error);
-      return null;
-    }
+      const res = await inst.loginPopup({ scopes: SCOPES });
+      return res.account;
+    } catch (e) { return null; }
   },
 
+  // Fix: Added logout method used in App, SelectionView, and AccessControl components
   async logout() {
-    const inst = await this.getInstance();
-    const accounts = inst.getAllAccounts();
-    if (accounts.length > 0) {
-      await inst.logoutPopup({ account: accounts[0] });
+    const inst = await this.init();
+    const account = await this.getAccount();
+    if (account) {
+      await inst.logoutPopup({ account, postLogoutRedirectUri: window.location.origin });
     }
-    localStorage.removeItem('ms_user_name');
   },
 
-  async getAccessToken() {
-    const inst = await this.getInstance();
+  async getAccount() {
+    const inst = await this.init();
     const accounts = inst.getAllAccounts();
-    if (accounts.length === 0) return null;
+    return accounts.length > 0 ? accounts[0] : null;
+  },
 
+  async getToken() {
+    const inst = await this.init();
+    const account = await this.getAccount();
+    if (!account) return null;
     try {
-      const response = await inst.acquireTokenSilent({
-        scopes: SCOPES,
-        account: accounts[0]
-      });
-      return response.accessToken;
-    } catch (error) {
+      const res = await inst.acquireTokenSilent({ scopes: SCOPES, account });
+      return res.accessToken;
+    } catch {
       try {
-        const response = await inst.acquireTokenPopup({ scopes: SCOPES });
-        return response.accessToken;
-      } catch (err) {
+        const res = await inst.acquireTokenPopup({ scopes: SCOPES });
+        return res.accessToken;
+      } catch (e) {
         return null;
       }
     }
   },
 
+  // Fix: Added getAccessToken method as used in SelectionView and AccessControl components
+  async getAccessToken() {
+    return this.getToken();
+  },
+
   async getSiteId() {
-    const token = await this.getAccessToken();
+    const token = await this.getToken();
     if (!token) return null;
-
     try {
-      const response = await fetch(`${GRAPH_ENDPOINT}/sites/${SHAREPOINT_SITE_PATH}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${SITE_PATH}`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await response.json();
-      if (data.error) return null;
-      return data.id;
-    } catch (error) {
-      return null;
-    }
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.id || null;
+    } catch { return null; }
   },
 
-  async saveDatabase(tasks: Task[], config: AppConfig) {
-    const token = await this.getAccessToken();
+  // Fix: Added checkAccess method used to verify site permissions
+  async checkAccess() {
     const siteId = await this.getSiteId();
-    
-    // Se não tiver SharePoint, tenta OneDrive como fallback ou retorna erro
-    const endpoint = siteId 
-      ? `${GRAPH_ENDPOINT}/sites/${siteId}/drive/root:/${DATABASE_FOLDER}/${DATABASE_FILENAME}:/content`
-      : `${GRAPH_ENDPOINT}/me/drive/root:/${DATABASE_FOLDER}/${DATABASE_FILENAME}:/content`;
-
-    if (!token) return false;
-
-    const data = JSON.stringify({ 
-      tasks, 
-      config, 
-      lastSync: new Date().toISOString(),
-      syncedBy: localStorage.getItem('ms_user_name') || 'Desconhecido'
-    });
-
-    try {
-      const response = await fetch(endpoint, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: data
-      });
-      return response.ok;
-    } catch (error) {
-      return false;
-    }
+    return !!siteId;
   },
 
-  async loadDatabase() {
-    const token = await this.getAccessToken();
-    const siteId = await this.getSiteId();
-
-    const endpoint = siteId 
-      ? `${GRAPH_ENDPOINT}/sites/${siteId}/drive/root:/${DATABASE_FOLDER}/${DATABASE_FILENAME}:/content`
-      : `${GRAPH_ENDPOINT}/me/drive/root:/${DATABASE_FOLDER}/${DATABASE_FILENAME}:/content`;
-
-    if (!token) return null;
-
-    try {
-      const response = await fetch(endpoint, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.status === 404) return null;
-      return await response.json();
-    } catch (error) {
-      return null;
-    }
-  },
-
+  // Fix: Added getUserInfo method to fetch authenticated user details
   async getUserInfo() {
-    const token = await this.getAccessToken();
+    const token = await this.getToken();
     if (!token) return null;
-    const response = await fetch(`${GRAPH_ENDPOINT}/me`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    return await response.json();
+    try {
+      const res = await fetch(`https://graph.microsoft.com/v1.0/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch { return null; }
+  },
+
+  async load() {
+    const token = await this.getToken();
+    const siteId = await this.getSiteId();
+    if (!token || !siteId) return null;
+    try {
+      const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/${DB_PATH}:/content`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch { return null; }
+  },
+
+  async save(data: any) {
+    const token = await this.getToken();
+    const siteId = await this.getSiteId();
+    if (!token || !siteId) return false;
+    try {
+      const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/${DB_PATH}:/content`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      return res.ok;
+    } catch { return false; }
   }
 };

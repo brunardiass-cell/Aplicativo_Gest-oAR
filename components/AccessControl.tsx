@@ -5,7 +5,7 @@ import {
   ShieldCheck, Lock, User, Save, Cloud, 
   UserPlus, Trash2, Key, ShieldAlert,
   CheckCircle2, AlertCircle, Eye, EyeOff,
-  Database, RefreshCw, Loader2
+  Database, RefreshCw, Loader2, ExternalLink
 } from 'lucide-react';
 import { MicrosoftGraphService } from '../services/microsoftGraphService';
 
@@ -17,13 +17,10 @@ interface AccessControlProps {
 
 const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, currentUser }) => {
   const [msAccount, setMsAccount] = useState<any>(null);
-  const [storageType, setStorageType] = useState<'none' | 'personal' | 'corporate'>('none');
+  const [hasAccess, setHasAccess] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(false);
   
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' as 'admin' | 'user' });
-  const [editingPasswordFor, setEditingPasswordFor] = useState<string | null>(null);
-  const [newTempPassword, setNewTempPassword] = useState('');
-  const [showPass, setShowPass] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
@@ -37,8 +34,8 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
     if (token) {
       const info = await MicrosoftGraphService.getUserInfo();
       setMsAccount(info);
-      const siteId = await MicrosoftGraphService.getSiteId();
-      setStorageType(siteId ? 'corporate' : 'personal');
+      const access = await MicrosoftGraphService.checkAccess();
+      setHasAccess(access);
     }
     setIsLoading(false);
   };
@@ -48,9 +45,13 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
     const account = await MicrosoftGraphService.login();
     if (account) {
       setMsAccount(account);
-      const siteId = await MicrosoftGraphService.getSiteId();
-      setStorageType(siteId ? 'corporate' : 'personal');
-      setMessage({ type: 'success', text: 'Conectado com sucesso!' });
+      const access = await MicrosoftGraphService.checkAccess();
+      setHasAccess(access);
+      if (access) {
+        setMessage({ type: 'success', text: 'Conectado ao SharePoint corporativo!' });
+      } else {
+        setMessage({ type: 'error', text: 'Sua conta não tem acesso ao site "regulatorios".' });
+      }
     }
     setIsLoading(false);
     setTimeout(() => setMessage(null), 3000);
@@ -59,7 +60,7 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
   const handleMsDisconnect = async () => {
     await MicrosoftGraphService.logout();
     setMsAccount(null);
-    setStorageType('none');
+    setHasAccess(false);
   };
 
   const handleAddUser = () => {
@@ -79,9 +80,13 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
         <header className="p-10 bg-slate-900 text-white flex justify-between items-center">
           <div>
             <h2 className="text-3xl font-black uppercase tracking-tighter flex items-center gap-3">
-              <ShieldCheck size={32} className="text-indigo-500" /> Segurança e Nuvem
+              <ShieldCheck size={32} className="text-indigo-500" /> Segurança e SharePoint
             </h2>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Gestão de Armazenamento Híbrido (Pessoal/Corporativo)</p>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Gestão de Atividades PAR - Configurações de Nuvem</p>
+          </div>
+          <div className="hidden md:flex flex-col items-end">
+             <span className="text-[10px] font-black uppercase text-indigo-400">ID da Aplicação</span>
+             <span className="text-[10px] font-mono text-slate-400">609422c2-d648-4b50-b1fe-ca614b77ffb5</span>
           </div>
         </header>
 
@@ -91,7 +96,7 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
           <div className="lg:col-span-5 space-y-6">
             <section className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-6">
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <Cloud size={16} className="text-sky-500" /> Conectividade Microsoft
+                <Cloud size={16} className="text-sky-500" /> Sincronização Microsoft 365
               </h3>
               
               <div className="flex items-center gap-4">
@@ -100,37 +105,55 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
                 </div>
                 <div>
                   <h4 className="text-xs font-black text-slate-900 uppercase">
-                    {msAccount ? msAccount.displayName || msAccount.name : 'Desconectado'}
+                    {msAccount ? msAccount.displayName || msAccount.name : 'Acesso Restrito'}
                   </h4>
                   <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
-                    {storageType === 'corporate' ? 'SharePoint Corporativo' : storageType === 'personal' ? 'OneDrive Pessoal' : 'Sem Nuvem'}
+                    ctvacinas974.sharepoint.com
                   </p>
                 </div>
               </div>
 
               {msAccount ? (
                 <div className="space-y-4">
-                  <div className={`p-4 rounded-xl flex items-center gap-3 border ${storageType === 'corporate' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-blue-50 border-blue-100 text-blue-700'}`}>
-                    {storageType === 'corporate' ? <CheckCircle2 size={16}/> : <Database size={16}/>}
+                  <div className={`p-4 rounded-xl flex items-center gap-3 border ${hasAccess ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
+                    {hasAccess ? <CheckCircle2 size={16}/> : <AlertCircle size={16}/>}
                     <div>
                       <p className="text-[9px] font-black uppercase tracking-tight">
-                        Armazenado em: {storageType === 'corporate' ? 'SharePoint /sites/regulatorios' : 'Seu OneDrive Pessoal'}
+                        {hasAccess ? 'Conectado ao Site: /regulatorios' : 'Acesso Negado ao Site SharePoint'}
                       </p>
-                      <p className="text-[8px] opacity-70">Pasta: /Documentos/Sistema/database.json</p>
+                      <p className="text-[8px] opacity-70">
+                        {hasAccess ? 'Destino: Documentos/Sistema/database.json' : 'Verifique se você tem permissão no site corporativo.'}
+                      </p>
                     </div>
                   </div>
                   <button onClick={handleMsDisconnect} className="w-full py-3 bg-white border border-red-100 text-red-500 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-red-50 transition">Desconectar Conta</button>
                 </div>
               ) : (
-                <button onClick={handleMsConnect} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition shadow-xl">Conectar com Microsoft</button>
+                <button onClick={handleMsConnect} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-700 transition shadow-xl shadow-indigo-100">
+                  Autenticar via Microsoft
+                </button>
               )}
             </section>
 
-            <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100 flex gap-4 items-start">
-               <AlertCircle className="text-amber-600 shrink-0" size={20} />
-               <p className="text-[10px] font-bold text-amber-800 leading-relaxed uppercase tracking-tight">
-                 Ao usar sua conta pessoal, os dados serão salvos no seu OneDrive. Para migrar para a empresa depois, basta mover o arquivo para o SharePoint.
-               </p>
+            <div className="p-6 bg-slate-900/5 rounded-3xl border border-slate-100 space-y-4">
+               <h4 className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2"><Database size={14} /> Dados do Aplicativo</h4>
+               <div className="space-y-2">
+                  <div className="flex flex-col">
+                    <span className="text-[8px] font-black text-slate-400 uppercase">Nome de Exibição</span>
+                    <span className="text-[10px] font-bold text-slate-700">Gestão de Atividades PAR</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[8px] font-black text-slate-400 uppercase">Tenant ID</span>
+                    <span className="text-[10px] font-mono text-slate-500">f51c2ea8-6e50-4e8f-a3e3-30c69e99d323</span>
+                  </div>
+               </div>
+               <a 
+                href="https://ctvacinas974.sharepoint.com/sites/regulatorios" 
+                target="_blank" 
+                className="text-[9px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 hover:underline pt-2"
+              >
+                Abrir SharePoint <ExternalLink size={10} />
+              </a>
             </div>
           </div>
 
@@ -138,16 +161,16 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
           <div className="lg:col-span-7 space-y-10">
             <section className="space-y-6">
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-4">
-                <UserPlus size={18} className="text-indigo-600" /> Cadastro de Membros
+                <UserPlus size={18} className="text-indigo-600" /> Cadastro de Membros Locais
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-6 rounded-3xl border border-slate-100">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Login</label>
-                  <input type="text" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} placeholder="Nome" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Login (Nome Exato no SharePoint)</label>
+                  <input type="text" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} placeholder="Ex: Graziella" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Senha</label>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Senha do Painel</label>
                   <input type="password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} placeholder="••••••••" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div className="md:col-span-2 flex items-center justify-between pt-2">
@@ -155,21 +178,24 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
                     <input type="checkbox" checked={newUser.role === 'admin'} onChange={e => setNewUser({...newUser, role: e.target.checked ? 'admin' : 'user'})} className="w-4 h-4 accent-indigo-600" />
                     <span className="text-[10px] font-black text-slate-600 uppercase">Perfil Administrador</span>
                   </label>
-                  <button onClick={handleAddUser} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-700 transition">Adicionar</button>
+                  <button onClick={handleAddUser} className="px-8 py-3 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition">Adicionar Membro</button>
                 </div>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                 {config.users.map(u => (
-                  <div key={u.username} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-2xl">
+                  <div key={u.username} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-2xl hover:border-indigo-100 transition shadow-sm">
                     <div className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black ${u.role === 'admin' ? 'bg-amber-100 text-amber-600' : 'bg-indigo-50 text-indigo-600'}`}>
                         {u.username[0]}
                       </div>
-                      <span className="text-sm font-black text-slate-800">{u.username}</span>
+                      <div>
+                        <span className="text-sm font-black text-slate-800 uppercase tracking-tighter">{u.username}</span>
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{u.role === 'admin' ? 'Admin' : 'Usuário'}</p>
+                      </div>
                     </div>
                     {u.username !== currentUser.username && (
-                      <button onClick={() => onUpdateConfig({...config, users: config.users.filter(usr => usr.username !== u.username)})} className="p-2 text-slate-300 hover:text-red-500"><Trash2 size={16}/></button>
+                      <button onClick={() => onUpdateConfig({...config, users: config.users.filter(usr => usr.username !== u.username)})} className="p-2 text-slate-300 hover:text-red-500 transition"><Trash2 size={16}/></button>
                     )}
                   </div>
                 ))}
