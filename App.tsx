@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { MicrosoftGraphService } from './services/microsoftGraphService';
+import { MicrosoftGraphService, AdminConsentError } from './services/microsoftGraphService';
 import { Task, AppConfig, ViewMode, AppUser } from './types';
 import Sidebar from './components/Sidebar';
 import SelectionView from './components/SelectionView';
@@ -12,6 +12,7 @@ const App: React.FC = () => {
   const [isAuth, setIsAuth] = useState(false);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [view, setView] = useState<ViewMode>('selection');
@@ -23,14 +24,20 @@ const App: React.FC = () => {
     const account = await MicrosoftGraphService.getAccount();
     if (account) {
       setIsAuth(true);
-      const access = await MicrosoftGraphService.checkAccess();
-      setHasAccess(access);
-      
-      if (access) {
-        const data = await MicrosoftGraphService.load();
-        if (data) {
-          setTasks(data.tasks || []);
-          setConfig(data.config || null);
+      try {
+        const access = await MicrosoftGraphService.checkAccess();
+        setHasAccess(access);
+        if (access) {
+          const data = await MicrosoftGraphService.load();
+          if (data) {
+            setTasks(data.tasks || []);
+            setConfig(data.config || null);
+          }
+        }
+      } catch (error) {
+        if (error instanceof AdminConsentError) {
+           setLoginError('Este aplicativo precisa de aprovação de um administrador de TI para acessar o SharePoint.');
+           setIsAuth(false);
         }
       }
     }
@@ -43,18 +50,34 @@ const App: React.FC = () => {
 
   const handleLogin = async () => {
     setLoading(true);
-    const account = await MicrosoftGraphService.login();
-    if (account) {
+    setLoginError(null);
+    const result = await MicrosoftGraphService.login();
+    
+    if (result.success && result.account) {
       setIsAuth(true);
-      const access = await MicrosoftGraphService.checkAccess();
-      setHasAccess(access);
-      if (access) {
-        const data = await MicrosoftGraphService.load();
-        if (data) {
-          setTasks(data.tasks || []);
-          setConfig(data.config || null);
+      try {
+        const access = await MicrosoftGraphService.checkAccess();
+        setHasAccess(access);
+        if (access) {
+          const data = await MicrosoftGraphService.load();
+          if (data) {
+            setTasks(data.tasks || []);
+            setConfig(data.config || null);
+          }
+        }
+      } catch (error) {
+        if (error instanceof AdminConsentError) {
+          setLoginError('Este aplicativo precisa de aprovação. Por favor, solicite a um administrador de TI para conceder permissão ao "Gestão de Atividades PAR" no portal do Azure.');
+          setIsAuth(false);
+          setHasAccess(null);
+        } else {
+          setLoginError('Ocorreu um erro ao verificar as permissões do SharePoint. Tente novamente.');
+          setIsAuth(false);
+          setHasAccess(null);
         }
       }
+    } else if (result.error && result.error !== 'cancelled') {
+      setLoginError('Ocorreu uma falha durante a autenticação. Tente novamente.');
     }
     setLoading(false);
   };
@@ -92,11 +115,18 @@ const App: React.FC = () => {
         <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter mb-2 leading-none">Gestão PAR</h1>
         <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-10">Autenticação Corporativa SharePoint</p>
         
-        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 mb-8 text-left">
-          <p className="text-xs text-slate-500 leading-relaxed font-medium">
-            O acesso a este sistema é restrito a membros autorizados no site <b>regulatorios</b> do SharePoint institucional.
-          </p>
-        </div>
+        {loginError ? (
+          <div className="p-5 bg-red-50 border border-red-100 rounded-2xl text-xs text-red-700 font-medium leading-relaxed mb-8">
+            <p className="font-bold mb-2">Ação Necessária</p>
+            {loginError}
+          </div>
+        ) : (
+          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 mb-8 text-left">
+            <p className="text-xs text-slate-500 leading-relaxed font-medium">
+              O primeiro passo é validar sua identidade Microsoft. Em seguida, o sistema verificará seu acesso ao site <b>regulatorios</b> do SharePoint.
+            </p>
+          </div>
+        )}
 
         <button 
           onClick={handleLogin}
@@ -176,11 +206,11 @@ const App: React.FC = () => {
         </header>
 
         <div className="p-8 flex-1">
-          {view === 'selection' && (
+          {view === 'selection' && config?.users && (
             <SelectionView 
               onSelect={() => setView('dashboard')} 
               onLogin={(u) => { setCurrentUser(u); setView('dashboard'); }} 
-              users={config?.users || []} 
+              users={config.users} 
             />
           )}
           

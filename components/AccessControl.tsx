@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AppConfig, AppUser } from '../types';
 import { 
@@ -34,12 +33,13 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
     checkConnection();
   }, []);
 
+  // Fix: Replaced call to non-existent 'getAccessToken' with 'getUserInfo'.
+  // 'getUserInfo' handles token acquisition internally and serves as a check for an active session.
   const checkConnection = async () => {
     setIsLoading(true);
     await MicrosoftGraphService.initialize();
-    const token = await MicrosoftGraphService.getAccessToken();
-    if (token) {
-      const info = await MicrosoftGraphService.getUserInfo();
+    const info = await MicrosoftGraphService.getUserInfo();
+    if (info) {
       setMsAccount(info);
       const access = await MicrosoftGraphService.checkAccess();
       setHasAccess(access);
@@ -47,11 +47,13 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
     setIsLoading(false);
   };
 
+  // Fix: Correctly handle the result object from `login()` and fetch user info after successful authentication.
   const handleMsConnect = async () => {
     setIsLoading(true);
-    const account = await MicrosoftGraphService.login();
-    if (account) {
-      setMsAccount(account);
+    const result = await MicrosoftGraphService.login();
+    if (result.success && result.account) {
+      const info = await MicrosoftGraphService.getUserInfo();
+      setMsAccount(info);
       const access = await MicrosoftGraphService.checkAccess();
       setHasAccess(access);
       if (access) {

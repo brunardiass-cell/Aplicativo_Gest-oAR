@@ -1,6 +1,13 @@
 
-import { PublicClientApplication, Configuration, LogLevel } from '@azure/msal-browser';
+import { PublicClientApplication, Configuration, InteractionRequiredAuthError } from '@azure/msal-browser';
 import { Task, AppConfig } from '../types';
+
+export class AdminConsentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AdminConsentError';
+  }
+}
 
 /**
  * CONFIGURAÇÃO AZURE AD / ENTRA ID - CTVACINAS
@@ -20,7 +27,8 @@ const msalConfig: Configuration = {
 
 const SITE_PATH = "ctvacinas974.sharepoint.com:/sites/regulatorios";
 const DB_PATH = "root:/Sistema/database.json";
-const SCOPES = ["User.Read", "Files.ReadWrite", "Sites.ReadWrite.All", "Mail.Send"];
+const LOGIN_SCOPES = ["User.Read"];
+const APP_SCOPES = ["Files.ReadWrite", "Sites.ReadWrite.All"];
 
 let pca: PublicClientApplication | null = null;
 
@@ -40,11 +48,14 @@ export const MicrosoftGraphService = {
   async login() {
     const inst = await this.init();
     try {
-      const res = await inst.loginPopup({ scopes: SCOPES });
-      return res.account;
-    } catch (e) {
-      console.error("Erro no login:", e);
-      return null;
+      const res = await inst.loginPopup({ scopes: LOGIN_SCOPES });
+      return { success: true, account: res.account, error: null };
+    } catch (e: any) {
+      console.error("Erro no login inicial:", e);
+      if (e.errorCode === 'user_cancelled' || e.errorCode === 'access_denied') {
+        return { success: false, account: null, error: 'cancelled' };
+      }
+      return { success: false, account: null, error: 'unknown' };
     }
   },
 
@@ -65,29 +76,34 @@ export const MicrosoftGraphService = {
     return accounts.length > 0 ? accounts[0] : null;
   },
 
-  async getToken() {
+  async getToken(scopes: string[]) {
     const inst = await this.init();
     const account = await this.getAccount();
     if (!account) return null;
+
     try {
-      const res = await inst.acquireTokenSilent({ scopes: SCOPES, account });
+      const res = await inst.acquireTokenSilent({ scopes, account });
       return res.accessToken;
-    } catch {
-      try {
-        const res = await inst.acquireTokenPopup({ scopes: SCOPES });
-        return res.accessToken;
-      } catch (e) {
-        return null;
+    } catch (e) {
+      if (e instanceof InteractionRequiredAuthError) {
+        try {
+          const res = await inst.acquireTokenPopup({ scopes });
+          return res.accessToken;
+        } catch (popupError: any) {
+          console.error("Falha na aquisição de token com popup:", popupError);
+          if (popupError.errorCode === 'consent_required' || popupError.message?.includes('AADSTS65001')) {
+            throw new AdminConsentError("Consentimento do administrador é necessário.");
+          }
+          return null;
+        }
       }
+      console.error("Erro inesperado na aquisição de token:", e);
+      return null;
     }
   },
 
-  async getAccessToken() {
-    return this.getToken();
-  },
-
   async getSiteId() {
-    const token = await this.getToken();
+    const token = await this.getToken(APP_SCOPES);
     if (!token) return null;
     try {
       const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${SITE_PATH}`, {
@@ -100,12 +116,20 @@ export const MicrosoftGraphService = {
   },
 
   async checkAccess() {
-    const siteId = await this.getSiteId();
-    return !!siteId;
+    try {
+      const siteId = await this.getSiteId();
+      return !!siteId;
+    } catch (error) {
+      if (error instanceof AdminConsentError) {
+        throw error;
+      }
+      console.error("Erro durante a verificação de acesso:", error);
+      return false;
+    }
   },
 
   async getUserInfo() {
-    const token = await this.getToken();
+    const token = await this.getToken(LOGIN_SCOPES);
     if (!token) return null;
     try {
       const res = await fetch(`https://graph.microsoft.com/v1.0/me`, {
@@ -117,7 +141,7 @@ export const MicrosoftGraphService = {
   },
 
   async load() {
-    const token = await this.getToken();
+    const token = await this.getToken(APP_SCOPES);
     const siteId = await this.getSiteId();
     if (!token || !siteId) return null;
     try {
@@ -130,7 +154,7 @@ export const MicrosoftGraphService = {
   },
 
   async save(data: { tasks: Task[], config: AppConfig }) {
-    const token = await this.getToken();
+    const token = await this.getToken(APP_SCOPES);
     const siteId = await this.getSiteId();
     if (!token || !siteId) return false;
     try {
