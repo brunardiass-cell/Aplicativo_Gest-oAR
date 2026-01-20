@@ -15,6 +15,13 @@ interface AccessControlProps {
   currentUser: AppUser;
 }
 
+const InfoItem = ({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) => (
+  <div className="flex flex-col">
+    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
+    <span className={`text-[10px] font-bold ${mono ? 'font-mono text-slate-500' : 'text-slate-700'}`}>{value}</span>
+  </div>
+);
+
 const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, currentUser }) => {
   const [msAccount, setMsAccount] = useState<any>(null);
   const [hasAccess, setHasAccess] = useState<boolean>(false);
@@ -84,10 +91,6 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
             </h2>
             <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Gestão de Atividades PAR - Configurações de Nuvem</p>
           </div>
-          <div className="hidden md:flex flex-col items-end">
-             <span className="text-[10px] font-black uppercase text-indigo-400">ID da Aplicação</span>
-             <span className="text-[10px] font-mono text-slate-400">609422c2-d648-4b50-b1fe-ca614b77ffb5</span>
-          </div>
         </header>
 
         <div className="p-10 grid grid-cols-1 lg:grid-cols-12 gap-12">
@@ -136,16 +139,13 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
             </section>
 
             <div className="p-6 bg-slate-900/5 rounded-3xl border border-slate-100 space-y-4">
-               <h4 className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2"><Database size={14} /> Dados do Aplicativo</h4>
-               <div className="space-y-2">
-                  <div className="flex flex-col">
-                    <span className="text-[8px] font-black text-slate-400 uppercase">Nome de Exibição</span>
-                    <span className="text-[10px] font-bold text-slate-700">Gestão de Atividades PAR</span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[8px] font-black text-slate-400 uppercase">Tenant ID</span>
-                    <span className="text-[10px] font-mono text-slate-500">f51c2ea8-6e50-4e8f-a3e3-30c69e99d323</span>
-                  </div>
+               <h4 className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                 <Database size={14} /> Identificação do Aplicativo (Azure)
+               </h4>
+               <div className="space-y-3">
+                 <InfoItem label="Nome de Exibição" value="Gestão de Atividades PAR" />
+                 <InfoItem label="ID do Aplicativo (Cliente)" value="609422c2-d648-4b50-b1fe-ca614b77ffb5" mono />
+                 <InfoItem label="ID do Diretório (Locatário)" value="f51c2ea8-6e50-4e8f-a3e3-30c69e99d323" mono />
                </div>
                <a 
                 href="https://ctvacinas974.sharepoint.com/sites/regulatorios" 

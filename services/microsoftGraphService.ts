@@ -2,23 +2,29 @@
 import { PublicClientApplication, Configuration, LogLevel } from '@azure/msal-browser';
 import { Task, AppConfig } from '../types';
 
+/**
+ * CONFIGURAÇÃO AZURE AD / ENTRA ID - CTVACINAS
+ * Nome de exibição: Gestão de Atividades PAR
+ */
 const msalConfig: Configuration = {
   auth: {
     clientId: "609422c2-d648-4b50-b1fe-ca614b77ffb5",
     authority: "https://login.microsoftonline.com/f51c2ea8-6e50-4e8f-a3e3-30c69e99d323",
     redirectUri: window.location.origin,
   },
-  cache: { cacheLocation: "localStorage", storeAuthStateInCookie: true }
+  cache: {
+    cacheLocation: "localStorage",
+    storeAuthStateInCookie: true,
+  }
 };
 
 const SITE_PATH = "ctvacinas974.sharepoint.com:/sites/regulatorios";
 const DB_PATH = "root:/Sistema/database.json";
-const SCOPES = ["User.Read", "Files.ReadWrite", "Sites.ReadWrite.All"];
+const SCOPES = ["User.Read", "Files.ReadWrite", "Sites.ReadWrite.All", "Mail.Send"];
 
 let pca: PublicClientApplication | null = null;
 
 export const MicrosoftGraphService = {
-  // Fix: Initialization logic for MSAL
   async init() {
     if (!pca) {
       pca = new PublicClientApplication(msalConfig);
@@ -27,7 +33,6 @@ export const MicrosoftGraphService = {
     return pca;
   },
 
-  // Fix: Added initialize method as used in SelectionView and AccessControl components
   async initialize() {
     return this.init();
   },
@@ -37,15 +42,20 @@ export const MicrosoftGraphService = {
     try {
       const res = await inst.loginPopup({ scopes: SCOPES });
       return res.account;
-    } catch (e) { return null; }
+    } catch (e) {
+      console.error("Erro no login:", e);
+      return null;
+    }
   },
 
-  // Fix: Added logout method used in App, SelectionView, and AccessControl components
   async logout() {
     const inst = await this.init();
     const account = await this.getAccount();
     if (account) {
-      await inst.logoutPopup({ account, postLogoutRedirectUri: window.location.origin });
+      await inst.logoutPopup({ 
+        account, 
+        postLogoutRedirectUri: window.location.origin 
+      });
     }
   },
 
@@ -72,7 +82,6 @@ export const MicrosoftGraphService = {
     }
   },
 
-  // Fix: Added getAccessToken method as used in SelectionView and AccessControl components
   async getAccessToken() {
     return this.getToken();
   },
@@ -90,13 +99,11 @@ export const MicrosoftGraphService = {
     } catch { return null; }
   },
 
-  // Fix: Added checkAccess method used to verify site permissions
   async checkAccess() {
     const siteId = await this.getSiteId();
     return !!siteId;
   },
 
-  // Fix: Added getUserInfo method to fetch authenticated user details
   async getUserInfo() {
     const token = await this.getToken();
     if (!token) return null;
@@ -122,7 +129,7 @@ export const MicrosoftGraphService = {
     } catch { return null; }
   },
 
-  async save(data: any) {
+  async save(data: { tasks: Task[], config: AppConfig }) {
     const token = await this.getToken();
     const siteId = await this.getSiteId();
     if (!token || !siteId) return false;
@@ -130,7 +137,10 @@ export const MicrosoftGraphService = {
       const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/${DB_PATH}:/content`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify({
+          ...data,
+          lastSync: new Date().toISOString()
+        })
       });
       return res.ok;
     } catch { return false; }
