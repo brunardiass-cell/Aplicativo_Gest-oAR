@@ -5,7 +5,6 @@ import { INITIAL_TASKS } from './constants';
 import Sidebar from './components/Sidebar';
 import SelectionView from './components/SelectionView';
 import { Plus, FileText, ShieldCheck, Bell, Loader2, Search, Filter, Cloud, ShieldAlert, Database } from 'lucide-react';
-import { sendSimulatedEmail } from './services/emailService';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
 
 const DashboardOverview = lazy(() => import('./components/DashboardOverview'));
@@ -22,7 +21,7 @@ const ReportView = lazy(() => import('./components/ReportView'));
 const LoadingFallback = () => (
   <div className="flex-1 flex flex-col items-center justify-center space-y-4 min-h-[400px]">
     <Loader2 className="w-12 h-12 text-indigo-600 animate-spin" />
-    <p className="text-slate-400 font-black uppercase text-[10px] tracking-widest animate-pulse">Sincronizando com OneDrive...</p>
+    <p className="text-slate-400 font-black uppercase text-[10px] tracking-widest animate-pulse">Sincronizando com SharePoint...</p>
   </div>
 );
 
@@ -31,7 +30,7 @@ const App: React.FC = () => {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
+  const [storageType, setStorageType] = useState<'offline' | 'onedrive' | 'sharepoint'>('offline');
 
   const initialConfig: AppConfig = {
     notificationEmail: 'graziella.lider@ctvacinas.br',
@@ -54,7 +53,9 @@ const App: React.FC = () => {
       const token = await MicrosoftGraphService.getAccessToken();
       
       if (token) {
-        setIsConnected(true);
+        const siteId = await MicrosoftGraphService.getSiteId();
+        setStorageType(siteId ? 'sharepoint' : 'onedrive');
+        
         const remoteData = await MicrosoftGraphService.loadDatabase();
         if (remoteData) {
           setTasks(remoteData.tasks || []);
@@ -78,7 +79,6 @@ const App: React.FC = () => {
     if (tasks.length > 0 && config) {
       localStorage.setItem('ar_tasks', JSON.stringify(tasks));
       localStorage.setItem('ar_config', JSON.stringify(config));
-      // Salva no OneDrive apenas se houver uma conexão ativa
       MicrosoftGraphService.saveDatabase(tasks, config);
     }
   }, [tasks, config]);
@@ -159,11 +159,17 @@ const App: React.FC = () => {
             <div>
               <h1 className="text-xl font-black tracking-tighter uppercase">{currentUser?.username}</h1>
               <div className="flex items-center gap-2">
-                {isConnected ? (
-                  <div className="flex items-center gap-1 text-[9px] font-bold text-blue-400 uppercase tracking-widest bg-blue-400/10 px-2 py-0.5 rounded border border-blue-400/20">
-                    <Database size={10} /> OneDrive Pessoal Conectado
+                {storageType === 'sharepoint' && (
+                  <div className="flex items-center gap-1 text-[9px] font-bold text-emerald-400 uppercase tracking-widest bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20">
+                    <Cloud size={10} /> SharePoint CTVacinas Ativo
                   </div>
-                ) : (
+                )}
+                {storageType === 'onedrive' && (
+                  <div className="flex items-center gap-1 text-[9px] font-bold text-blue-400 uppercase tracking-widest bg-blue-400/10 px-2 py-0.5 rounded border border-blue-400/20">
+                    <Database size={10} /> OneDrive Conectado
+                  </div>
+                )}
+                {storageType === 'offline' && (
                   <div className="flex items-center gap-1 text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-slate-400/10 px-2 py-0.5 rounded border border-slate-400/20">
                     <Cloud size={10} /> Modo Local (Offline)
                   </div>

@@ -3,14 +3,13 @@ import { PublicClientApplication, Configuration, LogLevel } from '@azure/msal-br
 import { Task, AppConfig } from '../types';
 
 /**
- * CONFIGURAÇÃO PARA CONTA PESSOAL
- * Note: Se você receber "unauthorized_client", certifique-se de que o App Registration 
- * no Azure esteja configurado para "Personal Microsoft accounts only" ou "Multitenant + Personal".
+ * CONFIGURAÇÃO CORPORATIVA - GESTÃO DE ATIVIDADES PAR
  */
 const msalConfig: Configuration = {
   auth: {
     clientId: "609422c2-d648-4b50-b1fe-ca614b77ffb5",
-    authority: "https://login.microsoftonline.com/common", 
+    // Authority usando o Directory (Tenant) ID fornecido
+    authority: "https://login.microsoftonline.com/f51c2ea8-6e50-4e8f-a3e3-30c69e99d323",
     redirectUri: window.location.origin,
     postLogoutRedirectUri: window.location.origin,
   },
@@ -20,10 +19,11 @@ const msalConfig: Configuration = {
   }
 };
 
+const SHAREPOINT_SITE_PATH = "ctvacinas974.sharepoint.com:/sites/regulatorios";
 const DATABASE_FOLDER = "Sistema";
 const DATABASE_FILENAME = "database.json";
 const GRAPH_ENDPOINT = "https://graph.microsoft.com/v1.0";
-const SCOPES = ["User.Read", "Files.ReadWrite"];
+const SCOPES = ["User.Read", "Mail.Send", "Files.ReadWrite", "Sites.ReadWrite.All"];
 
 let msalInstance: PublicClientApplication | null = null;
 
@@ -51,9 +51,6 @@ export const MicrosoftGraphService = {
       return response.account;
     } catch (error: any) {
       console.error("Falha no login Microsoft:", error);
-      if (error.message.includes("unauthorized_client")) {
-        alert("O ID do Aplicativo (ClientId) atual parece estar restrito à rede da empresa. Para usar sua conta @outlook ou @hotmail pessoal, o administrador precisa liberar 'Personal Accounts' no Azure Portal.");
-      }
       return null;
     }
   },
@@ -88,17 +85,31 @@ export const MicrosoftGraphService = {
     }
   },
 
-  // Ignorado para priorizar o OneDrive pessoal
   async getSiteId() {
-    return null;
+    const token = await this.getAccessToken();
+    if (!token) return null;
+
+    try {
+      const response = await fetch(`${GRAPH_ENDPOINT}/sites/${SHAREPOINT_SITE_PATH}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.error) return null;
+      return data.id;
+    } catch (error) {
+      return null;
+    }
   },
 
-  /**
-   * Salva os dados estritamente no OneDrive Pessoal.
-   * Caminho: Meus Arquivos > Sistema > database.json
-   */
   async saveDatabase(tasks: Task[], config: AppConfig) {
     const token = await this.getAccessToken();
+    const siteId = await this.getSiteId();
+    
+    // Se não tiver SharePoint, tenta OneDrive como fallback ou retorna erro
+    const endpoint = siteId 
+      ? `${GRAPH_ENDPOINT}/sites/${siteId}/drive/root:/${DATABASE_FOLDER}/${DATABASE_FILENAME}:/content`
+      : `${GRAPH_ENDPOINT}/me/drive/root:/${DATABASE_FOLDER}/${DATABASE_FILENAME}:/content`;
+
     if (!token) return false;
 
     const data = JSON.stringify({ 
@@ -109,8 +120,7 @@ export const MicrosoftGraphService = {
     });
 
     try {
-      // Endpoint fixo para OneDrive Pessoal
-      const response = await fetch(`${GRAPH_ENDPOINT}/me/drive/root:/${DATABASE_FOLDER}/${DATABASE_FILENAME}:/content`, {
+      const response = await fetch(endpoint, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -120,20 +130,22 @@ export const MicrosoftGraphService = {
       });
       return response.ok;
     } catch (error) {
-      console.error("Erro ao salvar no OneDrive:", error);
       return false;
     }
   },
 
-  /**
-   * Carrega os dados do OneDrive Pessoal.
-   */
   async loadDatabase() {
     const token = await this.getAccessToken();
+    const siteId = await this.getSiteId();
+
+    const endpoint = siteId 
+      ? `${GRAPH_ENDPOINT}/sites/${siteId}/drive/root:/${DATABASE_FOLDER}/${DATABASE_FILENAME}:/content`
+      : `${GRAPH_ENDPOINT}/me/drive/root:/${DATABASE_FOLDER}/${DATABASE_FILENAME}:/content`;
+
     if (!token) return null;
 
     try {
-      const response = await fetch(`${GRAPH_ENDPOINT}/me/drive/root:/${DATABASE_FOLDER}/${DATABASE_FILENAME}:/content`, {
+      const response = await fetch(endpoint, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.status === 404) return null;
