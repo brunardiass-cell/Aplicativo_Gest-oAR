@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { MicrosoftGraphService, AdminConsentError } from './services/microsoftGraphService';
+import { MicrosoftGraphService, AdminConsentError, ApiPermissionError } from './services/microsoftGraphService';
 import { Task, AppConfig, ViewMode, AppUser, ActivityLog, Person, ProjectData } from './types';
 import Sidebar from './components/Sidebar';
-import { Cloud, Loader2, ShieldCheck, ShieldAlert, LogOut, Eye } from 'lucide-react';
+import { Cloud, Loader2, ShieldCheck, ShieldAlert, LogOut, Eye, Copy, CheckCircle, Info } from 'lucide-react';
 import { INITIAL_TASKS, TEAM_MEMBERS } from './constants';
 
 // Lazy load components for code splitting
@@ -31,6 +31,8 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState<string>('Inicializando...');
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
@@ -40,6 +42,8 @@ const App: React.FC = () => {
   const startup = async () => {
     setLoading(true);
     setLoadingMessage('Inicializando conexão segura...');
+    setLoginError(null);
+    setAccessError(null);
     await MicrosoftGraphService.init();
     const account = await MicrosoftGraphService.getAccount();
     if (account) {
@@ -57,10 +61,12 @@ const App: React.FC = () => {
             setActivityLogs(data.activityLogs || []);
           }
         }
-      } catch (error) {
-        if (error instanceof AdminConsentError) {
-           setLoginError('Este aplicativo precisa de aprovação de um administrador de TI para acessar o SharePoint.');
-           setIsAuth(false);
+      } catch (error: any) {
+        setHasAccess(false);
+        if (error instanceof AdminConsentError || error instanceof ApiPermissionError) {
+           setAccessError(error.message);
+        } else {
+           setAccessError('Ocorreu um erro inesperado ao verificar as permissões. Verifique o console para mais detalhes.');
         }
       }
     }
@@ -75,6 +81,7 @@ const App: React.FC = () => {
     setLoading(true);
     setLoadingMessage('Aguardando autenticação Microsoft...');
     setLoginError(null);
+    setAccessError(null);
     const result = await MicrosoftGraphService.login();
     
     if (result.success && result.account) {
@@ -92,15 +99,12 @@ const App: React.FC = () => {
             setActivityLogs(data.activityLogs || []);
           }
         }
-      } catch (error) {
-        if (error instanceof AdminConsentError) {
-          setLoginError('Este aplicativo precisa de aprovação. Por favor, solicite a um administrador de TI para conceder permissão ao "Gestão de Atividades PAR" no portal do Azure.');
-          setIsAuth(false);
-          setHasAccess(null);
+      } catch (error: any) {
+        setHasAccess(false);
+        if (error instanceof AdminConsentError || error instanceof ApiPermissionError) {
+          setAccessError(error.message);
         } else {
-          setLoginError('Ocorreu um erro ao verificar as permissões do SharePoint. Tente novamente.');
-          setIsAuth(false);
-          setHasAccess(null);
+          setAccessError('Ocorreu um erro ao verificar as permissões do SharePoint. Tente novamente.');
         }
       }
     } else if (result.error && result.error !== 'cancelled') {
@@ -117,6 +121,28 @@ const App: React.FC = () => {
       setLoginError(detailedError);
     }
     setLoading(false);
+  };
+
+  const copyITInstructions = () => {
+    const text = `URGENTE: Correção de Permissões no Azure AD - App "Gestão de Atividades PAR"
+
+O TI configurou as permissões como "Tipo: Aplicativo", mas este é um Single-Page Application (SPA) que exige "Tipo: Delegada" para funcionar com login de usuário.
+
+Ações Corretivas Necessárias:
+1. No Portal do Azure > Registros de Aplicativo > "Gestão de Atividades PAR" (ID: 609422c2-d648-4b50-b1fe-ca614b77ffb5).
+2. Vá em "Permissões de API".
+3. ADICIONE as seguintes "Permissões DELEGADAS" (Delegated Permissions):
+   - User.Read
+   - Files.ReadWrite
+   - Sites.ReadWrite.All
+4. Remova as permissões do tipo "Aplicativo" se não forem usadas por outro sistema.
+5. CLIQUE EM "Conceder consentimento do administrador para CTVACINAS" para todas as permissões DELEGADAS acima.
+
+Este ajuste é essencial para resolver o erro de Access Denied (403) durante o fluxo de login do usuário.`;
+    
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 3000);
   };
 
   const handleGuestLogin = () => {
@@ -275,25 +301,46 @@ const App: React.FC = () => {
   );
 
   // Tela de Acesso Negado (Autenticado mas sem permissão no Site)
-  if (hasAccess === false) return (
+  if (isAuth && hasAccess === false) return (
     <div className="h-screen bg-slate-900 flex items-center justify-center p-6">
-      <div className="bg-white p-12 rounded-[3rem] shadow-2xl text-center max-w-md w-full animate-in fade-in duration-500">
+      <div className="bg-white p-12 rounded-[3rem] shadow-2xl text-center max-w-lg w-full animate-in fade-in duration-500">
         <div className="w-20 h-20 bg-red-100 text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-8">
           <ShieldAlert size={40} />
         </div>
         <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter mb-2">Acesso Negado</h1>
-        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-8">Sua conta não tem permissão no SharePoint</p>
+        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-8">Configuração Incorreta no Azure</p>
         
-        <div className="p-5 bg-red-50 border border-red-100 rounded-2xl text-xs text-red-700 font-medium leading-relaxed mb-8">
-          Você se autenticou com sucesso, mas não possui permissão de leitura/escrita no site <b>/sites/regulatorios</b>. Entre em contato com a liderança para solicitar acesso.
+        <div className="p-5 bg-red-50 border border-red-100 rounded-2xl text-xs text-red-700 font-medium leading-relaxed mb-8 text-left">
+          <div className="flex items-start gap-3 mb-4 p-3 bg-white/60 rounded-xl border border-red-200">
+             <Info className="shrink-0 text-red-600" size={18} />
+             <p className="font-bold text-[11px] leading-tight">Vimos sua imagem! O TI configurou as permissões como "Aplicativo", mas precisamos que sejam do tipo "Delegada".</p>
+          </div>
+          
+          <p className="font-bold mb-2">O que fazer agora?</p>
+          <p className="mb-4">As permissões de Aplicativo são para robôs. Como você está logando com sua conta, o Azure exige permissões <b>Delegadas</b>.</p>
+          
+          <div className="p-4 bg-white/50 rounded-xl border border-red-200">
+            <p className="font-bold text-[10px] uppercase mb-1">Ação para o Suporte:</p>
+            <p className="text-[11px]">Copie as instruções abaixo e envie ao administrador. Elas explicam como trocar o tipo da permissão.</p>
+          </div>
         </div>
 
-        <button 
-          onClick={handleLogout}
-          className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-black transition flex items-center justify-center gap-3"
-        >
-          <LogOut size={18} /> Sair da Conta
-        </button>
+        <div className="space-y-3">
+          <button 
+            onClick={copyITInstructions}
+            className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-700 transition shadow-xl flex items-center justify-center gap-3 active:scale-95"
+          >
+            {copied ? <CheckCircle size={20} /> : <Copy size={20} />}
+            {copied ? 'Instruções Copiadas!' : 'Copiar Ticket para o TI'}
+          </button>
+
+          <button 
+            onClick={handleLogout}
+            className="w-full py-4 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition flex items-center justify-center gap-2"
+          >
+            <LogOut size={16} /> Sair da Conta
+          </button>
+        </div>
       </div>
     </div>
   );

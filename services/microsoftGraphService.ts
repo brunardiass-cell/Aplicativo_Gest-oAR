@@ -9,6 +9,14 @@ export class AdminConsentError extends Error {
   }
 }
 
+export class ApiPermissionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ApiPermissionError';
+  }
+}
+
+
 /**
  * CONFIGURAÇÃO AZURE AD / ENTRA ID - CTVACINAS
  * Nome de exibição: Gestão de Atividades PAR
@@ -81,7 +89,9 @@ export const MicrosoftGraphService = {
   async getToken(scopes: string[]) {
     const inst = await this.init();
     const account = await this.getAccount();
-    if (!account) return null;
+    if (!account) {
+      throw new Error("Nenhuma conta de usuário encontrada. Por favor, faça login novamente.");
+    }
 
     try {
       const res = await inst.acquireTokenSilent({ scopes, account });
@@ -94,40 +104,45 @@ export const MicrosoftGraphService = {
         } catch (popupError: any) {
           console.error("Falha na aquisição de token com popup:", popupError);
           if (popupError.errorCode === 'consent_required' || popupError.message?.includes('AADSTS65001')) {
-            throw new AdminConsentError("Consentimento do administrador é necessário.");
+            throw new AdminConsentError("As permissões de API para este aplicativo precisam ser aprovadas por um administrador de TI.");
           }
-          return null;
+          throw new ApiPermissionError(`Falha ao obter permissões do aplicativo. O popup de consentimento pode ter sido fechado ou bloqueado. Erro: ${popupError.message}`);
         }
       }
-      console.error("Erro inesperado na aquisição de token:", e);
-      return null;
+      console.error("Erro inesperado na aquisição de token silencioso:", e);
+      throw new ApiPermissionError(`Ocorreu um erro inesperado ao tentar obter as permissões do aplicativo. Erro: ${e instanceof Error ? e.message : String(e)}`);
     }
   },
 
   async getSiteId() {
     const token = await this.getToken(APP_SCOPES);
-    if (!token) return null;
     try {
       const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${SITE_PATH}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!res.ok) return null;
+      
+      if (res.status === 403) {
+        throw new ApiPermissionError("Acesso negado ao recurso do SharePoint (Erro 403). Embora sua conta tenha acesso, o aplicativo 'Gestão de Atividades PAR' não tem as permissões de API necessárias ('Files.ReadWrite', 'Sites.ReadWrite.All') consentidas por um administrador no portal do Azure.");
+      }
+      if (!res.ok) {
+        const errorBody = await res.text();
+        console.error("Graph API Error on getSiteId:", res.status, errorBody);
+        throw new Error(`Falha ao acessar o site do SharePoint. Status: ${res.status}. Verifique se o caminho '${SITE_PATH}' está correto.`);
+      }
+      
       const data = await res.json();
       return data.id || null;
-    } catch { return null; }
+    } catch(e) {
+      if (e instanceof ApiPermissionError || e instanceof AdminConsentError || e instanceof Error) {
+          throw e;
+      }
+      throw new Error("Uma falha de rede impediu a comunicação com o SharePoint.");
+    }
   },
 
   async checkAccess() {
-    try {
-      const siteId = await this.getSiteId();
-      return !!siteId;
-    } catch (error) {
-      if (error instanceof AdminConsentError) {
-        throw error;
-      }
-      console.error("Erro durante a verificação de acesso:", error);
-      return false;
-    }
+    const siteId = await this.getSiteId();
+    return !!siteId;
   },
 
   async getUserInfo() {
