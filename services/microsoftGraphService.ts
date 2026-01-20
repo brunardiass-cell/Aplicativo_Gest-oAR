@@ -3,12 +3,14 @@ import { PublicClientApplication, Configuration, LogLevel } from '@azure/msal-br
 import { Task, AppConfig } from '../types';
 
 /**
- * CREDENCIAIS CTVACINAS - GESTÃO PAR
+ * CONFIGURAÇÃO PARA CONTA PESSOAL
+ * Note: Se você receber "unauthorized_client", certifique-se de que o App Registration 
+ * no Azure esteja configurado para "Personal Microsoft accounts only" ou "Multitenant + Personal".
  */
 const msalConfig: Configuration = {
   auth: {
     clientId: "609422c2-d648-4b50-b1fe-ca614b77ffb5",
-    authority: "https://login.microsoftonline.com/f51c2ea8-6e50-4e8f-a3e3-30c69e99d323",
+    authority: "https://login.microsoftonline.com/common", 
     redirectUri: window.location.origin,
     postLogoutRedirectUri: window.location.origin,
   },
@@ -18,19 +20,14 @@ const msalConfig: Configuration = {
   }
 };
 
-const SITE_URL = "ctvacinas974.sharepoint.com:/sites/regulatorios";
-const FOLDER_PATH = "Sistema";
-const FILE_NAME = "database.json";
-const GRAPH_URL = "https://graph.microsoft.com/v1.0";
-const SCOPES = ["User.Read", "Files.ReadWrite", "Sites.ReadWrite.All"];
+const DATABASE_FOLDER = "Sistema";
+const DATABASE_FILENAME = "database.json";
+const GRAPH_ENDPOINT = "https://graph.microsoft.com/v1.0";
+const SCOPES = ["User.Read", "Files.ReadWrite"];
 
 let msalInstance: PublicClientApplication | null = null;
 
 export const MicrosoftGraphService = {
-  async initialize() {
-    await this.getInstance();
-  },
-
   async getInstance() {
     if (!msalInstance) {
       msalInstance = new PublicClientApplication(msalConfig);
@@ -39,24 +36,35 @@ export const MicrosoftGraphService = {
     return msalInstance;
   },
 
-  async getUserInfo() {
-    const inst = await this.getInstance();
-    const accounts = inst.getAllAccounts();
-    if (accounts.length > 0) {
-      return accounts[0];
-    }
-    return null;
+  async initialize() {
+    await this.getInstance();
   },
 
   async login() {
     const inst = await this.getInstance();
     try {
-      const result = await inst.loginPopup({ scopes: SCOPES });
-      return result.account;
-    } catch (error) {
-      console.error("Erro Login MS:", error);
+      const response = await inst.loginPopup({ 
+        scopes: SCOPES,
+        prompt: "select_account" 
+      });
+      localStorage.setItem('ms_user_name', response.account.name || response.account.username);
+      return response.account;
+    } catch (error: any) {
+      console.error("Falha no login Microsoft:", error);
+      if (error.message.includes("unauthorized_client")) {
+        alert("O ID do Aplicativo (ClientId) atual parece estar restrito à rede da empresa. Para usar sua conta @outlook ou @hotmail pessoal, o administrador precisa liberar 'Personal Accounts' no Azure Portal.");
+      }
       return null;
     }
+  },
+
+  async logout() {
+    const inst = await this.getInstance();
+    const accounts = inst.getAllAccounts();
+    if (accounts.length > 0) {
+      await inst.logoutPopup({ account: accounts[0] });
+    }
+    localStorage.removeItem('ms_user_name');
   },
 
   async getAccessToken() {
@@ -70,7 +78,7 @@ export const MicrosoftGraphService = {
         account: accounts[0]
       });
       return response.accessToken;
-    } catch (e) {
+    } catch (error) {
       try {
         const response = await inst.acquireTokenPopup({ scopes: SCOPES });
         return response.accessToken;
@@ -80,62 +88,52 @@ export const MicrosoftGraphService = {
     }
   },
 
+  // Ignorado para priorizar o OneDrive pessoal
   async getSiteId() {
-    const token = await this.getAccessToken();
-    if (!token) return null;
-
-    try {
-      const response = await fetch(`${GRAPH_URL}/sites/${SITE_URL}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await response.json();
-      return data.id;
-    } catch (error) {
-      return null;
-    }
+    return null;
   },
 
+  /**
+   * Salva os dados estritamente no OneDrive Pessoal.
+   * Caminho: Meus Arquivos > Sistema > database.json
+   */
   async saveDatabase(tasks: Task[], config: AppConfig) {
     const token = await this.getAccessToken();
-    const siteId = await this.getSiteId();
-    if (!token || !siteId) return false;
+    if (!token) return false;
 
-    const body = JSON.stringify({ 
+    const data = JSON.stringify({ 
       tasks, 
       config, 
-      lastSync: new Date().toISOString()
+      lastSync: new Date().toISOString(),
+      syncedBy: localStorage.getItem('ms_user_name') || 'Desconhecido'
     });
 
     try {
-      const url = `${GRAPH_URL}/sites/${siteId}/drive/root:/${FOLDER_PATH}/${FILE_NAME}:/content`;
-      const response = await fetch(url, {
+      // Endpoint fixo para OneDrive Pessoal
+      const response = await fetch(`${GRAPH_ENDPOINT}/me/drive/root:/${DATABASE_FOLDER}/${DATABASE_FILENAME}:/content`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body
+        body: data
       });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Erro SharePoint:", errorData.error?.message);
-        return false;
-      }
-      return true;
+      return response.ok;
     } catch (error) {
+      console.error("Erro ao salvar no OneDrive:", error);
       return false;
     }
   },
 
+  /**
+   * Carrega os dados do OneDrive Pessoal.
+   */
   async loadDatabase() {
     const token = await this.getAccessToken();
-    const siteId = await this.getSiteId();
-    if (!token || !siteId) return null;
+    if (!token) return null;
 
     try {
-      const url = `${GRAPH_URL}/sites/${siteId}/drive/root:/${FOLDER_PATH}/${FILE_NAME}:/content`;
-      const response = await fetch(url, {
+      const response = await fetch(`${GRAPH_ENDPOINT}/me/drive/root:/${DATABASE_FOLDER}/${DATABASE_FILENAME}:/content`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.status === 404) return null;
@@ -145,8 +143,12 @@ export const MicrosoftGraphService = {
     }
   },
 
-  async checkAccess() {
-    const id = await this.getSiteId();
-    return !!id;
+  async getUserInfo() {
+    const token = await this.getAccessToken();
+    if (!token) return null;
+    const response = await fetch(`${GRAPH_ENDPOINT}/me`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return await response.json();
   }
 };
