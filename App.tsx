@@ -104,7 +104,17 @@ const App: React.FC = () => {
         }
       }
     } else if (result.error && result.error !== 'cancelled') {
-      setLoginError('Ocorreu uma falha durante a autenticação. Tente novamente.');
+      let detailedError = 'Ocorreu uma falha durante a autenticação. Tente novamente.';
+      if (typeof result.error === 'string') {
+        if (result.error.includes('AADSTS50011')) {
+          detailedError = `O endereço de redirecionamento mudou. É necessário atualizar o Portal do Azure com a nova URL para permitir o login. Erro técnico: ${result.error}`;
+        } else if (result.error.includes('popup_window_error')) {
+          detailedError = 'Seu navegador pode estar bloqueando a janela de login. Por favor, desative o bloqueador de pop-ups para este site e tente novamente.';
+        } else {
+          detailedError = `Ocorreu uma falha durante a autenticação. Detalhes: ${result.error}`;
+        }
+      }
+      setLoginError(detailedError);
     }
     setLoading(false);
   };
@@ -233,7 +243,7 @@ const App: React.FC = () => {
         <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-10">Autenticação Corporativa SharePoint</p>
         
         {loginError ? (
-          <div className="p-5 bg-red-50 border border-red-100 rounded-2xl text-xs text-red-700 font-medium leading-relaxed mb-8">
+          <div className="p-5 bg-red-50 border border-red-100 rounded-2xl text-xs text-red-700 font-medium leading-relaxed mb-8 text-left">
             <p className="font-bold mb-2">Ação Necessária</p>
             {loginError}
           </div>

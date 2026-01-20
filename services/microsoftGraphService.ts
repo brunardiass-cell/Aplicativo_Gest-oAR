@@ -55,7 +55,9 @@ export const MicrosoftGraphService = {
       if (e.errorCode === 'user_cancelled' || e.errorCode === 'access_denied') {
         return { success: false, account: null, error: 'cancelled' };
       }
-      return { success: false, account: null, error: 'unknown' };
+      // Retorna a mensagem de erro detalhada para depuração na UI.
+      const errorMessage = e.message || e.toString();
+      return { success: false, account: null, error: errorMessage };
     }
   },
 
