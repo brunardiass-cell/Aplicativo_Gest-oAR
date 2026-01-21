@@ -3,7 +3,7 @@ import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { MicrosoftGraphService, AdminConsentError, ApiPermissionError } from './services/microsoftGraphService';
 import { Task, AppConfig, ViewMode, AppUser, ActivityLog, Person, ProjectData } from './types';
 import Sidebar from './components/Sidebar';
-import { Cloud, Loader2, ShieldCheck, ShieldAlert, LogOut, Eye, Copy, CheckCircle, Info } from 'lucide-react';
+import { Cloud, Loader2, ShieldCheck, ShieldAlert, LogOut, Eye, Copy, CheckCircle, Info, ExternalLink, RefreshCw } from 'lucide-react';
 import { INITIAL_TASKS, TEAM_MEMBERS } from './constants';
 
 // Lazy load components for code splitting
@@ -124,21 +124,20 @@ const App: React.FC = () => {
   };
 
   const copyITInstructions = () => {
-    const text = `URGENTE: Correção de Permissões no Azure AD - App "Gestão de Atividades PAR"
+    const text = `URGENTE: Correção de Categoria de Permissão no Azure AD - App "Gestão de Atividades PAR"
 
-O TI configurou as permissões como "Tipo: Aplicativo", mas este é um Single-Page Application (SPA) que exige "Tipo: Delegada" para funcionar com login de usuário.
+O TI configurou corretamente os nomes das permissões, porém o TIPO está incorreto para um SPA.
+Na tela de Permissões de API, a coluna "Tipo" deve ser "Delegada" (Delegated) e não "Aplicativo".
 
-Ações Corretivas Necessárias:
-1. No Portal do Azure > Registros de Aplicativo > "Gestão de Atividades PAR" (ID: 609422c2-d648-4b50-b1fe-ca614b77ffb5).
-2. Vá em "Permissões de API".
-3. ADICIONE as seguintes "Permissões DELEGADAS" (Delegated Permissions):
-   - User.Read
-   - Files.ReadWrite
-   - Sites.ReadWrite.All
-4. Remova as permissões do tipo "Aplicativo" se não forem usadas por outro sistema.
-5. CLIQUE EM "Conceder consentimento do administrador para CTVACINAS" para todas as permissões DELEGADAS acima.
+AÇÕES CORRETIVAS NO PORTAL DO AZURE:
+1. No registro "Gestão de Atividades PAR" (ID: 609422c2-d648-4b50-b1fe-ca614b77ffb5).
+2. Vá em "Permissões de API" -> "Adicionar uma permissão".
+3. Escolha "Microsoft Graph" -> CLIQUE NA OPÇÃO DA ESQUERDA: "Permissões DELEGADAS".
+4. Selecione e adicione: Files.ReadWrite e Sites.ReadWrite.All.
+5. Remova as versões do tipo "Aplicativo" para evitar conflito de token.
+6. CLIQUE NO BOTÃO "Conceder consentimento do administrador para [Sua Empresa]" para as novas permissões delegadas.
 
-Este ajuste é essencial para resolver o erro de Access Denied (403) durante o fluxo de login do usuário.`;
+Sem que o Tipo seja DELEGADO, o usuário logado não recebe as permissões necessárias no token de acesso (Erro 403).`;
     
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -197,10 +196,13 @@ Este ajuste é essencial para resolver o erro de Access Denied (403) durante o f
       setConfig(null);
     } else {
       await MicrosoftGraphService.logout();
+      // Forçar limpeza do armazenamento local para garantir novo token
+      localStorage.clear();
       setIsAuth(false);
       setHasAccess(null);
       setCurrentUser(null);
       setView('selection');
+      window.location.reload();
     }
   };
 
@@ -304,42 +306,56 @@ Este ajuste é essencial para resolver o erro de Access Denied (403) durante o f
   if (isAuth && hasAccess === false) return (
     <div className="h-screen bg-slate-900 flex items-center justify-center p-6">
       <div className="bg-white p-12 rounded-[3rem] shadow-2xl text-center max-w-lg w-full animate-in fade-in duration-500">
-        <div className="w-20 h-20 bg-red-100 text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-8">
-          <ShieldAlert size={40} />
+        <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-8">
+          <ShieldCheck size={40} />
         </div>
-        <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter mb-2">Acesso Negado</h1>
-        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-8">Configuração Incorreta no Azure</p>
+        <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter mb-2">Perto da Conclusão</h1>
+        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-8">O TI já configurou? Siga os passos abaixo:</p>
         
-        <div className="p-5 bg-red-50 border border-red-100 rounded-2xl text-xs text-red-700 font-medium leading-relaxed mb-8 text-left">
-          <div className="flex items-start gap-3 mb-4 p-3 bg-white/60 rounded-xl border border-red-200">
-             <Info className="shrink-0 text-red-600" size={18} />
-             <p className="font-bold text-[11px] leading-tight">Vimos sua imagem! O TI configurou as permissões como "Aplicativo", mas precisamos que sejam do tipo "Delegada".</p>
+        <div className="p-5 bg-emerald-50 border border-emerald-100 rounded-2xl text-xs text-emerald-700 font-medium leading-relaxed mb-8 text-left">
+          <div className="flex items-start gap-3 mb-4 p-4 bg-white/70 rounded-2xl border border-emerald-200 shadow-sm">
+             <Info className="shrink-0 text-emerald-600" size={20} />
+             <div>
+               <p className="font-bold text-[11px] leading-tight mb-1">Se o TI já fez as alterações:</p>
+               <p className="text-[10px]">O seu navegador ainda está usando o "crachá" antigo. Você precisa sair e entrar novamente para que a Microsoft te dê as novas permissões.</p>
+             </div>
           </div>
           
-          <p className="font-bold mb-2">O que fazer agora?</p>
-          <p className="mb-4">As permissões de Aplicativo são para robôs. Como você está logando com sua conta, o Azure exige permissões <b>Delegadas</b>.</p>
+          <p className="font-bold mb-2">Como entrar agora:</p>
+          <ol className="list-decimal list-inside space-y-2 text-[11px] mb-4">
+            <li>Clique no botão <b>"Limpar Cache e Sair"</b> abaixo.</li>
+            <li>O sistema vai te deslogar completamente.</li>
+            <li>Faça o login de novo na tela inicial.</li>
+          </ol>
           
-          <div className="p-4 bg-white/50 rounded-xl border border-red-200">
-            <p className="font-bold text-[10px] uppercase mb-1">Ação para o Suporte:</p>
-            <p className="text-[11px]">Copie as instruções abaixo e envie ao administrador. Elas explicam como trocar o tipo da permissão.</p>
+          <div className="p-4 bg-slate-900/5 rounded-xl border border-slate-200">
+            <p className="font-black text-[9px] uppercase mb-1 text-slate-600">Ainda não funcionou?</p>
+            <p className="text-[10px] text-slate-500">Certifique-se que o TI colocou como <b>"Delegada"</b> (não apenas Aplicativo) e clicou no botão de consentimento.</p>
           </div>
         </div>
 
         <div className="space-y-3">
           <button 
-            onClick={copyITInstructions}
-            className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-700 transition shadow-xl flex items-center justify-center gap-3 active:scale-95"
+            onClick={handleLogout}
+            className="w-full py-5 bg-emerald-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-emerald-700 transition shadow-xl flex items-center justify-center gap-3 active:scale-95"
           >
-            {copied ? <CheckCircle size={20} /> : <Copy size={20} />}
-            {copied ? 'Instruções Copiadas!' : 'Copiar Ticket para o TI'}
+            <RefreshCw size={20} />
+            Limpar Cache e Sair
           </button>
 
           <button 
-            onClick={handleLogout}
-            className="w-full py-4 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600 transition flex items-center justify-center gap-2"
+            onClick={copyITInstructions}
+            className="w-full py-4 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-indigo-600 transition flex items-center justify-center gap-2"
           >
-            <LogOut size={16} /> Sair da Conta
+            {copied ? <CheckCircle size={16} /> : <Copy size={16} />}
+            {copied ? 'Ticket Copiado!' : 'Copiar Ticket (caso ainda falte algo)'}
           </button>
+        </div>
+        
+        <div className="mt-8 pt-6 border-t border-slate-100">
+           <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-center gap-1 hover:text-indigo-600 transition">
+             Ajuda de Faturamento API <ExternalLink size={10} />
+           </a>
         </div>
       </div>
     </div>
