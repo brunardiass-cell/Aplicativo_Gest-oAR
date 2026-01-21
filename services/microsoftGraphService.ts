@@ -1,30 +1,17 @@
 
 import { PublicClientApplication, Configuration, InteractionRequiredAuthError } from '@azure/msal-browser';
-import { Task, AppConfig, ActivityLog } from '../types';
-
-export class AdminConsentError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'AdminConsentError';
-  }
-}
-
-export class ApiPermissionError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ApiPermissionError';
-  }
-}
 
 /**
  * CONFIGURAÇÃO AZURE AD / ENTRA ID - CTVACINAS
- * Focada em validar permissões reais de pasta no SharePoint
+ * Focada exclusivamente no SharePoint Institucional
  */
 const msalConfig: Configuration = {
   auth: {
     clientId: "609422c2-d648-4b50-b1fe-ca614b77ffb5",
+    // Authority fixada no Tenant da Instituição para isolar o acesso
     authority: "https://login.microsoftonline.com/f51c2ea8-6e50-4e8f-a3e3-30c69e99d323",
     redirectUri: window.location.origin,
+    navigateToLoginRequestUrl: true
   },
   cache: {
     cacheLocation: "localStorage",
@@ -32,10 +19,13 @@ const msalConfig: Configuration = {
   }
 };
 
-const SITE_PATH = "ctvacinas974.sharepoint.com:/sites/regulatorios";
-const FOLDER_PATH = "root:/Sistema";
-const DB_PATH = `${FOLDER_PATH}/database.json`;
-const APP_SCOPES = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
+const SITE_HOSTNAME = "ctvacinas974.sharepoint.com";
+const SITE_PATH = "/sites/regulatorios";
+const FOLDER_NAME = "Sistema";
+const DB_FILENAME = "database.json";
+
+// Scopes mínimos necessários para operar na pasta do SharePoint
+const APP_SCOPES = ["Files.ReadWrite", "Sites.Read.All", "User.Read"];
 
 let pca: PublicClientApplication | null = null;
 
@@ -55,10 +45,9 @@ export const MicrosoftGraphService = {
         scopes: APP_SCOPES,
         prompt: "select_account" 
       });
-      return { success: true, account: res.account, error: null };
+      return { success: true, account: res.account };
     } catch (e: any) {
-      if (e.errorCode === 'user_cancelled') return { success: false, account: null, error: 'cancelled' };
-      return { success: false, account: null, error: e.message || "Erro na autenticação Microsoft" };
+      return { success: false, error: e.message };
     }
   },
 
@@ -95,7 +84,7 @@ export const MicrosoftGraphService = {
 
   async getSiteId() {
     const token = await this.getToken();
-    const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${SITE_PATH}`, {
+    const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${SITE_HOSTNAME}:${SITE_PATH}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     if (!res.ok) return null;
@@ -103,22 +92,21 @@ export const MicrosoftGraphService = {
     return data.id;
   },
 
-  /**
-   * VERIFICAÇÃO CRÍTICA: Tenta acessar a pasta do sistema.
-   * Se der 403, o usuário NÃO tem permissão na pasta, mesmo logado.
-   */
+  async getDriveId(siteId: string) {
+    const token = await this.getToken();
+    // Busca o drive de documentos do SITE institucional
+    const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.id;
+  },
+
   async checkAccess() {
     try {
-      const token = await this.getToken();
       const siteId = await this.getSiteId();
-      if (!siteId) return false;
-
-      // Tenta listar a pasta /Sistema
-      const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/${FOLDER_PATH}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      return res.ok; // Retorna true apenas se conseguir ler as propriedades da pasta
+      return !!siteId;
     } catch {
       return false;
     }
@@ -129,17 +117,14 @@ export const MicrosoftGraphService = {
       const token = await this.getToken();
       const siteId = await this.getSiteId();
       if (!siteId) return null;
+      const driveId = await this.getDriveId(siteId);
+      if (!driveId) return null;
 
-      const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/${DB_PATH}:/content`, {
+      const res = await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${FOLDER_NAME}/${DB_FILENAME}:/content`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      if (res.status === 404) {
-        // Arquivo não existe na pasta (Pasta vazia como na foto). 
-        // Retornamos null para o App saber que deve criar o banco inicial.
-        return null;
-      }
-
+      if (res.status === 404) return null;
       return res.ok ? await res.json() : null;
     } catch {
       return null;
@@ -151,8 +136,10 @@ export const MicrosoftGraphService = {
       const token = await this.getToken();
       const siteId = await this.getSiteId();
       if (!siteId) return false;
+      const driveId = await this.getDriveId(siteId);
+      if (!driveId) return false;
 
-      const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/${DB_PATH}:/content`, {
+      const res = await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${FOLDER_NAME}/${DB_FILENAME}:/content`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...data, lastSync: new Date().toISOString() })

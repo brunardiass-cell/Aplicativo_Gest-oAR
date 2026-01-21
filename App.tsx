@@ -1,18 +1,14 @@
 
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
-import { Task, AppConfig, ViewMode, AppUser, ActivityLog, Person, ProjectData } from './types';
+import { Task, AppConfig, ViewMode, AppUser, ActivityLog, Person } from './types';
 import Sidebar from './components/Sidebar';
-import { Cloud, Loader2, ShieldCheck, ShieldAlert, LogOut, Copy, CheckCircle, UserCircle } from 'lucide-react';
+import { Cloud, Loader2, ShieldCheck, ShieldAlert, Info, UserCircle, Lock } from 'lucide-react';
 import { INITIAL_TASKS, TEAM_MEMBERS } from './constants';
 
-// Lazy load components
 const SelectionView = lazy(() => import('./components/SelectionView'));
 const DashboardOverview = lazy(() => import('./components/DashboardOverview'));
-const TaskBoard = lazy(() => import('./components/TaskBoard'));
 const ProjectsManager = lazy(() => import('./components/ProjectsManager'));
-const PeopleManager = lazy(() => import('./components/PeopleManager'));
-const ActivityLogView = lazy(() => import('./components/ActivityLogView'));
 const AccessControl = lazy(() => import('./components/AccessControl'));
 
 const App: React.FC = () => {
@@ -20,7 +16,6 @@ const App: React.FC = () => {
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [authAccount, setAuthAccount] = useState<any>(null);
-  const [copied, setCopied] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
@@ -36,18 +31,16 @@ const App: React.FC = () => {
       active: true
     }));
 
-    const defaultConfig: AppConfig = {
-      notificationEmail: 'setor.ar@ctvacinas.com',
-      people: defaultPeople,
-      projectsData: [
-        { id: 'p1', name: 'Expansão Q3', status: 'Ativo', trackingMacroTasks: [], regulatoryMacroTasks: [], norms: [] }
-      ],
-      users: [
-        { username: 'Admin', role: 'admin', passwordHash: 'admin123', canViewAll: true }
-      ]
+    return {
+      tasks: INITIAL_TASKS,
+      config: {
+        notificationEmail: 'setor.ar@ctvacinas.com',
+        people: defaultPeople,
+        projectsData: [{ id: 'p1', name: 'Expansão Q3', status: 'Ativo', trackingMacroTasks: [], regulatoryMacroTasks: [], norms: [] }],
+        users: [{ username: 'Admin', role: 'admin', passwordHash: 'admin123', canViewAll: true }]
+      },
+      activityLogs: []
     };
-
-    return { tasks: INITIAL_TASKS, config: defaultConfig, activityLogs: [] };
   };
 
   const startup = async () => {
@@ -59,16 +52,12 @@ const App: React.FC = () => {
       setIsAuth(true);
       const access = await MicrosoftGraphService.checkAccess();
       setHasAccess(access);
-      
       if (access) {
         let data = await MicrosoftGraphService.load();
-        
-        // Se a pasta está vazia (load retornou null), criamos o arquivo inicial
         if (!data) {
           data = initializeDefaultData();
           await MicrosoftGraphService.save(data);
         }
-
         setTasks(data.tasks || []);
         setConfig(data.config || null);
         setActivityLogs(data.activityLogs || []);
@@ -87,7 +76,6 @@ const App: React.FC = () => {
       setIsAuth(true);
       const access = await MicrosoftGraphService.checkAccess();
       setHasAccess(access);
-      
       if (access) {
         let data = await MicrosoftGraphService.load();
         if (!data) {
@@ -102,22 +90,12 @@ const App: React.FC = () => {
     setLoading(false);
   };
 
-  const copyITInstructions = () => {
-    const text = `ERRO DE ACESSO - PASTA SISTEMA NO SHAREPOINT
-O usuário possui acesso ao Site, mas o App não consegue ler a pasta "/Sistema".
-Por favor, verifique as permissões de Escrita/Leitura para o usuário convidado na pasta específica de Documentos do site Regulatorios.`;
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 3000);
-  };
-
   const handleLogout = async () => {
     await MicrosoftGraphService.logout();
     setIsAuth(false);
     setHasAccess(null);
     setCurrentUser(null);
     setView('selection');
-    window.location.reload();
   };
 
   const handleSave = async (newTasks: Task[], newConfig: AppConfig, newLogs?: ActivityLog[]) => {
@@ -133,7 +111,7 @@ Por favor, verifique as permissões de Escrita/Leitura para o usuário convidado
   if (loading) return (
     <div className="h-screen bg-slate-900 flex flex-col items-center justify-center text-white">
       <Loader2 className="animate-spin mb-4" size={48} />
-      <p className="text-[10px] font-black uppercase tracking-widest opacity-50">Sincronizando com SharePoint...</p>
+      <p className="text-[10px] font-black uppercase tracking-widest opacity-50">Sincronizando com SharePoint Institucional...</p>
     </div>
   );
 
@@ -144,8 +122,19 @@ Por favor, verifique as permissões de Escrita/Leitura para o usuário convidado
           <ShieldCheck size={40} />
         </div>
         <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter mb-2">Gestão PAR</h1>
-        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-10">Validação de Membro Convidado</p>
-        <button onClick={handleLogin} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-700 transition shadow-xl active:scale-95">Entrar com Microsoft</button>
+        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-8">Login Institucional SharePoint</p>
+        
+        <button onClick={handleLogin} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-700 transition shadow-xl active:scale-95 mb-6">Entrar com Microsoft</button>
+        
+        <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 text-left">
+          <div className="flex items-center gap-2 mb-2 text-blue-700">
+            <Info size={16} />
+            <span className="text-[10px] font-black uppercase tracking-widest">Aviso de Segurança</span>
+          </div>
+          <p className="text-[10px] text-blue-600 leading-relaxed">
+            Ao entrar, a Microsoft enviará um alerta para o seu e-mail. Isso é <b>normal</b> e acontece porque você está autorizando o aplicativo a salvar o banco de dados na pasta <b>Sistema</b> do site institucional. Nós não acessamos seus e-mails privados.
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -156,18 +145,13 @@ Por favor, verifique as permissões de Escrita/Leitura para o usuário convidado
         <div className="w-20 h-20 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-8">
           <ShieldAlert size={40} />
         </div>
-        <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter mb-2">Acesso Negado à Pasta</h1>
+        <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter mb-2">Acesso Não Localizado</h1>
         <div className="flex items-center justify-center gap-2 mb-8 bg-slate-50 py-2 px-4 rounded-xl border border-slate-100 inline-flex">
           <UserCircle size={16} className="text-indigo-500" />
           <span className="text-[10px] font-black text-slate-600 uppercase">{authAccount?.username}</span>
         </div>
-        <p className="text-xs text-slate-500 mb-8 leading-relaxed">Você está autenticado na Microsoft, mas não possui permissões suficientes na pasta <b>/Sistema</b> do SharePoint Regulatorios. Solicite acesso de escrita ao proprietário da pasta.</p>
-        <div className="space-y-3">
-          <button onClick={copyITInstructions} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-700 transition shadow-xl flex items-center justify-center gap-3">
-            {copied ? <CheckCircle size={20} /> : <Copy size={20} />} {copied ? 'Copiado!' : 'Copiar Erro para o Proprietário'}
-          </button>
-          <button onClick={handleLogout} className="w-full py-4 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-600">Sair da Conta</button>
-        </div>
+        <p className="text-xs text-slate-500 mb-8 leading-relaxed">Não conseguimos acessar o site <b>regulatorios</b> com esta conta. Verifique se o seu e-mail tem permissão de edição no SharePoint da instituição.</p>
+        <button onClick={handleLogout} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-black transition">Tentar com outra conta</button>
       </div>
     </div>
   );
@@ -182,7 +166,7 @@ Por favor, verifique as permissões de Escrita/Leitura para o usuário convidado
         <header className="bg-white border-b border-slate-200 p-8 flex justify-between items-center sticky top-0 z-40">
           <div>
             <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">{view === 'dashboard' ? 'Painel Executivo' : 'Gestão PAR'}</h2>
-            <div className="flex items-center gap-2 text-emerald-500 text-[9px] font-black uppercase tracking-widest mt-1"><Cloud size={12} className="animate-pulse" /> Sincronizado com /Sistema</div>
+            <div className="flex items-center gap-2 text-emerald-500 text-[9px] font-black uppercase tracking-widest mt-1"><Cloud size={12} className="animate-pulse" /> Sincronizado: /Sistema (Institucional)</div>
           </div>
           {currentUser && (
             <div className="flex items-center gap-4 bg-slate-50 px-5 py-2.5 rounded-2xl border border-slate-200">
