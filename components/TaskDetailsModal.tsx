@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Task } from '../types';
-import { X, Calendar, User, Tag, ArrowRight, MessageCircle, Clock, History } from 'lucide-react';
+import { X, Calendar, User, Tag, ArrowRight, MessageCircle, Clock, History, ExternalLink } from 'lucide-react';
 
 interface TaskDetailsModalProps {
   task: Task;
@@ -56,6 +56,18 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
               <p className="text-[10px] font-black text-indigo-600 mt-1">{task.progress}% concluído</p>
             </div>
           </div>
+          
+          {task.fileLocation && (
+            <div className="space-y-4">
+              <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest flex items-center gap-1">
+                <ExternalLink size={12} /> Arquivo para Revisão
+              </span>
+              <a href={task.fileLocation} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-3 w-full p-6 bg-amber-500 text-white rounded-3xl font-bold shadow-xl shadow-amber-200 text-sm uppercase tracking-widest hover:bg-amber-600 transition">
+                <ExternalLink size={18}/>
+                Acessar Documento
+              </a>
+            </div>
+          )}
 
           <div className="space-y-4">
              <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
@@ -112,7 +124,7 @@ const InfoBlock: React.FC<{ label: string; value: string; icon: React.ReactNode;
       {icon} {label}
     </span>
     <p className={`font-bold text-sm ${highlight ? 'text-indigo-600' : 'text-slate-900'}`}>
-      {label.includes('Data') || label.includes('Prazo') || label.includes('Solicitação') ? (value ? new Date(value).toLocaleDateString('pt-BR') : '-') : value}
+      {label.includes('Data') || label.includes('Prazo') || label.includes('Solicitação') ? (value ? new Date(value + 'T00:00:00').toLocaleDateString('pt-BR') : '-') : value}
     </p>
   </div>
 );

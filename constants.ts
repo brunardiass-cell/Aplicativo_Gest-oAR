@@ -1,51 +1,55 @@
-// DO NOT add any new types to types.ts as per guidelines, fixing TeamMember usage here
-import { Priority, Status, Task } from './types';
 
-// Fix: Removed missing TeamMember type and used string[] instead
-export const TEAM_MEMBERS: string[] = ['Graziella', 'Bruna', 'Ester', 'Marjorie', 'Ana Luiza', 'Ana Terzian'];
+import { ActivityPlanTemplate, TeamMember } from './types';
 
-export const PRIORITIES: Priority[] = ['Baixa', 'Média', 'Alta', 'Urgente'];
+export const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
+  { id: 'tm_1', name: 'Graziella', role: 'Líder', isLeader: true },
+  { id: 'tm_2', name: 'Bruna', role: 'Equipe', isLeader: false },
+  { id: 'tm_3', name: 'Ester', role: 'Equipe', isLeader: false },
+  { id: 'tm_4', name: 'Marjorie', role: 'Equipe', isLeader: false },
+  { id: 'tm_5', name: 'Ana Luiza', role: 'Equipe', isLeader: false },
+  { id: 'tm_6', name: 'Ana Terzian', role: 'Equipe', isLeader: false }
+];
 
-export const STATUSES: Status[] = ['Não Iniciada', 'Em Andamento', 'Bloqueada', 'Concluída'];
-
-export const INITIAL_TASKS: Task[] = [
+export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
   {
-    id: '1',
-    requestDate: '2024-05-10',
-    project: 'Expansão Q3',
-    activity: 'Planejamento de Metas',
-    description: 'Definição detalhada dos KPIs para o terceiro trimestre.',
-    projectLead: 'Graziella',
-    collaborators: ['Bruna', 'Ester'],
-    priority: 'Alta',
-    status: 'Em Andamento',
-    plannedStartDate: '2024-05-12',
-    realStartDate: '2024-05-12',
-    completionDate: '2024-05-20',
-    progress: 45,
-    nextStep: 'Reunião de alinhamento com diretoria.',
-    updates: [
-      { id: 'u1', date: '2024-05-13', note: 'Primeira versão do documento concluída.' }
-    ],
-    emailOnJoin: true,
-    emailOnDeadline: true
+    id: 'plan_protein',
+    name: 'Proteína Recombinante',
+    macroActivities: [
+      'Desenvolvimento de Dossiê de Insumo (DIFA)',
+      'Coordenação de Estudo de Estabilidade',
+      'Validação de Processo Produtivo',
+      'Elaboração de Relatório Clínico Fase III',
+      'Submissão Regulatória Final'
+    ]
   },
   {
-    id: '2',
-    requestDate: '2024-05-11',
-    project: 'Marketing Interno',
-    activity: 'Newsletter Mensal',
-    description: 'Criação do conteúdo para a newsletter de colaboradores.',
-    projectLead: 'Marjorie',
-    collaborators: ['Ana Luiza'],
-    priority: 'Média',
-    status: 'Não Iniciada',
-    plannedStartDate: '2024-05-15',
-    completionDate: '2024-05-25',
-    progress: 0,
-    nextStep: 'Coleta de feedbacks dos setores.',
-    updates: [],
-    emailOnJoin: false,
-    emailOnDeadline: true
+    id: 'plan_virus',
+    name: 'Vírus Recombinante',
+    macroActivities: [
+      'Caracterização do Banco Viral Mestre/Trabalho',
+      'Gerenciamento de Testes de Adventícios',
+      'Desenvolvimento do Processo de Inativação Viral',
+      'Compilação e Submissão de Dossiê'
+    ]
+  },
+  {
+    id: 'plan_rna',
+    name: 'RNA (Terapia Gênica)',
+    macroActivities: [
+      'Qualificação do Plasmídeo Molde',
+      'Validação da Transcrição in vitro (TIV)',
+      'Análise de Pureza e Integridade do RNA',
+      'Elaboração de Relatório de Segurança Pré-clínica',
+    ]
+  },
+  {
+    id: 'plan_dna',
+    name: 'DNA (Vacina de DNA)',
+    macroActivities: [
+      'Construção e Qualificação do Vetor Plasmidial',
+      'Desenvolvimento da Produção em Larga Escala',
+      'Desenvolvimento de Teste de Potência',
+      'Preparação para Submissão de Estudos Clínicos',
+    ]
   }
 ];

@@ -2,17 +2,15 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { Task } from "../types";
 
-// Explicit declaration of process for TypeScript compiler in browser environment
-declare const process: {
-  env: {
-    API_KEY: string;
-  };
-};
-
 export const generateExecutiveReport = async (tasks: Task[], contextName: string): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  const tasksSummary = tasks.map(t => ({
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  
+  const recentTasks = tasks.filter(t => new Date(t.requestDate) >= thirtyDaysAgo);
+
+  const tasksSummary = recentTasks.map(t => ({
     projeto: t.project,
     atividade: t.activity,
     descricao: t.description,
@@ -23,23 +21,18 @@ export const generateExecutiveReport = async (tasks: Task[], contextName: string
   }));
 
   const prompt = `
-    Você é um consultor de gestão estratégica auxiliando Graziella, a líder do setor.
-    Sua tarefa é analisar a lista de atividades referente APENAS AO ÚLTIMO MÊS para o contexto: "${contextName}".
+    Você é um consultor de gestão estratégica para o setor de Assuntos Regulatórios do CTVacinas.
+    Analise as atividades do ÚLTIMO MÊS para o contexto: "${contextName}".
     
-    Analise os seguintes dados e gere um relatório executivo de ALTA PERFORMANCE em Português.
-    
-    Considere:
-    - O impacto das descrições detalhadas nas metas do setor.
-    - Se o contexto for individual, destaque a evolução mensal da pessoa.
-    - Se for geral, aponte a produtividade coletiva dos últimos 30 dias.
+    Relatório baseado em ${recentTasks.length} atividades recentes.
+    Dados: ${JSON.stringify(tasksSummary)}
 
-    O relatório deve ser dividido em:
-    1. Performance do Mês (Destaques positivos).
-    2. Alertas de Risco (O que ficou para trás ou está bloqueado).
-    3. Insights Estratégicos (Próximos passos baseados na carga atual).
+    Gere um relatório executivo em Português com:
+    1. Performance Geral (Destaques e conclusão).
+    2. Análise de Risco (Alertas de prioridade e atrasos).
+    3. Recomendações (Próximos passos estratégicos).
 
-    Dados das Atividades do Último Mês:
-    ${JSON.stringify(tasksSummary, null, 2)}
+    Mantenha um tom profissional, direto e otimista.
   `;
 
   try {
@@ -47,9 +40,8 @@ export const generateExecutiveReport = async (tasks: Task[], contextName: string
       model: 'gemini-3-flash-preview',
       contents: prompt,
     });
-    return response.text || "Não foi possível gerar o relatório no momento.";
+    return response.text || "Erro ao processar dados.";
   } catch (error) {
-    console.error("Erro ao gerar relatório com Gemini:", error);
-    return "Ocorreu um erro ao conectar com a inteligência artificial. Verifique sua conexão e tente novamente.";
+    return "Falha na conexão com a IA.";
   }
 };

@@ -1,154 +1,175 @@
 
 import React from 'react';
-import { Task } from '../types';
-import { Edit2, Trash2, Eye, Calendar, ArrowRight, User, AlertTriangle } from 'lucide-react';
+import { Task, AppNotification } from '../types';
+import { 
+  ArrowRight, 
+  MessageSquare, 
+  FileSignature, 
+  Clock, 
+  X,
+  Eye,
+  Edit2,
+  Trash2,
+  AlertTriangle,
+  FileCheck
+} from 'lucide-react';
 
 interface TaskBoardProps {
   tasks: Task[];
-  canEdit: boolean;
+  currentUser: string | 'Todos';
   onEdit: (task: Task) => void;
-  onDelete: (id: string) => void;
-  onViewDetails: (task: Task) => void;
+  onView: (task: Task) => void;
+  onDelete: (task: Task) => void;
+  onAssignReview: (taskId: string, reviewer: string) => void;
+  onNotificationClick: (notification: AppNotification) => void;
+  onClearSingleNotification: (notificationId: string) => void;
+  notifications: AppNotification[];
 }
 
-const TaskBoard: React.FC<TaskBoardProps> = ({ tasks, canEdit, onEdit, onDelete, onViewDetails }) => {
-  
-  const isNearDeadline = (dateStr: string) => {
-    if (!dateStr) return false;
-    const deadline = new Date(dateStr);
-    const today = new Date();
-    const diffTime = deadline.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays >= 0 && diffDays <= 3;
-  };
-
-  const getPriorityInfo = (priority: string) => {
-    switch (priority) {
-      case 'Urgente': return { color: 'bg-red-500', text: 'Urgente' };
-      case 'Alta': return { color: 'bg-orange-500', text: 'Alta' };
-      case 'Média': return { color: 'bg-amber-500', text: 'Média' };
-      default: return { color: 'bg-blue-500', text: 'Baixa' };
-    }
-  };
-
-  const getStatusStyle = (status: string) => {
-    switch (status) {
-      case 'Concluída': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-      case 'Em Andamento': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
-      case 'Bloqueada': return 'bg-slate-200 text-slate-800 border-slate-300';
-      default: return 'bg-slate-100 text-slate-500 border-slate-200';
-    }
-  };
+const TaskBoard: React.FC<TaskBoardProps> = ({ 
+  tasks, 
+  currentUser, 
+  onEdit, 
+  onView,
+  onDelete, 
+  onAssignReview,
+  onNotificationClick,
+  onClearSingleNotification,
+  notifications
+}) => {
+  const activeTasks = tasks.filter(t => !t.deleted);
+  const activeReviews = notifications.filter(n => n.userId === currentUser && !n.read && n.type === 'REVIEW_ASSIGNED');
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {tasks.map((task) => {
-        const priority = getPriorityInfo(task.priority);
-        const nearDeadline = isNearDeadline(task.completionDate) && task.status !== 'Concluída';
-        
-        return (
-          <div key={task.id} className={`bg-white rounded-2xl border ${nearDeadline ? 'border-amber-400 ring-2 ring-amber-400 ring-opacity-20' : 'border-slate-200'} shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group overflow-hidden`}>
-            {/* Top Bar */}
-            <div className={`h-1.5 w-full ${priority.color}`}></div>
-            
-            <div className="p-6 flex flex-col flex-1">
-              <div className="flex justify-between items-start mb-4">
-                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-widest rounded border border-indigo-100">
-                  {task.project}
-                </span>
-                <div className="flex gap-2">
-                   {nearDeadline && (
-                    <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-black uppercase tracking-widest rounded flex items-center gap-1 animate-pulse">
-                      <AlertTriangle size={10} /> Prazo Próximo
-                    </span>
-                  )}
-                  <span className={`text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-full border ${getStatusStyle(task.status)}`}>
-                    {task.status}
-                  </span>
-                </div>
+    <div className="space-y-10">
+      {activeReviews.length > 0 && currentUser !== 'Todos' && (
+        <div className="bg-[#1a2b4e] rounded-[2rem] p-6 shadow-2xl border border-white/10 animate-in slide-in-from-top duration-500">
+           <div className="flex items-center gap-4 mb-4">
+              <div className="w-10 h-10 bg-amber-400 rounded-2xl flex items-center justify-center text-[#1a2b4e] shadow-lg">
+                 <FileSignature size={24} />
               </div>
-
-              <h3 className="text-lg font-black text-slate-900 leading-tight mb-2 line-clamp-2">
-                {task.activity}
-              </h3>
-
-              <p className="text-xs text-slate-500 line-clamp-2 mb-6 font-medium italic">
-                {task.description}
-              </p>
-
-              {/* Progress */}
-              <div className="space-y-1 mb-6">
-                <div className="flex justify-between items-center text-[10px] font-bold uppercase text-slate-400">
-                  <span>Progresso</span>
-                  <span className="text-indigo-600">{task.progress}%</span>
-                </div>
-                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-indigo-600 transition-all duration-1000" 
-                    style={{ width: `${task.progress}%` }}
-                  ></div>
-                </div>
+              <div>
+                 <h3 className="text-white font-black uppercase text-sm tracking-tighter">Relatórios Pendentes para Sua Revisão</h3>
+                 <p className="text-blue-300 text-[9px] font-bold uppercase tracking-widest">Ação necessária em {activeReviews.length} documentos</p>
               </div>
-
-              {/* Next Step - Highlighted */}
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 mb-6">
-                <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 mb-1">
-                  <ArrowRight size={10} /> Próximo Passo
-                </p>
-                <p className="text-xs font-bold text-slate-700 leading-tight">
-                  {task.nextStep || 'Não definido'}
-                </p>
-              </div>
-
-              <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-50">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold">
-                    {task.projectLead.charAt(0)}
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Responsável</p>
-                    <p className="text-xs font-bold text-slate-800">{task.projectLead}</p>
-                  </div>
-                </div>
-                
-                <div className="flex gap-1">
+           </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {activeReviews.map(notif => (
+                <div 
+                  key={notif.id} 
+                  className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center justify-between group hover:bg-white/10 transition text-left w-full relative"
+                >
                   <button 
-                    onClick={() => onViewDetails(task)}
-                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                    title="Visualizar"
+                    onClick={() => onNotificationClick(notif)}
+                    className="flex-1 flex items-center justify-between pr-8"
                   >
-                    <Eye size={18} />
+                    <p className="text-white text-[10px] font-bold uppercase truncate">{notif.message}</p>
+                    <ArrowRight size={14} className="text-amber-400 group-hover:translate-x-1 transition shrink-0" />
                   </button>
-                  {canEdit && (
-                    <>
-                      <button 
-                        onClick={() => onEdit(task)}
-                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                        title="Editar"
-                      >
-                        <Edit2 size={18} />
-                      </button>
-                      <button 
-                        onClick={() => onDelete(task.id)}
-                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                        title="Excluir"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </>
-                  )}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onClearSingleNotification(notif.id); }}
+                    className="absolute top-2 right-2 p-1 text-blue-200/40 hover:text-white hover:bg-white/20 rounded-full transition-colors"
+                    title="Limpar notificação"
+                  >
+                    <X size={14} />
+                  </button>
                 </div>
-              </div>
-            </div>
-          </div>
-        );
-      })}
-
-      {tasks.length === 0 && (
-        <div className="col-span-full py-20 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200">
-          <p className="text-slate-400 font-medium italic">Nenhuma atividade encontrada com os filtros atuais.</p>
+              ))}
+           </div>
         </div>
       )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {activeTasks.map(task => (
+          <div key={task.id} className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-2xl transition-all group flex flex-col h-full relative overflow-hidden">
+            <div className="flex justify-between items-start mb-6">
+              <div className="flex flex-col gap-2">
+                <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                  task.status === 'Concluída' ? 'bg-emerald-50 text-emerald-600' : 
+                  task.status === 'Bloqueada' ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-500'
+                }`}>
+                  {task.status}
+                </span>
+                {task.isReport && (
+                  <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                    task.reportStage?.includes('Concluído') ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-amber-100 text-amber-700 border-amber-200'
+                  }`}>
+                    {task.reportStage || 'Relatório'}
+                  </span>
+                )}
+              </div>
+              
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => onView(task)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition" title="Visualizar"><Eye size={18}/></button>
+                <button onClick={() => onEdit(task)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition" title="Editar"><Edit2 size={18}/></button>
+                <button onClick={() => onDelete(task)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition" title="Excluir"><Trash2 size={18}/></button>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">{task.project}</p>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight leading-tight uppercase">{task.activity}</h3>
+              <p className="text-[11px] font-medium text-slate-400 mt-2 line-clamp-2">{task.description}</p>
+            </div>
+
+            <div className="space-y-2 mb-8">
+               <div className="flex justify-between items-end">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Avanço</span>
+                  <span className="text-[11px] font-black text-[#1a2b4e]">{task.progress}%</span>
+               </div>
+               <div className="w-full h-1.5 bg-slate-50 rounded-full overflow-hidden">
+                  <div className={`h-full transition-all duration-700 ${task.progress === 100 ? 'bg-emerald-500' : 'bg-[#1a2b4e]'}`} style={{width: `${task.progress}%`}}></div>
+               </div>
+            </div>
+
+            <div className="flex items-center justify-between mb-8 pb-6 border-b border-slate-50">
+               <div className="flex flex-col">
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Líder</span>
+                  <div className="flex items-center gap-2 mt-1">
+                     <div className="w-6 h-6 rounded-lg bg-slate-900 text-white flex items-center justify-center text-[9px] font-black uppercase">{task.projectLead[0]}</div>
+                     <span className="text-[10px] font-bold text-slate-700 uppercase">{task.projectLead}</span>
+                  </div>
+               </div>
+               {task.reportStage === 'Próximo Revisor' && task.currentReviewer && (
+                 <div className="flex flex-col text-right">
+                    <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest">Em Revisão Com</span>
+                    <span className="text-[10px] font-black text-amber-700 uppercase mt-1">{task.currentReviewer}</span>
+                 </div>
+               )}
+            </div>
+
+            <div className="p-5 bg-slate-50 rounded-[2rem] border border-slate-100 mt-auto">
+               <p className="text-[9px] font-black text-[#1a2b4e] uppercase tracking-widest flex items-center gap-2 mb-2">
+                  <ArrowRight size={12} /> Próximo Passo
+               </p>
+               <p className="text-[11px] font-bold text-slate-700 leading-tight italic">
+                 "{task.nextStep || 'Não definido'}"
+               </p>
+            </div>
+
+            {!task.isReport && (
+              <div className="mt-6 pt-4 border-t border-slate-50 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-slate-400">
+                   <Clock size={14} />
+                   <span className="text-[9px] font-bold uppercase">Prazo: {task.completionDate ? new Date(task.completionDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/D'}</span>
+                </div>
+                {task.updates.length > 0 && (
+                  <div className="flex items-center gap-1.5 text-blue-600">
+                     <MessageSquare size={14} />
+                     <span className="text-[10px] font-black">{task.updates.length}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+        {activeTasks.length === 0 && (
+          <div className="col-span-full py-20 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-100">
+            <AlertTriangle className="mx-auto text-slate-100 mb-4" size={48} />
+            <p className="text-slate-400 font-black uppercase text-xs tracking-widest italic">Nenhuma atividade ativa no momento.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

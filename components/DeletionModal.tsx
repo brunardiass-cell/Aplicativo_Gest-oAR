@@ -3,12 +3,12 @@ import React, { useState } from 'react';
 import { X, AlertTriangle, Trash2 } from 'lucide-react';
 
 interface DeletionModalProps {
-  taskName: string;
+  itemName: string;
   onClose: () => void;
   onConfirm: (reason: string) => void;
 }
 
-const DeletionModal: React.FC<DeletionModalProps> = ({ taskName, onClose, onConfirm }) => {
+const DeletionModal: React.FC<DeletionModalProps> = ({ itemName, onClose, onConfirm }) => {
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
 
@@ -36,10 +36,10 @@ const DeletionModal: React.FC<DeletionModalProps> = ({ taskName, onClose, onConf
         <div className="p-8 space-y-6">
           <div className="space-y-2">
             <p className="text-slate-600 text-sm font-medium">
-              Tem certeza que deseja excluir esta tarefa?
+              Tem certeza que deseja excluir este item?
             </p>
             <p className="text-slate-900 font-black uppercase text-lg leading-tight border-l-4 border-red-500 pl-4 py-1">
-              {taskName}
+              {itemName}
             </p>
           </div>
 
@@ -53,7 +53,7 @@ const DeletionModal: React.FC<DeletionModalProps> = ({ taskName, onClose, onConf
               value={reason}
               onChange={(e) => { setReason(e.target.value); setError(''); }}
               placeholder="Ex: Tarefa duplicada, erro de cadastro, projeto cancelado..."
-              className={`w-full px-4 py-3 bg-slate-50 border ${error ? 'border-red-500' : 'border-slate-200'} rounded-2xl outline-none focus:ring-2 focus:ring-red-500 text-sm font-bold transition-all resize-none`}
+              className={`w-full px-4 py-3 bg-slate-50 border ${error ? 'border-red-500' : 'border-slate-200'} rounded-2xl outline-none focus:ring-2 focus:ring-red-500 text-sm font-bold text-slate-900 transition-all resize-none`}
             ></textarea>
             {error && <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mt-1">{error}</p>}
           </div>
@@ -70,7 +70,7 @@ const DeletionModal: React.FC<DeletionModalProps> = ({ taskName, onClose, onConf
             onClick={onClose}
             className="w-full py-4 text-slate-400 font-black uppercase text-xs tracking-widest hover:bg-slate-200 rounded-2xl transition"
           >
-            Cancelar e Manter Tarefa
+            Cancelar e Manter Item
           </button>
         </footer>
       </div>

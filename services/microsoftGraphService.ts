@@ -16,7 +16,6 @@ export const MicrosoftGraphService = {
       msalInstance = new msal.PublicClientApplication({
         auth: {
           clientId: CLIENT_ID,
-          // 'common' permite tanto contas corporativas quanto pessoais (Outlook, Hotmail, etc.)
           authority: "https://login.microsoftonline.com/common",
           redirectUri: window.location.origin,
         },
@@ -39,7 +38,7 @@ export const MicrosoftGraphService = {
           const silentRes = await instance.acquireTokenSilent({ ...loginRequest, account: accounts[0] });
           return { success: true, account: silentRes.account };
         } catch (e) {
-          // Se falhar o silencioso, segue para o popup
+          // Segue para popup
         }
       }
       const loginResponse = await instance.loginPopup(loginRequest);
@@ -47,9 +46,10 @@ export const MicrosoftGraphService = {
     } catch (error: any) {
       console.error("Erro no login Microsoft:", error);
       
-      // Tratamento específico para o erro de cliente não habilitado para consumidores
       if (error.errorMessage?.includes("unauthorized_client") || error.message?.includes("unauthorized_client")) {
-        alert("Este identificador de acesso está configurado apenas para e-mails corporativos da instituição. Se estiver usando um e-mail pessoal (Gmail/Outlook), entre em contato com o administrador para habilitar o suporte multilocatário no Azure.");
+        alert("⚠️ ERRO DE PERMISSÃO AZURE:\n\nSua conta (@outlook.com) é pessoal, mas este Identificador de Aplicativo está configurado apenas para contas institucionais.\n\nPara corrigir, o administrador deve acessar o portal Azure e alterar 'Supported account types' para 'Multitenant + Personal Accounts'.\n\nPor enquanto, use o LOGIN LOCAL (Bruna) para entrar.");
+      } else {
+        alert("Ocorreu um erro ao tentar conectar com a Microsoft. Verifique sua internet ou tente novamente mais tarde.");
       }
       
       return { success: false, error };
