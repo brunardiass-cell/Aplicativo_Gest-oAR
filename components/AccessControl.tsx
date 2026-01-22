@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { AppConfig, AppUser } from '../types';
 import { 
   ShieldCheck, UserPlus, Trash2, 
-  Info, User, Lock, ShieldAlert
+  User, Lock
 } from 'lucide-react';
 
 interface AccessControlProps {
@@ -18,13 +18,11 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
 
   const handleAddUser = () => {
     if (!newUser.username.trim() || !newUser.password.trim()) return;
-    
     if (config.users.some(u => u.username.toLowerCase() === newUser.username.toLowerCase())) {
       setMessage({ type: 'error', text: 'Este nome de usuário já existe.' });
       setTimeout(() => setMessage(null), 3000);
       return;
     }
-
     onUpdateConfig({ 
       ...config, 
       users: [...config.users, { 
@@ -34,7 +32,6 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
         canViewAll: newUser.role === 'admin' 
       }] 
     });
-    
     setNewUser({ username: '', password: '', role: 'user' });
     setMessage({ type: 'success', text: 'Usuário autorizado com sucesso!' });
     setTimeout(() => setMessage(null), 3000);
@@ -43,87 +40,54 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
   const removeUser = (username: string) => {
     if (username === currentUser.username) return;
     if (confirm(`Remover o acesso de "${username}"?`)) {
-      onUpdateConfig({
-        ...config,
-        users: config.users.filter(u => u.username !== username)
-      });
+      onUpdateConfig({ ...config, users: config.users.filter(u => u.username !== username) });
     }
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
         <header className="p-10 bg-slate-900 text-white">
           <h2 className="text-3xl font-black uppercase tracking-tighter flex items-center gap-3">
-            <ShieldCheck size={32} className="text-indigo-500" /> Controle de Acesso Local
+            <ShieldCheck size={32} className="text-indigo-500" /> Controle de Acesso
           </h2>
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Gerencie quem pode acessar o painel de atividades</p>
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Gerenciamento de permissões e usuários autorizados</p>
         </header>
 
         <div className="p-10 space-y-12">
-          {/* Sessão de Adição */}
+          
+          {/* Sessão de Adição de Usuário */}
           <section className="space-y-6">
             <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-4">
-              <UserPlus size={18} className="text-indigo-600" /> Autorizar Novo Acesso
+              <UserPlus size={18} className="text-indigo-600" /> Autorizar Novo Usuário
             </h3>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-8 rounded-3xl border border-slate-100">
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-1">
                   <User size={12}/> Nome de Usuário
                 </label>
-                <input 
-                  type="text" 
-                  value={newUser.username} 
-                  onChange={e => setNewUser({...newUser, username: e.target.value})} 
-                  placeholder="Nome do integrante..." 
-                  className="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" 
-                />
+                <input type="text" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} placeholder="Ex: Bruna..." className="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-1">
                   <Lock size={12}/> Senha de Acesso
                 </label>
-                <input 
-                  type="password" 
-                  value={newUser.password} 
-                  onChange={e => setNewUser({...newUser, password: e.target.value})} 
-                  placeholder="Defina uma senha..." 
-                  className="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" 
-                />
+                <input type="password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} placeholder="Senha..." className="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div className="md:col-span-2 flex items-center justify-between pt-4 border-t border-slate-100 mt-2">
                 <label className="flex items-center gap-3 cursor-pointer group">
-                  <input 
-                    type="checkbox" 
-                    checked={newUser.role === 'admin'} 
-                    onChange={e => setNewUser({...newUser, role: e.target.checked ? 'admin' : 'user'})} 
-                    className="w-5 h-5 accent-indigo-600 rounded" 
-                  />
-                  <div>
-                    <span className="text-[10px] font-black text-slate-900 uppercase">Perfil Administrador</span>
-                    <p className="text-[8px] font-bold text-slate-400 uppercase">Pode gerenciar usuários e deletar tarefas</p>
-                  </div>
+                  <input type="checkbox" checked={newUser.role === 'admin'} onChange={e => setNewUser({...newUser, role: e.target.checked ? 'admin' : 'user'})} className="w-5 h-5 accent-indigo-600 rounded" />
+                  <span className="text-[10px] font-black text-slate-900 uppercase">Perfil Administrador</span>
                 </label>
-                <button 
-                  onClick={handleAddUser} 
-                  className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-black transition shadow-xl"
-                >
-                  Conceder Acesso
-                </button>
+                <button onClick={handleAddUser} className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-black transition shadow-xl">Conceder Acesso</button>
               </div>
-              {message && (
-                <div className={`md:col-span-2 p-3 rounded-xl text-[10px] font-black uppercase text-center ${message.type === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                  {message.text}
-                </div>
-              )}
             </div>
           </section>
 
           {/* Lista de Usuários */}
           <section className="space-y-6">
             <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-4">
-               Lista de Membros Ativos ({config.users.length})
+               Membros Ativos ({config.users.length})
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {config.users.map(u => (
@@ -134,40 +98,24 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
                     </div>
                     <div>
                       <h4 className="text-sm font-black text-slate-900 uppercase tracking-tighter">{u.username}</h4>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${u.role === 'admin' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}>
-                          {u.role}
-                        </span>
-                        {u.username === currentUser.username && (
-                          <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest">• Você</span>
-                        )}
-                      </div>
+                      <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${u.role === 'admin' ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-400'}`}>
+                        {u.role}
+                      </span>
                     </div>
                   </div>
                   {u.username !== currentUser.username && (
-                    <button 
-                      onClick={() => removeUser(u.username)} 
-                      className="p-3 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition"
-                    >
-                      <Trash2 size={20}/>
-                    </button>
+                    <button onClick={() => removeUser(u.username)} className="p-3 text-slate-300 hover:text-red-500 rounded-xl transition"><Trash2 size={20}/></button>
                   )}
                 </div>
               ))}
             </div>
           </section>
 
-          <div className="p-8 bg-blue-50 rounded-[2rem] border border-blue-100 flex gap-5 items-center">
-             <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg">
-                <Info size={24} />
-             </div>
-             <div>
-               <p className="text-[10px] font-black text-blue-900 uppercase tracking-widest mb-1">Nota de Privacidade Local</p>
-               <p className="text-xs text-blue-700 leading-relaxed font-medium">
-                 O sistema não está mais conectado à nuvem. Todas as alterações feitas aqui são salvas <b>apenas neste navegador</b>. Para usar em outro computador, os dados não serão sincronizados automaticamente.
-               </p>
-             </div>
-          </div>
+          {message && (
+            <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 px-10 py-4 rounded-2xl text-[10px] font-black uppercase text-center shadow-2xl z-[100] animate-in slide-in-from-bottom-4 ${message.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
+              {message.text}
+            </div>
+          )}
         </div>
       </div>
     </div>

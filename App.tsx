@@ -2,7 +2,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Task, AppConfig, ViewMode, AppUser, ActivityLog, Person } from './types';
 import Sidebar from './components/Sidebar';
-import { Loader2, Database, Cloud, CloudOff, RefreshCw } from 'lucide-react';
+import { Loader2, Cloud, CloudOff, RefreshCw } from 'lucide-react';
 import { INITIAL_TASKS, TEAM_MEMBERS } from './constants';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
 
@@ -53,6 +53,8 @@ const App: React.FC = () => {
   const loadData = async (forceCloud = false) => {
     setLoading(true);
     try {
+      const localData = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      
       const account = await MicrosoftGraphService.getAccount();
       setMsAccount(account);
       
@@ -63,16 +65,15 @@ const App: React.FC = () => {
         setSyncing(false);
       }
 
-      const localData = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      const data = cloudData || localData || initializeDefaultData();
+      const finalData = cloudData || localData || initializeDefaultData();
 
-      setTasks(data.tasks || []);
-      setConfig(data.config || null);
-      setActivityLogs(data.activityLogs || []);
+      setTasks(finalData.tasks || []);
+      setConfig(finalData.config || initializeDefaultData().config);
+      setActivityLogs(finalData.activityLogs || []);
       setIsCloudActive(!!cloudData);
       
-      if (!localData && !cloudData) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      if (cloudData) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(finalData));
       }
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
@@ -96,13 +97,11 @@ const App: React.FC = () => {
       lastUpdate: new Date().toISOString()
     };
 
-    // Salva Local
     setTasks(newTasks);
     setConfig(newConfig);
     setActivityLogs(logs);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
 
-    // Salva na Nuvem (SharePoint)
     if (msAccount) {
       const success = await MicrosoftGraphService.saveToCloud(dataToSave);
       setIsCloudActive(success);
@@ -116,6 +115,8 @@ const App: React.FC = () => {
     if (result.success) {
       setMsAccount(result.account);
       loadData(true);
+    } else {
+      alert("Falha na conexão com a conta Microsoft.");
     }
   };
 
@@ -127,7 +128,7 @@ const App: React.FC = () => {
   if (loading) return (
     <div className="h-screen bg-slate-900 flex flex-col items-center justify-center text-white">
       <Loader2 className="animate-spin mb-4" size={48} />
-      <p className="text-[10px] font-black uppercase tracking-widest opacity-50">Sincronizando com SharePoint...</p>
+      <p className="text-[10px] font-black uppercase tracking-widest opacity-50">Sincronizando Sistema...</p>
     </div>
   );
 
@@ -160,7 +161,7 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-3 mt-1">
                   <div className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest ${isCloudActive ? 'text-emerald-500' : 'text-slate-400'}`}>
                     {isCloudActive ? <Cloud size={12} /> : <CloudOff size={12} />}
-                    {isCloudActive ? 'Sincronizado via SharePoint' : 'Modo Local'}
+                    {isCloudActive ? 'SharePoint Ativo' : 'Modo Offline'}
                   </div>
                   {syncing && <RefreshCw size={10} className="animate-spin text-indigo-500" />}
                 </div>
@@ -185,6 +186,7 @@ const App: React.FC = () => {
                 onSelect={() => {}} 
                 msAccount={msAccount}
                 onMsLogin={handleMicrosoftLogin}
+                hasClientId={true}
               />
             )}
             
@@ -204,31 +206,15 @@ const App: React.FC = () => {
                   />
                 )}
                 {view === 'tasks' && (
-                  <TaskBoard 
-                    tasks={tasks} 
-                    canEdit={currentUser.role === 'admin'} 
-                    onEdit={(task) => {}} 
-                    onDelete={(id) => {}} 
-                    onViewDetails={() => {}} 
-                  />
+                  <TaskBoard tasks={tasks} canEdit={currentUser.role === 'admin'} onEdit={() => {}} onDelete={() => {}} onViewDetails={() => {}} />
                 )}
                 {view === 'projects' && config && (
                   <ProjectsManager 
-                    projects={config.projectsData} 
-                    tasks={tasks} 
-                    people={config.people} 
+                    projects={config.projectsData} tasks={tasks} people={config.people} 
                     canEdit={currentUser.role === 'admin'} 
                     onUpdate={(p) => handleSave(tasks, {...config, projectsData: p})} 
                     onAddLog={(id, title, reason) => {
-                      const newLog: ActivityLog = {
-                        id: Math.random().toString(36).substring(2, 9),
-                        taskId: id,
-                        taskTitle: title,
-                        user: currentUser.username,
-                        timestamp: new Date().toISOString(),
-                        reason,
-                        action: 'EXCLUSÃO'
-                      };
+                      const newLog: ActivityLog = { id: Math.random().toString(36).substring(2, 9), taskId: id, taskTitle: title, user: currentUser.username, timestamp: new Date().toISOString(), reason, action: 'EXCLUSÃO' };
                       handleSave(tasks, config, [newLog, ...activityLogs]);
                     }}
                   />
@@ -236,9 +222,7 @@ const App: React.FC = () => {
                 {view === 'access-control' && config && (
                   <AccessControl config={config} currentUser={currentUser} onUpdateConfig={(c) => handleSave(tasks, c)} />
                 )}
-                {view === 'logs' && (
-                  <ActivityLogView logs={activityLogs} />
-                )}
+                {view === 'logs' && <ActivityLogView logs={activityLogs} />}
               </>
             )}
           </Suspense>

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { AppUser } from '../types';
-import { User, ArrowRight, Lock, LogIn, ShieldCheck, Database, Cloud, AlertCircle } from 'lucide-react';
+import { User, ArrowRight, Lock, LogIn, ShieldCheck, Database, Cloud } from 'lucide-react';
 
 interface SelectionViewProps {
   onSelect: (member: string | 'Todos') => void;
@@ -9,9 +9,10 @@ interface SelectionViewProps {
   users: AppUser[];
   msAccount: any;
   onMsLogin: () => void;
+  hasClientId: boolean;
 }
 
-const SelectionView: React.FC<SelectionViewProps> = ({ onSelect, onLogin, users, msAccount, onMsLogin }) => {
+const SelectionView: React.FC<SelectionViewProps> = ({ onLogin, users, msAccount, onMsLogin }) => {
   const [showLogin, setShowLogin] = useState<AppUser | null>(null);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -34,7 +35,7 @@ const SelectionView: React.FC<SelectionViewProps> = ({ onSelect, onLogin, users,
           <div className="text-center mb-12 space-y-4">
             <div className={`inline-flex items-center gap-2 px-4 py-2 border rounded-full text-[10px] font-black uppercase tracking-widest mb-4 ${msAccount ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
               {msAccount ? <Cloud size={16} /> : <Database size={16} />}
-              {msAccount ? `Sincronizado: ${msAccount.username}` : 'Armazenamento Local'}
+              {msAccount ? `Conectado: ${msAccount.username}` : 'Modo Offline'}
             </div>
             <h1 className="text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">
               Acessar <span className="text-indigo-600">Painel AR</span>
@@ -45,19 +46,21 @@ const SelectionView: React.FC<SelectionViewProps> = ({ onSelect, onLogin, users,
           </div>
 
           {!msAccount && (
-            <div className="w-full max-w-2xl mb-12 p-6 bg-amber-50 border border-amber-100 rounded-3xl flex flex-col md:flex-row items-center gap-6 shadow-sm">
-               <div className="p-4 bg-amber-500 text-white rounded-2xl shadow-lg">
-                 <AlertCircle size={28} />
+            <div className="w-full max-w-2xl mb-12 p-8 bg-indigo-600 rounded-[2.5rem] flex flex-col md:flex-row items-center gap-6 shadow-2xl shadow-indigo-200 border border-indigo-500">
+               <div className="p-4 bg-white/10 text-white rounded-2xl">
+                 <Cloud size={32} />
                </div>
-               <div className="flex-1 text-center md:text-left">
-                 <h4 className="text-sm font-black text-amber-900 uppercase tracking-tight">Ativar Sincronização em Nuvem</h4>
-                 <p className="text-[10px] text-amber-700 font-bold uppercase mt-1">Conecte sua conta Microsoft para salvar alterações no SharePoint.</p>
+               <div className="flex-1 text-center md:text-left text-white">
+                 <h4 className="text-lg font-black uppercase tracking-tight">Ativar Sincronização em Nuvem</h4>
+                 <p className="text-xs font-medium opacity-80 mt-1">
+                   Conecte sua conta Microsoft para compartilhar os dados com toda a equipe via SharePoint automaticamente.
+                 </p>
                </div>
                <button 
                 onClick={onMsLogin}
-                className="px-8 py-3 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition flex items-center gap-2"
+                className="px-8 py-4 bg-white text-indigo-600 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-slate-50 transition flex items-center gap-2 shadow-xl"
                >
-                 <LogIn size={16} /> Entrar com Microsoft
+                 <LogIn size={20} /> Conectar Agora
                </button>
             </div>
           )}

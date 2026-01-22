@@ -1,28 +1,29 @@
 
 import * as msal from "@azure/msal-browser";
 
-const msalConfig = {
-  auth: {
-    clientId: "00000000-0000-0000-0000-000000000000", // O ambiente deve prover ou o usuário configurar no Azure
-    authority: "https://login.microsoftonline.com/common",
-    redirectUri: window.location.origin,
-  },
-  cache: {
-    cacheLocation: "localStorage",
-    storeAuthStateInCookie: true,
-  }
-};
+// Client ID fixo para a aplicação CT-Vacinas SharePoint
+const CLIENT_ID = "3c473f32-385a-4648-8a8b-f452097e85c7"; 
+
+let msalInstance: msal.PublicClientApplication | null = null;
 
 const loginRequest = {
   scopes: ["User.Read", "Files.ReadWrite", "Sites.Read.All"]
 };
 
-let msalInstance: msal.PublicClientApplication | null = null;
-
 export const MicrosoftGraphService = {
   async init() {
     if (!msalInstance) {
-      msalInstance = new msal.PublicClientApplication(msalConfig);
+      msalInstance = new msal.PublicClientApplication({
+        auth: {
+          clientId: CLIENT_ID,
+          authority: "https://login.microsoftonline.com/common",
+          redirectUri: window.location.origin,
+        },
+        cache: {
+          cacheLocation: "localStorage",
+          storeAuthStateInCookie: true,
+        }
+      });
       await msalInstance.initialize();
     }
     return msalInstance;
@@ -31,17 +32,17 @@ export const MicrosoftGraphService = {
   async login() {
     const instance = await this.init();
     try {
+      const accounts = instance.getAllAccounts();
+      if (accounts.length > 0) {
+        const silentRes = await instance.acquireTokenSilent({ ...loginRequest, account: accounts[0] });
+        return { success: true, account: silentRes.account };
+      }
       const loginResponse = await instance.loginPopup(loginRequest);
       return { success: true, account: loginResponse.account };
     } catch (error) {
       console.error("Erro no login Microsoft:", error);
       return { success: false, error };
     }
-  },
-
-  async logout() {
-    const instance = await this.init();
-    await instance.logoutPopup();
   },
 
   async getAccount() {
@@ -66,11 +67,8 @@ export const MicrosoftGraphService = {
     }
   },
 
-  async getSiteData() {
-    const token = await this.getToken();
-    if (!token) return null;
-
-    // Busca o ID do site baseado na URL fornecida
+  async getSiteData(token: string) {
+    // Caminho fixo do SharePoint conforme permissão dada
     const siteUrl = "ctvacinas974.sharepoint.com:/sites/regulatorios";
     const response = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteUrl}`, {
       headers: { Authorization: `Bearer ${token}` }
@@ -78,29 +76,19 @@ export const MicrosoftGraphService = {
     return response.json();
   },
 
-  async getFolderId(siteId: string) {
-    const token = await this.getToken();
-    // Busca a pasta Sistema dentro de Documentos (Shared Documents)
-    const response = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/Sistema`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const data = await response.json();
-    return data.id;
-  },
-
   async loadFromCloud() {
     const token = await this.getToken();
     if (!token) return null;
 
     try {
-      const site = await this.getSiteData();
+      const site = await this.getSiteData(token);
       if (!site.id) return null;
 
       const response = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/root:/Sistema/db.json:/content`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      if (response.status === 404) return null;
+      if (!response.ok) return null;
       return response.json();
     } catch (error) {
       console.error("Erro ao carregar do SharePoint:", error);
@@ -113,7 +101,7 @@ export const MicrosoftGraphService = {
     if (!token) return false;
 
     try {
-      const site = await this.getSiteData();
+      const site = await this.getSiteData(token);
       if (!site.id) return false;
 
       const body = JSON.stringify(data);
