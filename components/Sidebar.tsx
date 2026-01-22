@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Person, ViewMode, AppUser } from '../types';
-import { LayoutDashboard, ListTodo, Users, User, FolderKanban, LogOut, Home, ShieldCheck, ChevronDown, History } from 'lucide-react';
+import { LayoutDashboard, ListTodo, FolderKanban, LogOut, Home, ShieldCheck, History, Database, Cloud } from 'lucide-react';
 
 interface SidebarProps {
   currentView: ViewMode;
@@ -13,20 +13,18 @@ interface SidebarProps {
   people: Person[];
   currentUser: AppUser | null;
   availableUsers: string[];
+  isCloudActive: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
   currentView, 
   onViewChange, 
-  selectedMember, 
-  onMemberChange,
   onGoHome,
   onLogout,
   currentUser,
-  availableUsers
+  isCloudActive
 }) => {
   const isAdmin = currentUser?.role === 'admin';
-  const hasGlobalView = currentUser?.role === 'admin' || currentUser?.canViewAll;
 
   return (
     <aside className="w-64 bg-slate-900 text-slate-400 fixed h-full flex flex-col shadow-2xl z-50 border-r border-slate-800">
@@ -36,8 +34,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             P
           </div>
           <div>
-            <h2 className="text-white font-black text-lg leading-tight uppercase tracking-tighter">Gestão Atividades</h2>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Equipe PAR</p>
+            <h2 className="text-white font-black text-lg leading-tight uppercase tracking-tighter">Gestão PAR</h2>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Plataforma AR</p>
           </div>
         </div>
 
@@ -87,39 +85,22 @@ const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      <div className="px-6 py-4 flex-1">
-        <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-4 px-4">
-          Visualizar Setor
-        </h3>
+      <div className="mt-auto px-6 py-4 border-t border-slate-800">
+        <div className={`rounded-xl p-4 mb-4 ${isCloudActive ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-slate-800/50 border border-slate-700'}`}>
+           <div className={`flex items-center gap-2 text-[8px] font-black uppercase tracking-[0.2em] mb-1 ${isCloudActive ? 'text-emerald-500' : 'text-slate-500'}`}>
+             {isCloudActive ? <Cloud size={10} /> : <Database size={10} />}
+             {isCloudActive ? 'Nuvem Ativa' : 'Modo Local'}
+           </div>
+           <p className={`text-[10px] font-bold uppercase ${isCloudActive ? 'text-emerald-400' : 'text-slate-400'}`}>
+             {isCloudActive ? 'SharePoint Sinc' : 'Banco Offline'}
+           </p>
+        </div>
         
-        {hasGlobalView ? (
-          <div className="px-4 relative group">
-            <select 
-              value={selectedMember}
-              onChange={(e) => onMemberChange(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 text-[10px] font-black uppercase tracking-widest outline-none appearance-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="Todos">Toda a Equipe</option>
-              {availableUsers.map(u => <option key={u} value={u}>{u}</option>)}
-            </select>
-            <ChevronDown size={14} className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-          </div>
-        ) : (
-          <div className="px-4">
-            <div className="w-full bg-slate-800/50 border border-slate-700/50 text-indigo-400 rounded-xl px-4 py-3 text-[10px] font-black uppercase tracking-widest flex items-center gap-3">
-              <User size={16} />
-              {currentUser?.username}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="p-6 border-t border-slate-800">
         <button onClick={onGoHome} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition text-[10px] font-black uppercase tracking-widest text-slate-400">
           <Home size={18} /> Início
         </button>
         <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 transition text-[10px] font-black uppercase tracking-widest text-red-500 mt-1">
-          <LogOut size={18} /> Sair do Sistema
+          <LogOut size={18} /> Sair do Painel
         </button>
       </div>
     </aside>

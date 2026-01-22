@@ -1,15 +1,17 @@
 
 import React, { useState } from 'react';
 import { AppUser } from '../types';
-import { User, ArrowRight, Lock, LogIn, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { User, ArrowRight, Lock, LogIn, ShieldCheck, Database, Cloud, AlertCircle } from 'lucide-react';
 
 interface SelectionViewProps {
   onSelect: (member: string | 'Todos') => void;
   onLogin: (user: AppUser) => void;
   users: AppUser[];
+  msAccount: any;
+  onMsLogin: () => void;
 }
 
-const SelectionView: React.FC<SelectionViewProps> = ({ onSelect, onLogin, users }) => {
+const SelectionView: React.FC<SelectionViewProps> = ({ onSelect, onLogin, users, msAccount, onMsLogin }) => {
   const [showLogin, setShowLogin] = useState<AppUser | null>(null);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -25,22 +27,40 @@ const SelectionView: React.FC<SelectionViewProps> = ({ onSelect, onLogin, users 
   };
 
   return (
-    <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 animate-in fade-in duration-700">
+    <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 animate-in fade-in duration-700">
       
       {!showLogin ? (
         <>
-          <div className="text-center mb-16 space-y-4">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full text-[10px] font-black uppercase tracking-widest mb-4">
-              <CheckCircle2 size={16} />
-              SharePoint Online Validado
+          <div className="text-center mb-12 space-y-4">
+            <div className={`inline-flex items-center gap-2 px-4 py-2 border rounded-full text-[10px] font-black uppercase tracking-widest mb-4 ${msAccount ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+              {msAccount ? <Cloud size={16} /> : <Database size={16} />}
+              {msAccount ? `Sincronizado: ${msAccount.username}` : 'Armazenamento Local'}
             </div>
             <h1 className="text-5xl font-black text-slate-900 tracking-tighter uppercase leading-none">
-              Acessar <span className="text-indigo-600">Perfil</span>
+              Acessar <span className="text-indigo-600">Painel AR</span>
             </h1>
             <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">
-              Escolha seu perfil cadastrado para o Setor de Assuntos Regulatórios
+              Plataforma de Assuntos Regulatórios - CTVacinas
             </p>
           </div>
+
+          {!msAccount && (
+            <div className="w-full max-w-2xl mb-12 p-6 bg-amber-50 border border-amber-100 rounded-3xl flex flex-col md:flex-row items-center gap-6 shadow-sm">
+               <div className="p-4 bg-amber-500 text-white rounded-2xl shadow-lg">
+                 <AlertCircle size={28} />
+               </div>
+               <div className="flex-1 text-center md:text-left">
+                 <h4 className="text-sm font-black text-amber-900 uppercase tracking-tight">Ativar Sincronização em Nuvem</h4>
+                 <p className="text-[10px] text-amber-700 font-bold uppercase mt-1">Conecte sua conta Microsoft para salvar alterações no SharePoint.</p>
+               </div>
+               <button 
+                onClick={onMsLogin}
+                className="px-8 py-3 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition flex items-center gap-2"
+               >
+                 <LogIn size={16} /> Entrar com Microsoft
+               </button>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl">
             {users.map((user) => (
@@ -60,7 +80,7 @@ const SelectionView: React.FC<SelectionViewProps> = ({ onSelect, onLogin, users 
                   {user.role === 'admin' ? 'Administradora' : 'Equipe PAR'}
                 </p>
                 <div className="mt-auto flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
-                  Acessar <ArrowRight size={18} />
+                  Acessar Perfil <ArrowRight size={18} />
                 </div>
               </button>
             ))}

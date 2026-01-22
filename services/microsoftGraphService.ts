@@ -1,17 +1,11 @@
 
-import { PublicClientApplication, Configuration, InteractionRequiredAuthError } from '@azure/msal-browser';
+import * as msal from "@azure/msal-browser";
 
-/**
- * CONFIGURAÇÃO AZURE AD / ENTRA ID - CTVACINAS
- * Focada exclusivamente no SharePoint Institucional
- */
-const msalConfig: Configuration = {
+const msalConfig = {
   auth: {
-    clientId: "609422c2-d648-4b50-b1fe-ca614b77ffb5",
-    // Authority fixada no Tenant da Instituição para isolar o acesso
-    authority: "https://login.microsoftonline.com/f51c2ea8-6e50-4e8f-a3e3-30c69e99d323",
+    clientId: "00000000-0000-0000-0000-000000000000", // O ambiente deve prover ou o usuário configurar no Azure
+    authority: "https://login.microsoftonline.com/common",
     redirectUri: window.location.origin,
-    navigateToLoginRequestUrl: true
   },
   cache: {
     cacheLocation: "localStorage",
@@ -19,133 +13,122 @@ const msalConfig: Configuration = {
   }
 };
 
-const SITE_HOSTNAME = "ctvacinas974.sharepoint.com";
-const SITE_PATH = "/sites/regulatorios";
-const FOLDER_NAME = "Sistema";
-const DB_FILENAME = "database.json";
+const loginRequest = {
+  scopes: ["User.Read", "Files.ReadWrite", "Sites.Read.All"]
+};
 
-// Scopes mínimos necessários para operar na pasta do SharePoint
-const APP_SCOPES = ["Files.ReadWrite", "Sites.Read.All", "User.Read"];
-
-let pca: PublicClientApplication | null = null;
+let msalInstance: msal.PublicClientApplication | null = null;
 
 export const MicrosoftGraphService = {
   async init() {
-    if (!pca) {
-      pca = new PublicClientApplication(msalConfig);
-      await pca.initialize();
+    if (!msalInstance) {
+      msalInstance = new msal.PublicClientApplication(msalConfig);
+      await msalInstance.initialize();
     }
-    return pca;
+    return msalInstance;
   },
 
   async login() {
-    const inst = await this.init();
+    const instance = await this.init();
     try {
-      const res = await inst.loginPopup({ 
-        scopes: APP_SCOPES,
-        prompt: "select_account" 
-      });
-      return { success: true, account: res.account };
-    } catch (e: any) {
-      return { success: false, error: e.message };
+      const loginResponse = await instance.loginPopup(loginRequest);
+      return { success: true, account: loginResponse.account };
+    } catch (error) {
+      console.error("Erro no login Microsoft:", error);
+      return { success: false, error };
     }
   },
 
   async logout() {
-    const inst = await this.init();
-    const account = await this.getAccount();
-    if (account) {
-      await inst.logoutPopup({ account, postLogoutRedirectUri: window.location.origin });
-      localStorage.clear();
-    }
+    const instance = await this.init();
+    await instance.logoutPopup();
   },
 
   async getAccount() {
-    const inst = await this.init();
-    const accounts = inst.getAllAccounts();
+    const instance = await this.init();
+    const accounts = instance.getAllAccounts();
     return accounts.length > 0 ? accounts[0] : null;
   },
 
   async getToken() {
-    const inst = await this.init();
+    const instance = await this.init();
     const account = await this.getAccount();
-    if (!account) throw new Error("Sessão expirada");
+    if (!account) return null;
+
     try {
-      const res = await inst.acquireTokenSilent({ scopes: APP_SCOPES, account });
-      return res.accessToken;
-    } catch (e) {
-      if (e instanceof InteractionRequiredAuthError) {
-        const res = await inst.acquireTokenPopup({ scopes: APP_SCOPES });
-        return res.accessToken;
-      }
-      throw e;
-    }
-  },
-
-  async getSiteId() {
-    const token = await this.getToken();
-    const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${SITE_HOSTNAME}:${SITE_PATH}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.id;
-  },
-
-  async getDriveId(siteId: string) {
-    const token = await this.getToken();
-    // Busca o drive de documentos do SITE institucional
-    const res = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.id;
-  },
-
-  async checkAccess() {
-    try {
-      const siteId = await this.getSiteId();
-      return !!siteId;
-    } catch {
-      return false;
-    }
-  },
-
-  async load() {
-    try {
-      const token = await this.getToken();
-      const siteId = await this.getSiteId();
-      if (!siteId) return null;
-      const driveId = await this.getDriveId(siteId);
-      if (!driveId) return null;
-
-      const res = await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${FOLDER_NAME}/${DB_FILENAME}:/content`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const response = await instance.acquireTokenSilent({
+        ...loginRequest,
+        account: account
       });
-
-      if (res.status === 404) return null;
-      return res.ok ? await res.json() : null;
-    } catch {
+      return response.accessToken;
+    } catch (error) {
       return null;
     }
   },
 
-  async save(data: any) {
-    try {
-      const token = await this.getToken();
-      const siteId = await this.getSiteId();
-      if (!siteId) return false;
-      const driveId = await this.getDriveId(siteId);
-      if (!driveId) return false;
+  async getSiteData() {
+    const token = await this.getToken();
+    if (!token) return null;
 
-      const res = await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${FOLDER_NAME}/${DB_FILENAME}:/content`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, lastSync: new Date().toISOString() })
+    // Busca o ID do site baseado na URL fornecida
+    const siteUrl = "ctvacinas974.sharepoint.com:/sites/regulatorios";
+    const response = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteUrl}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.json();
+  },
+
+  async getFolderId(siteId: string) {
+    const token = await this.getToken();
+    // Busca a pasta Sistema dentro de Documentos (Shared Documents)
+    const response = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/Sistema`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await response.json();
+    return data.id;
+  },
+
+  async loadFromCloud() {
+    const token = await this.getToken();
+    if (!token) return null;
+
+    try {
+      const site = await this.getSiteData();
+      if (!site.id) return null;
+
+      const response = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/root:/Sistema/db.json:/content`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      return res.ok;
-    } catch {
+
+      if (response.status === 404) return null;
+      return response.json();
+    } catch (error) {
+      console.error("Erro ao carregar do SharePoint:", error);
+      return null;
+    }
+  },
+
+  async saveToCloud(data: any) {
+    const token = await this.getToken();
+    if (!token) return false;
+
+    try {
+      const site = await this.getSiteData();
+      if (!site.id) return false;
+
+      const body = JSON.stringify(data);
+      const response = await fetch(`https://graph.microsoft.com/v1.0/sites/${site.id}/drive/root:/Sistema/db.json:/content`, {
+        method: "PUT",
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: body
+      });
+
+      return response.ok;
+    } catch (error) {
+      console.error("Erro ao salvar no SharePoint:", error);
       return false;
     }
   }

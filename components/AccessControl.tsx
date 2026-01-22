@@ -1,12 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { AppConfig, AppUser } from '../types';
 import { 
-  ShieldCheck, Lock, User, Save, Cloud, 
-  UserPlus, Trash2, ShieldAlert,
-  CheckCircle2, AlertCircle, RefreshCw, Loader2, ExternalLink, Info
+  ShieldCheck, UserPlus, Trash2, 
+  Info, User, Lock, ShieldAlert
 } from 'lucide-react';
-import { MicrosoftGraphService } from '../services/microsoftGraphService';
 
 interface AccessControlProps {
   config: AppConfig;
@@ -14,164 +12,162 @@ interface AccessControlProps {
   currentUser: AppUser;
 }
 
-const InfoItem = ({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) => (
-  <div className="flex flex-col">
-    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
-    <span className={`text-[10px] font-bold ${mono ? 'font-mono text-slate-500' : 'text-slate-700'}`}>{value}</span>
-  </div>
-);
-
 const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, currentUser }) => {
-  const [msAccount, setMsAccount] = useState<any>(null);
-  const [hasAccess, setHasAccess] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState(false);
-  
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' as 'admin' | 'user' });
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  useEffect(() => {
-    checkConnection();
-  }, []);
-
-  const checkConnection = async () => {
-    setIsLoading(true);
-    await MicrosoftGraphService.init();
-    const info = await MicrosoftGraphService.getAccount();
-    if (info) {
-      setMsAccount(info);
-      try {
-        const access = await MicrosoftGraphService.checkAccess();
-        setHasAccess(access);
-      } catch {
-        setHasAccess(false);
-      }
-    }
-    setIsLoading(false);
-  };
-
-  const handleMsConnect = async () => {
-    setIsLoading(true);
-    const result = await MicrosoftGraphService.login();
-    if (result.success && result.account) {
-      setMsAccount(result.account);
-      const access = await MicrosoftGraphService.checkAccess();
-      setHasAccess(access);
-      setMessage({ type: access ? 'success' : 'error', text: access ? 'SharePoint Conectado!' : 'Sem acesso à pasta /regulatorios' });
-    }
-    setIsLoading(false);
-    setTimeout(() => setMessage(null), 3000);
-  };
-
   const handleAddUser = () => {
     if (!newUser.username.trim() || !newUser.password.trim()) return;
+    
+    if (config.users.some(u => u.username.toLowerCase() === newUser.username.toLowerCase())) {
+      setMessage({ type: 'error', text: 'Este nome de usuário já existe.' });
+      setTimeout(() => setMessage(null), 3000);
+      return;
+    }
+
     onUpdateConfig({ 
       ...config, 
-      users: [...config.users, { ...newUser, passwordHash: newUser.password, canViewAll: newUser.role === 'admin' }] 
+      users: [...config.users, { 
+        username: newUser.username.trim(), 
+        role: newUser.role, 
+        passwordHash: newUser.password, 
+        canViewAll: newUser.role === 'admin' 
+      }] 
     });
+    
     setNewUser({ username: '', password: '', role: 'user' });
-    setMessage({ type: 'success', text: 'Membro autorizado!' });
+    setMessage({ type: 'success', text: 'Usuário autorizado com sucesso!' });
     setTimeout(() => setMessage(null), 3000);
+  };
+
+  const removeUser = (username: string) => {
+    if (username === currentUser.username) return;
+    if (confirm(`Remover o acesso de "${username}"?`)) {
+      onUpdateConfig({
+        ...config,
+        users: config.users.filter(u => u.username !== username)
+      });
+    }
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-20 animate-in fade-in duration-500">
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
-        <header className="p-10 bg-slate-900 text-white flex justify-between items-center">
-          <div>
-            <h2 className="text-3xl font-black uppercase tracking-tighter flex items-center gap-3">
-              <ShieldCheck size={32} className="text-indigo-500" /> Segurança e Membros
-            </h2>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Configurações de Identidade e Acesso à Nuvem</p>
-          </div>
+        <header className="p-10 bg-slate-900 text-white">
+          <h2 className="text-3xl font-black uppercase tracking-tighter flex items-center gap-3">
+            <ShieldCheck size={32} className="text-indigo-500" /> Controle de Acesso Local
+          </h2>
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Gerencie quem pode acessar o painel de atividades</p>
         </header>
 
-        <div className="p-10 grid grid-cols-1 lg:grid-cols-12 gap-12">
-          
-          <div className="lg:col-span-5 space-y-6">
-            <section className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-6">
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <Cloud size={16} className="text-sky-500" /> Sincronização Microsoft
-              </h3>
-              
-              <div className="flex items-center gap-4">
-                <div className={`p-4 rounded-2xl ${msAccount ? 'bg-indigo-600' : 'bg-slate-300'} text-white shadow-lg`}>
-                  {isLoading ? <Loader2 className="animate-spin" size={24} /> : <Cloud size={24} />}
-                </div>
-                <div>
-                  <h4 className="text-xs font-black text-slate-900 uppercase truncate max-w-[150px]">
-                    {msAccount ? msAccount.username || msAccount.name : 'Desconectado'}
-                  </h4>
-                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">SharePoint Regulatorios</p>
-                </div>
-              </div>
+        <div className="p-10 space-y-12">
+          {/* Sessão de Adição */}
+          <section className="space-y-6">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-4">
+              <UserPlus size={18} className="text-indigo-600" /> Autorizar Novo Acesso
+            </h3>
 
-              {msAccount ? (
-                <div className="space-y-4">
-                  <div className={`p-4 rounded-xl flex items-center gap-3 border ${hasAccess ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
-                    {hasAccess ? <CheckCircle2 size={16}/> : <AlertCircle size={16}/>}
-                    <p className="text-[9px] font-black uppercase tracking-tight">
-                      {hasAccess ? 'Acesso Validado ao Site' : 'Acesso Negado à Pasta'}
-                    </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-8 rounded-3xl border border-slate-100">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-1">
+                  <User size={12}/> Nome de Usuário
+                </label>
+                <input 
+                  type="text" 
+                  value={newUser.username} 
+                  onChange={e => setNewUser({...newUser, username: e.target.value})} 
+                  placeholder="Nome do integrante..." 
+                  className="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" 
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-1">
+                  <Lock size={12}/> Senha de Acesso
+                </label>
+                <input 
+                  type="password" 
+                  value={newUser.password} 
+                  onChange={e => setNewUser({...newUser, password: e.target.value})} 
+                  placeholder="Defina uma senha..." 
+                  className="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" 
+                />
+              </div>
+              <div className="md:col-span-2 flex items-center justify-between pt-4 border-t border-slate-100 mt-2">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input 
+                    type="checkbox" 
+                    checked={newUser.role === 'admin'} 
+                    onChange={e => setNewUser({...newUser, role: e.target.checked ? 'admin' : 'user'})} 
+                    className="w-5 h-5 accent-indigo-600 rounded" 
+                  />
+                  <div>
+                    <span className="text-[10px] font-black text-slate-900 uppercase">Perfil Administrador</span>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase">Pode gerenciar usuários e deletar tarefas</p>
                   </div>
-                  <button onClick={() => MicrosoftGraphService.logout()} className="w-full py-3 bg-white border border-red-100 text-red-500 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-red-50 transition">Sair da Conta</button>
+                </label>
+                <button 
+                  onClick={handleAddUser} 
+                  className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-black transition shadow-xl"
+                >
+                  Conceder Acesso
+                </button>
+              </div>
+              {message && (
+                <div className={`md:col-span-2 p-3 rounded-xl text-[10px] font-black uppercase text-center ${message.type === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                  {message.text}
                 </div>
-              ) : (
-                <button onClick={handleMsConnect} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-700 shadow-xl shadow-indigo-100">Autenticar Microsoft</button>
               )}
-            </section>
-
-            <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100 space-y-3">
-               <h4 className="text-[10px] font-black text-amber-700 uppercase tracking-widest flex items-center gap-2">
-                 <Info size={14} /> Nota para Convidados
-               </h4>
-               <p className="text-[10px] text-amber-800 leading-relaxed font-medium">
-                 E-mails pessoais (Gmail/Outlook) funcionam se o App estiver como <b>Multilocatário</b> no Azure AD. Certifique-se de aceitar o convite do SharePoint antes de logar aqui.
-               </p>
             </div>
-          </div>
+          </section>
 
-          <div className="lg:col-span-7 space-y-10">
-            <section className="space-y-6">
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-4">
-                <UserPlus size={18} className="text-indigo-600" /> Autorizar Novo Membro
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">E-mail ou Nome (Exato do Microsoft)</label>
-                  <input type="text" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} placeholder="Ex: usuario@gmail.com" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Senha de Acesso Local</label>
-                  <input type="password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} placeholder="••••••••" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
-                </div>
-                <div className="md:col-span-2 flex items-center justify-between pt-2">
-                  <label className="flex items-center gap-2 cursor-pointer group">
-                    <input type="checkbox" checked={newUser.role === 'admin'} onChange={e => setNewUser({...newUser, role: e.target.checked ? 'admin' : 'user'})} className="w-4 h-4 accent-indigo-600" />
-                    <span className="text-[10px] font-black text-slate-600 uppercase">Perfil Administrador</span>
-                  </label>
-                  <button onClick={handleAddUser} className="px-8 py-3 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition">Autorizar</button>
-                </div>
-              </div>
-
-              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                {config.users.map(u => (
-                  <div key={u.username} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-2xl hover:border-indigo-100 transition shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black ${u.role === 'admin' ? 'bg-amber-100 text-amber-600' : 'bg-indigo-50 text-indigo-600'}`}>
-                        {u.username[0]}
-                      </div>
-                      <span className="text-sm font-black text-slate-800 uppercase tracking-tighter truncate max-w-[200px]">{u.username}</span>
+          {/* Lista de Usuários */}
+          <section className="space-y-6">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-4">
+               Lista de Membros Ativos ({config.users.length})
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {config.users.map(u => (
+                <div key={u.username} className="flex items-center justify-between p-6 bg-white border border-slate-100 rounded-3xl hover:border-indigo-100 transition shadow-sm group">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg ${u.role === 'admin' ? 'bg-amber-100 text-amber-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                      {u.username[0]}
                     </div>
-                    {u.username !== currentUser.username && (
-                      <button onClick={() => onUpdateConfig({...config, users: config.users.filter(usr => usr.username !== u.username)})} className="p-2 text-slate-300 hover:text-red-500 transition"><Trash2 size={16}/></button>
-                    )}
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900 uppercase tracking-tighter">{u.username}</h4>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${u.role === 'admin' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}>
+                          {u.role}
+                        </span>
+                        {u.username === currentUser.username && (
+                          <span className="text-[8px] font-black text-indigo-500 uppercase tracking-widest">• Você</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                ))}
-              </div>
-            </section>
-          </div>
+                  {u.username !== currentUser.username && (
+                    <button 
+                      onClick={() => removeUser(u.username)} 
+                      className="p-3 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition"
+                    >
+                      <Trash2 size={20}/>
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
 
+          <div className="p-8 bg-blue-50 rounded-[2rem] border border-blue-100 flex gap-5 items-center">
+             <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg">
+                <Info size={24} />
+             </div>
+             <div>
+               <p className="text-[10px] font-black text-blue-900 uppercase tracking-widest mb-1">Nota de Privacidade Local</p>
+               <p className="text-xs text-blue-700 leading-relaxed font-medium">
+                 O sistema não está mais conectado à nuvem. Todas as alterações feitas aqui são salvas <b>apenas neste navegador</b>. Para usar em outro computador, os dados não serão sincronizados automaticamente.
+               </p>
+             </div>
+          </div>
         </div>
       </div>
     </div>
