@@ -100,6 +100,7 @@ export interface AppConfig {
   people: Person[];
   projectsData: ProjectData[];
   users: AppUser[];
+  authorizedEmails: string[]; // Whitelist de e-mails para acesso Cloud
 }
 
 export type ViewMode = 'selection' | 'dashboard' | 'tasks' | 'projects' | 'people' | 'logs' | 'access-control';

@@ -26,7 +26,7 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [msAccount, setMsAccount] = useState<any>(null);
 
-  const initializeDefaultData = () => {
+  const initializeDefaultData = (): { tasks: Task[], config: AppConfig, activityLogs: ActivityLog[] } => {
     const defaultPeople: Person[] = TEAM_MEMBERS.map(name => ({
       id: Math.random().toString(36).substring(2, 9),
       name,
@@ -41,6 +41,7 @@ const App: React.FC = () => {
         notificationEmail: 'setor.ar@ctvacinas.com',
         people: defaultPeople,
         projectsData: [{ id: 'p1', name: 'Expansão Q3', status: 'Ativo', trackingMacroTasks: [], regulatoryMacroTasks: [], norms: [] }],
+        authorizedEmails: ['graziella@ctvacinas.com', 'setor.ar@ctvacinas.com'], // E-mails iniciais permitidos
         users: [
           { username: 'Graziella', role: 'admin', passwordHash: 'admin', canViewAll: true },
           { username: 'Colaborador', role: 'user', passwordHash: '123456', canViewAll: false }
@@ -53,16 +54,26 @@ const App: React.FC = () => {
   const loadData = async (forceCloud = false) => {
     setLoading(true);
     try {
-      const localData = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      const localRaw = localStorage.getItem(STORAGE_KEY);
+      const localData = localRaw ? JSON.parse(localRaw) : null;
       
       const account = await MicrosoftGraphService.getAccount();
-      setMsAccount(account);
       
       let cloudData = null;
-      if (account || forceCloud) {
-        setSyncing(true);
-        cloudData = await MicrosoftGraphService.loadFromCloud();
-        setSyncing(false);
+      if (account) {
+        // Verifica se o e-mail da conta MS está na whitelist do banco LOCAL antes de tentar carregar da cloud
+        // Se a whitelist ainda não existir (primeira vez), permitimos para não bloquear o admin inicial
+        const currentWhitelist = localData?.config?.authorizedEmails || initializeDefaultData().config.authorizedEmails;
+        
+        if (currentWhitelist.includes(account.username.toLowerCase())) {
+          setMsAccount(account);
+          setSyncing(true);
+          cloudData = await MicrosoftGraphService.loadFromCloud();
+          setSyncing(false);
+        } else {
+          console.warn("Acesso Microsoft negado: E-mail não autorizado na whitelist.");
+          setMsAccount(null);
+        }
       }
 
       const finalData = cloudData || localData || initializeDefaultData();
@@ -102,7 +113,7 @@ const App: React.FC = () => {
     setActivityLogs(logs);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
 
-    if (msAccount) {
+    if (msAccount && newConfig.authorizedEmails.includes(msAccount.username.toLowerCase())) {
       const success = await MicrosoftGraphService.saveToCloud(dataToSave);
       setIsCloudActive(success);
     }
@@ -112,11 +123,18 @@ const App: React.FC = () => {
 
   const handleMicrosoftLogin = async () => {
     const result = await MicrosoftGraphService.login();
-    if (result.success) {
-      setMsAccount(result.account);
-      loadData(true);
-    } else {
-      alert("Falha na conexão com a conta Microsoft.");
+    if (result.success && result.account) {
+      const email = result.account.username.toLowerCase();
+      const currentWhitelist = config?.authorizedEmails || [];
+      
+      if (currentWhitelist.includes(email)) {
+        setMsAccount(result.account);
+        loadData(true);
+      } else {
+        alert(`O e-mail "${email}" não está autorizado a acessar este painel. Entre em contato com a administração.`);
+      }
+    } else if (!result.success) {
+      // O erro já foi tratado dentro do serviço
     }
   };
 

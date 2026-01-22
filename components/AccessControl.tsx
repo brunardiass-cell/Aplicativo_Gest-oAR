@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { AppConfig, AppUser } from '../types';
 import { 
   ShieldCheck, UserPlus, Trash2, 
-  User, Lock
+  User, Lock, Cloud, MailPlus
 } from 'lucide-react';
 
 interface AccessControlProps {
@@ -14,6 +14,7 @@ interface AccessControlProps {
 
 const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, currentUser }) => {
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' as 'admin' | 'user' });
+  const [newAuthEmail, setNewAuthEmail] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const handleAddUser = () => {
@@ -37,6 +38,34 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
     setTimeout(() => setMessage(null), 3000);
   };
 
+  const handleAddAuthEmail = () => {
+    if (!newAuthEmail.trim() || !newAuthEmail.includes('@')) return;
+    const email = newAuthEmail.trim().toLowerCase();
+    
+    if (config.authorizedEmails.includes(email)) {
+      setMessage({ type: 'error', text: 'E-mail já está autorizado.' });
+      setTimeout(() => setMessage(null), 3000);
+      return;
+    }
+
+    onUpdateConfig({
+      ...config,
+      authorizedEmails: [...config.authorizedEmails, email]
+    });
+    setNewAuthEmail('');
+    setMessage({ type: 'success', text: 'E-mail liberado para Cloud!' });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
+  const removeAuthEmail = (email: string) => {
+    if (confirm(`Remover autorização Cloud de "${email}"?`)) {
+      onUpdateConfig({
+        ...config,
+        authorizedEmails: config.authorizedEmails.filter(e => e !== email)
+      });
+    }
+  };
+
   const removeUser = (username: string) => {
     if (username === currentUser.username) return;
     if (confirm(`Remover o acesso de "${username}"?`)) {
@@ -56,10 +85,56 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
 
         <div className="p-10 space-y-12">
           
-          {/* Sessão de Adição de Usuário */}
+          {/* Sessão de Autorização Cloud (NOVO) */}
+          <section className="space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <Cloud size={18} className="text-indigo-600" /> Autorização Microsoft Cloud (Sincronização)
+              </h3>
+              <span className="text-[9px] font-black text-slate-300 uppercase">Whitelist de Segurança</span>
+            </div>
+            
+            <div className="bg-indigo-50/30 p-8 rounded-3xl border border-indigo-100/50 space-y-6">
+              <div className="flex gap-3">
+                <div className="flex-1 space-y-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-1">
+                    Liberar novo e-mail (Pessoal ou Corporativo)
+                  </label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="email" 
+                      value={newAuthEmail} 
+                      onChange={e => setNewAuthEmail(e.target.value)} 
+                      placeholder="exemplo@email.com" 
+                      className="flex-1 px-5 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500" 
+                    />
+                    <button 
+                      onClick={handleAddAuthEmail}
+                      className="px-6 bg-indigo-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-700 transition flex items-center gap-2"
+                    >
+                      <MailPlus size={16}/> Autorizar Cloud
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {config.authorizedEmails.map(email => (
+                  <div key={email} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-2xl group hover:border-indigo-200 transition">
+                    <span className="text-xs font-bold text-slate-600 truncate mr-2">{email}</span>
+                    <button onClick={() => removeAuthEmail(email)} className="text-slate-300 hover:text-red-500 transition">
+                      <Trash2 size={14}/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* Sessão de Adição de Usuário Local */}
           <section className="space-y-6">
             <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-4">
-              <UserPlus size={18} className="text-indigo-600" /> Autorizar Novo Usuário
+              <UserPlus size={18} className="text-slate-600" /> Usuários com Acesso ao Painel (Login Local)
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-8 rounded-3xl border border-slate-100">
               <div className="space-y-1">
@@ -87,7 +162,7 @@ const AccessControl: React.FC<AccessControlProps> = ({ config, onUpdateConfig, c
           {/* Lista de Usuários */}
           <section className="space-y-6">
             <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-4">
-               Membros Ativos ({config.users.length})
+               Membros Ativos no Painel ({config.users.length})
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {config.users.map(u => (
