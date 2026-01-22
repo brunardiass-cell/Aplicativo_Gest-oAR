@@ -41,7 +41,8 @@ const App: React.FC = () => {
         notificationEmail: 'setor.ar@ctvacinas.com',
         people: defaultPeople,
         projectsData: [{ id: 'p1', name: 'Expansão Q3', status: 'Ativo', trackingMacroTasks: [], regulatoryMacroTasks: [], norms: [] }],
-        authorizedEmails: ['graziella@ctvacinas.com', 'setor.ar@ctvacinas.com'], // E-mails iniciais permitidos
+        // Whitelist de e-mails autorizados (incluindo o e-mail solicitado)
+        authorizedEmails: ['brunardias@outlook.com', 'graziella@ctvacinas.com', 'setor.ar@ctvacinas.com'], 
         users: [
           { username: 'Graziella', role: 'admin', passwordHash: 'admin', canViewAll: true },
           { username: 'Colaborador', role: 'user', passwordHash: '123456', canViewAll: false }
@@ -61,11 +62,11 @@ const App: React.FC = () => {
       
       let cloudData = null;
       if (account) {
-        // Verifica se o e-mail da conta MS está na whitelist do banco LOCAL antes de tentar carregar da cloud
-        // Se a whitelist ainda não existir (primeira vez), permitimos para não bloquear o admin inicial
         const currentWhitelist = localData?.config?.authorizedEmails || initializeDefaultData().config.authorizedEmails;
+        // Normalização para evitar erros de case-sensitivity
+        const normalizedWhitelist = currentWhitelist.map((e: string) => e.toLowerCase());
         
-        if (currentWhitelist.includes(account.username.toLowerCase())) {
+        if (normalizedWhitelist.includes(account.username.toLowerCase())) {
           setMsAccount(account);
           setSyncing(true);
           cloudData = await MicrosoftGraphService.loadFromCloud();
@@ -113,7 +114,8 @@ const App: React.FC = () => {
     setActivityLogs(logs);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
 
-    if (msAccount && newConfig.authorizedEmails.includes(msAccount.username.toLowerCase())) {
+    const normalizedWhitelist = newConfig.authorizedEmails.map(e => e.toLowerCase());
+    if (msAccount && normalizedWhitelist.includes(msAccount.username.toLowerCase())) {
       const success = await MicrosoftGraphService.saveToCloud(dataToSave);
       setIsCloudActive(success);
     }
@@ -125,7 +127,7 @@ const App: React.FC = () => {
     const result = await MicrosoftGraphService.login();
     if (result.success && result.account) {
       const email = result.account.username.toLowerCase();
-      const currentWhitelist = config?.authorizedEmails || [];
+      const currentWhitelist = config?.authorizedEmails.map(e => e.toLowerCase()) || [];
       
       if (currentWhitelist.includes(email)) {
         setMsAccount(result.account);
@@ -133,8 +135,6 @@ const App: React.FC = () => {
       } else {
         alert(`O e-mail "${email}" não está autorizado a acessar este painel. Entre em contato com a administração.`);
       }
-    } else if (!result.success) {
-      // O erro já foi tratado dentro do serviço
     }
   };
 
