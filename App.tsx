@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember } from './types';
 import { DEFAULT_TEAM_MEMBERS, DEFAULT_ACTIVITY_PLANS } from './constants';
 import SelectionView from './components/SelectionView';
@@ -13,40 +13,17 @@ import ActivityLogView from './components/ActivityLogView';
 import ReportView from './components/ReportView';
 import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
-import PasswordModal from './components/PasswordModal';
-import { PlusCircle, Search, FileSignature, AlertCircle, ShieldCheck, FileText, BellOff } from 'lucide-react';
+import { MicrosoftGraphService } from './services/microsoftGraphService';
+import { PlusCircle, Search, FileSignature, AlertCircle, ShieldCheck, FileText, BellOff, Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    const saved = localStorage.getItem('ar_tasks_v6');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [activityPlans, setActivityPlans] = useState<ActivityPlanTemplate[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [logs, setLogs] = useState<ActivityLog[]>([]);
   
-  const [projects, setProjects] = useState<Project[]>(() => {
-    const saved = localStorage.getItem('ar_projects_v6');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
-    const saved = localStorage.getItem('ar_team_members_v6');
-    return saved ? JSON.parse(saved) : DEFAULT_TEAM_MEMBERS;
-  });
-
-  const [activityPlans, setActivityPlans] = useState<ActivityPlanTemplate[]>(() => {
-    const saved = localStorage.getItem('ar_activity_plans_v6');
-    return saved ? JSON.parse(saved) : DEFAULT_ACTIVITY_PLANS;
-  });
-
-  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
-    const saved = localStorage.getItem('ar_notifications_v6');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [logs, setLogs] = useState<ActivityLog[]>(() => {
-    const saved = localStorage.getItem('ar_logs_v6');
-    return saved ? JSON.parse(saved) : [];
-  });
-
   const [view, setView] = useState<ViewMode>('selection');
   const [currentUser, setCurrentUser] = useState<string | 'Todos'>('Todos');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -60,46 +37,89 @@ const App: React.FC = () => {
   const [isProjectItemDeletionModalOpen, setIsProjectItemDeletionModalOpen] = useState(false);
   const [projectItemToDelete, setProjectItemToDelete] = useState<{ type: 'macro' | 'micro', projectId: string; macroId: string; microId?: string; name: string } | null>(null);
 
-  const [userToAuth, setUserToAuth] = useState<TeamMember | null>(null);
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const isInitialLoad = useRef(true);
+
+  const saveDataToSharePoint = async (data: { tasks: Task[], projects: Project[], teamMembers: TeamMember[], activityPlans: ActivityPlanTemplate[], notifications: AppNotification[], logs: ActivityLog[] }) => {
+    await MicrosoftGraphService.saveToCloud(data);
+  };
 
   useEffect(() => {
-    localStorage.setItem('ar_tasks_v6', JSON.stringify(tasks));
-    localStorage.setItem('ar_projects_v6', JSON.stringify(projects));
-    localStorage.setItem('ar_team_members_v6', JSON.stringify(teamMembers));
-    localStorage.setItem('ar_activity_plans_v6', JSON.stringify(activityPlans));
-    localStorage.setItem('ar_notifications_v6', JSON.stringify(notifications));
-    localStorage.setItem('ar_logs_v6', JSON.stringify(logs));
-  }, [tasks, projects, teamMembers, activityPlans, notifications, logs]);
+    const checkLogin = async () => {
+      const account = await MicrosoftGraphService.getAccount();
+      if (account) {
+        handleLogin(true); // Attempt silent login
+      } else {
+        setIsLoading(false);
+      }
+    };
+    checkLogin();
+  }, []);
 
-  const loginUser = (name: string | 'Todos') => {
-    setCurrentUser(name);
-    setFilterMember(name);
-    setView('dashboard');
-    setIsPasswordModalOpen(false);
-    setUserToAuth(null);
-  };
-
-  const handleSelectUser = (memberOrAll: TeamMember | 'Todos') => {
-    if (memberOrAll === 'Todos') {
-      loginUser('Todos');
+  useEffect(() => {
+    if (isInitialLoad.current) {
       return;
     }
-    const member = memberOrAll;
-    if (member.password) {
-      setUserToAuth(member);
-      setIsPasswordModalOpen(true);
-    } else {
-      loginUser(member.name);
+    const currentState = { tasks, projects, teamMembers, activityPlans, notifications, logs };
+    saveDataToSharePoint(currentState);
+  }, [tasks, projects, teamMembers, activityPlans, notifications, logs]);
+
+
+  const handleLogin = async (isSilent = false) => {
+    setIsLoading(true);
+    const loginResult = isSilent 
+      ? { success: true, account: await MicrosoftGraphService.getAccount() } 
+      : await MicrosoftGraphService.login();
+
+    if (loginResult.success && loginResult.account) {
+      setCurrentUser(loginResult.account.name || 'Usuário');
+      setFilterMember(loginResult.account.name || 'Usuário');
+
+      const cloudData = await MicrosoftGraphService.loadFromCloud();
+      
+      if (cloudData) {
+        setTasks(cloudData.tasks || []);
+        setProjects(cloudData.projects || []);
+        setTeamMembers(cloudData.teamMembers || DEFAULT_TEAM_MEMBERS);
+        setActivityPlans(cloudData.activityPlans || DEFAULT_ACTIVITY_PLANS);
+        setNotifications(cloudData.notifications || []);
+        setLogs(cloudData.logs || []);
+      } else {
+        const initialState = {
+            tasks: [],
+            projects: [],
+            teamMembers: DEFAULT_TEAM_MEMBERS,
+            activityPlans: DEFAULT_ACTIVITY_PLANS,
+            notifications: [],
+            logs: []
+        };
+        setTasks(initialState.tasks);
+        setProjects(initialState.projects);
+        setTeamMembers(initialState.teamMembers);
+        setActivityPlans(initialState.activityPlans);
+        setNotifications(initialState.notifications);
+        setLogs(initialState.logs);
+        await saveDataToSharePoint(initialState);
+      }
+      setView('dashboard');
+      isInitialLoad.current = false;
+    } else if (!isSilent) {
+      alert('Falha no login. Por favor, tente novamente.');
     }
+    setIsLoading(false);
   };
 
-  const handlePasswordConfirm = (password: string) => {
-    if (userToAuth && password === userToAuth.password) {
-      loginUser(userToAuth.name);
-    } else {
-      alert('Senha incorreta.');
-    }
+  const handleLogout = async () => {
+    await MicrosoftGraphService.logout();
+    isInitialLoad.current = true;
+    setCurrentUser('Todos');
+    setView('selection');
+    setTasks([]);
+    setProjects([]);
+    setTeamMembers([]);
+    setActivityPlans([]);
+    setNotifications([]);
+    setLogs([]);
   };
 
   const handleSaveTask = (task: Task) => {
@@ -275,19 +295,22 @@ const App: React.FC = () => {
     });
   }, [tasks, filterMember, searchTerm]);
 
+  const currentUserIsLeader = useMemo(() => {
+    return teamMembers.find(m => m.name === currentUser)?.isLeader || false;
+  }, [teamMembers, currentUser]);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[#0f172a] text-white flex-col gap-4">
+        <Loader2 size={48} className="animate-spin text-blue-500" />
+        <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.5em]">CONECTANDO AO SHAREPOINT...</p>
+      </div>
+    );
+  }
+
   if (view === 'selection') {
     return (
-      <>
-        <SelectionView members={teamMembers} onSelect={handleSelectUser} />
-        {isPasswordModalOpen && userToAuth && (
-          <PasswordModal
-            isOpen={isPasswordModalOpen}
-            onClose={() => setIsPasswordModalOpen(false)}
-            onConfirm={handlePasswordConfirm}
-            userName={userToAuth.name}
-          />
-        )}
-      </>
+      <SelectionView onSelect={() => handleLogin(false)} />
     );
   }
 
@@ -298,9 +321,9 @@ const App: React.FC = () => {
       <Sidebar 
         currentView={view} 
         onViewChange={setView} 
-        onGoHome={() => setView('selection')}
-        onLogout={() => setView('selection')} 
-        currentUser={{ username: currentUser, role: currentUser === 'Graziella' ? 'admin' : 'user' }}
+        onGoHome={() => setView('dashboard')}
+        onLogout={handleLogout} 
+        currentUser={{ username: currentUser, role: currentUserIsLeader ? 'admin' : 'user' }}
         notificationCount={activeReviews.length}
       />
       

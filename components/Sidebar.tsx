@@ -60,7 +60,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             icon={<FolderKanban size={18} />} 
             label="Projetos" 
           />
-          {currentUser?.username === 'Graziella' && (
+          {currentUser?.role === 'admin' && (
              <SidebarButton 
               active={currentView === 'quality'} 
               onClick={() => onViewChange('quality')} 
@@ -68,7 +68,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               label="Controle de Acesso" 
             />
           )}
-          {currentUser?.username === 'Graziella' && (
+          {currentUser?.role === 'admin' && (
             <SidebarButton 
               active={currentView === 'traceability'} 
               onClick={() => onViewChange('traceability')} 
