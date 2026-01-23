@@ -4,8 +4,10 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  // FIX: Per @google/genai guidelines, the API key must be accessed directly from process.env.API_KEY.
+  // This configuration makes the environment variable available in the client-side code.
   define: {
-    '__API_KEY__': JSON.stringify(process.env.API_KEY)
+    'process.env.API_KEY': JSON.stringify(process.env.API_KEY)
   },
   build: {
     chunkSizeWarningLimit: 1000, // Aumenta o limite de aviso para 1000 kB
