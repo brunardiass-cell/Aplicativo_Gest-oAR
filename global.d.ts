@@ -5,10 +5,11 @@ declare global {
     msal: any;
   }
   
-  // FIX: To resolve the "Cannot redeclare block-scoped variable 'process'" error,
-  // we augment the existing NodeJS.ProcessEnv interface instead of declaring a new
-  // 'process' variable. This is the standard way to add types for environment variables
-  // in a project that includes Node.js type definitions.
+  // FIX: Declara explicitamente a variável 'process' no escopo global para o TypeScript.
+  // Isso resolve o erro "Cannot find name 'process'" em ambientes de navegador
+  // onde 'process' não existe nativamente, mas é injetado pelo Vite.
+  // FIX: Switched from redeclaring 'process' to augmenting the NodeJS namespace
+  // to avoid a redeclaration error with existing global types.
   namespace NodeJS {
     interface ProcessEnv {
       API_KEY: string;
