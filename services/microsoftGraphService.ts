@@ -1,7 +1,6 @@
-
 import * as msal from "@azure/msal-browser";
 
-const CLIENT_ID = "ee1975b9-c61a-4ffa-a976-b1cbc7e25cef"; 
+const CLIENT_ID = "609422c2-d648-4b50-b1fe-ca614b77ffb5"; 
 const TENANT_ID = "f51c2ea8-6e50-4e8f-a3e3-30c69e99d323";
 
 let msalInstance: msal.PublicClientApplication | null = null;
