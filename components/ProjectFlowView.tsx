@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Project } from '../types';
+import { Project, CompletionStatus } from '../types';
 import { CheckCircle, AlertTriangle, Repeat, FileText, MessageSquare } from 'lucide-react';
 
 interface ProjectFlowViewProps {
@@ -61,22 +61,29 @@ const ProjectFlowView: React.FC<ProjectFlowViewProps> = ({ project }) => {
   );
 };
 
-const CompletionBadge = ({ status }: { status: string }) => {
-  const badgeStyles = {
+const CompletionBadge = ({ status }: { status: CompletionStatus }) => {
+  const badgeStyles: Partial<Record<CompletionStatus, string>> = {
     'Aprovada': 'bg-emerald-100 text-emerald-700',
     'Finalizada com Restrições': 'bg-amber-100 text-amber-700',
     'A ser Repetida': 'bg-red-100 text-red-700',
   };
-  const icon = {
+  const icon: Partial<Record<CompletionStatus, React.ReactNode>> = {
     'Aprovada': <CheckCircle size={12} />,
     'Finalizada com Restrições': <AlertTriangle size={12} />,
     'A ser Repetida': <Repeat size={12} />,
   };
   const text = status.replace('Finalizada com', 'Com');
+
+  const style = badgeStyles[status];
+  const iconEl = icon[status];
+
+  if (!style || !iconEl) {
+    return null;
+  }
   
   return (
-    <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 ${badgeStyles[status]}`}>
-      {icon[status]} {text}
+    <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 ${style}`}>
+      {iconEl} {text}
     </span>
   );
 };

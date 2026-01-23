@@ -3,6 +3,7 @@ import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { Task } from "../types";
 
 export const generateExecutiveReport = async (tasks: Task[], contextName: string): Promise<string> => {
+  // FIX: Use `process.env.API_KEY` to initialize the GoogleGenAI client as per the coding guidelines.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const thirtyDaysAgo = new Date();

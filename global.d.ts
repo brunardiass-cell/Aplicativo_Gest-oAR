@@ -6,3 +6,5 @@ declare global {
     msal: any;
   }
 }
+
+declare const __API_KEY__: string;
