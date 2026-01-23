@@ -1,17 +1,17 @@
-
 export {};
 
 declare global {
   interface Window {
     msal: any;
   }
+  
+  // FIX: To resolve the "Cannot redeclare block-scoped variable 'process'" error,
+  // we augment the existing NodeJS.ProcessEnv interface instead of declaring a new
+  // 'process' variable. This is the standard way to add types for environment variables
+  // in a project that includes Node.js type definitions.
+  namespace NodeJS {
+    interface ProcessEnv {
+      API_KEY: string;
+    }
+  }
 }
-
-// FIX: Removed __API_KEY__ declaration. Per @google/genai guidelines, the API key must be
-// accessed via process.env.API_KEY. This declaration provides the necessary types for
-// TypeScript to compile without errors. Vite handles the value replacement at build time.
-declare var process: {
-  env: {
-    API_KEY: string;
-  };
-};
