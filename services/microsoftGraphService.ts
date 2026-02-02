@@ -40,11 +40,13 @@ export const MicrosoftGraphService = {
       return { success: true, account: loginResponse.account };
     } catch (error: any) {
       console.error("Erro no login Microsoft:", error);
-       // Erro específico para quando um admin precisa consentir ou o tipo de conta é errado
        if (error.errorCode === 'unauthorized_client' || error.errorMessage?.includes('AADSTS65005')) {
-        alert("⚠️ APROVAÇÃO DE ADMINISTRADOR NECESSÁRIA\n\nEste aplicativo precisa de permissões que apenas um administrador da organização pode conceder.\n\nCAUSAS COMUNS:\n1. Você está tentando logar com uma conta pessoal (ex: @outlook.com) em um aplicativo configurado apenas para contas da organização.\n2. As permissões do aplicativo no Azure precisam ser aprovadas por um administrador.\n\nSOLUÇÃO:\n- Tente logar com sua conta corporativa (ex: @ctvacinas.org).\n- Se o erro persistir, peça a um administrador do Azure para conceder o consentimento para o aplicativo 'Gestão de Atividades PAR'.");
-      } else {
-        alert("Ocorreu um erro ao tentar conectar com a Microsoft. Verifique suas permissões de acesso ao SharePoint ou tente novamente mais tarde.");
+        alert("⚠️ Acesso Negado ou Permissão Necessária\n\nNão foi possível fazer o login. Possíveis causas:\n\n1. Você está usando uma conta pessoal (@outlook, @gmail) em vez da sua conta corporativa (@ctvacinas.org).\n2. O aplicativo precisa de permissão de um administrador de TI para acessar o SharePoint.\n\nPor favor, tente novamente com sua conta corporativa. Se o erro continuar, contate o suporte de TI e solicite a aprovação para o aplicativo 'Gestão de Atividades PAR'.");
+      } else if (error.errorCode === 'user_cancelled') {
+        console.log("Login cancelado pelo usuário.");
+      }
+      else {
+        alert("Ocorreu um erro inesperado durante o login. Por favor, verifique sua conexão e tente novamente. Se o problema persistir, contate o suporte.");
       }
       return { success: false, error };
     }
@@ -112,11 +114,15 @@ export const MicrosoftGraphService = {
 
   async loadFromCloud() {
     const token = await this.getToken();
-    if (!token) return null;
+    if (!token) {
+      return { data: null, error: 'token_error' };
+    }
 
     try {
       const ids = await this.getSiteAndDriveId(token);
-      if (!ids) return null;
+      if (!ids) {
+        return { data: null, error: 'permission_denied' };
+      }
       
       const response = await fetch(`https://graph.microsoft.com/v1.0/drives/${ids.driveId}/root:${FILE_PATH}:/content`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -124,13 +130,16 @@ export const MicrosoftGraphService = {
 
       if (response.status === 404) {
           console.warn("Arquivo 'db.json' não encontrado no SharePoint. Será criado um novo no primeiro salvamento.");
-          return null;
+          return { data: null, error: null };
       }
-      if (!response.ok) return null;
-      return response.json();
+      if (!response.ok) {
+        return { data: null, error: 'fetch_error' };
+      }
+      const data = await response.json();
+      return { data, error: null };
     } catch (error) {
       console.error("Erro ao carregar do SharePoint:", error);
-      return null;
+      return { data: null, error: 'permission_denied' };
     }
   },
 
