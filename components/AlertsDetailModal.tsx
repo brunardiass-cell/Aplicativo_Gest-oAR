@@ -26,47 +26,47 @@ const AlertsDetailModal: React.FC<AlertsDetailModalProps> = ({ isOpen, onClose, 
 
   return (
     <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
-        <header className="p-8 bg-slate-50 border-b border-slate-100 flex items-center gap-4">
-          <div className="bg-red-100 p-3 rounded-2xl text-red-600">
+      <div className="bg-[#1e293b] text-white rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col border border-white/10">
+        <header className="p-8 bg-slate-900/50 border-b border-white/10 flex items-center gap-4">
+          <div className="bg-red-500/10 p-3 rounded-2xl text-red-400">
             <AlertTriangle size={24} />
           </div>
           <div>
-            <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter">{title}</h2>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{items.length} item(s) requerem atenção</p>
+            <h2 className="text-xl font-black text-white uppercase tracking-tighter">{title}</h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{items.length} item(s) requerem atenção</p>
           </div>
-          <button onClick={onClose} className="ml-auto p-2 hover:bg-slate-200 rounded-full transition"><X size={20} /></button>
+          <button onClick={onClose} className="ml-auto p-2 text-slate-400 hover:bg-white/10 rounded-full transition"><X size={20} /></button>
         </header>
         
         <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-white/10">
             {items.map(item => (
               <button 
                 key={item.id} 
                 onClick={() => isTask(item) && onItemClick(item)} 
                 disabled={!isTask(item)}
-                className="w-full text-left p-4 hover:bg-slate-50 rounded-lg transition flex justify-between items-center disabled:pointer-events-none group"
+                className="w-full text-left p-4 hover:bg-white/5 rounded-lg transition flex justify-between items-center disabled:pointer-events-none group"
               >
                 <div>
-                  <p className="font-bold text-slate-800">{isTask(item) ? item.activity : item.name}</p>
-                  <div className="flex items-center gap-4 text-[10px] font-bold uppercase text-slate-400 mt-1">
-                    {isTask(item) && <span>PROJETO: <span className="text-indigo-500">{item.project}</span></span>}
-                    {isTask(item) && item.completionDate && <span>VENCIMENTO: <span className="text-red-500">{new Date(item.completionDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span></span>}
+                  <p className="font-bold text-slate-200">{isTask(item) ? item.activity : item.name}</p>
+                  <div className="flex items-center gap-4 text-[10px] font-bold uppercase text-slate-500 mt-1">
+                    {isTask(item) && <span>PROJETO: <span className="text-blue-400">{item.project}</span></span>}
+                    {isTask(item) && item.completionDate && <span>VENCIMENTO: <span className="text-red-400">{new Date(item.completionDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span></span>}
                   </div>
                 </div>
-                {isTask(item) && <ChevronRight size={18} className="text-slate-300 group-hover:translate-x-1 transition-transform"/>}
+                {isTask(item) && <ChevronRight size={18} className="text-slate-600 group-hover:translate-x-1 transition-transform"/>}
               </button>
             ))}
              {items.length === 0 && (
                 <div className="text-center py-20">
-                    <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Nenhum item encontrado.</p>
+                    <p className="text-slate-500 font-bold uppercase text-xs tracking-widest">Nenhum item encontrado.</p>
                 </div>
              )}
           </div>
         </div>
 
-        <footer className="p-6 bg-slate-50 border-t flex justify-end">
-          <button onClick={onClose} className="px-10 py-3 bg-slate-800 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition">
+        <footer className="p-6 bg-slate-900/50 border-t border-white/10 flex justify-end">
+          <button onClick={onClose} className="px-10 py-3 bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-blue-700 transition">
             Fechar
           </button>
         </footer>

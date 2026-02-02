@@ -14,7 +14,7 @@ import ReportView from './components/ReportView';
 import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
-import { PlusCircle, Search, FileSignature, AlertCircle, ShieldCheck, FileText, BellOff, Loader2 } from 'lucide-react';
+import { PlusCircle, Search, FileSignature, AlertCircle, FileText, BellOff, Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -104,7 +104,7 @@ const App: React.FC = () => {
       setView('dashboard');
       isInitialLoad.current = false;
     } else if (!isSilent) {
-      alert('Falha no login. Por favor, tente novamente.');
+      // O erro já é tratado com um alerta dentro do microsoftGraphService
     }
     setIsLoading(false);
   };
@@ -317,7 +317,7 @@ const App: React.FC = () => {
   const projectNames = Array.from(new Set(tasks.map(t => t.project))).filter(p => p !== '');
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc]">
+    <div className="flex min-h-screen bg-[#0f172a] text-slate-200">
       <Sidebar 
         currentView={view} 
         onViewChange={setView} 
@@ -331,26 +331,26 @@ const App: React.FC = () => {
         <header className="flex justify-between items-start mb-12">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
-              <span className="w-3 h-3 bg-[#1a2b4e] rounded-full"></span>
+              <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
               <h1 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
                 Gestão Setorial • CTVacinas
               </h1>
             </div>
-            <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">
+            <h2 className="text-4xl font-black text-white tracking-tighter uppercase">
               {view === 'dashboard' ? `ATIVIDADES • ${filterMember === 'Todos' ? 'TODA A EQUIPE' : filterMember}` : 
                view === 'tasks' ? 'Atividades Regulatórias' : 
                view === 'projects' ? 'Fluxos Estratégicos' : 
-               view === 'quality' ? 'Controle de Acesso' : 'Rastreabilidade'}
+               view === 'quality' ? 'Gerenciar Equipe' : 'Rastreabilidade'}
             </h2>
             
             <div className="mt-4 flex flex-wrap items-center gap-4">
               {(view === 'dashboard' || view === 'tasks') && currentUser !== 'Todos' && activeReviews.length > 0 && (
                   <>
-                      <button onClick={() => handleNotificationClick(activeReviews[0])} className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest animate-pulse shadow-lg shadow-amber-200">
+                      <button onClick={() => handleNotificationClick(activeReviews[0])} className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest animate-pulse shadow-lg shadow-amber-500/20">
                           <FileSignature size={14} />
                           {activeReviews.length} Relatórios para você analisar
                       </button>
-                      <button onClick={handleClearAllNotifications} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition">
+                      <button onClick={handleClearAllNotifications} className="flex items-center gap-2 px-4 py-2 bg-white/5 text-slate-400 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition">
                           <BellOff size={14} /> Limpar Notificações
                       </button>
                   </>
@@ -358,14 +358,14 @@ const App: React.FC = () => {
               {view === 'tasks' && (
                   <>
                       {currentUser !== 'Todos' && activeReviews.length === 0 && (
-                          <div className="flex items-center gap-2 text-slate-400 italic text-[10px] font-bold uppercase tracking-widest">
+                          <div className="flex items-center gap-2 text-slate-500 italic text-[10px] font-bold uppercase tracking-widest">
                               <AlertCircle size={14} />
                               Você não tem relatórios para análise
                           </div>
                       )}
                       <button 
                           onClick={() => setIsReportOpen(true)}
-                          className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 transition"
+                          className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500/20 transition"
                       >
                           <FileText size={14} />
                           Emitir Relatório IA ({filterMember})
@@ -381,28 +381,28 @@ const App: React.FC = () => {
                   <select 
                     value={filterMember} 
                     onChange={e => setFilterMember(e.target.value)}
-                    className="px-6 py-3 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none shadow-sm focus:ring-2 focus:ring-[#1a2b4e] text-slate-900"
+                    className="px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none shadow-sm focus:ring-2 focus:ring-blue-500 text-white"
                   >
-                    <option value="Todos">Toda a Equipe</option>
-                    {teamMembers.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+                    <option value="Todos" className="bg-slate-900">Toda a Equipe</option>
+                    {teamMembers.map(m => <option key={m.name} value={m.name} className="bg-slate-900">{m.name}</option>)}
                   </select>
               </div>
             )}
              {view === 'tasks' && (
                <>
                  <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                     <input 
                       type="text"
                       placeholder="Buscar por nome ou projeto..."
                       value={searchTerm}
                       onChange={e => setSearchTerm(e.target.value)}
-                      className="pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none shadow-sm focus:ring-2 focus:ring-[#1a2b4e] text-slate-900"
+                      className="pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-xs font-bold outline-none shadow-sm focus:ring-2 focus:ring-blue-500 text-white"
                     />
                  </div>
                  <button 
                   onClick={() => { setSelectedTask(null); setIsModalOpen(true); }}
-                  className="px-8 py-3.5 bg-[#1a2b4e] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-[#0f172a] transition shadow-xl flex items-center gap-2"
+                  className="px-8 py-3.5 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition shadow-xl shadow-blue-500/20 flex items-center gap-2"
                 >
                   <PlusCircle size={18} /> Nova Atividade
                 </button>
@@ -447,41 +447,7 @@ const App: React.FC = () => {
           )}
 
           {view === 'traceability' && (
-            <div className="space-y-10">
-              <ActivityLogView logs={logs} />
-              
-              <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
-                <header className="p-8 bg-red-50 border-b border-red-100 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-xl font-black text-red-900 uppercase tracking-tighter">Atividades Excluídas Recentemente</h3>
-                    <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Disponíveis para restauração por até 7 dias</p>
-                  </div>
-                </header>
-                <div className="divide-y divide-slate-100">
-                  {tasks.filter(t => t.deleted).map(task => (
-                    <div key={task.id} className="p-8 flex items-center justify-between group hover:bg-red-50/10 transition-colors">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-1">
-                          <h4 className="text-lg font-black text-slate-900 uppercase tracking-tight">{task.activity}</h4>
-                          <span className="text-[9px] font-black uppercase bg-slate-100 text-slate-400 px-2 py-0.5 rounded">{task.project}</span>
-                        </div>
-                        <p className="text-xs text-red-600 font-medium">Motivo: {task.deletionReason}</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Excluído em: {new Date(task.deletionDate!).toLocaleDateString('pt-BR')}</p>
-                      </div>
-                      <button 
-                        onClick={() => handleRestoreTask(task.id)}
-                        className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-black transition"
-                      >
-                        Restaurar Atividade
-                      </button>
-                    </div>
-                  ))}
-                  {tasks.filter(t => t.deleted).length === 0 && (
-                    <p className="p-16 text-center text-slate-400 font-bold uppercase text-xs italic tracking-widest">Nenhuma atividade na lixeira.</p>
-                  )}
-                </div>
-              </div>
-            </div>
+            <ActivityLogView logs={logs} tasks={tasks} onRestoreTask={handleRestoreTask} />
           )}
         </div>
 

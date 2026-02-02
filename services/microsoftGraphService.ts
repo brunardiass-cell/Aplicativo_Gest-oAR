@@ -40,8 +40,9 @@ export const MicrosoftGraphService = {
       return { success: true, account: loginResponse.account };
     } catch (error: any) {
       console.error("Erro no login Microsoft:", error);
-       if (error.errorMessage?.includes("unauthorized_client") || error.message?.includes("unauthorized_client")) {
-        alert("⚠️ ERRO DE PERMISSÃO AZURE:\n\nSua conta pode ser pessoal, mas o aplicativo no Azure pode não estar configurado para aceitá-las. Peça ao administrador para habilitar 'Contas em qualquer diretório organizacional e contas pessoais da Microsoft' no Portal do Azure.");
+       // Erro específico para quando um admin precisa consentir ou o tipo de conta é errado
+       if (error.errorCode === 'unauthorized_client' || error.errorMessage?.includes('AADSTS65005')) {
+        alert("⚠️ APROVAÇÃO DE ADMINISTRADOR NECESSÁRIA\n\nEste aplicativo precisa de permissões que apenas um administrador da organização pode conceder.\n\nCAUSAS COMUNS:\n1. Você está tentando logar com uma conta pessoal (ex: @outlook.com) em um aplicativo configurado apenas para contas da organização.\n2. As permissões do aplicativo no Azure precisam ser aprovadas por um administrador.\n\nSOLUÇÃO:\n- Tente logar com sua conta corporativa (ex: @ctvacinas.org).\n- Se o erro persistir, peça a um administrador do Azure para conceder o consentimento para o aplicativo 'Gestão de Atividades PAR'.");
       } else {
         alert("Ocorreu um erro ao tentar conectar com a Microsoft. Verifique suas permissões de acesso ao SharePoint ou tente novamente mais tarde.");
       }

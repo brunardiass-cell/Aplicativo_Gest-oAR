@@ -29,10 +29,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   notificationCount
 }) => {
   return (
-    <aside className="w-64 bg-brand-dark text-slate-400 fixed h-full flex flex-col shadow-2xl z-50 border-r border-white/5">
+    <aside className="w-64 bg-[#0a0f1d] text-slate-400 fixed h-full flex flex-col shadow-2xl z-50 border-r border-white/5">
       <div className="p-8">
         <div className="flex items-center gap-3 mb-12 cursor-pointer group" onClick={onGoHome}>
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-900/40">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-500/20 transition-transform group-hover:scale-110">
             AR
           </div>
           <div>
@@ -65,7 +65,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               active={currentView === 'quality'} 
               onClick={() => onViewChange('quality')} 
               icon={<ShieldCheck size={18} />} 
-              label="Controle de Acesso" 
+              label="Gerenciar Equipe" 
             />
           )}
           {currentUser?.role === 'admin' && (
@@ -80,14 +80,14 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div className="mt-auto px-6 py-6 border-t border-white/5 space-y-2">
-        <div className="px-4 py-2 mb-4 bg-white/5 rounded-2xl border border-white/5">
+        <div className="px-4 py-3 mb-4 bg-white/5 rounded-2xl border border-white/5">
           <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Usuário Atual</p>
-          <p className="text-xs font-bold text-white truncate">{currentUser?.username}</p>
+          <p className="text-xs font-bold text-slate-200 truncate">{currentUser?.username}</p>
         </div>
-        <button onClick={onGoHome} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition text-[10px] font-black uppercase tracking-widest text-slate-400">
+        <button onClick={onGoHome} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white">
           <Home size={18} /> Início
         </button>
-        <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 transition text-[10px] font-black uppercase tracking-widest text-red-500">
+        <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 transition text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-300">
           <LogOut size={18} /> Sair
         </button>
       </div>
@@ -98,7 +98,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 const SidebarButton = ({ active, onClick, icon, label }: any) => (
   <button 
     onClick={onClick}
-    className={`w-full flex items-center text-left gap-3 px-4 py-3.5 rounded-xl transition font-bold text-[10px] uppercase tracking-[0.15em] ${active ? 'bg-white/10 text-white border border-white/10 shadow-lg' : `hover:bg-white/5 text-slate-400`}`}
+    className={`w-full flex items-center text-left gap-3 px-4 py-3.5 rounded-xl transition font-bold text-[10px] uppercase tracking-[0.15em] ${active ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : `hover:bg-white/5 text-slate-400 hover:text-slate-200`}`}
   >
     {icon}
     {label}

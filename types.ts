@@ -110,7 +110,6 @@ export interface TeamMember {
   name: string;
   role: string;
   isLeader: boolean;
-  password?: string;
 }
 
 
