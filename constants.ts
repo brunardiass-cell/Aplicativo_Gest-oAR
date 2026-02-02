@@ -1,13 +1,20 @@
 
-import { ActivityPlanTemplate, TeamMember } from './types';
+import { ActivityPlanTemplate, TeamMember, AccessUser } from './types';
 
 export const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
   { id: 'tm_1', name: 'Graziella', role: 'Líder', isLeader: true },
-  { id: 'tm_2', name: 'Bruna', role: 'Equipe', isLeader: false },
+  { id: 'tm_2', name: 'Bruna Dias', role: 'Equipe', isLeader: false },
   { id: 'tm_3', name: 'Ester', role: 'Equipe', isLeader: false },
   { id: 'tm_4', name: 'Marjorie', role: 'Equipe', isLeader: false },
   { id: 'tm_5', name: 'Ana Luiza', role: 'Equipe', isLeader: false },
   { id: 'tm_6', name: 'Ana Terzian', role: 'Equipe', isLeader: false }
+];
+
+export const DEFAULT_ACCESS_USERS: AccessUser[] = [
+  { id: 'au_1', name: 'Graziella', email: 'graziella.r@ctvacinas.org', role: 'admin', status: 'active' },
+  { id: 'au_3', name: 'Priscila Passos', email: 'priscilapassos@ctvacinas.org', role: 'admin', status: 'active' },
+  { id: 'au_4', name: 'Priscila Passos', email: 'priscilapassos.ctvacinas@gmail.com', role: 'admin', status: 'active' },
+  { id: 'au_2', name: 'Bruna Dias', email: 'brunardias@outlook.com', role: 'admin', status: 'active' },
 ];
 
 export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [

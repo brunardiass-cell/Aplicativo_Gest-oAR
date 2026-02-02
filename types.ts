@@ -56,6 +56,14 @@ export interface AppNotification {
   refId: string;
 }
 
+export interface AccessUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'user';
+  status: 'active' | 'inactive';
+}
+
 export interface AppUser {
   username: string;
   role: 'admin' | 'user';

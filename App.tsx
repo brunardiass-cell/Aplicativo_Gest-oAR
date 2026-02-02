@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember } from './types';
-import { DEFAULT_TEAM_MEMBERS, DEFAULT_ACTIVITY_PLANS } from './constants';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AccessUser } from './types';
+import { DEFAULT_TEAM_MEMBERS, DEFAULT_ACTIVITY_PLANS, DEFAULT_ACCESS_USERS } from './constants';
 import SelectionView from './components/SelectionView';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -20,6 +20,7 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [accessUsers, setAccessUsers] = useState<AccessUser[]>([]);
   const [activityPlans, setActivityPlans] = useState<ActivityPlanTemplate[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
@@ -40,7 +41,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const isInitialLoad = useRef(true);
 
-  const saveDataToSharePoint = async (data: { tasks: Task[], projects: Project[], teamMembers: TeamMember[], activityPlans: ActivityPlanTemplate[], notifications: AppNotification[], logs: ActivityLog[] }) => {
+  const saveDataToSharePoint = async (data: { tasks: Task[], projects: Project[], teamMembers: TeamMember[], accessUsers: AccessUser[], activityPlans: ActivityPlanTemplate[], notifications: AppNotification[], logs: ActivityLog[] }) => {
     await MicrosoftGraphService.saveToCloud(data);
   };
 
@@ -60,9 +61,9 @@ const App: React.FC = () => {
     if (isInitialLoad.current) {
       return;
     }
-    const currentState = { tasks, projects, teamMembers, activityPlans, notifications, logs };
+    const currentState = { tasks, projects, teamMembers, accessUsers, activityPlans, notifications, logs };
     saveDataToSharePoint(currentState);
-  }, [tasks, projects, teamMembers, activityPlans, notifications, logs]);
+  }, [tasks, projects, teamMembers, accessUsers, activityPlans, notifications, logs]);
 
 
   const handleLogin = async (isSilent = false) => {
@@ -81,6 +82,7 @@ const App: React.FC = () => {
         setTasks(cloudData.tasks || []);
         setProjects(cloudData.projects || []);
         setTeamMembers(cloudData.teamMembers || DEFAULT_TEAM_MEMBERS);
+        setAccessUsers(cloudData.accessUsers || DEFAULT_ACCESS_USERS);
         setActivityPlans(cloudData.activityPlans || DEFAULT_ACTIVITY_PLANS);
         setNotifications(cloudData.notifications || []);
         setLogs(cloudData.logs || []);
@@ -89,6 +91,7 @@ const App: React.FC = () => {
             tasks: [],
             projects: [],
             teamMembers: DEFAULT_TEAM_MEMBERS,
+            accessUsers: DEFAULT_ACCESS_USERS,
             activityPlans: DEFAULT_ACTIVITY_PLANS,
             notifications: [],
             logs: []
@@ -96,10 +99,11 @@ const App: React.FC = () => {
         setTasks(initialState.tasks);
         setProjects(initialState.projects);
         setTeamMembers(initialState.teamMembers);
+        setAccessUsers(initialState.accessUsers);
         setActivityPlans(initialState.activityPlans);
         setNotifications(initialState.notifications);
         setLogs(initialState.logs);
-        await saveDataToSharePoint(initialState);
+        await saveDataToSharePoint(initialState as any);
       }
       setView('dashboard');
       isInitialLoad.current = false;
@@ -117,6 +121,7 @@ const App: React.FC = () => {
     setTasks([]);
     setProjects([]);
     setTeamMembers([]);
+    setAccessUsers([]);
     setActivityPlans([]);
     setNotifications([]);
     setLogs([]);
@@ -295,9 +300,9 @@ const App: React.FC = () => {
     });
   }, [tasks, filterMember, searchTerm]);
 
-  const currentUserIsLeader = useMemo(() => {
-    return teamMembers.find(m => m.name === currentUser)?.isLeader || false;
-  }, [teamMembers, currentUser]);
+  const currentUserIsAdmin = useMemo(() => {
+    return accessUsers.find(u => u.name === currentUser)?.role === 'admin' || false;
+  }, [accessUsers, currentUser]);
 
   if (isLoading) {
     return (
@@ -323,7 +328,7 @@ const App: React.FC = () => {
         onViewChange={setView} 
         onGoHome={() => setView('dashboard')}
         onLogout={handleLogout} 
-        currentUser={{ username: currentUser, role: currentUserIsLeader ? 'admin' : 'user' }}
+        currentUser={{ username: currentUser, role: currentUserIsAdmin ? 'admin' : 'user' }}
         notificationCount={activeReviews.length}
       />
       
@@ -340,7 +345,7 @@ const App: React.FC = () => {
               {view === 'dashboard' ? `ATIVIDADES • ${filterMember === 'Todos' ? 'TODA A EQUIPE' : filterMember}` : 
                view === 'tasks' ? 'Atividades Regulatórias' : 
                view === 'projects' ? 'Fluxos Estratégicos' : 
-               view === 'quality' ? 'Gerenciar Equipe' : 'Rastreabilidade'}
+               view === 'quality' ? 'Gestão de Acesso' : 'Rastreabilidade'}
             </h2>
             
             <div className="mt-4 flex flex-wrap items-center gap-4">
@@ -443,6 +448,8 @@ const App: React.FC = () => {
              <AccessControl 
                 teamMembers={teamMembers}
                 onUpdateTeamMembers={setTeamMembers}
+                accessUsers={accessUsers}
+                onUpdateAccessUsers={setAccessUsers}
              />
           )}
 

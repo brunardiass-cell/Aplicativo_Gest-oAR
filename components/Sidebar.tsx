@@ -65,7 +65,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               active={currentView === 'quality'} 
               onClick={() => onViewChange('quality')} 
               icon={<ShieldCheck size={18} />} 
-              label="Gerenciar Equipe" 
+              label="Gestão de Acesso" 
             />
           )}
           {currentUser?.role === 'admin' && (
