@@ -47,10 +47,16 @@ class MsalService {
 
   constructor() {
     this.msalInstance = new PublicClientApplication(msalConfig);
-    // A inicialização começa imediatamente e qualquer chamada de método aguardará sua conclusão.
-    this.initializationPromise = this.msalInstance.handleRedirectPromise().then(() => {}).catch(err => {
+    // A inicialização começa imediatamente. Primeiro, inicialize a instância,
+    // depois, lide com qualquer promessa de redirecionamento.
+    this.initializationPromise = this.msalInstance.initialize()
+      .then(() => {
+        return this.msalInstance.handleRedirectPromise();
+      })
+      .then(() => { /* Garante que a promessa seja resolvida como void */ })
+      .catch(err => {
         console.error("Erro de inicialização do MSAL:", err);
-    });
+      });
   }
 
   async login(): Promise<void> {
