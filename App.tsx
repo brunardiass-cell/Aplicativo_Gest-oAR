@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo } from './types';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, SyncInfo } from './types';
 import { DEFAULT_TEAM_MEMBERS } from './constants';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
@@ -24,7 +24,6 @@ const App: React.FC = () => {
   const [activityPlans, setActivityPlans] = useState<ActivityPlanTemplate[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
-  const [appUsers, setAppUsers] = useState<AppUser[]>([]);
   const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
   
   const [view, setView] = useState<ViewMode>('dashboard');
@@ -70,7 +69,6 @@ const App: React.FC = () => {
         setActivityPlans(cloudData.activityPlans || []);
         setNotifications(cloudData.notifications || []);
         setLogs(cloudData.logs || []);
-        setAppUsers(cloudData.appUsers || []);
       } else {
         setTeamMembers(DEFAULT_TEAM_MEMBERS);
       }
@@ -90,7 +88,7 @@ const App: React.FC = () => {
     
     saveDataTimeout.current = window.setTimeout(async () => {
       setLastSync(prev => ({ ...(prev || { timestamp: '', user: '' }), status: 'syncing' }));
-      const dataToSave = { tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers };
+      const dataToSave = { tasks, projects, teamMembers, activityPlans, notifications, logs };
       const success = await MicrosoftGraphService.saveToCloud(dataToSave);
       setLastSync(prev => ({
         ...(prev || { user: 'System' }),
@@ -98,10 +96,10 @@ const App: React.FC = () => {
         timestamp: new Date().toISOString(),
       }));
     }, 2000);
-  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers]);
+  }, [tasks, projects, teamMembers, activityPlans, notifications, logs]);
 
-  const hasFullAccess = useMemo(() => !!(selectedProfile?.isLeader && isPasswordAuthenticated), [selectedProfile, isPasswordAuthenticated]);
-  const canCreate = useMemo(() => isPasswordAuthenticated && selectedProfile?.id !== 'team_view_user', [isPasswordAuthenticated, selectedProfile]);
+  const hasFullAccess = useMemo(() => selectedProfile?.role === 'Admin' && isPasswordAuthenticated, [selectedProfile, isPasswordAuthenticated]);
+  const canCreate = useMemo(() => isPasswordAuthenticated && (selectedProfile?.role === 'Admin' || selectedProfile?.role === 'Membro'), [isPasswordAuthenticated, selectedProfile]);
 
   const handleLogin = async () => {
     setIsLoading(true);
@@ -126,7 +124,7 @@ const App: React.FC = () => {
   };
   
   const handleSaveLocalBackup = () => {
-    const dataToSave = { tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers };
+    const dataToSave = { tasks, projects, teamMembers, activityPlans, notifications, logs };
     const blob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -153,7 +151,6 @@ const App: React.FC = () => {
             setActivityPlans(data.activityPlans || []);
             setNotifications(data.notifications || []);
             setLogs(data.logs || []);
-            setAppUsers(data.appUsers || []);
             alert("Backup local carregado com sucesso! Os dados serão sincronizados com a nuvem.");
           }
         } catch (error) {
@@ -176,7 +173,7 @@ const App: React.FC = () => {
   };
 
   const handleTeamViewSelect = () => {
-    const teamViewerProfile: TeamMember = { id: 'team_view_user', name: 'Visão Geral da Equipe', role: 'Visualizador', isLeader: false };
+    const teamViewerProfile: TeamMember = { id: 'team_view_user', name: 'Visão Geral da Equipe', email: '', jobTitle: 'Visualizador', role: 'Usuario', status: 'active' };
     setSelectedProfile(teamViewerProfile);
     setFilterMember('Todos');
     setIsPasswordAuthenticated(true);
@@ -333,13 +330,13 @@ const App: React.FC = () => {
 
         <div className="animation-in">
           {view === 'dashboard' && <Dashboard tasks={tasks} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />}
-          {view === 'quality' && hasFullAccess && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} appUsers={appUsers} onUpdateAppUsers={setAppUsers} />}
-          {view === 'tasks' && <TaskBoard tasks={tasks.filter(t => !t.deleted && (filterMember === 'Todos' || t.projectLead === filterMember || t.collaborators.includes(filterMember)))} currentUser={filterMember} onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} onDelete={(task) => { setSelectedTask(task); setIsDeleteModalOpen(true); }} onAssignReview={() => {}} onNotificationClick={() => {}} onClearSingleNotification={() => {}} notifications={notifications.filter(n => n.userId === selectedProfile?.name)} />}
-          {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={() => {}} teamMembers={teamMembers} />}
+          {view === 'quality' && hasFullAccess && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} />}
+          {view === 'tasks' && <TaskBoard tasks={tasks.filter(t => !t.deleted && (filterMember === 'Todos' || t.projectLead === filterMember || t.collaborators.includes(filterMember)))} currentUser={filterMember} onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} onDelete={(task) => { setSelectedTask(task); setIsDeleteModalOpen(true); }} onAssignReview={() => {}} onNotificationClick={() => {}} onClearSingleNotification={() => {}} notifications={notifications.filter(n => n.userId === selectedProfile?.name)} currentUserRole={selectedProfile.role} currentUserName={selectedProfile.name} />}
+          {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={() => {}} teamMembers={teamMembers} currentUserRole={selectedProfile.role} />}
           {view === 'traceability' && hasFullAccess && <ActivityLogView logs={logs} />}
         </div>
 
-        {isModalOpen && <TaskModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveTask} projects={Array.from(new Set(tasks.map(t => t.project)))} initialData={selectedTask} teamMembers={teamMembers} />}
+        {isModalOpen && <TaskModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveTask} projects={Array.from(new Set(tasks.map(t => t.project)))} initialData={selectedTask} teamMembers={teamMembers} currentUser={selectedProfile} />}
         {isDetailsOpen && selectedTask && <TaskDetailsModal task={selectedTask} onClose={() => { setIsDetailsOpen(false); setSelectedTask(null); }} />}
         {isDeleteModalOpen && selectedTask && <DeletionModal itemName={selectedTask.activity} onClose={() => { setIsDeleteModalOpen(false); setSelectedTask(null); }} onConfirm={handleDeleteTask} />}
         {isReportModalOpen && <MonthlyReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} tasks={tasks} />}

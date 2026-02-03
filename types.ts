@@ -62,25 +62,8 @@ export interface AppNotification {
   refId: string;
 }
 
-export interface AccessUser {
-  id: string;
-  name: string;
-  email: string;
-  role: 'admin' | 'user';
-  status: 'active' | 'inactive';
-}
-
-export interface AppUser {
-  id: string;
-  username: string;
-  email: string;
-  role: 'admin' | 'user';
-  status: 'active' | 'pending' | 'blocked';
-  joinedAt: string;
-}
-
 export interface ActivityLog {
-  id: string;
+  id:string;
   action: 'CRIAÇÃO' | 'EDIÇÃO' | 'EXCLUSÃO' | 'RESTAURAÇÃO' | 'REVISÃO';
   taskTitle: string;
   user: string;
@@ -121,12 +104,16 @@ export interface Project {
   macroActivities: MacroActivity[];
 }
 
+export type UserRole = 'Admin' | 'Membro' | 'Usuario';
+
 export interface TeamMember {
   id: string;
   name: string;
-  role: string;
-  isLeader: boolean;
+  email: string;
+  jobTitle: string;
+  role: UserRole;
   password?: string;
+  status: 'active' | 'inactive';
 }
 
 
@@ -171,7 +158,7 @@ export interface ProjectData {
 }
 
 export interface AppConfig {
-  users: AppUser[];
+  users: TeamMember[]; // Changed from AppUser to TeamMember
   authorizedEmails: string[];
   notificationEmail: string;
   projectsData: ProjectData[];

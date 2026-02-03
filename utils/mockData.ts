@@ -1,9 +1,10 @@
-
 import { Task, TeamMember } from '../types';
 
 export const generateInitialTasks = (teamMembers: TeamMember[]): Task[] => {
-  const leader = teamMembers.find(m => m.isLeader);
-  const otherMembers = teamMembers.filter(m => !m.isLeader);
+  // FIX: Property 'isLeader' does not exist on type 'TeamMember'. Assuming 'Admin' role indicates a leader.
+  const leader = teamMembers.find(m => m.role === 'Admin');
+  // FIX: Property 'isLeader' does not exist on type 'TeamMember'. Assuming non-'Admin' roles for other members.
+  const otherMembers = teamMembers.filter(m => m.role !== 'Admin');
 
   return [
     {

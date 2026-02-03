@@ -1,13 +1,15 @@
-
 import React, { useState } from 'react';
-import { Person, AppUser } from '../types';
+// FIX: Changed AppUser to TeamMember as AppUser is not an exported type.
+import { Person, TeamMember } from '../types';
 import { Plus, Trash2, Mail, User, Shield, Info } from 'lucide-react';
 
 interface PeopleManagerProps {
   people: Person[];
-  users: AppUser[];
+  // FIX: Changed AppUser[] to TeamMember[]
+  users: TeamMember[];
   canEdit: boolean;
-  onUpdate: (people: Person[], users: AppUser[]) => void;
+  // FIX: Changed AppUser[] to TeamMember[]
+  onUpdate: (people: Person[], users: TeamMember[]) => void;
   onAddLog: (id: string, title: string, reason: string) => void;
 }
 
@@ -61,7 +63,8 @@ const PeopleManager: React.FC<PeopleManagerProps> = ({ people, users, canEdit, o
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {people.map(person => {
-              const hasSystemAccess = users.some(u => u.username === person.name);
+              // FIX: The 'TeamMember' type does not have a 'username' property. Use 'name' instead.
+              const hasSystemAccess = users.some(u => u.name === person.name);
               return (
                 <div key={person.id} className="p-5 bg-white border border-slate-200 rounded-2xl flex items-center justify-between group hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-4">

@@ -2,12 +2,12 @@
 import { ActivityPlanTemplate, TeamMember } from './types';
 
 export const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
-  { id: 'tm_1', name: 'Graziella', role: 'Líder', isLeader: true, password: 'admin' },
-  { id: 'tm_2', name: 'Bruna Dias', role: 'Equipe', isLeader: false },
-  { id: 'tm_3', name: 'Ester', role: 'Equipe', isLeader: false },
-  { id: 'tm_4', name: 'Marjorie', role: 'Equipe', isLeader: false },
-  { id: 'tm_5', name: 'Ana Luiza', role: 'Equipe', isLeader: false },
-  { id: 'tm_6', name: 'Ana Terzian', role: 'Equipe', isLeader: false }
+  { id: 'tm_1', name: 'Graziella', email: 'graziella@ctvacinas.org', jobTitle: 'Líder', role: 'Admin', password: 'admin', status: 'active' },
+  { id: 'tm_2', name: 'Bruna Dias', email: 'bruna.dias@ctvacinas.org', jobTitle: 'Equipe', role: 'Membro', status: 'active' },
+  { id: 'tm_3', name: 'Ester', email: 'ester@ctvacinas.org', jobTitle: 'Equipe', role: 'Membro', status: 'active' },
+  { id: 'tm_4', name: 'Marjorie', email: 'marjorie@ctvacinas.org', jobTitle: 'Equipe', role: 'Membro', status: 'active' },
+  { id: 'tm_5', name: 'Ana Luiza', email: 'ana.luiza@ctvacinas.org', jobTitle: 'Equipe', role: 'Usuario', status: 'active' },
+  { id: 'tm_6', name: 'Ana Terzian', email: 'ana.terzian@ctvacinas.org', jobTitle: 'Equipe', role: 'Usuario', status: 'inactive' }
 ];
 
 export const ADMIN_WHITELIST = [
