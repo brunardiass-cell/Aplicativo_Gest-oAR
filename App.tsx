@@ -224,8 +224,34 @@ const App: React.FC = () => {
   };
 
   const handleSaveTask = (task: Task) => {
-    const isEditing = tasks.some(t => t.id === task.id);
-    setTasks(prev => isEditing ? prev.map(t => t.id === task.id ? task : t) : [{ ...task, id: `task_${Date.now()}` }, ...prev]);
+    const isEditing = !!task.id && tasks.some(t => t.id === task.id);
+    const taskToSave = { ...task };
+    
+    if (!isEditing) {
+        taskToSave.id = `task_${Date.now()}`;
+    }
+
+    const oldTask = isEditing ? tasks.find(t => t.id === taskToSave.id) : null;
+
+    if (
+      taskToSave.isReport &&
+      taskToSave.reportStage === 'Próximo Revisor' &&
+      taskToSave.currentReviewer &&
+      (!oldTask || oldTask.currentReviewer !== taskToSave.currentReviewer || oldTask.reportStage !== 'Próximo Revisor')
+    ) {
+      const newNotification: AppNotification = {
+        id: `notif_${Date.now()}`,
+        userId: taskToSave.currentReviewer,
+        message: `Revisão: ${taskToSave.activity}`,
+        timestamp: new Date().toISOString(),
+        read: false,
+        type: 'REVIEW_ASSIGNED',
+        refId: taskToSave.id,
+      };
+      setNotifications(prev => [...prev, newNotification]);
+    }
+
+    setTasks(prev => isEditing ? prev.map(t => t.id === taskToSave.id ? taskToSave : t) : [taskToSave, ...prev]);
     setIsModalOpen(false);
     setSelectedTask(null);
   };
@@ -362,6 +388,17 @@ const App: React.FC = () => {
     return <PasswordModal isOpen={true} onConfirm={handlePasswordConfirm} onClose={handleSwitchProfile} userName={selectedProfile.name} error={passwordError}/>
   }
   
+  const tasksForBoard = useMemo(() => {
+    return tasks.filter(t => 
+      !t.deleted && (
+        filterMember === 'Todos' || 
+        t.projectLead === filterMember || 
+        t.collaborators.includes(filterMember) ||
+        t.currentReviewer === filterMember
+      )
+    );
+  }, [tasks, filterMember]);
+
   return (
     <div className="flex min-h-screen bg-brand-light text-slate-800">
       <input type="file" ref={fileInputRef} onChange={handleLoadLocalBackup} accept=".json" className="hidden" />
@@ -414,7 +451,7 @@ const App: React.FC = () => {
         <div className="animation-in">
           {view === 'dashboard' && <Dashboard tasks={tasks} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />}
           {view === 'quality' && hasFullAccess && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} appUsers={appUsers} onUpdateAppUsers={setAppUsers} />}
-          {view === 'tasks' && <TaskBoard tasks={tasks.filter(t => !t.deleted && (filterMember === 'Todos' || t.projectLead === filterMember || t.collaborators.includes(filterMember)))} currentUser={selectedProfile?.name || 'Todos'} onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} onDelete={(task) => { setSelectedTask(task); setIsDeleteModalOpen(true); }} onAssignReview={() => {}} onNotificationClick={handleNotificationClick} onClearSingleNotification={handleClearSingleNotification} onClearAllNotifications={handleClearAllReviewNotifications} notifications={notifications} />}
+          {view === 'tasks' && <TaskBoard tasks={tasksForBoard} currentUser={selectedProfile?.name || 'Todos'} onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} onDelete={(task) => { setSelectedTask(task); setIsDeleteModalOpen(true); }} onAssignReview={() => {}} onNotificationClick={handleNotificationClick} onClearSingleNotification={handleClearSingleNotification} onClearAllNotifications={handleClearAllReviewNotifications} notifications={notifications} />}
           {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={() => {}} teamMembers={teamMembers} />}
           {view === 'traceability' && hasFullAccess && <ActivityLogView logs={logs} />}
         </div>
