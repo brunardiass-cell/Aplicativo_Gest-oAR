@@ -99,17 +99,20 @@ const App: React.FC = () => {
     }, 2000);
   }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers]);
 
-  const hasFullAccess = useMemo(() => selectedProfile?.isLeader && isPasswordAuthenticated, [selectedProfile, isPasswordAuthenticated]);
+  const hasFullAccess = useMemo(() => !!(selectedProfile?.isLeader && isPasswordAuthenticated), [selectedProfile, isPasswordAuthenticated]);
   const canCreate = useMemo(() => isPasswordAuthenticated && selectedProfile?.id !== 'team_view_user', [isPasswordAuthenticated, selectedProfile]);
 
   const handleLogin = async () => {
     setIsLoading(true);
+    setAuthError(null);
     const result = await MicrosoftGraphService.login();
     if (result.success) {
       setIsMsalAuthenticated(true);
       await loadDataFromSharePoint();
     } else {
-      setAuthError("Falha no login com a Microsoft.");
+      if (result.error) {
+        setAuthError("Falha no login com a Microsoft.");
+      }
       setIsLoading(false);
     }
   };

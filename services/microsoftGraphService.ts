@@ -1,3 +1,4 @@
+
 import * as msal from "@azure/msal-browser";
 
 const CLIENT_ID = "609422c2-d648-4b50-b1fe-ca614b77ffb5"; 
@@ -48,6 +49,10 @@ export const MicrosoftGraphService = {
       instance.setActiveAccount(loginResponse.account);
       return { success: true, account: loginResponse.account };
     } catch (error: any) {
+      if (error instanceof msal.BrowserAuthError && error.errorCode === 'user_cancelled') {
+        console.log('Login cancelado pelo usuário.');
+        return { success: false, error: null }; 
+      }
       console.error("Erro no login Microsoft:", error);
       return { success: false, error };
     }
