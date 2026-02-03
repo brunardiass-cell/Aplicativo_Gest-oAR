@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
-import { Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember, UserRole } from '../types';
-import { FolderPlus, ListPlus, FolderKanban, Workflow, GanttChartSquare, Copy, ShieldAlert } from 'lucide-react';
+import { Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember } from '../types';
+import { FolderPlus, ListPlus, FolderKanban, Workflow, GanttChartSquare, Copy } from 'lucide-react';
 import PlanManagerModal from './PlanManagerModal';
 import NewProjectModal from './NewProjectModal';
 import ProjectTimeline from './ProjectTimeline';
@@ -13,10 +14,8 @@ interface ProjectsManagerProps {
   onUpdateActivityPlans: (plans: ActivityPlanTemplate[]) => void;
   onOpenDeletionModal: (item: { type: 'macro' | 'micro', projectId: string; macroId: string; microId?: string; name: string }) => void;
   teamMembers: TeamMember[];
-  currentUserRole: UserRole;
 }
 
-// FIX: Add missing type definition for ProjectView
 type ProjectView = 'timeline' | 'flow';
 
 const ProjectsManager: React.FC<ProjectsManagerProps> = ({ 
@@ -26,7 +25,6 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   onUpdateActivityPlans,
   onOpenDeletionModal,
   teamMembers,
-  currentUserRole
 }) => {
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
@@ -82,39 +80,32 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
   return (
     <div className="space-y-8">
-      {currentUserRole === 'Admin' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <button
-            onClick={() => setIsNewProjectModalOpen(true)}
-            className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-brand-primary/20 transition-all text-left"
-          >
-            <div className="p-5 bg-brand-primary text-white rounded-3xl shadow-lg shadow-teal-200 group-hover:scale-110 transition-transform">
-              <FolderPlus size={32} />
-            </div>
-            <div>
-              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Criar Novo Projeto</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Use um plano para gerar um cronograma.</p>
-            </div>
-          </button>
-          <button
-            onClick={() => setIsPlanModalOpen(true)}
-            className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-amber-200 transition-all text-left"
-          >
-            <div className="p-5 bg-amber-500 text-white rounded-3xl shadow-lg shadow-amber-200 group-hover:scale-110 transition-transform">
-              <ListPlus size={32} />
-            </div>
-            <div>
-              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Gerenciar Planos</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Crie e edite templates de atividades.</p>
-            </div>
-          </button>
-        </div>
-      ) : (
-         <div className="p-8 bg-amber-50 rounded-[2rem] border border-amber-100 flex items-center gap-4">
-            <ShieldAlert size={24} className="text-amber-500" />
-            <p className="text-amber-900 font-bold text-sm">A criação de projetos e o gerenciamento de planos são restritos aos administradores do sistema.</p>
-         </div>
-      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <button
+          onClick={() => setIsNewProjectModalOpen(true)}
+          className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all text-left"
+        >
+          <div className="p-5 bg-indigo-600 text-white rounded-3xl shadow-lg shadow-indigo-200 group-hover:scale-110 transition-transform">
+            <FolderPlus size={32} />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Criar Novo Projeto</h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Use um plano para gerar um cronograma.</p>
+          </div>
+        </button>
+        <button
+          onClick={() => setIsPlanModalOpen(true)}
+          className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-amber-200 transition-all text-left"
+        >
+          <div className="p-5 bg-amber-500 text-white rounded-3xl shadow-lg shadow-amber-200 group-hover:scale-110 transition-transform">
+            <ListPlus size={32} />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Gerenciar Planos</h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Crie e edite templates de atividades.</p>
+          </div>
+        </button>
+      </div>
       
       <div className="grid grid-cols-12 gap-8">
         <div className="col-span-4">
@@ -124,7 +115,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
               <button 
                 key={p.id}
                 onClick={() => setSelectedProject(p)}
-                className={`w-full p-4 rounded-2xl text-left transition ${selectedProject?.id === p.id ? 'bg-brand-dark text-white shadow-lg' : 'hover:bg-slate-50'}`}
+                className={`w-full p-4 rounded-2xl text-left transition ${selectedProject?.id === p.id ? 'bg-[#1a2b4e] text-white shadow-lg' : 'hover:bg-slate-50'}`}
               >
                 <p className="text-sm font-black uppercase tracking-tight truncate">{p.name}</p>
                 <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">{p.status}</span>
@@ -146,20 +137,17 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                         <div className="flex items-center gap-2 mt-2">
                            <select 
                              value={selectedProject.status} 
-                             disabled={currentUserRole !== 'Admin'}
                              onChange={(e) => handleStatusChange(selectedProject.id, e.target.value as Project['status'])}
-                             className="px-3 py-1 text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 rounded-lg border border-slate-200 appearance-none outline-none disabled:cursor-not-allowed"
+                             className="px-3 py-1 text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 rounded-lg border border-slate-200 appearance-none outline-none"
                            >
                               <option value="Em Planejamento">Em Planejamento</option>
                               <option value="Ativo">Ativo</option>
                               <option value="Suspenso">Suspenso</option>
                               <option value="Concluído">Concluído</option>
                            </select>
-                           {currentUserRole === 'Admin' && (
-                            <button onClick={() => handleDuplicateProject(selectedProject)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Criar Versão 2 do Projeto">
-                                <Copy size={14} />
-                            </button>
-                           )}
+                           <button onClick={() => handleDuplicateProject(selectedProject)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Criar Versão 2 do Projeto">
+                              <Copy size={14} />
+                           </button>
                         </div>
                     </div>
                     <div className="bg-slate-100 p-1 rounded-full flex gap-1">

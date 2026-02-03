@@ -33,7 +33,7 @@ const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSe
 
         <div className="mt-12 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-            {teamMembers.filter(m => m.status === 'active').map(member => (
+            {teamMembers.map(member => (
               <button 
                 key={member.id} 
                 onClick={() => onSelectUser(member)}
@@ -43,7 +43,7 @@ const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSe
                   <div className="w-20 h-20 bg-brand-primary/10 rounded-full flex items-center justify-center text-2xl font-black text-brand-primary group-hover:scale-105 transition-transform">
                     {getInitials(member.name)}
                   </div>
-                  {member.role === 'Admin' && (
+                  {member.isLeader && (
                     <div className="absolute -top-1 -right-1 bg-amber-400 p-1.5 rounded-full text-white border-2 border-white">
                       <Crown size={12} />
                     </div>
@@ -51,7 +51,7 @@ const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSe
                 </div>
                 <div className="text-center">
                   <p className="font-bold text-slate-800">{member.name}</p>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{member.jobTitle}</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{member.role}</p>
                 </div>
               </button>
             ))}
