@@ -54,7 +54,7 @@ class MsalService {
         return this.msalInstance.handleRedirectPromise();
       })
       .then(() => { /* Garante que a promessa seja resolvida como void */ })
-      .catch(err => {
+      .catch((err: any) => {
         console.error("Erro de inicialização do MSAL:", err);
       });
   }
