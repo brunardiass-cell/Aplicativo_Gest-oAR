@@ -1,20 +1,34 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Gestão de Atividades - Assuntos Regulatórios
 
-# Run and deploy your AI Studio app
+Uma plataforma robusta para gestão de projetos e tarefas do setor de Assuntos Regulatórios, construída com React, TypeScript e Vite.
 
-This contains everything you need to run your app locally.
+## Funcionalidades Principais
 
-View your app in AI Studio: https://ai.studio/apps/drive/1GjP1H4QcMJBUIQz91QUkX7JkQeMZOOjU
+-   **Dashboard Executivo:** KPIs, gráficos e alertas para uma visão geral da performance do setor.
+-   **Gestão de Atividades:** Crie, atribua e acompanhe o progresso de tarefas regulatórias.
+-   **Fluxos de Projeto:** Defina projetos com macro e microatividades, e acompanhe o cronograma.
+-   **Controle de Acesso:** Gerencie quem pode acessar o sistema e quais são suas permissões.
+-   **Sincronização em Nuvem:** Os dados são salvos e sincronizados com o SharePoint via Microsoft Graph API.
+-   **Backup e Restauração:** Ferramentas administrativas para exportar e importar todos os dados do sistema.
 
-## Run Locally
+## Setup
 
-**Prerequisites:**  Node.js
+1.  **Instale as dependências:**
+    ```bash
+    npm install
+    ```
 
+2.  **Configure as Variáveis de Ambiente:**
+    Este projeto requer uma chave de API do Google GenAI. Crie um arquivo `.env.local` na raiz do projeto e adicione sua chave:
+    ```
+    API_KEY=SUA_CHAVE_DE_API_AQUI
+    ```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+3.  **Inicie o servidor de desenvolvimento:**
+    ```bash
+    npm run dev
+    ```
+
+## Autenticação
+
+A aplicação utiliza o Microsoft Azure Active Directory para autenticação. Um registro de aplicativo precisa ser configurado no portal Azure com as permissões corretas (`User.Read`, `Files.ReadWrite.All`, `Sites.Read.All`) e o `CLIENT_ID` resultante deve ser inserido no arquivo `services/microsoftGraphService.ts`. O `Redirect URI` deve ser configurado para a URL onde a aplicação está hospedada.

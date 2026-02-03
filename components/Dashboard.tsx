@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import { Task, AppNotification } from '../types';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -112,10 +111,10 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, filteredUser, notification
         <ChartContainer title="Nível de Prioridade das Atividades">
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={priorityData} layout="vertical" margin={{ top: 0, right: 20, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#334155" />
+              <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e2e8f0" />
               <XAxis type="number" hide />
-              <YAxis dataKey="name" type="category" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} width={80} stroke="#94a3b8" />
-              <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} cursor={{fill: 'rgba(255,255,255,0.05)'}} />
+              <YAxis dataKey="name" type="category" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} width={80} stroke="#64748b" />
+              <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px' }} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
               <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={25}>
                 {priorityData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
               </Bar>
@@ -129,7 +128,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, filteredUser, notification
               <Pie data={statusChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} labelLine={false} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
                 {statusChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
               </Pie>
-              <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
             </PieChart>
           </ResponsiveContainer>
         </ChartContainer>
@@ -137,27 +136,27 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, filteredUser, notification
 
       {/* Lists */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-7 bg-white/5 p-8 rounded-[2rem] shadow-sm border border-white/5">
+        <div className="lg:col-span-7 bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Atividades Próximas do Prazo (7 dias)</h3>
            <div className="space-y-4">
              {upcomingTasks.length > 0 ? upcomingTasks.map(task => {
                 const daysLeft = Math.ceil((new Date(task.completionDate + 'T00:00:00').getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
                 return (
-                  <div key={task.id} className="p-4 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between">
+                  <div key={task.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-bold text-white">{task.activity}</p>
-                      <p className="text-[9px] font-bold text-blue-400 uppercase">{task.project}</p>
+                      <p className="text-xs font-bold text-slate-800">{task.activity}</p>
+                      <p className="text-[9px] font-bold text-blue-600 uppercase">{task.project}</p>
                     </div>
-                    <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${daysLeft <= 2 ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                    <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${daysLeft <= 2 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                        {daysLeft <= 1 ? 'Vence hoje/amanhã' : `Vence em ${daysLeft} dias`}
                     </div>
                   </div>
                 )
-             }) : <p className="text-center text-slate-500 text-xs py-10 italic">Nenhuma entrega nos próximos 7 dias.</p>}
+             }) : <p className="text-center text-slate-400 text-xs py-10 italic">Nenhuma entrega nos próximos 7 dias.</p>}
            </div>
         </div>
 
-        <div className="lg:col-span-5 bg-slate-950 p-8 rounded-[2rem] shadow-2xl border border-white/5">
+        <div className="lg:col-span-5 bg-slate-800 p-8 rounded-[2rem] shadow-2xl">
            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6">Alertas e Notificações</h3>
            <div className="space-y-4">
              <AlertItem value={alerts.overdue.length} label="Atividade(s) Vencida(s)" icon={<AlertTriangle size={18}/>} color="text-red-400" onClick={() => handleAlertClick('overdue')}/>
@@ -184,18 +183,18 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, filteredUser, notification
 };
 
 const StatCard = ({ label, value, icon, color }: { label: string, value: string | number, icon: React.ReactNode, color: string }) => (
-  <div className="bg-white/5 p-6 rounded-3xl border border-white/5 shadow-sm flex items-center gap-5">
+  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-5">
     <div className={`p-4 rounded-2xl ${color} text-white shadow-lg`}>{icon}</div>
     <div>
-      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{label}</p>
-      <h3 className="text-4xl font-black text-white tracking-tighter">{value}</h3>
+      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+      <h3 className="text-4xl font-black text-slate-900 tracking-tighter">{value}</h3>
     </div>
   </div>
 );
 
 const ChartContainer: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <div className="bg-white/5 p-8 rounded-[2rem] shadow-sm border border-white/5">
-    <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-8">{title}</h3>
+  <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
+    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-8">{title}</h3>
     {children}
   </div>
 );
@@ -204,7 +203,7 @@ const AlertItem = ({ value, label, icon, color, onClick }: { value: number; labe
   <button
     onClick={onClick}
     disabled={value === 0}
-    className="w-full text-left bg-white/5 border border-white/5 p-4 rounded-2xl flex items-center justify-between transition-all hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none"
+    className="w-full text-left bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center justify-between transition-all hover:bg-white/20 disabled:opacity-30 disabled:pointer-events-none"
   >
     <div className="flex items-center gap-4">
       <div className={`shrink-0 ${color}`}>{icon}</div>

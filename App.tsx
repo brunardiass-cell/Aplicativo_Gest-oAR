@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AccessUser } from './types';
-import { DEFAULT_TEAM_MEMBERS, DEFAULT_ACTIVITY_PLANS, DEFAULT_ACCESS_USERS } from './constants';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo } from './types';
+import { DEFAULT_TEAM_MEMBERS, DEFAULT_ACTIVITY_PLANS, ADMIN_WHITELIST } from './constants';
 import SelectionView from './components/SelectionView';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -14,412 +14,378 @@ import ReportView from './components/ReportView';
 import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
-import { PlusCircle, Search, FileSignature, AlertCircle, FileText, BellOff, Loader2 } from 'lucide-react';
+import { PlusCircle, Loader2, ShieldAlert, LogOut } from 'lucide-react';
 
 const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-  const [accessUsers, setAccessUsers] = useState<AccessUser[]>([]);
   const [activityPlans, setActivityPlans] = useState<ActivityPlanTemplate[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [appUsers, setAppUsers] = useState<AppUser[]>([]);
+  const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
   
   const [view, setView] = useState<ViewMode>('selection');
-  const [currentUser, setCurrentUser] = useState<string | 'Todos'>('Todos');
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [isReportOpen, setIsReportOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm] = useState('');
   const [filterMember, setFilterMember] = useState<string | 'Todos'>('Todos');
   
-  const [isProjectItemDeletionModalOpen, setIsProjectItemDeletionModalOpen] = useState(false);
-  const [projectItemToDelete, setProjectItemToDelete] = useState<{ type: 'macro' | 'micro', projectId: string; macroId: string; microId?: string; name: string } | null>(null);
-
-  const [isInitialCheck, setIsInitialCheck] = useState(true);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
-
+  const [isLoading, setIsLoading] = useState(true);
   const isInitialLoad = useRef(true);
-  const debounceTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const saveDataToSharePoint = async (data: { tasks: Task[], projects: Project[], teamMembers: TeamMember[], accessUsers: AccessUser[], activityPlans: ActivityPlanTemplate[], notifications: AppNotification[], logs: ActivityLog[] }) => {
-    await MicrosoftGraphService.saveToCloud(data);
+  const hasFullAccess = useMemo(() => currentUser?.role === 'admin', [currentUser]);
+
+  const saveDataToSharePoint = async () => {
+    if (isInitialLoad.current || !currentUser) return;
+
+    setLastSync(prev => prev ? { ...prev, status: 'syncing' } : { timestamp: new Date().toISOString(), user: currentUser.username, status: 'syncing' });
+    
+    const dataToSave = { tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers };
+    const success = await MicrosoftGraphService.saveToCloud(dataToSave);
+    
+    if (success) {
+      setLastSync({
+        timestamp: new Date().toISOString(),
+        user: currentUser.username,
+        status: 'synced'
+      });
+    } else {
+      setLastSync(prev => prev ? { ...prev, status: 'error' } : null);
+    }
+  };
+
+  const handleDownloadBackup = () => {
+    const backupData = {
+      tasks,
+      projects,
+      teamMembers,
+      activityPlans,
+      notifications,
+      logs,
+      appUsers,
+      version: '1.0',
+      exportedAt: new Date().toISOString()
+    };
+
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `backup_reguladores_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleRestoreBackup = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!confirm("Atenção: Restaurar um backup irá sobrescrever todos os dados atuais do sistema. Deseja continuar?")) {
+        event.target.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const data = JSON.parse(content);
+
+        if (!data.tasks || !data.projects || !data.appUsers) {
+          throw new Error("Formato de backup inválido.");
+        }
+
+        setTasks(data.tasks || []);
+        setProjects(data.projects || []);
+        setTeamMembers(data.teamMembers || DEFAULT_TEAM_MEMBERS);
+        setActivityPlans(data.activityPlans || DEFAULT_ACTIVITY_PLANS);
+        setNotifications(data.notifications || []);
+        setLogs(data.logs || []);
+        setAppUsers(data.appUsers || []);
+        
+        alert("Backup restaurado com sucesso! O sistema irá sincronizar com a nuvem em breve.");
+      } catch (err) {
+        console.error("Erro ao restaurar backup:", err);
+        alert("Falha ao restaurar backup: O arquivo selecionado não é válido.");
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
   };
 
   useEffect(() => {
     const checkLogin = async () => {
       const account = await MicrosoftGraphService.getAccount();
       if (account) {
-        await handleLogin(true);
+        handleLogin(true);
+      } else {
+        setIsLoading(false);
       }
-      setIsInitialCheck(false);
     };
     checkLogin();
   }, []);
 
   useEffect(() => {
-    if (isInitialLoad.current) return;
-    if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+    if (isInitialLoad.current || !currentUser) return;
+    
+    const timeoutId = setTimeout(() => {
+      saveDataToSharePoint();
+    }, 2000);
 
-    debounceTimeout.current = setTimeout(() => {
-      const currentState = { tasks, projects, teamMembers, accessUsers, activityPlans, notifications, logs };
-      saveDataToSharePoint(currentState);
-    }, 1500);
-
-    return () => { if (debounceTimeout.current) clearTimeout(debounceTimeout.current); };
-  }, [tasks, projects, teamMembers, accessUsers, activityPlans, notifications, logs]);
+    return () => clearTimeout(timeoutId);
+  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers]);
 
   const handleLogin = async (isSilent = false) => {
-    setIsLoggingIn(true);
-    setLoginError(null);
-
+    setIsLoading(true);
     const loginResult = isSilent 
       ? { success: true, account: await MicrosoftGraphService.getAccount() } 
       : await MicrosoftGraphService.login();
 
-    if (!loginResult.success || !loginResult.account) {
-      if (!isSilent) setLoginError("Falha na autenticação da Microsoft. Verifique o pop-up e tente novamente.");
-      setIsLoggingIn(false);
-      return;
-    }
+    if (loginResult.success && loginResult.account) {
+      try {
+        const { data: cloudData } = await MicrosoftGraphService.loadFromCloud();
+        
+        const email = loginResult.account.username.toLowerCase();
+        const existingUsers = cloudData?.appUsers || [];
+        const userRecord = existingUsers.find((u: AppUser) => u.email.toLowerCase() === email);
+        const isDefaultAdmin = ADMIN_WHITELIST.map(e => e.toLowerCase()).includes(email);
 
-    const { data: cloudData, error: loadError } = await MicrosoftGraphService.loadFromCloud();
-    
-    if (loadError) {
-      let message = "Não foi possível conectar ao banco de dados. Tente novamente.";
-      if (loadError === 'permission_denied') message = "Acesso negado ao SharePoint. Verifique se você tem permissão para acessar a pasta 'Regulatórios'.";
-      setLoginError(message);
-      setIsLoggingIn(false);
-      if (!isSilent) await MicrosoftGraphService.logout();
-      return;
-    }
+        if (cloudData) {
+          setTasks(cloudData.tasks || []);
+          setProjects(cloudData.projects || []);
+          setTeamMembers(cloudData.teamMembers || DEFAULT_TEAM_MEMBERS);
+          setActivityPlans(cloudData.activityPlans || DEFAULT_ACTIVITY_PLANS);
+          setNotifications(cloudData.notifications || []);
+          setLogs(cloudData.logs || []);
+          setAppUsers(existingUsers);
+          
+          setLastSync({
+            timestamp: new Date().toISOString(),
+            user: loginResult.account.name || email,
+            status: 'synced'
+          });
+        } else {
+          setTeamMembers(DEFAULT_TEAM_MEMBERS);
+          setActivityPlans(DEFAULT_ACTIVITY_PLANS);
+        }
 
-    const loadedAccessUsers = cloudData?.accessUsers || DEFAULT_ACCESS_USERS;
-    const userEmail = loginResult.account.username.toLowerCase();
-    
-    const isAuthorized = loadedAccessUsers.some(
-      (user: AccessUser) => user.email.toLowerCase() === userEmail && user.status === 'active'
-    );
-
-    if (!isAuthorized) {
-      setLoginError("Sua conta não está autorizada a usar este aplicativo. Contate o administrador.");
-      setIsLoggingIn(false);
-      await MicrosoftGraphService.logout();
-      return;
+        if (userRecord) {
+          if (isDefaultAdmin && (userRecord.role !== 'admin' || userRecord.status !== 'active')) {
+            const updatedUser: AppUser = { ...userRecord, role: 'admin', status: 'active' };
+            setAppUsers(prev => prev.map(u => u.id === userRecord.id ? updatedUser : u));
+            setCurrentUser(updatedUser);
+            setFilterMember('Todos');
+            setView('dashboard');
+          } else if (userRecord.status === 'active') {
+            setCurrentUser(userRecord);
+            setFilterMember(userRecord.role === 'admin' ? 'Todos' : userRecord.username);
+            setView('dashboard');
+          } else if (userRecord.status === 'pending') {
+            setView('unauthorized');
+          } else {
+            alert("Sua conta está bloqueada.");
+            handleLogout();
+          }
+        } else {
+          const newUser: AppUser = {
+            id: 'user_' + Math.random().toString(36).substr(2, 9),
+            username: loginResult.account.name || 'Novo Usuário',
+            email: email,
+            role: (existingUsers.length === 0 || isDefaultAdmin) ? 'admin' : 'user',
+            status: (existingUsers.length === 0 || isDefaultAdmin) ? 'active' : 'pending',
+            joinedAt: new Date().toISOString()
+          };
+          
+          setAppUsers(prev => [...prev, newUser]);
+          
+          if (newUser.status === 'active') {
+            setCurrentUser(newUser);
+            setFilterMember(newUser.role === 'admin' ? 'Todos' : newUser.username);
+            setView('dashboard');
+          } else {
+            setView('unauthorized');
+          }
+        }
+        
+        setTimeout(() => {
+          isInitialLoad.current = false;
+        }, 1000);
+      } catch (e) {
+        console.error("Falha ao inicializar app com dados da nuvem:", e);
+        alert("Erro de sincronização. O sistema não pôde carregar os dados do SharePoint.");
+      }
     }
-
-    setCurrentUser(loginResult.account.name || 'Usuário');
-    setFilterMember(loginResult.account.name || 'Usuário');
-    
-    if (cloudData) {
-      setTasks(cloudData.tasks || []);
-      setProjects(cloudData.projects || []);
-      setTeamMembers(cloudData.teamMembers || DEFAULT_TEAM_MEMBERS);
-      setAccessUsers(cloudData.accessUsers || DEFAULT_ACCESS_USERS);
-      setActivityPlans(cloudData.activityPlans || DEFAULT_ACTIVITY_PLANS);
-      setNotifications(cloudData.notifications || []);
-      setLogs(cloudData.logs || []);
-    } else {
-      const initialState = { tasks: [], projects: [], teamMembers: DEFAULT_TEAM_MEMBERS, accessUsers: DEFAULT_ACCESS_USERS, activityPlans: DEFAULT_ACTIVITY_PLANS, notifications: [], logs: [] };
-      setTasks(initialState.tasks);
-      setProjects(initialState.projects);
-      setTeamMembers(initialState.teamMembers);
-      setAccessUsers(initialState.accessUsers);
-      setActivityPlans(initialState.activityPlans);
-      setNotifications(initialState.notifications);
-      setLogs(initialState.logs);
-      await saveDataToSharePoint(initialState as any);
-    }
-    
-    setView('dashboard');
-    isInitialLoad.current = false;
-    setIsLoggingIn(false);
+    setIsLoading(false);
   };
 
   const handleLogout = async () => {
-    await MicrosoftGraphService.logout();
     isInitialLoad.current = true;
-    setCurrentUser('Todos');
+    await MicrosoftGraphService.logout();
+    setCurrentUser(null);
+    setLastSync(null);
     setView('selection');
-    setTasks([]);
-    setProjects([]);
-    setTeamMembers([]);
-    setAccessUsers([]);
-    setActivityPlans([]);
-    setNotifications([]);
-    setLogs([]);
-    setLoginError(null);
   };
 
   const handleSaveTask = (task: Task) => {
     const isEditing = tasks.some(t => t.id === task.id);
-    const originalTask = tasks.find(t => t.id === task.id);
-
-    if (originalTask && originalTask.reportStage === 'Próximo Revisor' && originalTask.currentReviewer) {
-        const reviewerChanged = task.currentReviewer !== originalTask.currentReviewer;
-        const stageChanged = task.reportStage !== 'Próximo Revisor';
-        
-        if (reviewerChanged || stageChanged) {
-            setNotifications(prevNotifs => prevNotifs.map(n => 
-                (n.refId === originalTask.id && n.userId === originalTask.currentReviewer && !n.read) 
-                ? { ...n, read: true } 
-                : n
-            ));
-        }
-    }
-
-    setTasks(prevTasks => isEditing ? prevTasks.map(t => t.id === task.id ? task : t) : [task, ...prevTasks]);
-    
-    const log: ActivityLog = {
-      id: Math.random().toString(36).substr(2, 9),
-      action: isEditing ? 'EDIÇÃO' : 'CRIAÇÃO',
-      taskTitle: task.activity,
-      user: currentUser,
-      timestamp: new Date().toISOString(),
-      reason: isEditing ? 'Atualização dos dados da atividade' : 'Nova atividade adicionada'
-    };
-    setLogs(prevLogs => [log, ...prevLogs]);
-
-    if (task.reportStage === 'Próximo Revisor' && task.currentReviewer && task.currentReviewer !== originalTask?.currentReviewer) {
-      const newNotif: AppNotification = {
-        id: Math.random().toString(36).substr(2, 9),
-        userId: task.currentReviewer,
-        message: `REVISÃO: ${task.activity} para você.`,
-        timestamp: new Date().toISOString(),
-        read: false,
-        type: 'REVIEW_ASSIGNED',
-        refId: task.id
-      };
-      setNotifications(prevNotifs => [newNotif, ...prevNotifs]);
-    }
-
+    setTasks(prev => isEditing ? prev.map(t => t.id === task.id ? task : t) : [task, ...prev]);
     setIsModalOpen(false);
     setSelectedTask(null);
   };
 
   const handleDeleteTask = (reason: string) => {
     if (!selectedTask) return;
-
-    setTasks(tasks.map(t => t.id === selectedTask.id ? { ...t, deleted: true, deletionReason: reason, deletionDate: new Date().toISOString() } : t));
-    setNotifications(prev => prev.map(n => n.refId === selectedTask.id ? { ...n, read: true } : n));
-
-    const log: ActivityLog = {
-      id: Math.random().toString(36).substr(2, 9),
-      action: 'EXCLUSÃO',
-      taskTitle: selectedTask.activity,
-      user: currentUser,
-      timestamp: new Date().toISOString(),
-      reason: reason
-    };
-    setLogs([log, ...logs]);
-    
+    setTasks(prev => prev.map(t => t.id === selectedTask.id ? { ...t, deleted: true, deletionReason: reason, deletionDate: new Date().toISOString() } : t));
     setIsDeleteModalOpen(false);
     setSelectedTask(null);
   };
 
-  const handleRestoreTask = (taskId: string) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
-
-    setTasks(tasks.map(t => t.id === taskId ? { ...t, deleted: false } : t));
-
-    const log: ActivityLog = {
-      id: Math.random().toString(36).substr(2, 9),
-      action: 'RESTAURAÇÃO',
-      taskTitle: task.activity,
-      user: currentUser,
-      timestamp: new Date().toISOString(),
-      reason: 'Atividade restaurada'
-    };
-    setLogs([log, ...logs]);
-  };
-  
-  const handleOpenProjectItemDeletionModal = (item: { type: 'macro' | 'micro', projectId: string; macroId: string; microId?: string; name: string }) => {
-    setProjectItemToDelete(item);
-    setIsProjectItemDeletionModalOpen(true);
-  };
-
-  const handleConfirmProjectItemDeletion = (reason: string) => {
-    if (!projectItemToDelete) return;
-
-    const { type, projectId, macroId, microId, name } = projectItemToDelete;
-    const project = projects.find(p => p.id === projectId);
-    if (!project) return;
-
-    let updatedProjects = [...projects];
-    const projectIndex = updatedProjects.findIndex(p => p.id === projectId);
-
-    if (type === 'macro') {
-        updatedProjects[projectIndex].macroActivities = updatedProjects[projectIndex].macroActivities.filter(m => m.id !== macroId);
-    } else if (type === 'micro' && microId) {
-        const macroIndex = updatedProjects[projectIndex].macroActivities.findIndex(m => m.id === macroId);
-        if (macroIndex > -1) {
-            updatedProjects[projectIndex].macroActivities[macroIndex].microActivities = updatedProjects[projectIndex].macroActivities[macroIndex].microActivities.filter(m => m.id !== microId);
-        }
-    }
-
-    setProjects(updatedProjects);
-
-    const log: ActivityLog = {
-        id: Math.random().toString(36).substr(2, 9),
-        action: 'EXCLUSÃO',
-        taskTitle: `[${project.name}] ${type}: ${name}`,
-        user: currentUser,
-        timestamp: new Date().toISOString(),
-        reason: reason
-    };
-    setLogs(prevLogs => [log, ...prevLogs]);
-
-    setIsProjectItemDeletionModalOpen(false);
-    setProjectItemToDelete(null);
-  };
-
-  const handleClearAllNotifications = () => {
-    setNotifications(prev => prev.map(n => (n.userId === currentUser && !n.read) ? { ...n, read: true } : n));
-  };
-
-  const handleClearSingleNotification = (notificationId: string) => {
-    setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read: true } : n));
-  };
-  
-  const handleNotificationClick = (notification: AppNotification) => {
-    const task = tasks.find(t => t.id === notification.refId);
-    if (task) {
-      handleClearSingleNotification(notification.id);
-      setSelectedTask(task);
-      setIsDetailsOpen(true);
-    }
-  };
-
-  const onViewTaskDetails = (task: Task) => {
-    setSelectedTask(task);
-    setIsDetailsOpen(true);
-  };
-
-  const activeReviews = useMemo(() => {
-    return notifications.filter(n => n.userId === currentUser && !n.read && n.type === 'REVIEW_ASSIGNED');
-  }, [notifications, currentUser]);
-
-  const filteredTasks = useMemo(() => {
-    return tasks.filter(t => {
-      const memberMatch = filterMember === 'Todos' || t.projectLead === filterMember || t.collaborators.includes(filterMember) || t.currentReviewer === filterMember;
-      const searchMatch = t.activity.toLowerCase().includes(searchTerm.toLowerCase()) || t.project.toLowerCase().includes(searchTerm.toLowerCase());
-      return memberMatch && searchMatch;
-    });
-  }, [tasks, filterMember, searchTerm]);
-
-  const currentUserIsAdmin = useMemo(() => {
-    return accessUsers.find(u => u.name === currentUser)?.role === 'admin' || false;
-  }, [accessUsers, currentUser]);
-
-  if (isInitialCheck) {
+  if (isLoading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#0f172a] text-white flex-col gap-4">
-        <Loader2 size={48} className="animate-spin text-blue-500" />
-        <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.5em]">VERIFICANDO SESSÃO...</p>
+      <div className="flex h-screen w-screen items-center justify-center bg-white text-slate-900 flex-col gap-4">
+        <Loader2 size={48} className="animate-spin text-blue-600" />
+        <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.5em]">CARREGANDO DADOS DA NUVEM...</p>
+      </div>
+    );
+  }
+
+  if (view === 'unauthorized') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-10 bg-white">
+        <div className="max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in duration-500">
+           <div className="inline-block p-6 bg-amber-50 rounded-[2.5rem] border border-amber-100 shadow-xl mb-4">
+              <ShieldAlert size={56} className="text-amber-500" />
+           </div>
+           <h1 className="text-4xl font-black text-slate-900 uppercase tracking-tighter">Acesso Pendente</h1>
+           <p className="text-slate-500 font-medium">Seu cadastro foi realizado com sucesso, mas ainda precisa ser aprovado pela gestão.</p>
+           <button onClick={handleLogout} className="flex items-center gap-2 mx-auto px-8 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest">
+              <LogOut size={18}/> Sair da Conta
+           </button>
+        </div>
       </div>
     );
   }
 
   if (view === 'selection') {
-    return <SelectionView onSelect={() => handleLogin(false)} isLoading={isLoggingIn} errorMessage={loginError} />;
+    return <SelectionView onSelect={() => handleLogin(false)} isLoading={false} errorMessage={null} />;
   }
 
-  const projectNames = Array.from(new Set([...projects.map(p => p.name), ...tasks.map(t => t.project)])).filter(Boolean);
-
   return (
-    <div className="flex min-h-screen bg-[#0f172a] text-slate-200">
+    <div className="flex min-h-screen bg-[#f8fafc] text-slate-800">
       <Sidebar 
         currentView={view} 
         onViewChange={setView} 
         onGoHome={() => setView('dashboard')}
         onLogout={handleLogout} 
-        currentUser={{ username: currentUser, role: currentUserIsAdmin ? 'admin' : 'user' }}
-        notificationCount={activeReviews.length}
+        currentUser={currentUser}
+        notificationCount={0}
+        lastSync={lastSync}
+        onRetrySync={saveDataToSharePoint}
+        onDownloadBackup={handleDownloadBackup}
+        onRestoreBackup={handleRestoreBackup}
       />
       
-      <main className="flex-1 ml-64 p-10 max-w-[1600px]">
+      <main className="flex-1 ml-72 p-10 max-w-[1600px]">
         <header className="flex justify-between items-start mb-12">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
-              <h1 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                Gestão Setorial • CTVacinas
-              </h1>
+            <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                    <span className="w-3 h-3 bg-blue-600 rounded-full"></span>
+                    <h1 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                        {hasFullAccess ? 'Administrador' : 'Colaborador'} • CTVacinas
+                    </h1>
+                </div>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">
+                    {view === 'dashboard' ? `Painel Executivo` : 
+                     view === 'tasks' ? 'Atividades Regulatórias' : 
+                     view === 'projects' ? 'Fluxos Estratégicos' : 
+                     view === 'quality' ? 'Gestão de Acesso' : 'Rastreabilidade'}
+                </h2>
             </div>
-            <h2 className="text-4xl font-black text-white tracking-tighter uppercase">
-              {view === 'dashboard' ? `ATIVIDADES • ${filterMember === 'Todos' ? 'TODA A EQUIPE' : filterMember}` : 
-               view === 'tasks' ? 'Atividades Regulatórias' : 
-               view === 'projects' ? 'Fluxos Estratégicos' : 
-               view === 'quality' ? 'Gestão de Acesso' : 'Rastreabilidade'}
-            </h2>
             
-            <div className="mt-4 flex flex-wrap items-center gap-4">
-              {view === 'tasks' && (
-                  <>
-                      {currentUser !== 'Todos' && activeReviews.length > 0 && (
-                          <button onClick={() => handleNotificationClick(activeReviews[0])} className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest animate-pulse shadow-lg shadow-amber-500/20">
-                              <FileSignature size={14} /> {activeReviews.length} Relatórios para analisar
-                          </button>
-                      )}
-                      <button 
-                          onClick={() => setIsReportOpen(true)}
-                          className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500/20 transition"
-                      >
-                          <FileText size={14} /> Emitir Relatório ({filterMember})
-                      </button>
-                  </>
-              )}
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            {(view === 'dashboard' || view === 'tasks') && (
-              <select 
-                value={filterMember} 
-                onChange={e => setFilterMember(e.target.value)}
-                className="px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none shadow-sm focus:ring-2 focus:ring-blue-500 text-white"
-              >
-                <option value="Todos" className="bg-slate-900">Toda a Equipe</option>
-                {teamMembers.map(m => <option key={m.id} value={m.name} className="bg-slate-900">{m.name}</option>)}
-              </select>
-            )}
-             {view === 'tasks' && (
-               <>
-                 <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                    <input 
-                      type="text" placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-                      className="pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-xs font-bold outline-none shadow-sm focus:ring-2 focus:ring-blue-500 text-white"
-                    />
-                 </div>
+            <div className="flex items-center gap-4">
+               {view === 'tasks' && hasFullAccess && (
                  <button 
                   onClick={() => { setSelectedTask(null); setIsModalOpen(true); }}
-                  className="px-8 py-3.5 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition shadow-xl shadow-blue-500/20 flex items-center gap-2"
+                  className="px-8 py-3.5 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition shadow-xl shadow-blue-100 flex items-center gap-2"
                 >
                   <PlusCircle size={18} /> Nova Atividade
                 </button>
-               </>
-             )}
-          </div>
+               )}
+            </div>
         </header>
 
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-700 pb-20">
-          {view === 'dashboard' && <Dashboard tasks={tasks} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={onViewTaskDetails} />}
-          {view === 'tasks' && <TaskBoard tasks={filteredTasks} currentUser={currentUser} onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} onDelete={(task) => { setSelectedTask(task); setIsDeleteModalOpen(true); }} onAssignReview={() => {}} onNotificationClick={handleNotificationClick} onClearSingleNotification={handleClearSingleNotification} notifications={notifications} />}
-          {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={handleOpenProjectItemDeletionModal} teamMembers={teamMembers} />}
-          {view === 'quality' && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} accessUsers={accessUsers} onUpdateAccessUsers={setAccessUsers} />}
-          {view === 'traceability' && <ActivityLogView logs={logs} tasks={tasks} onRestoreTask={handleRestoreTask} />}
+          {view === 'dashboard' && <Dashboard tasks={tasks} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />}
+          
+          {view === 'quality' && hasFullAccess && (
+             <AccessControl 
+                teamMembers={teamMembers}
+                onUpdateTeamMembers={setTeamMembers}
+                appUsers={appUsers}
+                onUpdateAppUsers={setAppUsers}
+             />
+          )}
+
+          {view === 'tasks' && (
+            <TaskBoard 
+              tasks={tasks.filter(t => !t.deleted && (searchTerm === '' || t.activity.toLowerCase().includes(searchTerm.toLowerCase())))} 
+              currentUser={currentUser?.username || ''} 
+              onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} 
+              onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }}
+              onDelete={(task) => { setSelectedTask(task); setIsDeleteModalOpen(true); }}
+              onAssignReview={() => {}}
+              onNotificationClick={() => {}}
+              onClearSingleNotification={() => {}}
+              notifications={notifications}
+            />
+          )}
+
+          {view === 'projects' && (
+            <ProjectsManager
+              projects={projects}
+              onUpdateProjects={setProjects}
+              activityPlans={activityPlans}
+              onUpdateActivityPlans={setActivityPlans}
+              onOpenDeletionModal={() => {}}
+              teamMembers={teamMembers}
+            />
+          )}
+
+          {view === 'traceability' && hasFullAccess && <ActivityLogView logs={logs} />}
         </div>
 
-        {isModalOpen && <TaskModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setSelectedTask(null); }} onSave={handleSaveTask} initialData={selectedTask} projects={projectNames} teamMembers={teamMembers} />}
-        {isDetailsOpen && selectedTask && <TaskDetailsModal task={selectedTask} onClose={() => { setIsDetailsOpen(false); setSelectedTask(null); }} />}
-        {isDeleteModalOpen && selectedTask && <DeletionModal itemName={selectedTask.activity} onClose={() => { setIsDeleteModalOpen(false); setSelectedTask(null); }} onConfirm={handleDeleteTask} />}
-        {isProjectItemDeletionModalOpen && projectItemToDelete && <DeletionModal itemName={projectItemToDelete.name} onClose={() => { setIsProjectItemDeletionModalOpen(false); setProjectItemToDelete(null); }} onConfirm={handleConfirmProjectItemDeletion} />}
-        {isReportOpen && <ReportView isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} tasks={filteredTasks} userName={filterMember} />}
+        {isModalOpen && (
+          <TaskModal 
+            isOpen={isModalOpen} 
+            onClose={() => setIsModalOpen(false)} 
+            onSave={handleSaveTask}
+            projects={Array.from(new Set(tasks.map(t => t.project)))}
+            teamMembers={teamMembers}
+            initialData={selectedTask}
+          />
+        )}
+
+        {isDetailsOpen && selectedTask && (
+          <TaskDetailsModal 
+            task={selectedTask} 
+            onClose={() => { setIsDetailsOpen(false); setSelectedTask(null); }} 
+          />
+        )}
+
+        {isDeleteModalOpen && selectedTask && (
+          <DeletionModal 
+            itemName={selectedTask.activity} 
+            onClose={() => { setIsDeleteModalOpen(false); setSelectedTask(null); }} 
+            onConfirm={handleDeleteTask} 
+          />
+        )}
       </main>
     </div>
   );
