@@ -10,9 +10,11 @@ interface TaskModalProps {
   projects: string[];
   initialData?: Task | null;
   teamMembers: TeamMember[];
+  // FIX: Added missing prop to fix type error in App.tsx.
+  currentUser: TeamMember | null;
 }
 
-const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects, initialData, teamMembers }) => {
+const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects, initialData, teamMembers, currentUser }) => {
   const [formData, setFormData] = useState<Partial<Task>>({
     activity: '',
     project: projects[0] || 'Geral',
@@ -78,7 +80,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
     const newNote: TaskNote = {
       id: Math.random().toString(36).substr(2, 9),
       date: new Date().toISOString(),
-      user: 'Usuário',
+      // FIX: Use current user's name for the note instead of a hardcoded value.
+      user: currentUser?.name || 'Usuário',
       note: note.trim()
     };
     setFormData({ ...formData, updates: [...(formData.updates || []), newNote] });

@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { Task, AppNotification } from '../types';
+// FIX: Import UserRole to use in component props.
+import { Task, AppNotification, UserRole } from '../types';
 import { 
   ArrowRight, 
   MessageSquare, 
@@ -23,6 +24,9 @@ interface TaskBoardProps {
   onNotificationClick: (notification: AppNotification) => void;
   onClearSingleNotification: (notificationId: string) => void;
   notifications: AppNotification[];
+  // FIX: Added missing props to fix type error in App.tsx.
+  currentUserRole: UserRole;
+  currentUserName: string;
 }
 
 const TaskBoard: React.FC<TaskBoardProps> = ({ 
@@ -34,7 +38,9 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   onAssignReview,
   onNotificationClick,
   onClearSingleNotification,
-  notifications
+  notifications,
+  currentUserRole,
+  currentUserName,
 }) => {
   const activeTasks = tasks.filter(t => !t.deleted);
   const activeReviews = notifications.filter(n => n.userId === currentUser && !n.read && n.type === 'REVIEW_ASSIGNED');
@@ -79,7 +85,11 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {activeTasks.map(task => (
+        {activeTasks.map(task => {
+          // FIX: Add logic to determine if the current user can edit or delete the task.
+          const canEditDelete = currentUserRole === 'Admin' || currentUserRole === 'Membro';
+
+          return (
           <div key={task.id} className="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm hover:shadow-xl hover:border-blue-100 transition-all group flex flex-col h-full relative overflow-hidden">
             <div className="flex justify-between items-start mb-6">
               <div className="flex flex-col gap-2">
@@ -100,8 +110,9 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
               
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button onClick={() => onView(task)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition" title="Visualizar"><Eye size={18}/></button>
-                <button onClick={() => onEdit(task)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition" title="Editar"><Edit2 size={18}/></button>
-                <button onClick={() => onDelete(task)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition" title="Excluir"><Trash2 size={18}/></button>
+                {/* FIX: Conditionally render edit/delete buttons based on user role */}
+                {canEditDelete && <button onClick={() => onEdit(task)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition" title="Editar"><Edit2 size={18}/></button>}
+                {canEditDelete && <button onClick={() => onDelete(task)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition" title="Excluir"><Trash2 size={18}/></button>}
               </div>
             </div>
 
@@ -161,7 +172,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
               </div>
             )}
           </div>
-        ))}
+        )})}
         {activeTasks.length === 0 && (
           <div className="col-span-full py-20 text-center bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
             <AlertTriangle className="mx-auto text-slate-300 mb-4" size={48} />
