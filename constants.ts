@@ -8,10 +8,9 @@ export const AUTHORIZED_EMAILS = [
 ];
 
 export const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
-  // FIX: Added isLeader property to align with type definition and fix usage errors.
-  { id: 'tm_1', name: 'Priscila Passos', email: 'priscilapassos@ctvacinas.org', jobTitle: 'Gerente Regulatória', role: 'Admin', password: 'admin', status: 'active', isLeader: true },
-  { id: 'tm_2', name: 'priscilapassos.ctvacinas@gmail.com', email: 'priscilapassos.ctvacinas@gmail.com', jobTitle: 'Consultora', role: 'Admin', status: 'active', isLeader: false },
-  { id: 'tm_3', name: 'Bruna Dias', email: 'brunardias@outlook.com', jobTitle: 'Especialista Regulatória', role: 'Admin', status: 'active', isLeader: false },
+  { id: 'tm_1', name: 'Priscila Passos', email: 'priscilapassos@ctvacinas.org', jobTitle: 'Gerente Regulatória', role: 'Membro', status: 'active', isLeader: false },
+  { id: 'tm_2', name: 'priscilapassos.ctvacinas@gmail.com', email: 'priscilapassos.ctvacinas@gmail.com', jobTitle: 'Consultora', role: 'Membro', status: 'active', isLeader: false },
+  { id: 'tm_3', name: 'Bruna Dias', email: 'brunardias@outlook.com', jobTitle: 'Especialista Regulatória', role: 'Admin', password: 'admin', status: 'active', isLeader: true },
 ];
 
 
