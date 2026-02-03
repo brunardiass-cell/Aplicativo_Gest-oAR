@@ -14,6 +14,8 @@ interface ProjectsManagerProps {
   onUpdateActivityPlans: (plans: ActivityPlanTemplate[]) => void;
   onOpenDeletionModal: (item: { type: 'macro' | 'micro', projectId: string; macroId: string; microId?: string; name: string }) => void;
   teamMembers: TeamMember[];
+  selectedProfile: TeamMember | null;
+  onRequestManagePlans: () => void;
 }
 
 type ProjectView = 'timeline' | 'flow';
@@ -25,6 +27,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   onUpdateActivityPlans,
   onOpenDeletionModal,
   teamMembers,
+  selectedProfile,
+  onRequestManagePlans,
 }) => {
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
