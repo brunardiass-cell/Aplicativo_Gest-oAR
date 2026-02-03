@@ -15,7 +15,7 @@ import MonthlyReportModal from './components/MonthlyReportModal';
 import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
-import { PlusCircle, Loader2, LogIn, Bell, FileText } from 'lucide-react';
+import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight } from 'lucide-react';
 
 const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -224,12 +224,52 @@ const App: React.FC = () => {
   
   if (!isMsalAuthenticated) {
     return (
-      <div className="flex h-screen items-center justify-center bg-brand-light flex-col gap-6 p-4">
-        <h1 className="text-4xl font-black uppercase text-slate-900">Gestão <span className="text-brand-primary">Regulatória</span></h1>
-        <button onClick={handleLogin} className="px-10 py-4 bg-brand-primary text-white rounded-full font-bold uppercase text-sm tracking-widest flex items-center gap-3 hover:bg-brand-accent shadow-lg shadow-teal-500/20 transition">
-          <LogIn size={20}/> Entrar com Microsoft
-        </button>
-        {authError && <p className="text-red-500 mt-4">{authError}</p>}
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4 font-sans">
+        <main className="w-full max-w-md mx-auto text-center animate-in-slow">
+          
+          <div className="mb-8 inline-block">
+            <div className="bg-slate-100 p-5 rounded-3xl shadow-sm">
+              <FileText size={36} className="text-brand-primary" strokeWidth={2.5}/>
+            </div>
+          </div>
+
+          <h1 className="text-5xl font-black tracking-tighter">
+            <span className="text-slate-900">GESTÃO</span>
+            <span className="text-brand-primary"> REGULATÓRIA</span>
+          </h1>
+
+          <p className="mt-4 text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center justify-center gap-2">
+            <ShieldCheck size={14} className="text-emerald-500"/>
+            Portal de Atividades • CTVacinas
+          </p>
+
+          <div className="mt-12 bg-slate-50/70 p-8 sm:p-10 rounded-[2.5rem] border border-slate-200/80 shadow-sm text-center">
+            <h2 className="font-black text-slate-800 uppercase tracking-wider">Bem-vindo ao sistema</h2>
+            <p className="mt-2 text-sm text-slate-500 max-w-xs mx-auto">
+              Utilize suas credenciais institucionais para acessar o painel de controle e fluxos estratégicos.
+            </p>
+
+            <button 
+              onClick={handleLogin} 
+              className="mt-8 w-full bg-slate-900 text-white rounded-2xl p-3.5 flex items-center justify-center gap-4 hover:bg-black transition-colors shadow-lg shadow-slate-200 active:scale-[0.98]">
+              <div className="bg-brand-primary p-2.5 rounded-lg">
+                  <ArrowRight size={20} />
+              </div>
+              <div className="text-left flex-1">
+                  <span className="font-bold text-sm uppercase tracking-wider">Entrar com Microsoft</span>
+                  <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Conta Corporativa @ctvacinas.org</p>
+              </div>
+            </button>
+          </div>
+
+          <div className="mt-8 flex justify-center items-center gap-2">
+            <div className="w-2 h-2 bg-slate-300 rounded-full"></div>
+            <div className="w-2 h-2 bg-slate-200 rounded-full"></div>
+            <div className="w-2 h-2 bg-slate-200 rounded-full"></div>
+          </div>
+          
+          {authError && <p className="text-red-500 mt-6">{authError}</p>}
+        </main>
       </div>
     );
   }
