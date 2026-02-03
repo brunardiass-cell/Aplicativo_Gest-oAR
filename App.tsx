@@ -16,6 +16,7 @@ import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
 import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight } from 'lucide-react';
+import PlanManagerModal from './components/PlanManagerModal';
 
 const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -36,6 +37,7 @@ const App: React.FC = () => {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isPlanManagerOpen, setIsPlanManagerOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [filterMember, setFilterMember] = useState<string | 'Todos'>('Todos');
   
@@ -306,7 +308,6 @@ const App: React.FC = () => {
       <Sidebar 
         currentView={view} 
         onViewChange={setView}
-// FIX: Pass view setter to onAdminViewChange to fix type error.
         onAdminViewChange={(view) => requestAdminAccess(() => setView(view))}
         onGoHome={() => setView('dashboard')}
         onSwitchProfile={handleSwitchProfile} 
@@ -355,8 +356,7 @@ const App: React.FC = () => {
           {view === 'dashboard' && <Dashboard tasks={tasks} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />}
           {view === 'quality' && hasFullAccess && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} appUsers={appUsers} onUpdateAppUsers={setAppUsers} />}
           {view === 'tasks' && <TaskBoard tasks={tasks.filter(t => !t.deleted && (filterMember === 'Todos' || t.projectLead === filterMember || t.collaborators.includes(filterMember)))} currentUser={filterMember} onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} onDelete={(task) => { setSelectedTask(task); setIsDeleteModalOpen(true); }} onAssignReview={() => {}} onNotificationClick={() => {}} onClearSingleNotification={() => {}} notifications={notifications.filter(n => n.userId === selectedProfile?.name)} />}
-// FIX: Pass selectedProfile to ProjectsManager to fix type error.
-          {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={() => {}} teamMembers={teamMembers} selectedProfile={selectedProfile} onRequestManagePlans={() => requestAdminAccess(() => setIsReportModalOpen(true)) /*Ação de exemplo, será trocado no componente*/ } />}
+          {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={() => {}} teamMembers={teamMembers} selectedProfile={selectedProfile} onOpenPlanManager={() => requestAdminAccess(() => setIsPlanManagerOpen(true))} />}
           {view === 'traceability' && hasFullAccess && <ActivityLogView logs={logs} />}
         </div>
 
@@ -364,6 +364,15 @@ const App: React.FC = () => {
         {isDetailsOpen && selectedTask && <TaskDetailsModal task={selectedTask} onClose={() => { setIsDetailsOpen(false); setSelectedTask(null); }} />}
         {isDeleteModalOpen && selectedTask && <DeletionModal itemName={selectedTask.activity} onClose={() => { setIsDeleteModalOpen(false); setSelectedTask(null); }} onConfirm={handleDeleteTask} />}
         {isReportModalOpen && <MonthlyReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} tasks={tasks} />}
+        {isPlanManagerOpen && (
+          <PlanManagerModal 
+            isOpen={isPlanManagerOpen}
+            onClose={() => setIsPlanManagerOpen(false)}
+            plans={activityPlans}
+            // FIX: The function 'onUpdateActivityPlans' was not defined. Replaced with 'setActivityPlans'.
+            onSave={setActivityPlans}
+          />
+        )}
         
         {isAdminActionModalOpen && selectedProfile && (
           <PasswordModal
