@@ -1,18 +1,14 @@
 
 import { ActivityPlanTemplate, TeamMember } from './types';
 
-export const AUTHORIZED_EMAILS = [
-  'priscilapassos@ctvacinas.org',
-  'priscilapassos.ctvacinas@gmail.com',
-  'brunardias@outlook.com'
-];
-
 export const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
-  { id: 'tm_1', name: 'Priscila Passos', email: 'priscilapassos@ctvacinas.org', jobTitle: 'Gerente Regulatória', role: 'Membro', status: 'active', isLeader: false },
-  { id: 'tm_2', name: 'priscilapassos.ctvacinas@gmail.com', email: 'priscilapassos.ctvacinas@gmail.com', jobTitle: 'Consultora', role: 'Membro', status: 'active', isLeader: false },
-  { id: 'tm_3', name: 'Bruna Dias', email: 'brunardias@outlook.com', jobTitle: 'Especialista Regulatória', role: 'Admin', password: 'admin', status: 'active', isLeader: true },
+  { id: 'tm_1', name: 'Graziella', role: 'Líder', isLeader: true, password: 'admin' },
+  { id: 'tm_2', name: 'Bruna Dias', role: 'Equipe', isLeader: false },
+  { id: 'tm_3', name: 'Ester', role: 'Equipe', isLeader: false },
+  { id: 'tm_4', name: 'Marjorie', role: 'Equipe', isLeader: false },
+  { id: 'tm_5', name: 'Ana Luiza', role: 'Equipe', isLeader: false },
+  { id: 'tm_6', name: 'Ana Terzian', role: 'Equipe', isLeader: false }
 ];
-
 
 export const ADMIN_WHITELIST = [
   'priscilapassos@ctvacinas.org'

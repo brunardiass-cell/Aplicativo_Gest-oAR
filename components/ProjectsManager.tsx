@@ -1,7 +1,6 @@
 
 import React, { useState } from 'react';
-// FIX: Import UserRole to use in component props.
-import { Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember, UserRole } from '../types';
+import { Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember } from '../types';
 import { FolderPlus, ListPlus, FolderKanban, Workflow, GanttChartSquare, Copy } from 'lucide-react';
 import PlanManagerModal from './PlanManagerModal';
 import NewProjectModal from './NewProjectModal';
@@ -15,8 +14,6 @@ interface ProjectsManagerProps {
   onUpdateActivityPlans: (plans: ActivityPlanTemplate[]) => void;
   onOpenDeletionModal: (item: { type: 'macro' | 'micro', projectId: string; macroId: string; microId?: string; name: string }) => void;
   teamMembers: TeamMember[];
-  // FIX: Add missing prop to fix type error in App.tsx.
-  currentUserRole: UserRole;
 }
 
 type ProjectView = 'timeline' | 'flow';
@@ -28,14 +25,11 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   onUpdateActivityPlans,
   onOpenDeletionModal,
   teamMembers,
-  currentUserRole,
 }) => {
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(projects[0] || null);
   const [viewMode, setViewMode] = useState<ProjectView>('timeline');
-
-  const canManage = currentUserRole === 'Admin' || currentUserRole === 'Membro';
 
   const addProject = (project: Project) => {
     const updatedProjects = [...projects, project];
@@ -86,35 +80,32 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
   return (
     <div className="space-y-8">
-      {/* FIX: Conditionally render management buttons based on user role */}
-      {canManage && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <button
-            onClick={() => setIsNewProjectModalOpen(true)}
-            className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all text-left"
-          >
-            <div className="p-5 bg-indigo-600 text-white rounded-3xl shadow-lg shadow-indigo-200 group-hover:scale-110 transition-transform">
-              <FolderPlus size={32} />
-            </div>
-            <div>
-              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Criar Novo Projeto</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Use um plano para gerar um cronograma.</p>
-            </div>
-          </button>
-          <button
-            onClick={() => setIsPlanModalOpen(true)}
-            className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-amber-200 transition-all text-left"
-          >
-            <div className="p-5 bg-amber-500 text-white rounded-3xl shadow-lg shadow-amber-200 group-hover:scale-110 transition-transform">
-              <ListPlus size={32} />
-            </div>
-            <div>
-              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Gerenciar Planos</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Crie e edite templates de atividades.</p>
-            </div>
-          </button>
-        </div>
-      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <button
+          onClick={() => setIsNewProjectModalOpen(true)}
+          className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all text-left"
+        >
+          <div className="p-5 bg-indigo-600 text-white rounded-3xl shadow-lg shadow-indigo-200 group-hover:scale-110 transition-transform">
+            <FolderPlus size={32} />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Criar Novo Projeto</h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Use um plano para gerar um cronograma.</p>
+          </div>
+        </button>
+        <button
+          onClick={() => setIsPlanModalOpen(true)}
+          className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-amber-200 transition-all text-left"
+        >
+          <div className="p-5 bg-amber-500 text-white rounded-3xl shadow-lg shadow-amber-200 group-hover:scale-110 transition-transform">
+            <ListPlus size={32} />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Gerenciar Planos</h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Crie e edite templates de atividades.</p>
+          </div>
+        </button>
+      </div>
       
       <div className="grid grid-cols-12 gap-8">
         <div className="col-span-4">

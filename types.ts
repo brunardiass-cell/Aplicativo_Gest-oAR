@@ -62,8 +62,25 @@ export interface AppNotification {
   refId: string;
 }
 
+export interface AccessUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'user';
+  status: 'active' | 'inactive';
+}
+
+export interface AppUser {
+  id: string;
+  username: string;
+  email: string;
+  role: 'admin' | 'user';
+  status: 'active' | 'pending' | 'blocked';
+  joinedAt: string;
+}
+
 export interface ActivityLog {
-  id:string;
+  id: string;
   action: 'CRIAÇÃO' | 'EDIÇÃO' | 'EXCLUSÃO' | 'RESTAURAÇÃO' | 'REVISÃO';
   taskTitle: string;
   user: string;
@@ -104,18 +121,12 @@ export interface Project {
   macroActivities: MacroActivity[];
 }
 
-export type UserRole = 'Admin' | 'Membro' | 'Usuario';
-
 export interface TeamMember {
   id: string;
   name: string;
-  email: string;
-  jobTitle: string;
-  role: UserRole;
+  role: string;
+  isLeader: boolean;
   password?: string;
-  status: 'active' | 'inactive';
-  // FIX: Added optional isLeader property to resolve errors in multiple files.
-  isLeader?: boolean;
 }
 
 
@@ -160,7 +171,7 @@ export interface ProjectData {
 }
 
 export interface AppConfig {
-  users: TeamMember[]; // Changed from AppUser to TeamMember
+  users: AppUser[];
   authorizedEmails: string[];
   notificationEmail: string;
   projectsData: ProjectData[];

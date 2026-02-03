@@ -11,11 +11,9 @@ interface UserSelectionViewProps {
 }
 
 const getInitials = (name: string): string => {
-  if (!name.includes('@')) {
-    const parts = name.split(' ');
-    if (parts.length > 1 && parts[1]) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
+  const parts = name.split(' ');
+  if (parts.length > 1 && parts[1]) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
   }
   return name.substring(0, 2).toUpperCase();
 };
@@ -53,7 +51,7 @@ const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSe
                 </div>
                 <div className="text-center">
                   <p className="font-bold text-slate-800">{member.name}</p>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{member.jobTitle}</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{member.role}</p>
                 </div>
               </button>
             ))}

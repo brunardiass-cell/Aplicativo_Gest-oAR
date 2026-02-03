@@ -1,16 +1,13 @@
 
 import React, { useState } from 'react';
-// FIX: Replaced non-existent AppUser with TeamMember.
-import { Person, TeamMember } from '../types';
+import { Person, AppUser } from '../types';
 import { Plus, Trash2, Mail, User, Shield, Info } from 'lucide-react';
 
 interface PeopleManagerProps {
   people: Person[];
-  // FIX: Replaced non-existent AppUser with TeamMember.
-  users: TeamMember[];
+  users: AppUser[];
   canEdit: boolean;
-  // FIX: Replaced non-existent AppUser with TeamMember.
-  onUpdate: (people: Person[], users: TeamMember[]) => void;
+  onUpdate: (people: Person[], users: AppUser[]) => void;
   onAddLog: (id: string, title: string, reason: string) => void;
 }
 
@@ -64,8 +61,7 @@ const PeopleManager: React.FC<PeopleManagerProps> = ({ people, users, canEdit, o
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {people.map(person => {
-              // FIX: Changed u.username to u.name to match TeamMember interface.
-              const hasSystemAccess = users.some(u => u.name === person.name);
+              const hasSystemAccess = users.some(u => u.username === person.name);
               return (
                 <div key={person.id} className="p-5 bg-white border border-slate-200 rounded-2xl flex items-center justify-between group hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-4">
