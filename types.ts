@@ -44,7 +44,7 @@ export interface Task {
   deletionDate?: string;
 }
 
-export type ViewMode = 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceability' | 'selection' | 'unauthorized';
+export type ViewMode = 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceability';
 
 export interface SyncInfo {
   timestamp: string;
