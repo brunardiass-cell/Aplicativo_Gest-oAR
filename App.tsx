@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import type { AccountInfo } from "@azure/msal-browser";
 import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo } from './types';
-import { DEFAULT_TEAM_MEMBERS } from './constants';
+import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS } from './constants';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
 import Sidebar from './components/Sidebar';
@@ -15,7 +16,7 @@ import MonthlyReportModal from './components/MonthlyReportModal';
 import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
-import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight } from 'lucide-react';
+import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert } from 'lucide-react';
 
 const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -29,6 +30,8 @@ const App: React.FC = () => {
   
   const [view, setView] = useState<ViewMode>('dashboard');
   const [isMsalAuthenticated, setIsMsalAuthenticated] = useState(false);
+  const [account, setAccount] = useState<AccountInfo | null>(null);
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<TeamMember | null>(null);
   const [isPasswordAuthenticated, setIsPasswordAuthenticated] = useState(false);
 
@@ -49,15 +52,30 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const initAuth = async () => {
-      const account = await MicrosoftGraphService.getAccount();
-      if (account) {
+      const acc = await MicrosoftGraphService.getAccount();
+      if (acc) {
+        setAccount(acc);
         setIsMsalAuthenticated(true);
         loadDataFromSharePoint();
+      } else {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
     initAuth();
   }, []);
+
+  useEffect(() => {
+    if (isMsalAuthenticated && account && appUsers.length > 0 && isAuthorized === null) {
+      const userEmail = account.username.toLowerCase();
+      const authorizedUser = appUsers.find(
+        (user) => user.email.toLowerCase() === userEmail && user.status === 'active'
+      );
+      setIsAuthorized(!!authorizedUser);
+      if (!authorizedUser) {
+        setIsLoading(false);
+      }
+    }
+  }, [isMsalAuthenticated, account, appUsers, isAuthorized]);
   
   const loadDataFromSharePoint = async () => {
     setIsLoading(true);
@@ -70,16 +88,20 @@ const App: React.FC = () => {
         setActivityPlans(cloudData.activityPlans || []);
         setNotifications(cloudData.notifications || []);
         setLogs(cloudData.logs || []);
-        setAppUsers(cloudData.appUsers || []);
+        setAppUsers(cloudData.appUsers || DEFAULT_APP_USERS);
       } else {
         setTeamMembers(DEFAULT_TEAM_MEMBERS);
+        setAppUsers(DEFAULT_APP_USERS);
       }
       setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'Cloud' });
     } catch (error) {
       setAuthError("Falha ao carregar dados do SharePoint.");
       setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'Cloud' });
     } finally {
-      setIsLoading(false);
+      // Don't set isLoading to false here if user might be unauthorized
+      if (isAuthorized !== false) {
+        setIsLoading(false);
+      }
       isInitialLoad.current = false;
     }
   };
@@ -107,7 +129,8 @@ const App: React.FC = () => {
     setIsLoading(true);
     setAuthError(null);
     const result = await MicrosoftGraphService.login();
-    if (result.success) {
+    if (result.success && result.account) {
+      setAccount(result.account);
       setIsMsalAuthenticated(true);
       await loadDataFromSharePoint();
     } else {
@@ -123,6 +146,8 @@ const App: React.FC = () => {
     setIsMsalAuthenticated(false);
     setSelectedProfile(null);
     setIsPasswordAuthenticated(false);
+    setAccount(null);
+    setIsAuthorized(null);
   };
   
   const handleSaveLocalBackup = () => {
@@ -272,6 +297,39 @@ const App: React.FC = () => {
         </main>
       </div>
     );
+  }
+
+  if (isMsalAuthenticated && isAuthorized === false) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans">
+        <main className="w-full max-w-md mx-auto text-center animate-in-slow">
+            <div className="bg-white p-10 rounded-[2.5rem] border border-red-200/80 shadow-lg shadow-red-500/10">
+                <div className="mb-6 inline-block bg-red-100 p-5 rounded-3xl">
+                    <ShieldAlert size={36} className="text-red-500" strokeWidth={2.5}/>
+                </div>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tighter">
+                    Acesso Negado
+                </h1>
+                <p className="mt-4 text-sm text-slate-500">
+                    A conta <span className="font-bold text-slate-700">{account?.username}</span> não tem permissão para acessar este sistema ou está inativa.
+                </p>
+                <p className="mt-2 text-xs text-slate-400">
+                    Se isso for um erro, por favor, entre em contato com o administrador da plataforma.
+                </p>
+                <button 
+                onClick={handleLogout} 
+                className="mt-8 w-full bg-slate-800 text-white rounded-2xl p-4 font-bold uppercase text-xs tracking-widest hover:bg-black transition"
+                >
+                Tentar com outra conta
+                </button>
+            </div>
+        </main>
+      </div>
+    );
+  }
+  
+  if (isMsalAuthenticated && isAuthorized === null) {
+      return <div className="flex h-screen w-screen items-center justify-center bg-brand-light"><Loader2 size={48} className="animate-spin text-brand-primary" /></div>;
   }
 
   if (!selectedProfile) {

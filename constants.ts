@@ -1,5 +1,16 @@
 
-import { ActivityPlanTemplate, TeamMember } from './types';
+import { ActivityPlanTemplate, TeamMember, AppUser } from './types';
+
+export const DEFAULT_APP_USERS: AppUser[] = [
+  {
+    id: 'user_admin_bruna',
+    username: 'Bruna Rodrigues',
+    email: 'brunardias@outlook.com',
+    role: 'admin',
+    status: 'active',
+    joinedAt: new Date().toISOString()
+  }
+];
 
 export const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
   { id: 'tm_1', name: 'Graziella', role: 'Líder', isLeader: true, password: 'admin' },
@@ -37,7 +48,7 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
     ]
   },
   {
-    id: 'plan_rna',
+    id: 'plan_dna',
     name: 'RNA (Terapia Gênica)',
     macroActivities: [
       'Qualificação do Plasmídeo Molde',
