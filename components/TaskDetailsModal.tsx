@@ -21,7 +21,7 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
           </button>
           
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            <span className="px-3 py-1 bg-blue-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm">
+            <span className="px-3 py-1 bg-teal-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm">
               {task.project}
             </span>
             <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
@@ -51,9 +51,9 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
             <div className="space-y-1">
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Progresso</span>
               <div className="h-2 bg-white/10 rounded-full overflow-hidden mt-2">
-                <div className="h-full bg-blue-500" style={{width: `${task.progress}%`}}></div>
+                <div className="h-full bg-teal-500" style={{width: `${task.progress}%`}}></div>
               </div>
-              <p className="text-[10px] font-black text-blue-400 mt-1">{task.progress}% concluído</p>
+              <p className="text-[10px] font-black text-teal-400 mt-1">{task.progress}% concluído</p>
             </div>
           </div>
           
@@ -70,7 +70,7 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
           )}
 
           <div className="space-y-4">
-             <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-1">
+             <span className="text-[10px] font-black text-teal-400 uppercase tracking-widest flex items-center gap-1">
                 <ArrowRight size={12} /> Próximo Passo Estratégico
               </span>
               <div className="p-6 bg-slate-900/50 text-white rounded-3xl font-bold shadow-xl border border-white/10 text-sm italic">
@@ -80,15 +80,15 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
 
           <div className="space-y-6">
             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-white/10 pb-2">
-              <History size={14} className="text-blue-500" /> Linha do Tempo de Atualizações
+              <History size={14} className="text-teal-500" /> Linha do Tempo de Atualizações
             </h3>
             <div className="relative pl-8 space-y-8 before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-white/10">
               {task.updates && task.updates.length > 0 ? [...task.updates].reverse().map((update, idx) => (
                 <div key={update.id} className="relative">
-                  <div className={`absolute -left-[33px] top-1 w-5 h-5 rounded-full border-4 border-[#1e293b] shadow-sm ${idx === 0 ? 'bg-blue-500 animate-pulse' : 'bg-slate-600'}`}></div>
-                  <div className="bg-white/5 p-5 rounded-2xl border border-white/10 hover:border-blue-500/20 transition shadow-sm">
+                  <div className={`absolute -left-[33px] top-1 w-5 h-5 rounded-full border-4 border-[#1e293b] shadow-sm ${idx === 0 ? 'bg-teal-500 animate-pulse' : 'bg-slate-600'}`}></div>
+                  <div className="bg-white/5 p-5 rounded-2xl border border-white/10 hover:border-teal-500/20 transition shadow-sm">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">
+                      <span className="text-[10px] font-black text-teal-400 uppercase tracking-widest">
                         {new Date(update.date).toLocaleDateString('pt-BR')}
                       </span>
                       {update.user && <span className="text-[9px] font-bold text-slate-400 uppercase italic">Por {update.user}</span>}
@@ -108,7 +108,7 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
         <div className="p-8 bg-slate-900/50 border-t border-white/10 flex justify-center">
            <button 
             onClick={onClose}
-            className="px-16 py-4 bg-blue-600 text-white rounded-2xl shadow-xl shadow-blue-500/20 font-black uppercase text-[10px] tracking-widest hover:bg-blue-700 transition active:scale-95"
+            className="px-16 py-4 bg-teal-600 text-white rounded-2xl shadow-xl shadow-teal-500/20 font-black uppercase text-[10px] tracking-widest hover:bg-teal-700 transition active:scale-95"
           >
             Fechar Visualização
           </button>
@@ -123,7 +123,7 @@ const InfoBlock: React.FC<{ label: string; value: string; icon: React.ReactNode;
     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
       {icon} {label}
     </span>
-    <p className={`font-bold text-sm ${highlight ? 'text-blue-400' : 'text-white'}`}>
+    <p className={`font-bold text-sm ${highlight ? 'text-teal-400' : 'text-white'}`}>
       {label.includes('Data') || label.includes('Prazo') || label.includes('Solicitação') ? (value ? new Date(value + 'T00:00:00').toLocaleDateString('pt-BR') : '-') : value}
     </p>
   </div>

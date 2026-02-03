@@ -44,13 +44,7 @@ export interface Task {
   deletionDate?: string;
 }
 
-export type ViewMode = 'selection' | 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceability' | 'unauthorized';
-
-export interface SyncInfo {
-  timestamp: string;
-  user: string;
-  status: 'syncing' | 'synced' | 'error';
-}
+export type ViewMode = 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceability';
 
 export interface AppNotification {
   id: string;
@@ -126,6 +120,7 @@ export interface TeamMember {
   name: string;
   role: string;
   isLeader: boolean;
+  password?: string;
 }
 
 

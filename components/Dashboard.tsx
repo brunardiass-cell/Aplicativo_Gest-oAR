@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { Task, AppNotification } from '../types';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -47,13 +48,13 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, filteredUser, notification
   const priorityData = useMemo(() => [
     { name: 'Urgente', value: lastMonthTasks.filter(t => t.priority === 'Urgente').length, color: '#ef4444' },
     { name: 'Alta', value: lastMonthTasks.filter(t => t.priority === 'Alta').length, color: '#f59e0b' },
-    { name: 'Média', value: lastMonthTasks.filter(t => t.priority === 'Média').length, color: '#6366f1' },
+    { name: 'Média', value: lastMonthTasks.filter(t => t.priority === 'Média').length, color: '#14b8a6' },
     { name: 'Baixa', value: lastMonthTasks.filter(t => t.priority === 'Baixa').length, color: '#94a3b8' },
   ], [lastMonthTasks]);
 
   const statusChartData = useMemo(() => [
     { name: 'Finalizadas', value: stats.done, color: '#10b981' },
-    { name: 'Em Andamento', value: stats.ongoing, color: '#3b82f6' },
+    { name: 'Em Andamento', value: stats.ongoing, color: '#14b8a6' },
     { name: 'Atrasadas', value: stats.late, color: '#f43f5e' },
   ], [stats]);
 
@@ -101,9 +102,9 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, filteredUser, notification
     <div className="space-y-8">
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard label="Atividades no Mês" value={stats.total} icon={<Briefcase size={20}/>} color="bg-indigo-600" />
+        <StatCard label="Atividades no Mês" value={stats.total} icon={<Briefcase size={20}/>} color="bg-teal-600" />
         <StatCard label="Finalizadas no Mês" value={stats.done} icon={<CheckCircle size={20}/>} color="bg-emerald-600" />
-        <StatCard label="Projetos Acompanhados" value={stats.projects} icon={<FolderKanban size={20}/>} color="bg-sky-600" />
+        <StatCard label="Projetos Acompanhados" value={stats.projects} icon={<FolderKanban size={20}/>} color="bg-lime-600" />
       </div>
 
       {/* Charts */}
@@ -145,7 +146,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, filteredUser, notification
                   <div key={task.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
                     <div>
                       <p className="text-xs font-bold text-slate-800">{task.activity}</p>
-                      <p className="text-[9px] font-bold text-blue-600 uppercase">{task.project}</p>
+                      <p className="text-[9px] font-bold text-teal-600 uppercase">{task.project}</p>
                     </div>
                     <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${daysLeft <= 2 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                        {daysLeft <= 1 ? 'Vence hoje/amanhã' : `Vence em ${daysLeft} dias`}

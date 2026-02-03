@@ -14,7 +14,7 @@ const ActivityLogView: React.FC<ActivityLogViewProps> = ({ logs }) => {
         <header className="p-8 bg-slate-900 text-white flex justify-between items-center">
           <div>
             <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
-              <History size={28} className="text-indigo-500" /> Registro de Auditoria
+              <History size={28} className="text-teal-500" /> Registro de Auditoria
             </h2>
             <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Histórico de ações críticas e exclusões</p>
           </div>
