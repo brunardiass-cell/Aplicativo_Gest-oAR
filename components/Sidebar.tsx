@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ViewMode, TeamMember } from '../types';
 import { 
   LayoutDashboard, 
@@ -9,9 +9,11 @@ import {
   History, 
   Users,
   LogOut,
-  CheckCircle,
-  Loader2,
-  AlertTriangle
+  Database,
+  Download,
+  Upload,
+  Cloud,
+  Clock,
 } from 'lucide-react';
 
 type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
@@ -25,6 +27,8 @@ interface SidebarProps {
   hasFullAccess: boolean;
   syncStatus: SyncStatus;
   onLogout: () => void;
+  onLocalBackup: () => void;
+  onLocalRestore: () => void;
 }
 
 const getInitials = (name?: string): string => {
@@ -36,21 +40,58 @@ const getInitials = (name?: string): string => {
   return name[0].toUpperCase();
 };
 
-const SyncIndicator: React.FC<{ status: SyncStatus }> = ({ status }) => {
+const SyncManager: React.FC<{ status: SyncStatus; onBackup: () => void; onRestore: () => void; }> = ({ status, onBackup, onRestore }) => {
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (status === 'synced') {
+      setLastSyncTime(new Date().toLocaleTimeString('pt-BR'));
+    }
+  }, [status]);
+
   const statusConfig = {
-    synced: { text: 'Sincronizado', icon: <CheckCircle size={14} />, color: 'text-emerald-400' },
-    syncing: { text: 'Sincronizando...', icon: <Loader2 size={14} className="animate-spin" />, color: 'text-amber-400' },
-    error: { text: 'Erro na Sincronização', icon: <AlertTriangle size={14} />, color: 'text-red-400' },
-    idle: { text: 'Aguardando', icon: <Loader2 size={14} />, color: 'text-slate-500' },
+    synced: { text: 'Sharepoint OK', color: 'bg-emerald-500', textColor: 'text-emerald-300' },
+    syncing: { text: 'Sincronizando...', color: 'bg-amber-500 animate-pulse', textColor: 'text-amber-300' },
+    error: { text: 'Falha na Conexão', color: 'bg-red-500', textColor: 'text-red-300' },
+    idle: { text: 'Aguardando', color: 'bg-slate-600', textColor: 'text-slate-400' },
   };
-  const current = statusConfig[status];
+  const currentStatus = statusConfig[status];
+
   return (
-    <div className={`flex items-center justify-center gap-2 text-[9px] font-bold uppercase tracking-widest ${current.color}`}>
-      {current.icon}
-      <span>{current.text}</span>
+    <div className="space-y-4">
+      {/* Backup Local */}
+      <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-700">
+        <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-3">
+          <Database size={12}/> Backup Local
+        </h4>
+        <div className="flex gap-2">
+          <button onClick={onBackup} className="flex-1 flex items-center justify-center gap-2 px-2 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 transition text-xs font-bold uppercase tracking-wider text-slate-300">
+            <Download size={14}/> Salvar
+          </button>
+          <button onClick={onRestore} className="flex-1 flex items-center justify-center gap-2 px-2 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 transition text-xs font-bold uppercase tracking-wider text-slate-300">
+            <Upload size={14}/> Subir
+          </button>
+        </div>
+      </div>
+      {/* Status Cloud */}
+      <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-700">
+        <div className="flex items-center justify-between">
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Status Cloud</h4>
+            <div className={`w-2.5 h-2.5 rounded-full transition-colors ${currentStatus.color}`}></div>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+            <Cloud size={14} className={currentStatus.textColor} />
+            <p className={`text-xs font-bold ${currentStatus.textColor}`}>{currentStatus.text}</p>
+        </div>
+        <div className="mt-1 flex items-center gap-2 text-slate-500">
+            <Clock size={14} />
+            <p className="text-xs font-bold">{lastSyncTime || '--:--:--'}</p>
+        </div>
+      </div>
     </div>
   );
 };
+
 
 const Sidebar: React.FC<SidebarProps> = ({ 
   currentView, 
@@ -60,7 +101,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   selectedProfile,
   hasFullAccess,
   syncStatus,
-  onLogout
+  onLogout,
+  onLocalBackup,
+  onLocalRestore
 }) => {
   return (
     <aside className="w-64 bg-slate-800 text-white fixed h-full flex flex-col z-50">
@@ -89,7 +132,8 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div className="mt-auto p-6 space-y-4">
-        <SyncIndicator status={syncStatus} />
+        {hasFullAccess && <SyncManager status={syncStatus} onBackup={onLocalBackup} onRestore={onLocalRestore}/>}
+        
         <div className="flex items-center gap-2">
           <button onClick={onSwitchProfile} className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-slate-700 hover:bg-slate-600 transition text-xs font-bold uppercase tracking-wider text-slate-300">
             <Users size={16} /> Trocar Perfil

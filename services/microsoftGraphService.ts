@@ -1,7 +1,7 @@
 
 import { PublicClientApplication, AccountInfo, InteractionRequiredAuthError, AuthenticationResult } from '@azure/msal-browser';
 import { Task, Project, TeamMember, ActivityPlanTemplate, ActivityLog, AppUser } from '../types';
-import { DEFAULT_ACTIVITY_PLANS, DEFAULT_TEAM_MEMBERS } from '../constants';
+import { DEFAULT_ACTIVITY_PLANS, DEFAULT_TEAM_MEMBERS, ADMIN_WHITELIST } from '../constants';
 import { generateInitialTasks } from '../utils/mockData';
 
 // --- Configuração ---
@@ -149,13 +149,30 @@ class GraphService {
   
   private createDefaultDatabase(): AppDatabase {
     const team = DEFAULT_TEAM_MEMBERS;
+    
+    const adminUsers: AppUser[] = ADMIN_WHITELIST.map((email, index) => {
+        const namePart = email.split('@')[0];
+        const formattedName = namePart
+            .replace(/[._]/g, ' ')
+            .replace(/\b\w/g, char => char.toUpperCase());
+
+        return {
+            id: `user_admin_${index + 1}`,
+            username: formattedName,
+            email: email,
+            role: 'admin',
+            status: 'active',
+            joinedAt: new Date().toISOString()
+        };
+    });
+
     return {
       tasks: generateInitialTasks(team),
       projects: [],
       teamMembers: team,
       activityPlans: DEFAULT_ACTIVITY_PLANS,
       logs: [],
-      appUsers: []
+      appUsers: adminUsers
     };
   }
 }

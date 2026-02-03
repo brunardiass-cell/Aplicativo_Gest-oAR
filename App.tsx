@@ -184,6 +184,51 @@ const App: React.FC = () => {
     isDataInitialized.current = false;
   };
   
+  const handleLocalBackup = useCallback(() => {
+    const db = { tasks, projects, teamMembers, activityPlans, logs, appUsers };
+    const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    a.download = `ctvacinas_backup_${timestamp}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [tasks, projects, teamMembers, activityPlans, logs, appUsers]);
+
+  const handleLocalRestore = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const content = e.target?.result as string;
+          const db = JSON.parse(content);
+          if (db.tasks && db.projects && db.teamMembers) {
+            setTasks(db.tasks);
+            setProjects(db.projects);
+            setTeamMembers(db.teamMembers);
+            setActivityPlans(db.activityPlans || []);
+            setLogs(db.logs || []);
+            setAppUsers(db.appUsers || []);
+            alert('Backup restaurado com sucesso! Os dados serão sincronizados com o SharePoint.');
+          } else {
+            alert('Arquivo de backup inválido.');
+          }
+        } catch (error) {
+          alert('Erro ao ler o arquivo de backup.');
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }, []);
+
   if (isLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-white text-slate-900 flex-col gap-4">
@@ -227,6 +272,8 @@ const App: React.FC = () => {
         hasFullAccess={hasFullAccess}
         syncStatus={syncStatus}
         onLogout={handleLogout}
+        onLocalBackup={handleLocalBackup}
+        onLocalRestore={handleLocalRestore}
       />
       
       <main className="flex-1 ml-64 p-10 max-w-[1600px]">
@@ -265,6 +312,8 @@ const App: React.FC = () => {
              <AccessControl 
                 teamMembers={teamMembers}
                 onUpdateTeamMembers={setTeamMembers}
+                appUsers={appUsers}
+                onUpdateAppUsers={setAppUsers}
              />
           )}
 
