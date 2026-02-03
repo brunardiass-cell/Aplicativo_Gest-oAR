@@ -43,7 +43,7 @@ const App: React.FC = () => {
   const saveDataToSharePoint = async () => {
     if (isInitialLoad.current || !currentUser) return;
 
-    setLastSync(prev => prev ? { ...prev, status: 'syncing' } : { timestamp: new Date().toISOString(), user: currentUser.username, status: 'syncing' });
+    setLastSync((prev: SyncInfo | null) => prev ? { ...prev, status: 'syncing' } : { timestamp: new Date().toISOString(), user: currentUser.username, status: 'syncing' });
     
     const dataToSave = { tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers };
     const success = await MicrosoftGraphService.saveToCloud(dataToSave);
@@ -55,7 +55,7 @@ const App: React.FC = () => {
         status: 'synced'
       });
     } else {
-      setLastSync(prev => prev ? { ...prev, status: 'error' } : null);
+      setLastSync((prev: SyncInfo | null) => prev ? { ...prev, status: 'error' } : null);
     }
   };
 

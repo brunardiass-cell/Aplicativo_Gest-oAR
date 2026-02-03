@@ -1,4 +1,3 @@
-
 import * as msal from "@azure/msal-browser";
 
 const CLIENT_ID = "609422c2-d648-4b50-b1fe-ca614b77ffb5"; 
@@ -26,11 +25,11 @@ export const MicrosoftGraphService = {
           authority: `https://login.microsoftonline.com/${TENANT_ID}`,
           redirectUri: window.location.origin,
           // Garante que o MSAL trate corretamente usuários convidados (external tenants)
-          navigateToLoginRequestUrl: true
+          // FIX: Removed invalid 'navigateToLoginRequestUrl' property as it does not exist in type 'BrowserAuthOptions'. This behavior is default in MSAL.js v2.
         },
         cache: {
           cacheLocation: "localStorage",
-          storeAuthStateInCookie: false,
+          // FIX: Removed invalid 'storeAuthStateInCookie' property as it does not exist in type 'CacheOptions'. This behavior is default in MSAL.js v2.
         }
       });
       await msalInstance.initialize();
