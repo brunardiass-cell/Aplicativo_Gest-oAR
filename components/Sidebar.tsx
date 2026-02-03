@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ViewMode, AppUser, SyncInfo, TeamMember } from '../types';
+import { ViewMode, SyncInfo, TeamMember } from '../types';
 import { 
   LayoutDashboard, 
   ListTodo, 
@@ -11,8 +11,10 @@ import {
   Users,
   Cloud,
   CloudOff,
-  RefreshCw,
-  Clock
+  Clock,
+  Database,
+  Download,
+  Upload
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -24,6 +26,8 @@ interface SidebarProps {
   selectedProfile: TeamMember | null;
   hasFullAccess: boolean;
   lastSync: SyncInfo | null;
+  onSaveBackup: () => void;
+  onLoadBackup: () => void;
 }
 
 const getInitials = (name?: string): string => {
@@ -40,8 +44,15 @@ const Sidebar: React.FC<SidebarProps> = ({
   onSwitchProfile,
   selectedProfile,
   hasFullAccess,
-  lastSync
+  lastSync,
+  onSaveBackup,
+  onLoadBackup
 }) => {
+
+  const formatSyncTime = (timestamp: string) => {
+    if (!timestamp) return '--:--:--';
+    return new Date(timestamp).toLocaleTimeString('pt-BR');
+  };
 
   return (
     <aside className="w-64 bg-slate-800 text-white fixed h-full flex flex-col z-50">
@@ -70,22 +81,38 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div className="mt-auto p-6 space-y-4">
+        <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-700 space-y-4">
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <Database size={12}/> Backup Local
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+                <button onClick={onSaveBackup} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 text-[9px] font-bold uppercase flex items-center justify-center gap-2 transition"><Download size={12}/> Salvar</button>
+                <button onClick={onLoadBackup} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 text-[9px] font-bold uppercase flex items-center justify-center gap-2 transition"><Upload size={12}/> Subir</button>
+            </div>
+        </div>
+        
         <div className={`p-4 rounded-xl border transition-all ${
           lastSync?.status === 'error' ? 'bg-red-500/10 border-red-500/20' : 'bg-slate-900/50 border-slate-700'
         }`}>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-3">
             <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Status Cloud</p>
             <div className={`w-2 h-2 rounded-full ${
               lastSync?.status === 'syncing' ? 'bg-amber-400 animate-pulse' : 
               lastSync?.status === 'error' ? 'bg-red-500' : 'bg-emerald-500'
             }`} />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mb-2">
              {lastSync?.status === 'error' ? <CloudOff size={12} className="text-red-400" /> : <Cloud size={12} className="text-emerald-400" />}
              <span className={`text-[9px] font-black uppercase truncate ${
                 lastSync?.status === 'error' ? 'text-red-400' : 'text-slate-300'
              }`}>
                {lastSync?.status === 'syncing' ? 'Sincronizando...' : lastSync?.status === 'error' ? 'Erro de Conexão' : 'SharePoint OK'}
+             </span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-400">
+             <Clock size={12}/>
+             <span className="text-[9px] font-bold">
+                {lastSync?.status === 'synced' ? formatSyncTime(lastSync.timestamp) : '--:--:--'}
              </span>
           </div>
         </div>

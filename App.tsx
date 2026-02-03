@@ -45,6 +45,7 @@ const App: React.FC = () => {
 
   const isInitialLoad = useRef(true);
   const saveDataTimeout = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -122,6 +123,48 @@ const App: React.FC = () => {
     setIsMsalAuthenticated(false);
     setSelectedProfile(null);
     setIsPasswordAuthenticated(false);
+  };
+  
+  const handleSaveLocalBackup = () => {
+    const dataToSave = { tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers };
+    const blob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'db.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleLoadLocalBackup = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const content = e.target?.result;
+          if (typeof content === 'string') {
+            const data = JSON.parse(content);
+            setTasks(data.tasks || []);
+            setProjects(data.projects || []);
+            setTeamMembers(data.teamMembers || DEFAULT_TEAM_MEMBERS);
+            setActivityPlans(data.activityPlans || []);
+            setNotifications(data.notifications || []);
+            setLogs(data.logs || []);
+            setAppUsers(data.appUsers || []);
+            alert("Backup local carregado com sucesso! Os dados serão sincronizados com a nuvem.");
+          }
+        } catch (error) {
+          alert("Erro ao ler o arquivo de backup. Verifique se o arquivo é válido.");
+        }
+      };
+      reader.readAsText(file);
+    }
+     if(fileInputRef.current) {
+        fileInputRef.current.value = "";
+    }
   };
 
   const handleProfileSelect = (user: TeamMember) => {
@@ -201,6 +244,7 @@ const App: React.FC = () => {
   
   return (
     <div className="flex min-h-screen bg-brand-light text-slate-800">
+      <input type="file" ref={fileInputRef} onChange={handleLoadLocalBackup} accept=".json" className="hidden" />
       <Sidebar 
         currentView={view} 
         onViewChange={setView} 
@@ -210,6 +254,8 @@ const App: React.FC = () => {
         hasFullAccess={hasFullAccess}
         lastSync={lastSync}
         onLogout={handleLogout}
+        onSaveBackup={handleSaveLocalBackup}
+        onLoadBackup={() => fileInputRef.current?.click()}
       />
       
       <main className="flex-1 ml-64 p-10 max-w-[1600px]">
