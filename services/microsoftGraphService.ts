@@ -1,5 +1,5 @@
 
-import { PublicClientApplication, AccountInfo, InteractionRequiredAuthError } from '@azure/msal-browser';
+import { PublicClientApplication, AccountInfo, InteractionRequiredAuthError, AuthenticationResult } from '@azure/msal-browser';
 import { Task, Project, TeamMember, ActivityPlanTemplate, ActivityLog, AppUser } from '../types';
 import { DEFAULT_ACTIVITY_PLANS, DEFAULT_TEAM_MEMBERS } from '../constants';
 import { generateInitialTasks } from '../utils/mockData';
@@ -53,7 +53,7 @@ class MsalService {
       .then(() => {
         return this.msalInstance.handleRedirectPromise();
       })
-      .then(() => { /* Garante que a promessa seja resolvida como void */ })
+      .then((_response: AuthenticationResult | null) => { /* Garante que a promessa seja resolvida como void */ })
       .catch((err: any) => {
         console.error("Erro de inicialização do MSAL:", err);
       });
