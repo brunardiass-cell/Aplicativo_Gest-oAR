@@ -16,7 +16,6 @@ import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
 import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight } from 'lucide-react';
-import PlanManagerModal from './components/PlanManagerModal';
 
 const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -37,16 +36,12 @@ const App: React.FC = () => {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  const [isPlanManagerOpen, setIsPlanManagerOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [filterMember, setFilterMember] = useState<string | 'Todos'>('Todos');
   
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
-
-  const [isAdminActionModalOpen, setIsAdminActionModalOpen] = useState(false);
-  const [pendingAdminAction, setPendingAdminAction] = useState<(() => void) | null>(null);
 
   const isInitialLoad = useRef(true);
   const saveDataTimeout = useRef<number | null>(null);
@@ -106,7 +101,7 @@ const App: React.FC = () => {
   }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers]);
 
   const hasFullAccess = useMemo(() => !!(selectedProfile?.isLeader && isPasswordAuthenticated), [selectedProfile, isPasswordAuthenticated]);
-  const canCreate = useMemo(() => selectedProfile?.id !== 'team_view_user', [selectedProfile]);
+  const canCreate = useMemo(() => isPasswordAuthenticated && selectedProfile?.id !== 'team_view_user', [isPasswordAuthenticated, selectedProfile]);
 
   const handleLogin = async () => {
     setIsLoading(true);
@@ -187,12 +182,19 @@ const App: React.FC = () => {
     setIsPasswordAuthenticated(true);
   };
   
+  const handlePasswordConfirm = (password: string) => {
+    if (password === selectedProfile?.password) {
+      setIsPasswordAuthenticated(true);
+      setPasswordError(null);
+    } else {
+      setPasswordError('Senha incorreta.');
+    }
+  };
+
   const handleSwitchProfile = () => {
     setSelectedProfile(null);
     setIsPasswordAuthenticated(false);
     setPasswordError(null);
-    setIsAdminActionModalOpen(false);
-    setPendingAdminAction(null);
   };
 
   const handleSaveTask = (task: Task) => {
@@ -207,32 +209,6 @@ const App: React.FC = () => {
     setTasks(prev => prev.map(t => t.id === selectedTask.id ? { ...t, deleted: true, deletionReason: reason, deletionDate: new Date().toISOString() } : t));
     setIsDeleteModalOpen(false);
     setSelectedTask(null);
-  };
-
-  const handleAdminActionPasswordConfirm = (password: string) => {
-    if (password === selectedProfile?.password) {
-      setIsPasswordAuthenticated(true);
-      setIsAdminActionModalOpen(false);
-      if (pendingAdminAction) {
-        pendingAdminAction();
-      }
-      setPendingAdminAction(null);
-      setPasswordError(null);
-    } else {
-      setPasswordError('Senha incorreta.');
-    }
-  };
-
-  const requestAdminAccess = (action: () => void) => {
-    if (hasFullAccess) {
-      action();
-      return;
-    }
-    
-    if (selectedProfile?.isLeader) {
-      setPendingAdminAction(() => action);
-      setIsAdminActionModalOpen(true);
-    }
   };
 
   const pendingReviewCount = useMemo(() => {
@@ -301,14 +277,17 @@ const App: React.FC = () => {
   if (!selectedProfile) {
     return <UserSelectionView onSelectUser={handleProfileSelect} onSelectTeamView={handleTeamViewSelect} teamMembers={teamMembers} onLogout={handleLogout} />;
   }
+
+  if (selectedProfile.password && !isPasswordAuthenticated) {
+    return <PasswordModal isOpen={true} onConfirm={handlePasswordConfirm} onClose={handleSwitchProfile} userName={selectedProfile.name} error={passwordError}/>
+  }
   
   return (
     <div className="flex min-h-screen bg-brand-light text-slate-800">
       <input type="file" ref={fileInputRef} onChange={handleLoadLocalBackup} accept=".json" className="hidden" />
       <Sidebar 
         currentView={view} 
-        onViewChange={setView}
-        onAdminViewChange={(view) => requestAdminAccess(() => setView(view))}
+        onViewChange={setView} 
         onGoHome={() => setView('dashboard')}
         onSwitchProfile={handleSwitchProfile} 
         selectedProfile={selectedProfile}
@@ -356,7 +335,7 @@ const App: React.FC = () => {
           {view === 'dashboard' && <Dashboard tasks={tasks} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />}
           {view === 'quality' && hasFullAccess && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} appUsers={appUsers} onUpdateAppUsers={setAppUsers} />}
           {view === 'tasks' && <TaskBoard tasks={tasks.filter(t => !t.deleted && (filterMember === 'Todos' || t.projectLead === filterMember || t.collaborators.includes(filterMember)))} currentUser={filterMember} onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} onDelete={(task) => { setSelectedTask(task); setIsDeleteModalOpen(true); }} onAssignReview={() => {}} onNotificationClick={() => {}} onClearSingleNotification={() => {}} notifications={notifications.filter(n => n.userId === selectedProfile?.name)} />}
-          {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={() => {}} teamMembers={teamMembers} selectedProfile={selectedProfile} onOpenPlanManager={() => requestAdminAccess(() => setIsPlanManagerOpen(true))} />}
+          {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={() => {}} teamMembers={teamMembers} />}
           {view === 'traceability' && hasFullAccess && <ActivityLogView logs={logs} />}
         </div>
 
@@ -364,29 +343,6 @@ const App: React.FC = () => {
         {isDetailsOpen && selectedTask && <TaskDetailsModal task={selectedTask} onClose={() => { setIsDetailsOpen(false); setSelectedTask(null); }} />}
         {isDeleteModalOpen && selectedTask && <DeletionModal itemName={selectedTask.activity} onClose={() => { setIsDeleteModalOpen(false); setSelectedTask(null); }} onConfirm={handleDeleteTask} />}
         {isReportModalOpen && <MonthlyReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} tasks={tasks} />}
-        {isPlanManagerOpen && (
-          <PlanManagerModal 
-            isOpen={isPlanManagerOpen}
-            onClose={() => setIsPlanManagerOpen(false)}
-            plans={activityPlans}
-            // FIX: The function 'onUpdateActivityPlans' was not defined. Replaced with 'setActivityPlans'.
-            onSave={setActivityPlans}
-          />
-        )}
-        
-        {isAdminActionModalOpen && selectedProfile && (
-          <PasswordModal
-            isOpen={isAdminActionModalOpen}
-            onClose={() => {
-              setIsAdminActionModalOpen(false);
-              setPendingAdminAction(null);
-              setPasswordError(null);
-            }}
-            onConfirm={handleAdminActionPasswordConfirm}
-            userName={selectedProfile.name}
-            error={passwordError}
-          />
-        )}
       </main>
     </div>
   );

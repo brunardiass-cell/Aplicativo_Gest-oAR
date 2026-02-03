@@ -20,7 +20,6 @@ import {
 interface SidebarProps {
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
-  onAdminViewChange: (view: ViewMode) => void;
   onGoHome: () => void;
   onLogout: () => void;
   onSwitchProfile: () => void;
@@ -40,7 +39,6 @@ const getInitials = (name?: string): string => {
 const Sidebar: React.FC<SidebarProps> = ({ 
   currentView, 
   onViewChange, 
-  onAdminViewChange,
   onGoHome,
   onLogout,
   onSwitchProfile,
@@ -75,9 +73,8 @@ const Sidebar: React.FC<SidebarProps> = ({
           <SidebarButton active={currentView === 'projects'} onClick={() => onViewChange('projects')} icon={<FolderKanban size={18} />} label="Projetos" />
           {hasFullAccess && (
             <>
-              {/* FIX: Use onAdminViewChange for admin-only navigation to trigger password prompt if necessary. */}
-              <SidebarButton active={currentView === 'quality'} onClick={() => onAdminViewChange('quality')} icon={<ShieldCheck size={18} />} label="Acessos" />
-              <SidebarButton active={currentView === 'traceability'} onClick={() => onAdminViewChange('traceability')} icon={<History size={18} />} label="Auditoria" />
+              <SidebarButton active={currentView === 'quality'} onClick={() => onViewChange('quality')} icon={<ShieldCheck size={18} />} label="Acessos" />
+              <SidebarButton active={currentView === 'traceability'} onClick={() => onViewChange('traceability')} icon={<History size={18} />} label="Auditoria" />
             </>
           )}
         </nav>
