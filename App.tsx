@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser } from './types';
-import { msalService, graphService } from './services/microsoftGraphService';
-import UserSelectionView from './components/UserSelectionView';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo } from './types';
+import { DEFAULT_TEAM_MEMBERS, DEFAULT_ACTIVITY_PLANS, ADMIN_WHITELIST } from './constants';
+import SelectionView from './components/SelectionView';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import TaskBoard from './components/TaskBoard';
@@ -10,12 +10,11 @@ import TaskModal from './components/TaskModal';
 import TaskDetailsModal from './components/TaskDetailsModal';
 import DeletionModal from './components/DeletionModal';
 import ActivityLogView from './components/ActivityLogView';
+import ReportView from './components/ReportView';
 import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
-import PasswordModal from './components/PasswordModal';
-import { PlusCircle, Loader2, LogIn } from 'lucide-react';
-
-type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
+import { MicrosoftGraphService } from './services/microsoftGraphService';
+import { PlusCircle, Loader2, ShieldAlert, LogOut } from 'lucide-react';
 
 const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -25,142 +24,213 @@ const App: React.FC = () => {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [appUsers, setAppUsers] = useState<AppUser[]>([]);
+  const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
   
-  const [view, setView] = useState<ViewMode>('dashboard');
-  const [selectedProfile, setSelectedProfile] = useState<TeamMember | null>(null);
-  const [isPasswordAuthenticated, setIsPasswordAuthenticated] = useState(false);
-  
+  const [view, setView] = useState<ViewMode>('selection');
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [searchTerm] = useState('');
   const [filterMember, setFilterMember] = useState<string | 'Todos'>('Todos');
   
   const [isLoading, setIsLoading] = useState(true);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const isInitialLoad = useRef(true);
 
-  const [isMsalAuthenticated, setIsMsalAuthenticated] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
-  const saveTimeoutRef = useRef<number | null>(null);
-  
-  const isDataInitialized = useRef(false);
+  const hasFullAccess = useMemo(() => currentUser?.role === 'admin', [currentUser]);
 
-  const loadDataFromSharePoint = useCallback(async () => {
-    if (isDataInitialized.current) return;
+  const saveDataToSharePoint = async () => {
+    if (isInitialLoad.current || !currentUser) return;
+
+    setLastSync(prev => prev ? { ...prev, status: 'syncing' } : { timestamp: new Date().toISOString(), user: currentUser.username, status: 'syncing' });
     
-    setSyncStatus('syncing');
+    const dataToSave = { tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers };
+    const success = await MicrosoftGraphService.saveToCloud(dataToSave);
     
-    try {
-      const token = await msalService.getToken();
-      if (!token) {
-        console.log("Token não disponível, provavelmente redirecionando para login.");
-        return;
-      }
-      
-      const db = await graphService.getDb(token);
-      setTasks(db.tasks || []);
-      setProjects(db.projects || []);
-      setTeamMembers(db.teamMembers || []);
-      setActivityPlans(db.activityPlans || []);
-      setLogs(db.logs || []);
-      setAppUsers(db.appUsers || []);
-      
-      setSyncStatus('synced');
-      isDataInitialized.current = true;
-    } catch (error) {
-      console.error(error);
-      setSyncStatus('error');
-      setAuthError('Falha ao carregar dados do SharePoint. Verifique sua conexão e permissões.');
+    if (success) {
+      setLastSync({
+        timestamp: new Date().toISOString(),
+        user: currentUser.username,
+        status: 'synced'
+      });
+    } else {
+      setLastSync(prev => prev ? { ...prev, status: 'error' } : null);
     }
-  }, []);
+  };
+
+  const handleDownloadBackup = () => {
+    const backupData = {
+      tasks,
+      projects,
+      teamMembers,
+      activityPlans,
+      notifications,
+      logs,
+      appUsers,
+      version: '1.0',
+      exportedAt: new Date().toISOString()
+    };
+
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `backup_reguladores_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleRestoreBackup = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!confirm("Atenção: Restaurar um backup irá sobrescrever todos os dados atuais do sistema. Deseja continuar?")) {
+        event.target.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const data = JSON.parse(content);
+
+        if (!data.tasks || !data.projects || !data.appUsers) {
+          throw new Error("Formato de backup inválido.");
+        }
+
+        setTasks(data.tasks || []);
+        setProjects(data.projects || []);
+        setTeamMembers(data.teamMembers || DEFAULT_TEAM_MEMBERS);
+        setActivityPlans(data.activityPlans || DEFAULT_ACTIVITY_PLANS);
+        setNotifications(data.notifications || []);
+        setLogs(data.logs || []);
+        setAppUsers(data.appUsers || []);
+        
+        alert("Backup restaurado com sucesso! O sistema irá sincronizar com a nuvem em breve.");
+      } catch (err) {
+        console.error("Erro ao restaurar backup:", err);
+        alert("Falha ao restaurar backup: O arquivo selecionado não é válido.");
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  };
 
   useEffect(() => {
-    const initializeApp = async () => {
-      setIsLoading(true);
-      try {
-        const account = await msalService.getAccount();
-        if (account) {
-          setIsMsalAuthenticated(true);
-          await loadDataFromSharePoint();
-        }
-      } catch (error) {
-        console.error(error);
-        setAuthError('Falha ao inicializar a autenticação.');
-        setSyncStatus('error');
-      } finally {
+    const checkLogin = async () => {
+      const account = await MicrosoftGraphService.getAccount();
+      if (account) {
+        handleLogin(true);
+      } else {
         setIsLoading(false);
       }
     };
-    initializeApp();
-  }, [loadDataFromSharePoint]);
-
-  const saveDataToSharePoint = useCallback(async () => {
-    if (!isDataInitialized.current || !isMsalAuthenticated) return;
-
-    setSyncStatus('syncing');
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = window.setTimeout(async () => {
-      try {
-        const token = await msalService.getToken();
-        if (!token) throw new Error('Não foi possível obter o token de acesso para salvar.');
-
-        const db = { tasks, projects, teamMembers, activityPlans, logs, appUsers };
-        await graphService.saveDb(token, db);
-        setSyncStatus('synced');
-      } catch (error) {
-        console.error(error);
-        setSyncStatus('error');
-      }
-    }, 2000); // Debounce de 2 segundos
-  }, [tasks, projects, teamMembers, activityPlans, logs, appUsers, isMsalAuthenticated]);
+    checkLogin();
+  }, []);
 
   useEffect(() => {
-    saveDataToSharePoint();
-  }, [saveDataToSharePoint]);
+    if (isInitialLoad.current || !currentUser) return;
+    
+    const timeoutId = setTimeout(() => {
+      saveDataToSharePoint();
+    }, 2000);
 
-  const hasFullAccess = useMemo(() => selectedProfile?.isLeader === true && isPasswordAuthenticated, [selectedProfile, isPasswordAuthenticated]);
-  const canCreate = useMemo(() => selectedProfile?.id !== 'team_view_user' && isPasswordAuthenticated, [selectedProfile, isPasswordAuthenticated]);
-  
-  const handleProfileSelect = (user: TeamMember) => {
-    setSelectedProfile(user);
-    setFilterMember(user.name);
-    if (!user.password) {
-      setIsPasswordAuthenticated(true);
-    } else {
-      setIsPasswordAuthenticated(false);
+    return () => clearTimeout(timeoutId);
+  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers]);
+
+  const handleLogin = async (isSilent = false) => {
+    setIsLoading(true);
+    const loginResult = isSilent 
+      ? { success: true, account: await MicrosoftGraphService.getAccount() } 
+      : await MicrosoftGraphService.login();
+
+    if (loginResult.success && loginResult.account) {
+      try {
+        const cloudData = await MicrosoftGraphService.loadFromCloud();
+        
+        const email = loginResult.account.username.toLowerCase();
+        const existingUsers = cloudData?.appUsers || [];
+        const userRecord = existingUsers.find((u: AppUser) => u.email.toLowerCase() === email);
+        const isDefaultAdmin = ADMIN_WHITELIST.map(e => e.toLowerCase()).includes(email);
+
+        if (cloudData) {
+          setTasks(cloudData.tasks || []);
+          setProjects(cloudData.projects || []);
+          setTeamMembers(cloudData.teamMembers || DEFAULT_TEAM_MEMBERS);
+          setActivityPlans(cloudData.activityPlans || DEFAULT_ACTIVITY_PLANS);
+          setNotifications(cloudData.notifications || []);
+          setLogs(cloudData.logs || []);
+          setAppUsers(existingUsers);
+          
+          setLastSync({
+            timestamp: new Date().toISOString(),
+            user: loginResult.account.name || email,
+            status: 'synced'
+          });
+        } else {
+          setTeamMembers(DEFAULT_TEAM_MEMBERS);
+          setActivityPlans(DEFAULT_ACTIVITY_PLANS);
+        }
+
+        if (userRecord) {
+          if (isDefaultAdmin && (userRecord.role !== 'admin' || userRecord.status !== 'active')) {
+            const updatedUser: AppUser = { ...userRecord, role: 'admin', status: 'active' };
+            setAppUsers(prev => prev.map(u => u.id === userRecord.id ? updatedUser : u));
+            setCurrentUser(updatedUser);
+            setFilterMember('Todos');
+            setView('dashboard');
+          } else if (userRecord.status === 'active') {
+            setCurrentUser(userRecord);
+            setFilterMember(userRecord.role === 'admin' ? 'Todos' : userRecord.username);
+            setView('dashboard');
+          } else if (userRecord.status === 'pending') {
+            setView('unauthorized');
+          } else {
+            alert("Sua conta está bloqueada.");
+            handleLogout();
+          }
+        } else {
+          const newUser: AppUser = {
+            id: 'user_' + Math.random().toString(36).substr(2, 9),
+            username: loginResult.account.name || 'Novo Usuário',
+            email: email,
+            role: (existingUsers.length === 0 || isDefaultAdmin) ? 'admin' : 'user',
+            status: (existingUsers.length === 0 || isDefaultAdmin) ? 'active' : 'pending',
+            joinedAt: new Date().toISOString()
+          };
+          
+          setAppUsers(prev => [...prev, newUser]);
+          
+          if (newUser.status === 'active') {
+            setCurrentUser(newUser);
+            setFilterMember(newUser.role === 'admin' ? 'Todos' : newUser.username);
+            setView('dashboard');
+          } else {
+            setView('unauthorized');
+          }
+        }
+        
+        setTimeout(() => {
+          isInitialLoad.current = false;
+        }, 1000);
+      } catch (e) {
+        console.error("Falha ao inicializar app com dados da nuvem:", e);
+        alert("Erro de sincronização. O sistema não pôde carregar os dados do SharePoint.");
+      }
     }
+    setIsLoading(false);
   };
 
-  const handleTeamViewSelect = () => {
-    const teamViewerProfile: TeamMember = { id: 'team_view_user', name: 'Visão Geral da Equipe', role: 'Visualizador', isLeader: false };
-    setSelectedProfile(teamViewerProfile);
-    setFilterMember('Todos');
-    setIsPasswordAuthenticated(true);
-  };
-
-  const handlePasswordConfirm = (password: string) => {
-    if (password === selectedProfile?.password) {
-      setIsPasswordAuthenticated(true);
-      setPasswordError(null);
-    } else {
-      setPasswordError('Senha incorreta. Tente novamente.');
-    }
-  };
-
-  const handlePasswordCancel = () => {
-    setSelectedProfile(null);
-    setIsPasswordAuthenticated(false);
-    setPasswordError(null);
-  };
-  
-  const handleSwitchProfile = () => {
-    setSelectedProfile(null);
-    setFilterMember('Todos');
-    setIsPasswordAuthenticated(false);
+  const handleLogout = async () => {
+    isInitialLoad.current = true;
+    await MicrosoftGraphService.logout();
+    setCurrentUser(null);
+    setLastSync(null);
+    setView('selection');
   };
 
   const handleSaveTask = (task: Task) => {
@@ -177,115 +247,61 @@ const App: React.FC = () => {
     setSelectedTask(null);
   };
 
-  const handleLogin = () => msalService.login();
-  const handleLogout = () => {
-    msalService.logout();
-    setIsMsalAuthenticated(false);
-    isDataInitialized.current = false;
-  };
-  
-  const handleLocalBackup = useCallback(() => {
-    const db = { tasks, projects, teamMembers, activityPlans, logs, appUsers };
-    const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    a.download = `ctvacinas_backup_${timestamp}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [tasks, projects, teamMembers, activityPlans, logs, appUsers]);
-
-  const handleLocalRestore = useCallback(() => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = (event) => {
-      const file = (event.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const content = e.target?.result as string;
-          const db = JSON.parse(content);
-          if (db.tasks && db.projects && db.teamMembers) {
-            setTasks(db.tasks);
-            setProjects(db.projects);
-            setTeamMembers(db.teamMembers);
-            setActivityPlans(db.activityPlans || []);
-            setLogs(db.logs || []);
-            setAppUsers(db.appUsers || []);
-            alert('Backup restaurado com sucesso! Os dados serão sincronizados com o SharePoint.');
-          } else {
-            alert('Arquivo de backup inválido.');
-          }
-        } catch (error) {
-          alert('Erro ao ler o arquivo de backup.');
-        }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
-  }, []);
-
   if (isLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-white text-slate-900 flex-col gap-4">
-        <Loader2 size={48} className="animate-spin text-teal-600" />
-        <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.5em]">
-            {syncStatus === 'syncing' ? 'SINCRONIZANDO DADOS...' : 'INICIALIZANDO...'}
-        </p>
+        <Loader2 size={48} className="animate-spin text-blue-600" />
+        <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.5em]">CARREGANDO DADOS DA NUVEM...</p>
       </div>
     );
   }
 
-  if (!isMsalAuthenticated) {
+  if (view === 'unauthorized') {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-slate-100 flex-col gap-6 p-4 text-center">
-        <h1 className="text-4xl font-black uppercase text-slate-900">Gestão <span className="text-teal-500">Regulatória</span></h1>
-        <p className="text-slate-500 max-w-md">Para acessar o painel, por favor, autentique-se com sua conta Microsoft.</p>
-        <button onClick={handleLogin} className="px-10 py-4 bg-teal-500 text-white rounded-full font-bold uppercase text-sm tracking-widest flex items-center gap-3 hover:bg-teal-600 shadow-lg shadow-teal-500/20 transition">
-          <LogIn size={20}/> Entrar com Microsoft
-        </button>
-        {authError && <p className="text-red-500 text-xs font-bold mt-4">{authError}</p>}
+      <div className="min-h-screen flex flex-col items-center justify-center p-10 bg-white">
+        <div className="max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in duration-500">
+           <div className="inline-block p-6 bg-amber-50 rounded-[2.5rem] border border-amber-100 shadow-xl mb-4">
+              <ShieldAlert size={56} className="text-amber-500" />
+           </div>
+           <h1 className="text-4xl font-black text-slate-900 uppercase tracking-tighter">Acesso Pendente</h1>
+           <p className="text-slate-500 font-medium">Seu cadastro foi realizado com sucesso, mas ainda precisa ser aprovado pela gestão.</p>
+           <button onClick={handleLogout} className="flex items-center gap-2 mx-auto px-8 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest">
+              <LogOut size={18}/> Sair da Conta
+           </button>
+        </div>
       </div>
     );
   }
 
-  if (!selectedProfile) {
-    return <UserSelectionView tasks={tasks} onSelectUser={handleProfileSelect} onSelectTeamView={handleTeamViewSelect} onLogout={handleLogout} />;
-  }
-
-  if (selectedProfile.password && !isPasswordAuthenticated) {
-    return <PasswordModal isOpen={true} onClose={handlePasswordCancel} onConfirm={handlePasswordConfirm} userName={selectedProfile.name} error={passwordError} />;
+  if (view === 'selection') {
+    return <SelectionView onSelect={() => handleLogin(false)} />;
   }
 
   return (
     <div className="flex min-h-screen bg-[#f8fafc] text-slate-800">
       <Sidebar 
         currentView={view} 
-        onViewChange={setView}
+        onViewChange={setView} 
         onGoHome={() => setView('dashboard')}
-        onSwitchProfile={handleSwitchProfile} 
-        selectedProfile={selectedProfile}
-        hasFullAccess={hasFullAccess}
-        syncStatus={syncStatus}
-        onLogout={handleLogout}
-        onLocalBackup={handleLocalBackup}
-        onLocalRestore={handleLocalRestore}
+        onLogout={handleLogout} 
+        currentUser={currentUser}
+        notificationCount={0}
+        lastSync={lastSync}
+        onRetrySync={saveDataToSharePoint}
+        onDownloadBackup={handleDownloadBackup}
+        onRestoreBackup={handleRestoreBackup}
       />
       
       <main className="flex-1 ml-64 p-10 max-w-[1600px]">
         <header className="flex justify-between items-start mb-12">
             <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
-                    <span className="w-2 h-2 bg-teal-600 rounded-full"></span>
-                    <h1 className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                        {filterMember === 'Todos' ? 'Visão Geral da Equipe' : `Visão de ${selectedProfile.name}`} • CTVacinas
+                    <span className="w-3 h-3 bg-blue-600 rounded-full"></span>
+                    <h1 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                        {hasFullAccess ? 'Administrador' : 'Colaborador'} • CTVacinas
                     </h1>
                 </div>
-                <h2 className="text-3xl font-black text-slate-900 tracking-wide uppercase">
+                <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">
                     {view === 'dashboard' ? `Painel Executivo` : 
                      view === 'tasks' ? 'Atividades Regulatórias' : 
                      view === 'projects' ? 'Fluxos Estratégicos' : 
@@ -294,12 +310,12 @@ const App: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-4">
-               {view === 'tasks' && canCreate && (
+               {view === 'tasks' && hasFullAccess && (
                  <button 
                   onClick={() => { setSelectedTask(null); setIsModalOpen(true); }}
-                  className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-black transition shadow-lg flex items-center gap-2"
+                  className="px-8 py-3.5 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition shadow-xl shadow-blue-100 flex items-center gap-2"
                 >
-                  <PlusCircle size={16} /> Nova Atividade
+                  <PlusCircle size={18} /> Nova Atividade
                 </button>
                )}
             </div>
@@ -319,21 +335,15 @@ const App: React.FC = () => {
 
           {view === 'tasks' && (
             <TaskBoard 
-              tasks={tasks.filter(t => !t.deleted && (filterMember === 'Todos' || t.projectLead === filterMember || t.collaborators.includes(filterMember)))} 
-              currentUser={selectedProfile.name}
+              tasks={tasks.filter(t => !t.deleted && (searchTerm === '' || t.activity.toLowerCase().includes(searchTerm.toLowerCase())))} 
+              currentUser={currentUser?.username || ''} 
               onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} 
               onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }}
               onDelete={(task) => { setSelectedTask(task); setIsDeleteModalOpen(true); }}
-              notifications={notifications.filter(n => n.userId === selectedProfile.name)}
-              onNotificationClick={(notif) => {
-                const task = tasks.find(t => t.id === notif.refId);
-                if (task) {
-                  setSelectedTask(task);
-                  setIsDetailsOpen(true);
-                }
-              }}
-              onClearNotifications={() => setNotifications(notifs => notifs.filter(n => n.userId !== selectedProfile.name))}
-              hasFullAccess={hasFullAccess}
+              onAssignReview={() => {}}
+              onNotificationClick={() => {}}
+              onClearSingleNotification={() => {}}
+              notifications={notifications}
             />
           )}
 
@@ -345,8 +355,6 @@ const App: React.FC = () => {
               onUpdateActivityPlans={setActivityPlans}
               onOpenDeletionModal={() => {}}
               teamMembers={teamMembers}
-              hasFullAccess={hasFullAccess}
-              canCreate={canCreate}
             />
           )}
 

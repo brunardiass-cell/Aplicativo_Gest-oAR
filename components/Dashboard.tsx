@@ -48,13 +48,13 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, filteredUser, notification
   const priorityData = useMemo(() => [
     { name: 'Urgente', value: lastMonthTasks.filter(t => t.priority === 'Urgente').length, color: '#ef4444' },
     { name: 'Alta', value: lastMonthTasks.filter(t => t.priority === 'Alta').length, color: '#f59e0b' },
-    { name: 'Média', value: lastMonthTasks.filter(t => t.priority === 'Média').length, color: '#14b8a6' },
+    { name: 'Média', value: lastMonthTasks.filter(t => t.priority === 'Média').length, color: '#6366f1' },
     { name: 'Baixa', value: lastMonthTasks.filter(t => t.priority === 'Baixa').length, color: '#94a3b8' },
   ], [lastMonthTasks]);
 
   const statusChartData = useMemo(() => [
     { name: 'Finalizadas', value: stats.done, color: '#10b981' },
-    { name: 'Em Andamento', value: stats.ongoing, color: '#14b8a6' },
+    { name: 'Em Andamento', value: stats.ongoing, color: '#3b82f6' },
     { name: 'Atrasadas', value: stats.late, color: '#f43f5e' },
   ], [stats]);
 
@@ -102,9 +102,9 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, filteredUser, notification
     <div className="space-y-8">
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard label="Atividades no Mês" value={stats.total} icon={<Briefcase size={20}/>} color="bg-teal-600" />
+        <StatCard label="Atividades no Mês" value={stats.total} icon={<Briefcase size={20}/>} color="bg-indigo-600" />
         <StatCard label="Finalizadas no Mês" value={stats.done} icon={<CheckCircle size={20}/>} color="bg-emerald-600" />
-        <StatCard label="Projetos Acompanhados" value={stats.projects} icon={<FolderKanban size={20}/>} color="bg-lime-600" />
+        <StatCard label="Projetos Acompanhados" value={stats.projects} icon={<FolderKanban size={20}/>} color="bg-sky-600" />
       </div>
 
       {/* Charts */}
@@ -115,7 +115,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, filteredUser, notification
               <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e2e8f0" />
               <XAxis type="number" hide />
               <YAxis dataKey="name" type="category" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} width={80} stroke="#64748b" />
-              <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px' }} cursor={{fill: 'rgba(0,0,0,0.05)'}} />
+              <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px' }} cursor={{fill: 'rgba(0,0,0,0.02)'}} />
               <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={25}>
                 {priorityData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
               </Bar>
@@ -145,10 +145,10 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, filteredUser, notification
                 return (
                   <div key={task.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-bold text-slate-800">{task.activity}</p>
-                      <p className="text-[9px] font-bold text-teal-600 uppercase">{task.project}</p>
+                      <p className="text-xs font-bold text-slate-900">{task.activity}</p>
+                      <p className="text-[9px] font-bold text-blue-600 uppercase">{task.project}</p>
                     </div>
-                    <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${daysLeft <= 2 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                    <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${daysLeft <= 2 ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
                        {daysLeft <= 1 ? 'Vence hoje/amanhã' : `Vence em ${daysLeft} dias`}
                     </div>
                   </div>
@@ -157,12 +157,12 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, filteredUser, notification
            </div>
         </div>
 
-        <div className="lg:col-span-5 bg-slate-800 p-8 rounded-[2rem] shadow-2xl">
-           <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6">Alertas e Notificações</h3>
+        <div className="lg:col-span-5 bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
+           <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Alertas e Notificações</h3>
            <div className="space-y-4">
-             <AlertItem value={alerts.overdue.length} label="Atividade(s) Vencida(s)" icon={<AlertTriangle size={18}/>} color="text-red-400" onClick={() => handleAlertClick('overdue')}/>
-             <AlertItem value={alerts.pendingReviews.length} label="Relatório(s) Pendente(s)" icon={<FileSignature size={18}/>} color="text-amber-400" onClick={() => handleAlertClick('pending')}/>
-             <AlertItem value={alerts.projectsAtRisk.length} label="Projeto(s) em Atraso" icon={<Activity size={18}/>} color="text-sky-400" onClick={() => handleAlertClick('risk')}/>
+             <AlertItem value={alerts.overdue.length} label="Atividade(s) Vencida(s)" icon={<AlertTriangle size={18}/>} color="text-red-500" onClick={() => handleAlertClick('overdue')}/>
+             <AlertItem value={alerts.pendingReviews.length} label="Relatório(s) Pendente(s)" icon={<FileSignature size={18}/>} color="text-amber-500" onClick={() => handleAlertClick('pending')}/>
+             <AlertItem value={alerts.projectsAtRisk.length} label="Projeto(s) em Atraso" icon={<Activity size={18}/>} color="text-blue-500" onClick={() => handleAlertClick('risk')}/>
            </div>
         </div>
       </div>
@@ -204,13 +204,13 @@ const AlertItem = ({ value, label, icon, color, onClick }: { value: number; labe
   <button
     onClick={onClick}
     disabled={value === 0}
-    className="w-full text-left bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center justify-between transition-all hover:bg-white/20 disabled:opacity-30 disabled:pointer-events-none"
+    className="w-full text-left bg-slate-50 border border-slate-100 p-4 rounded-2xl flex items-center justify-between transition-all hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none"
   >
     <div className="flex items-center gap-4">
       <div className={`shrink-0 ${color}`}>{icon}</div>
-      <p className="text-xs font-bold text-white">{label}</p>
+      <p className="text-xs font-bold text-slate-900">{label}</p>
     </div>
-    <div className={`px-4 py-1 rounded-full text-sm font-black ${value > 0 ? `${color} bg-white/10` : 'text-slate-600 bg-transparent'}`}>
+    <div className={`px-4 py-1 rounded-full text-sm font-black ${value > 0 ? `${color} bg-white` : 'text-slate-400 bg-transparent'}`}>
       {value}
     </div>
   </button>

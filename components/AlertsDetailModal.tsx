@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Task } from '../types';
 import { X, AlertTriangle, ChevronRight } from 'lucide-react';
@@ -24,8 +25,8 @@ const AlertsDetailModal: React.FC<AlertsDetailModalProps> = ({ isOpen, onClose, 
   const isTask = (item: any): item is Task => 'activity' in item;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-      <div className="bg-white text-slate-900 rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col border border-slate-200">
+    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
         <header className="p-8 bg-slate-50 border-b border-slate-100 flex items-center gap-4">
           <div className="bg-red-100 p-3 rounded-2xl text-red-600">
             <AlertTriangle size={24} />
@@ -34,7 +35,7 @@ const AlertsDetailModal: React.FC<AlertsDetailModalProps> = ({ isOpen, onClose, 
             <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter">{title}</h2>
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{items.length} item(s) requerem atenção</p>
           </div>
-          <button onClick={onClose} className="ml-auto p-2 text-slate-400 hover:bg-slate-200 rounded-full transition"><X size={20} /></button>
+          <button onClick={onClose} className="ml-auto p-2 hover:bg-slate-200 rounded-full transition"><X size={20} /></button>
         </header>
         
         <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
@@ -64,7 +65,7 @@ const AlertsDetailModal: React.FC<AlertsDetailModalProps> = ({ isOpen, onClose, 
           </div>
         </div>
 
-        <footer className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+        <footer className="p-6 bg-slate-50 border-t flex justify-end">
           <button onClick={onClose} className="px-10 py-3 bg-slate-800 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition">
             Fechar
           </button>

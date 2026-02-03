@@ -19,11 +19,11 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, tasks, pro
   ];
 
   const calculateProjectProgress = (project: ProjectData) => {
-    const allMacros = [...(project.trackingMacroTasks || []), ...(project.regulatoryMacroTasks || [])];
+    const allMacros: any[] = [...(project.trackingMacroTasks || []), ...(project.regulatoryMacroTasks || [])];
     if (allMacros.length === 0) return 0;
     const progressSum = allMacros.reduce((acc, macro) => {
       if (!macro.microTasks || macro.microTasks.length === 0) return acc;
-      const done = macro.microTasks.filter(m => m.status === 'Concluído' || m.status === 'Validado').length;
+      const done = (macro.microTasks as any[]).filter((m: any) => m.status === 'Concluído' || m.status === 'Validado').length;
       return acc + (done / macro.microTasks.length) * 100;
     }, 0);
     return Math.round(progressSum / allMacros.length);
@@ -47,15 +47,15 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, tasks, pro
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Gráfico de Carga de Prioridade */}
-        <div className="lg:col-span-5 bg-white/5 p-8 rounded-[2rem] shadow-sm border border-white/10">
+        <div className="lg:col-span-5 bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
           <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-8">Carga de Prioridade</h3>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={priorityData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#334155" />
+                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
                 <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} stroke="#94a3b8" />
-                <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}/>
+                <YAxis dataKey="name" type="category" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
+                <Tooltip cursor={{fill: '#f8fafc'}} />
                 <Bar dataKey="count" radius={[0, 10, 10, 0]} barSize={30}>
                   {priorityData.map((entry, index) => <Cell key={index} fill={entry.color} />)}
                 </Bar>
@@ -65,21 +65,21 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, tasks, pro
         </div>
 
         {/* Saúde dos Projetos */}
-        <div className="lg:col-span-7 bg-white/5 p-8 rounded-[2rem] shadow-sm border border-white/10">
+        <div className="lg:col-span-7 bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
           <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-8">Saúde dos Projetos (Progresso Real)</h3>
           <div className="space-y-6 max-h-[300px] overflow-y-auto pr-4 custom-scrollbar">
             {projectHealth.length > 0 ? projectHealth.map(proj => (
               <div key={proj.name} className="space-y-2">
                 <div className="flex justify-between items-end">
-                  <span className="text-xs font-black text-slate-300 uppercase">{proj.name}</span>
-                  <span className="text-[10px] font-bold text-indigo-400">{proj.progress}%</span>
+                  <span className="text-xs font-black text-slate-700 uppercase">{proj.name}</span>
+                  <span className="text-[10px] font-bold text-indigo-600">{proj.progress}%</span>
                 </div>
-                <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                   <div className={`h-full transition-all duration-1000 ${proj.progress > 80 ? 'bg-emerald-500' : proj.progress > 40 ? 'bg-indigo-500' : 'bg-amber-500'}`} style={{width: `${proj.progress}%`}}></div>
                 </div>
               </div>
             )) : (
-              <p className="text-center text-slate-500 text-xs py-20 italic">Selecione projetos ou membros para ver a saúde.</p>
+              <p className="text-center text-slate-400 text-xs py-20 italic">Selecione projetos ou membros para ver a saúde.</p>
             )}
           </div>
         </div>
@@ -89,11 +89,11 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ stats, tasks, pro
 };
 
 const StatCard = ({ label, value, icon, color }: { label: string, value: string | number, icon: any, color: string }) => (
-  <div className="bg-white/5 p-5 rounded-3xl border border-white/10 shadow-sm flex items-center gap-4 group hover:shadow-md transition-all">
+  <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4 group hover:shadow-md transition-all">
     <div className={`p-3 rounded-2xl ${color} text-white shadow-lg`}>{icon}</div>
     <div>
       <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
-      <h3 className="text-2xl font-black text-white tracking-tighter">{value}</h3>
+      <h3 className="text-2xl font-black text-slate-900 tracking-tighter">{value}</h3>
     </div>
   </div>
 );

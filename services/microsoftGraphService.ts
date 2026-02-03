@@ -1,181 +1,205 @@
 
-import { PublicClientApplication, AccountInfo, InteractionRequiredAuthError, AuthenticationResult } from '@azure/msal-browser';
-import { Task, Project, TeamMember, ActivityPlanTemplate, ActivityLog, AppUser } from '../types';
-import { DEFAULT_ACTIVITY_PLANS, DEFAULT_TEAM_MEMBERS, ADMIN_WHITELIST } from '../constants';
-import { generateInitialTasks } from '../utils/mockData';
+import * as msal from "@azure/msal-browser";
 
-// --- Configuração ---
-const msalConfig = {
-  auth: {
-    clientId: 'INSIRA_SEU_CLIENT_ID_AQUI', // IMPORTANTE: Substitua pelo seu Client ID do Azure App Registration
-    authority: 'https://login.microsoftonline.com/common',
-    redirectUri: window.location.origin,
-  },
-  cache: {
-    cacheLocation: 'sessionStorage',
-    storeAuthStateInCookie: false,
-  },
-};
+const CLIENT_ID = "609422c2-d648-4b50-b1fe-ca614b77ffb5"; 
+const TENANT_ID = "f51c2ea8-6e50-4e8f-a3e3-30c69e99d323";
 
+let msalInstance: msal.PublicClientApplication | null = null;
+
+// Escopos reduzidos para evitar a necessidade de aprovação do administrador global.
+// Files.ReadWrite permite que o usuário acesse os arquivos que ELE já tem permissão no SharePoint.
 const loginRequest = {
-  scopes: ['User.Read', 'Files.ReadWrite.All', 'Sites.Read.All'],
+  scopes: ["User.Read", "Files.ReadWrite"]
 };
 
-// Configurações do SharePoint - NÃO ALTERAR SE NÃO TIVER CERTEZA
-const config = {
-    siteId: 'ctvacinas.sharepoint.com,b7b71749-3211-4483-9326-78d0f25619a9,1229729a-24a0-4598-944d-58705f427773',
-    driveId: 'b!SRe3tzIRg0STJnjQ8lYZqZopcpokpFhJlE1YcF9Cd3Nl54U_r27_R4Yx7o3SFy1B',
-    filePath: '/General/AR_DATABASE/database.json' 
-};
+const SHAREPOINT_HOST = "ctvacinas974.sharepoint.com";
+const SITE_PATH = "/sites/regulatorios";
+const FOLDER_NAME = "sistema";
+const FILE_NAME = "db.json";
 
-const graphEndpoint = `https://graph.microsoft.com/v1.0/sites/${config.siteId}/drives/${config.driveId}/root:${config.filePath}`;
-
-// --- Estrutura da Base de Dados ---
-interface AppDatabase {
-  tasks: Task[];
-  projects: Project[];
-  teamMembers: TeamMember[];
-  activityPlans: ActivityPlanTemplate[];
-  logs: ActivityLog[];
-  appUsers: AppUser[];
-}
-
-// --- Serviços ---
-class MsalService {
-  private msalInstance: PublicClientApplication;
-  private initializationPromise: Promise<void>;
-
-  constructor() {
-    this.msalInstance = new PublicClientApplication(msalConfig);
-    // A inicialização começa imediatamente. Primeiro, inicialize a instância,
-    // depois, lide com qualquer promessa de redirecionamento.
-    this.initializationPromise = this.msalInstance.initialize()
-      .then(() => {
-        return this.msalInstance.handleRedirectPromise();
-      })
-      .then((_response: AuthenticationResult | null) => { /* Garante que a promessa seja resolvida como void */ })
-      .catch((err: any) => {
-        console.error("Erro de inicialização do MSAL:", err);
+export const MicrosoftGraphService = {
+  async init() {
+    if (!msalInstance) {
+      msalInstance = new msal.PublicClientApplication({
+        auth: {
+          clientId: CLIENT_ID,
+          authority: `https://login.microsoftonline.com/${TENANT_ID}`,
+          redirectUri: window.location.origin,
+          // Garante que o MSAL trate corretamente usuários convidados (external tenants)
+          navigateToLoginRequestUrl: true
+        },
+        cache: {
+          cacheLocation: "localStorage",
+          storeAuthStateInCookie: false,
+        }
       });
-  }
+      await msalInstance.initialize();
+    }
+    return msalInstance;
+  },
 
-  async login(): Promise<void> {
-    await this.initializationPromise;
-    return this.msalInstance.loginRedirect(loginRequest);
-  }
+  async login() {
+    const instance = await this.init();
+    try {
+      // Força a tela de seleção de conta para garantir que o usuário escolha a conta correta do CTVacinas/Convidado
+      const loginResponse = await instance.loginPopup({
+        ...loginRequest,
+        prompt: "select_account"
+      });
+      instance.setActiveAccount(loginResponse.account);
+      return { success: true, account: loginResponse.account };
+    } catch (error: any) {
+      console.error("Erro no login Microsoft:", error);
+      return { success: false, error };
+    }
+  },
 
-  async logout(): Promise<void> {
-    await this.initializationPromise;
-    const account = this.getAccountInternal();
+  async logout() {
+    const instance = await this.init();
+    const account = instance.getActiveAccount();
     if (account) {
-      return this.msalInstance.logoutRedirect({ account });
+        await instance.logoutPopup({ account });
     }
-  }
+    await instance.clearCache();
+  },
 
-  private getAccountInternal(): AccountInfo | null {
-    const accounts = this.msalInstance.getAllAccounts();
-    return accounts.length > 0 ? accounts[0] : null;
-  }
-
-  async getAccount(): Promise<AccountInfo | null> {
-    await this.initializationPromise;
-    return this.getAccountInternal();
-  }
-
-  async getToken(): Promise<string | null> {
-    await this.initializationPromise;
-    const account = this.getAccountInternal();
-    if (!account) {
-      return null;
+  async getAccount() {
+    const instance = await this.init();
+    const accounts = instance.getAllAccounts();
+    if (accounts.length > 0) {
+        instance.setActiveAccount(accounts[0]);
+        return accounts[0];
     }
+    return null;
+  },
 
-    const request = { ...loginRequest, account };
+  async getToken() {
+    const instance = await this.init();
+    const account = await this.getAccount();
+    if (!account) return null;
 
     try {
-      const response = await this.msalInstance.acquireTokenSilent(request);
+      const response = await instance.acquireTokenSilent({
+        ...loginRequest,
+        account: account
+      });
       return response.accessToken;
     } catch (error) {
-      if (error instanceof InteractionRequiredAuthError) {
-        console.warn("Falha na aquisição silenciosa de token. Redirecionando para login interativo.");
-        this.msalInstance.acquireTokenRedirect(request);
-        return null;
+       if (error instanceof msal.InteractionRequiredAuthError) {
+         try {
+            const response = await instance.acquireTokenPopup(loginRequest);
+            return response.accessToken;
+         } catch (popupError) {
+            return null;
+         }
+       }
+       return null;
+    }
+  },
+
+  async getSiteAndDriveId(token: string) {
+    try {
+      // Busca o site diretamente pelo caminho. 
+      // Esta chamada funciona com permissões de usuário (Delegated) se o usuário tiver acesso ao site.
+      const siteRes = await fetch(`https://graph.microsoft.com/v1.0/sites/${SHAREPOINT_HOST}:${SITE_PATH}?$select=id`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!siteRes.ok) {
+        const err = await siteRes.json();
+        console.error("Erro Site:", err);
+        throw new Error("Site não encontrado ou sem permissão");
       }
-      console.error('Erro MSAL durante a aquisição de token:', error);
+      const siteData = await siteRes.json();
+      
+      const driveRes = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteData.id}/drive?$select=id`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!driveRes.ok) throw new Error("Drive não encontrado");
+      const driveData = await driveRes.json();
+
+      return { siteId: siteData.id, driveId: driveData.id };
+    } catch (e) {
+      console.error("Erro ao buscar metadados SharePoint:", e);
       return null;
     }
-  }
-}
+  },
 
-class GraphService {
-  async getDb(accessToken: string): Promise<AppDatabase> {
+  async ensureFolderExists(token: string, driveId: string) {
     try {
-      const response = await fetch(`${graphEndpoint}/content`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      if (response.ok) {
-        return response.json();
-      }
-
-      if (response.status === 404) {
-        console.warn('Arquivo de banco de dados não encontrado no SharePoint. Criando um padrão.');
-        const defaultDb = this.createDefaultDatabase();
-        await this.saveDb(accessToken, defaultDb);
-        return defaultDb;
-      }
-
-      throw new Error(`Erro ao buscar BD: ${response.statusText}`);
-    } catch (error) {
-      console.error('Falha ao obter BD do SharePoint:', error);
-      throw error;
-    }
-  }
-
-  async saveDb(accessToken: string, data: AppDatabase): Promise<void> {
-    try {
-      await fetch(`${graphEndpoint}/content`, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
+      const res = await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/root/children`, {
+        method: "POST",
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          name: FOLDER_NAME,
+          folder: {},
+          "@microsoft.graph.conflictBehavior": "fail" 
+        })
       });
+      
+      if (res.status === 409) return true; 
+      return res.ok;
+    } catch (e) {
+      return false;
+    }
+  },
+
+  async loadFromCloud() {
+    const token = await this.getToken();
+    if (!token) return null;
+
+    try {
+      const ids = await this.getSiteAndDriveId(token);
+      if (!ids) return null;
+      
+      const response = await fetch(`https://graph.microsoft.com/v1.0/drives/${ids.driveId}/root:/${FOLDER_NAME}/${FILE_NAME}:/content`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.status === 404) return null;
+      if (!response.ok) throw new Error("Erro SharePoint");
+      return await response.json();
     } catch (error) {
-      console.error('Falha ao salvar BD no SharePoint:', error);
+      console.error("Erro carregar:", error);
       throw error;
     }
+  },
+
+  async saveToCloud(data: any) {
+    const token = await this.getToken();
+    if (!token) return false;
+
+    try {
+      const ids = await this.getSiteAndDriveId(token);
+      if (!ids) return false;
+
+      await this.ensureFolderExists(token, ids.driveId);
+
+      const body = JSON.stringify(data, null, 2);
+      const url = `https://graph.microsoft.com/v1.0/drives/${ids.driveId}/root:/${FOLDER_NAME}/${FILE_NAME}:/content`;
+      
+      const response = await fetch(url, {
+        method: "PUT",
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: body
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        console.error("Falha no upload:", err);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Falha salvamento:", error);
+      return false;
+    }
   }
-  
-  private createDefaultDatabase(): AppDatabase {
-    const team = DEFAULT_TEAM_MEMBERS;
-    
-    const adminUsers: AppUser[] = ADMIN_WHITELIST.map((email, index) => {
-        const namePart = email.split('@')[0];
-        const formattedName = namePart
-            .replace(/[._]/g, ' ')
-            .replace(/\b\w/g, char => char.toUpperCase());
-
-        return {
-            id: `user_admin_${index + 1}`,
-            username: formattedName,
-            email: email,
-            role: 'admin',
-            status: 'active',
-            joinedAt: new Date().toISOString()
-        };
-    });
-
-    return {
-      tasks: generateInitialTasks(team),
-      projects: [],
-      teamMembers: team,
-      activityPlans: DEFAULT_ACTIVITY_PLANS,
-      logs: [],
-      appUsers: adminUsers
-    };
-  }
-}
-
-export const msalService = new MsalService();
-export const graphService = new GraphService();
+};

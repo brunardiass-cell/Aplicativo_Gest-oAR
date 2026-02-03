@@ -30,6 +30,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
       return;
     }
     
+    // Fix: Updated property names to match ProjectData interface (trackingMacroTasks and regulatoryMacroTasks)
     const newProject: ProjectData = {
       id: Math.random().toString(36).substring(2, 9),
       name: newProjectName.trim(),
@@ -80,14 +81,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-      <div className="bg-[#1e293b] text-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-white/10">
-        <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-slate-900/50">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <BellRing size={20} className="text-blue-500" />
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <BellRing size={20} className="text-indigo-600" />
             Configurações do Sistema
           </h2>
-          <button type="button" onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg transition">
-            <X size={20} className="text-slate-400" />
+          <button type="button" onClick={onClose} className="p-2 hover:bg-slate-200 rounded-lg transition">
+            <X size={20} className="text-slate-500" />
           </button>
         </div>
 
@@ -95,8 +96,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
           <div className="p-6 space-y-8 overflow-y-auto custom-scrollbar">
             {/* Email Settings */}
             <div>
-              <label className="block text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2">
-                <Mail size={16} className="text-blue-500" />
+              <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                <Mail size={16} className="text-indigo-500" />
                 E-mail para Notificações
               </label>
               <input
@@ -105,14 +106,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
                 placeholder="exemplo@empresa.com"
                 value={localConfig.notificationEmail}
                 onChange={(e) => setLocalConfig({ ...localConfig, notificationEmail: e.target.value })}
-                className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition"
               />
             </div>
 
             {/* Project Management */}
             <div>
-              <label className="block text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
-                <FolderKanban size={16} className="text-blue-500" />
+              <label className="block text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                <FolderKanban size={16} className="text-indigo-600" />
                 Gerenciar Nomes de Projetos
               </label>
               
@@ -123,28 +124,28 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addProject(e as any)}
-                  className="flex-1 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 <button
                   type="button"
                   onClick={addProject}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center gap-2 text-sm font-bold shadow-md shadow-blue-500/20"
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center gap-2 text-sm font-bold shadow-md"
                 >
                   <Plus size={18} /> Adicionar
                 </button>
               </div>
 
-              <div className="border border-white/10 rounded-xl overflow-hidden shadow-sm">
+              <div className="border border-slate-100 rounded-xl overflow-hidden shadow-sm">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-white/5 text-slate-400 font-bold text-[10px] uppercase tracking-widest">
+                  <thead className="bg-slate-50 text-slate-400 font-bold text-[10px] uppercase tracking-widest">
                     <tr>
                       <th className="px-4 py-3">Nome do Projeto</th>
                       <th className="px-4 py-3 text-right">Ações</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/10">
+                  <tbody className="divide-y divide-slate-50">
                     {localConfig.projectsData.map((project: ProjectData, index: number) => (
-                      <tr key={project.id} className="hover:bg-white/5 transition">
+                      <tr key={project.id} className="hover:bg-slate-50/50 transition">
                         <td className="px-4 py-3">
                           {editingProjectIndex === index ? (
                             <div className="flex gap-1">
@@ -154,11 +155,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
                                 value={editingProjectName}
                                 onChange={(e) => setEditingProjectName(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && saveEditProject(e)}
-                                className="flex-1 px-2 py-1 bg-slate-900 border border-blue-500 rounded outline-none text-sm"
+                                className="flex-1 px-2 py-1 border border-indigo-300 rounded outline-none text-sm"
                               />
                             </div>
                           ) : (
-                            <span className="font-semibold text-slate-200">{project.name}</span>
+                            <span className="font-semibold text-slate-700">{project.name}</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -167,7 +168,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
                               <button 
                                 type="button" 
                                 onClick={(e) => saveEditProject(e)} 
-                                className="p-1.5 text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition"
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
                                 title="Salvar"
                               >
                                 <Check size={16} />
@@ -177,7 +178,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
                                 <button 
                                   type="button" 
                                   onClick={(e) => startEditProject(e, index, project.name)}
-                                  className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition"
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
                                   title="Editar"
                                 >
                                   <Edit3 size={16} />
@@ -185,7 +186,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
                                 <button 
                                   type="button" 
                                   onClick={(e) => removeProject(e, project.id)}
-                                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition"
+                                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
                                   title="Remover"
                                 >
                                   <Trash2 size={16} />
@@ -198,7 +199,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
                     ))}
                     {localConfig.projectsData.length === 0 && (
                       <tr>
-                        <td colSpan={2} className="px-4 py-8 text-center text-slate-500 italic">Nenhum projeto cadastrado. Adicione um acima.</td>
+                        <td colSpan={2} className="px-4 py-8 text-center text-slate-400 italic">Nenhum projeto cadastrado. Adicione um acima.</td>
                       </tr>
                     )}
                   </tbody>
@@ -207,17 +208,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
             </div>
           </div>
 
-          <div className="px-6 py-4 border-t border-white/10 bg-slate-900/50 flex gap-3">
+          <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-slate-400 hover:bg-white/10 rounded-xl transition font-bold uppercase text-[10px] tracking-widest"
+              className="flex-1 px-4 py-2 text-slate-500 hover:bg-slate-200 rounded-xl transition font-bold uppercase text-[10px] tracking-widest"
             >
               Descartar
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-500/20 font-bold uppercase text-[10px] tracking-widest flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition shadow-lg shadow-indigo-100 font-bold uppercase text-[10px] tracking-widest flex items-center justify-center gap-2"
             >
               <Save size={16} />
               Confirmar Alterações

@@ -43,15 +43,19 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
     const microIndex = updatedProject.macroActivities[macroIndex].microActivities.findIndex(m => m.id === microId);
     if (microIndex === -1) return;
 
+    // Apply updates
     updatedProject.macroActivities[macroIndex].microActivities[microIndex] = {
       ...updatedProject.macroActivities[macroIndex].microActivities[microIndex],
       ...updates
     };
     
+    // Update completionDate if status is Concluída
     if(updates.status === 'Concluída' && !updatedProject.macroActivities[macroIndex].microActivities[microIndex].completionDate) {
       updatedProject.macroActivities[macroIndex].microActivities[microIndex].completionDate = new Date().toISOString();
     }
 
+
+    // Recalculate macro status
     const updatedMacro = updatedProject.macroActivities[macroIndex];
     updatedProject.macroActivities[macroIndex].status = updateMacroStatus(updatedMacro);
     
@@ -98,10 +102,10 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
   return (
     <div className="space-y-4">
       {project.macroActivities.map(macro => (
-        <div key={macro.id} className="bg-white border border-slate-200 rounded-3xl overflow-hidden">
-          <div className="w-full p-6 flex justify-between items-center text-left hover:bg-slate-50/50 group">
+        <div key={macro.id} className="bg-slate-50/50 border border-slate-100 rounded-3xl overflow-hidden">
+          <div className="w-full p-6 flex justify-between items-center text-left hover:bg-slate-100/50 group">
             <div className="flex items-center gap-4 flex-1">
-              <button onClick={() => toggleMacro(macro.id)} className={`w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0 ${macro.status === 'Concluída' ? 'bg-emerald-500' : 'bg-slate-400'}`}>
+              <button onClick={() => toggleMacro(macro.id)} className={`w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0 ${macro.status === 'Concluída' ? 'bg-emerald-500' : 'bg-slate-800'}`}>
                 <ChevronDown size={20} className={`transition-transform ${expandedMacros.has(macro.id) ? 'rotate-180' : ''}`} />
               </button>
               {editingMacro === macro.id ? (
@@ -110,23 +114,23 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
                       value={editingMacroName}
                       onChange={e => setEditingMacroName(e.target.value)}
                       autoFocus
-                      className="w-full text-sm font-black text-slate-900 uppercase tracking-tight bg-white border border-teal-500 rounded-md px-3 py-2"
+                      className="w-full text-sm font-black text-slate-800 uppercase tracking-tight bg-white border border-indigo-300 rounded-md px-3 py-2"
                    />
                    <button onClick={() => handleSaveMacroName(macro.id)} className="p-2 text-emerald-500 hover:bg-emerald-100 rounded-md"><Save size={16}/></button>
-                   <button onClick={() => setEditingMacro(null)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-md"><X size={16}/></button>
+                   <button onClick={() => setEditingMacro(null)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-md"><X size={16}/></button>
                 </div>
               ) : (
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">{macro.name}</h3>
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">{macro.name}</h3>
               )}
             </div>
             <div className="flex items-center gap-2">
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
-                    <button onClick={() => handleStartEditMacro(macro)} className="p-2 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-md"><Edit size={16}/></button>
-                    <button onClick={() => onOpenDeletionModal({ type: 'macro', projectId: project.id, macroId: macro.id, name: macro.name })} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md"><Trash2 size={16}/></button>
+                    <button onClick={() => handleStartEditMacro(macro)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md"><Edit size={16}/></button>
+                    <button onClick={() => onOpenDeletionModal({ type: 'macro', projectId: project.id, macroId: macro.id, name: macro.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"><Trash2 size={16}/></button>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                    macro.status === 'Concluída' ? 'bg-emerald-100 text-emerald-700' : 
-                    macro.status === 'Em Andamento' ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-500'
+                    macro.status === 'Concluída' ? 'bg-emerald-100 text-emerald-600' : 
+                    macro.status === 'Em Andamento' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'
                 }`}>
                 {macro.status}
                 </span>
@@ -134,7 +138,7 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
           </div>
 
           {expandedMacros.has(macro.id) && (
-            <div className="bg-slate-50/70 p-4 space-y-3">
+            <div className="bg-white p-4 space-y-3">
               {macro.microActivities.map(micro => (
                  <MicroActivityRow 
                     key={micro.id} 
@@ -146,7 +150,7 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
                     onSetEditing={setEditingMicro}
                  />
               ))}
-              <button onClick={() => addMicroActivity(macro.id)} className="w-full mt-2 p-3 bg-slate-100 text-slate-500 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition">
+              <button onClick={() => addMicroActivity(macro.id)} className="w-full mt-2 p-3 bg-slate-50 text-slate-500 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition">
                 <Plus size={14}/> Adicionar Microatividade
               </button>
             </div>
@@ -157,6 +161,7 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
   );
 };
 
+// Sub-componente para a linha de Microatividade
 interface MicroActivityRowProps {
   micro: MicroActivity;
   onUpdate: (updates: Partial<MicroActivity>) => void;
@@ -174,66 +179,64 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
       onSetEditing(null);
     };
 
-    const isOverdue = new Date(micro.dueDate + 'T23:59:59') < new Date() && micro.status !== 'Concluída';
-
     return (
-    <div className={`p-4 border rounded-2xl transition-all ${isEditing ? 'bg-teal-50 border-teal-200 shadow-lg' : isOverdue ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
+    <div className={`p-4 border rounded-2xl transition-all ${isEditing ? 'bg-indigo-50/50 border-indigo-200 shadow-lg' : 'bg-white border-slate-100'}`}>
       <div className="grid grid-cols-12 gap-4 items-center">
         <div className="col-span-4 flex items-center gap-2">
             {isEditing ? (
                 <>
-                <input value={localName} onChange={e => setLocalName(e.target.value)} autoFocus className="w-full text-xs font-bold text-slate-800 bg-white border border-teal-500 rounded-md px-2 py-1"/>
+                <input value={localName} onChange={e => setLocalName(e.target.value)} autoFocus className="w-full text-xs font-bold text-slate-900 bg-white border border-indigo-300 rounded-md px-2 py-1"/>
                 <button onClick={handleSaveName} className="p-1 text-emerald-500 hover:bg-emerald-100 rounded-md"><Save size={14}/></button>
                 </>
             ) : (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-700">{micro.name}</span>
-                  <button onClick={() => { setLocalName(micro.name); onSetEditing(micro.id); }} className="p-1 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-md"><Edit size={14}/></button>
-                </div>
+                <>
+                <span className="text-xs font-bold text-slate-700">{micro.name}</span>
+                <button onClick={() => { setLocalName(micro.name); onSetEditing(micro.id); }} className="p-1 text-slate-400 hover:bg-slate-100 rounded-md"><Edit size={14}/></button>
+                </>
             )}
         </div>
         <div className="col-span-2">
-          <select value={micro.assignee} onChange={e => onUpdate({ assignee: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600 outline-none">
+          <select value={micro.assignee} onChange={e => onUpdate({ assignee: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600">
             {teamMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
           </select>
         </div>
-        <div className="col-span-2 relative">
-          <input type="date" value={micro.dueDate} onChange={e => onUpdate({ dueDate: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600 outline-none"/>
-          {isOverdue && <span className="absolute -top-5 right-0 px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-red-500 text-white">ATIVIDADE ATRASADA</span>}
+        <div className="col-span-2">
+          <input type="date" value={micro.dueDate} onChange={e => onUpdate({ dueDate: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600"/>
         </div>
         <div className="col-span-2">
-          <select value={micro.status} onChange={e => onUpdate({ status: e.target.value as Status })} className="w-full bg-transparent text-[10px] font-bold text-slate-600 outline-none">
+          <select value={micro.status} onChange={e => onUpdate({ status: e.target.value as Status })} className="w-full bg-transparent text-[10px] font-bold text-slate-600">
              <option value="Planejada">Planejada</option><option value="Em Andamento">Em Andamento</option><option value="Concluída">Concluída</option><option value="Bloqueada">Bloqueada</option>
           </select>
         </div>
         <div className="col-span-2 flex items-center justify-end gap-1">
            {micro.status === 'Concluída' && (
-             <select value={micro.completionStatus} onChange={e => onUpdate({ completionStatus: e.target.value as CompletionStatus })} className={`w-full text-[9px] font-bold rounded-md p-1 border-2 outline-none ${
-                micro.completionStatus === 'Aprovada' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 
-                micro.completionStatus === 'Finalizada com Restrições' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-red-100 text-red-700 border-red-200'
+             <select value={micro.completionStatus} onChange={e => onUpdate({ completionStatus: e.target.value as CompletionStatus })} className={`w-full text-[9px] font-bold rounded-md p-1 border-2 ${
+                micro.completionStatus === 'Aprovada' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
+                micro.completionStatus === 'Finalizada com Restrições' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-red-50 text-red-600 border-red-100'
              }`}>
                <option value="Aprovada">Aprovada</option>
                <option value="Finalizada com Restrições">Com Restrições</option>
                <option value="A ser Repetida">A Repetir</option>
              </select>
            )}
-           <button onClick={onDelete} className="p-2 text-slate-400 hover:text-red-500 rounded-xl transition"><Trash2 size={14}/></button>
+           <button onClick={onDelete} className="p-2 text-slate-300 hover:text-red-500 rounded-xl transition"><Trash2 size={14}/></button>
         </div>
       </div>
       {(isEditing || micro.observations || micro.reportLink) && (
-          <div className="mt-4 pt-4 border-t border-slate-200 grid grid-cols-2 gap-4">
+          <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-4">
               <div>
-                  <label className="text-[9px] font-black text-slate-500 flex items-center gap-1 mb-1"><MessageSquare size={12}/> Observações</label>
-                  <textarea value={micro.observations} onChange={e => onUpdate({ observations: e.target.value })} rows={2} className="w-full text-xs p-2 border border-slate-200 rounded-md bg-white text-slate-800 outline-none focus:ring-1 focus:ring-teal-500"/>
+                  <label className="text-[9px] font-black text-slate-400 flex items-center gap-1 mb-1"><MessageSquare size={12}/> Observações</label>
+                  <textarea value={micro.observations} onChange={e => onUpdate({ observations: e.target.value })} rows={2} className="w-full text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-900"/>
               </div>
               <div>
-                  <label className="text-[9px] font-black text-slate-500 flex items-center gap-1 mb-1"><LinkIcon size={12}/> Link do Relatório</label>
-                  <input value={micro.reportLink || ''} onChange={e => onUpdate({ reportLink: e.target.value })} placeholder="Cole o link aqui..." className="w-full text-xs p-2 border border-slate-200 rounded-md bg-white text-slate-800 outline-none focus:ring-1 focus:ring-teal-500"/>
+                  <label className="text-[9px] font-black text-slate-400 flex items-center gap-1 mb-1"><LinkIcon size={12}/> Link do Relatório</label>
+                  <input value={micro.reportLink || ''} onChange={e => onUpdate({ reportLink: e.target.value })} placeholder="Cole o link aqui..." className="w-full text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-900"/>
               </div>
           </div>
       )}
     </div>
     );
 };
+
 
 export default ProjectTimeline;
