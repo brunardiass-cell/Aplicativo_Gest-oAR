@@ -7,26 +7,35 @@ interface MonthlyReportModalProps {
   isOpen: boolean;
   onClose: () => void;
   tasks: Task[];
+  filteredUser: string | 'Todos';
 }
 
-const generateMonthlyReport = (tasks: Task[]): string => {
+const generateMonthlyReport = (tasks: Task[], filteredUser: string | 'Todos'): string => {
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  const recentTasks = tasks.filter(t => !t.deleted && new Date(t.requestDate) >= thirtyDaysAgo);
+  const monthlyTasks = tasks.filter(t => !t.deleted && new Date(t.requestDate) >= thirtyDaysAgo);
   
+  const relevantTasks = filteredUser === 'Todos'
+    ? monthlyTasks
+    : monthlyTasks.filter(t =>
+        t.projectLead === filteredUser ||
+        (Array.isArray(t.collaborators) && t.collaborators.includes(filteredUser)) ||
+        t.currentReviewer === filteredUser
+      );
+
   const reportDate = new Date().toLocaleDateString('pt-BR');
-  let reportText = `RELATÓRIO DE ATIVIDADES (ÚLTIMO MÊS) - GERAL\n`;
+  let reportText = `RELATÓRIO DE ATIVIDADES (ÚLTIMO MÊS) - ${filteredUser === 'Todos' ? 'GERAL' : filteredUser.toUpperCase()}\n`;
   reportText += `Gerado em: ${reportDate}\n\n`;
-  reportText += `Este relatório resume um total de ${recentTasks.length} atividades recentes.\n`;
+  reportText += `Este relatório resume um total de ${relevantTasks.length} atividades recentes.\n`;
   reportText += '==================================================\n\n';
 
-  if (recentTasks.length === 0) {
-    reportText += 'Nenhuma atividade registrada no período.';
+  if (relevantTasks.length === 0) {
+    reportText += 'Nenhuma atividade registrada no período para este perfil.';
     return reportText;
   }
 
-  recentTasks.forEach(task => {
+  relevantTasks.forEach(task => {
     reportText += `ATIVIDADE: ${task.activity.toUpperCase()}\n`;
     reportText += `--------------------------------------------------\n`;
     reportText += `  - Projeto:    ${task.project}\n`;
@@ -40,10 +49,10 @@ const generateMonthlyReport = (tasks: Task[]): string => {
   return reportText;
 };
 
-const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ isOpen, onClose, tasks }) => {
+const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ isOpen, onClose, tasks, filteredUser }) => {
   if (!isOpen) return null;
 
-  const reportContent = generateMonthlyReport(tasks);
+  const reportContent = generateMonthlyReport(tasks, filteredUser);
   
   const handlePrint = () => {
     const printableContent = `

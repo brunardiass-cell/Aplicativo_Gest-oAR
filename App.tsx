@@ -129,7 +129,12 @@ const App: React.FC = () => {
   }, [account, appUsers]);
 
   const hasFullAccess = useMemo(() => currentUserRole === 'admin', [currentUserRole]);
-  const canCreate = useMemo(() => isPasswordAuthenticated && selectedProfile?.id !== 'team_view_user', [isPasswordAuthenticated, selectedProfile]);
+  const canCreate = useMemo(() => {
+    if(selectedProfile?.id === 'team_view_user' && currentUserRole !== 'admin') {
+        return false;
+    }
+    return isPasswordAuthenticated;
+  }, [isPasswordAuthenticated, selectedProfile, currentUserRole]);
 
   const handleLogin = async () => {
     setIsLoading(true);
@@ -463,7 +468,7 @@ const App: React.FC = () => {
         {isModalOpen && <TaskModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveTask} projects={Array.from(new Set(tasks.map(t => t.project)))} initialData={selectedTask} teamMembers={teamMembers} />}
         {isDetailsOpen && selectedTask && <TaskDetailsModal task={selectedTask} onClose={() => { setIsDetailsOpen(false); setSelectedTask(null); }} />}
         {isDeleteModalOpen && selectedTask && <DeletionModal itemName={selectedTask.activity} onClose={() => { setIsDeleteModalOpen(false); setSelectedTask(null); }} onConfirm={handleDeleteTask} />}
-        {isReportModalOpen && <MonthlyReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} tasks={tasks} />}
+        {isReportModalOpen && <MonthlyReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} tasks={tasks} filteredUser={filterMember} />}
       </main>
     </div>
   );
