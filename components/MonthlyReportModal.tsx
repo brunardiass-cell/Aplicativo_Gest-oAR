@@ -38,6 +38,12 @@ const generateMonthlyReport = (tasks: Task[], filteredUser: string | 'Todos'): s
   relevantTasks.forEach(task => {
     reportText += `ATIVIDADE: ${task.activity.toUpperCase()}\n`;
     reportText += `--------------------------------------------------\n`;
+
+    const isCollaborator = filteredUser !== 'Todos' && task.collaborators?.includes(filteredUser) && task.projectLead !== filteredUser;
+    if (isCollaborator) {
+      reportText += `  - SEU PAPEL:  Colaborador\n`;
+    }
+
     reportText += `  - Projeto:    ${task.project}\n`;
     reportText += `  - Status:     ${task.status} (${task.progress}%)\n`;
     reportText += `  - Prioridade: ${task.priority}\n`;

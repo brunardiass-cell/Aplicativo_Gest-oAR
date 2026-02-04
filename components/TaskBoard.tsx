@@ -61,7 +61,6 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   const renderReportStageBadge = (task: Task) => {
     if (!task.isReport || !task.reportStage) return null;
 
-    // FIX: Widened the type of the 'text' variable to 'string' to allow for custom UI labels like "Revisão Solicitada", which are not part of the 'ReportStage' type. This resolves the TypeScript error.
     let text: string = task.reportStage;
     let className = 'bg-amber-50 text-amber-600 border-amber-100'; // Padrão para relatórios
 
@@ -84,6 +83,9 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
       </span>
     );
   };
+  
+  const isCollaborator = (task: Task) => currentUser !== 'Todos' && task.collaborators?.includes(currentUser) && task.projectLead !== currentUser;
+
 
   return (
     <div className="space-y-10">
@@ -199,6 +201,11 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                   {task.status}
                 </span>
                 {renderReportStageBadge(task)}
+                {isCollaborator(task) && (
+                  <span className="px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-600 border border-indigo-100">
+                    Você é Colaborador
+                  </span>
+                )}
               </div>
               
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -233,9 +240,9 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                   </div>
                </div>
                
-               {task.isReport && task.reportStage?.includes('Concluído') && task.completionDate ? (
+               {task.isReport && task.reportStage?.includes('Concluído') && task.completionDate && task.status === 'Concluída' ? (
                    <div className="flex flex-col text-right">
-                      <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Concluída em</span>
+                      <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Atividade Concluída em</span>
                       <span className="text-[10px] font-black text-emerald-600 uppercase mt-1">
                         {new Date(task.completionDate + 'T00:00:00').toLocaleDateString('pt-BR')}
                       </span>

@@ -269,7 +269,7 @@ const App: React.FC = () => {
                 createNote(`Status alterado de "${oldTask.status}" para "${taskToSave.status}".`);
             }
             if (oldTask.reportStage !== taskToSave.reportStage) {
-                createNote(`Etapa do relatório alterada para "${taskToSave.reportStage}".`);
+                createNote(`Etapa do fluxo de revisão alterada para "${taskToSave.reportStage}".`);
             }
             if (oldTask.currentReviewer !== taskToSave.currentReviewer) {
                 if (taskToSave.currentReviewer) {
@@ -278,10 +278,14 @@ const App: React.FC = () => {
                     createNote(`Revisor "${oldTask.currentReviewer}" foi removido.`);
                 }
             }
+            // Adiciona nota quando o fluxo de revisão é desativado
+            if (oldTask.isReport && !taskToSave.isReport) {
+                createNote('Fluxo de revisão desativado.');
+            }
         }
         taskToSave.updates = updates;
 
-        // If the review flow was just disabled, clear the reviewer and stage
+        // Se o fluxo de revisão foi desativado, limpa os campos relacionados
         if (oldTask.isReport && !taskToSave.isReport) {
             taskToSave.currentReviewer = undefined;
             taskToSave.reportStage = 'Em Elaboração';
