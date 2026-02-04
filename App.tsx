@@ -270,8 +270,16 @@ const App: React.FC = () => {
         taskToSave.updates = updates;
     }
     
-    if (taskToSave.isReport && taskToSave.reportStage?.includes('Concluído') && (!oldTask || !oldTask.reportStage?.includes('Concluído'))) {
-        taskToSave.completionDate = new Date().toISOString().split('T')[0];
+    const wasJustCompleted = 
+      (taskToSave.status === 'Concluída' && oldTask?.status !== 'Concluída') ||
+      (taskToSave.isReport && taskToSave.reportStage?.includes('Concluído') && !oldTask?.reportStage?.includes('Concluído'));
+
+    if (wasJustCompleted) {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      taskToSave.completionDate = `${year}-${month}-${day}`;
     }
 
     if (
@@ -464,6 +472,9 @@ const App: React.FC = () => {
                         <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">{pendingReviewCount}</span>
                     }
                 </div>
+                 <button onClick={() => setIsReportModalOpen(true)} className="p-3 bg-white border border-slate-200 rounded-full text-slate-500 hover:bg-slate-100 transition">
+                  <FileText size={20}/>
+               </button>
                 {canCreate && (
                     <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-brand-primary text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg hover:bg-brand-accent transition">
                         <PlusCircle size={16}/> Nova Atividade
@@ -530,6 +541,4 @@ const App: React.FC = () => {
     </div>
   );
 };
-
-// FIX: Add default export to make the component available for import in index.tsx.
 export default App;
