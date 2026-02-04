@@ -22,6 +22,7 @@ interface TaskBoardProps {
   onAssignReview: (taskId: string, reviewer: string) => void;
   onNotificationClick: (notification: AppNotification) => void;
   onClearSingleNotification: (notificationId: string) => void;
+  onClearAllNotifications: () => void;
   notifications: AppNotification[];
 }
 
@@ -34,6 +35,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   onAssignReview,
   onNotificationClick,
   onClearSingleNotification,
+  onClearAllNotifications,
   notifications
 }) => {
   const activeTasks = tasks.filter(t => !t.deleted);
@@ -42,38 +44,54 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   return (
     <div className="space-y-10">
       {activeReviews.length > 0 && currentUser !== 'Todos' && (
-        <div className="bg-amber-50 rounded-[2rem] p-6 shadow-sm border border-amber-100 animate-in slide-in-from-top duration-500">
-           <div className="flex items-center gap-4 mb-4">
-              <div className="w-10 h-10 bg-amber-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-amber-200">
-                 <FileSignature size={24} />
-              </div>
-              <div>
-                 <h3 className="text-amber-900 font-black uppercase text-sm tracking-tighter">Relatórios Pendentes para Sua Revisão</h3>
-                 <p className="text-amber-600/60 text-[9px] font-bold uppercase tracking-widest">Ação necessária em {activeReviews.length} documentos</p>
-              </div>
-           </div>
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {activeReviews.map(notif => (
-                <div 
-                  key={notif.id} 
-                  className="bg-white border border-amber-200 p-4 rounded-2xl flex items-center justify-between group hover:bg-amber-100/50 transition text-left w-full relative shadow-sm"
+        <div className="bg-[#1e293b] rounded-2xl p-6 shadow-lg animate-in slide-in-from-top duration-500 space-y-4">
+           <div className="flex justify-between items-center">
+             <div className="flex items-center gap-4">
+                <button className="px-4 py-2 bg-amber-500 text-white rounded-lg text-xs font-bold flex items-center gap-2">
+                   <FileSignature size={14} /> {activeReviews.length} RELATÓRIOS PARA VOCÊ ANALISAR
+                </button>
+                <button 
+                  onClick={onClearAllNotifications}
+                  className="px-4 py-2 bg-white/10 text-slate-300 rounded-lg text-xs font-bold hover:bg-white/20 transition"
                 >
-                  <button 
-                    onClick={() => onNotificationClick(notif)}
-                    className="flex-1 flex items-center justify-between pr-8"
-                  >
-                    <p className="text-amber-900 text-[10px] font-bold uppercase truncate">{notif.message}</p>
-                    <ArrowRight size={14} className="text-amber-500 group-hover:translate-x-1 transition shrink-0" />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onClearSingleNotification(notif.id); }}
-                    className="absolute top-2 right-2 p-1 text-amber-300 hover:text-amber-600 hover:bg-amber-100 rounded-full transition-colors"
-                    title="Limpar notificação"
-                  >
-                    <X size={14} />
-                  </button>
+                  Limpar Notificações
+                </button>
+             </div>
+           </div>
+           
+           <div className="bg-[#0f172a] p-4 rounded-xl space-y-3">
+              <div className="flex items-center gap-3 px-2">
+                <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-white shadow-lg">
+                  <FileSignature size={16}/>
                 </div>
-              ))}
+                <div>
+                  <h3 className="text-white font-bold text-sm">RELATÓRIOS PENDENTES PARA SUA REVISÃO</h3>
+                  <p className="text-amber-400 text-[10px] font-bold uppercase tracking-wider">Ação necessária em {activeReviews.length} documentos</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                 {activeReviews.map(notif => (
+                   <div 
+                     key={notif.id} 
+                     className="bg-[#1e293b] p-3 rounded-lg flex items-center justify-between group"
+                   >
+                     <button 
+                       onClick={() => onNotificationClick(notif)}
+                       className="flex-1 flex items-center justify-between pr-6 text-left"
+                     >
+                       <p className="text-slate-300 text-xs font-bold uppercase truncate">{notif.message}</p>
+                       <ArrowRight size={16} className="text-amber-500 group-hover:translate-x-1 transition shrink-0" />
+                     </button>
+                     <button
+                       onClick={(e) => { e.stopPropagation(); onClearSingleNotification(notif.id); }}
+                       className="p-1 text-slate-500 hover:text-white hover:bg-slate-700 rounded-full transition-colors"
+                       title="Limpar notificação"
+                     >
+                       <X size={14} />
+                     </button>
+                   </div>
+                 ))}
+              </div>
            </div>
         </div>
       )}

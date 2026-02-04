@@ -223,8 +223,34 @@ const App: React.FC = () => {
   };
 
   const handleSaveTask = (task: Task) => {
-    const isEditing = tasks.some(t => t.id === task.id);
-    setTasks(prev => isEditing ? prev.map(t => t.id === task.id ? task : t) : [{ ...task, id: `task_${Date.now()}` }, ...prev]);
+    const isEditing = !!task.id && tasks.some(t => t.id === task.id);
+    const taskToSave = { ...task };
+    
+    if (!isEditing) {
+        taskToSave.id = `task_${Date.now()}`;
+    }
+
+    const oldTask = isEditing ? tasks.find(t => t.id === taskToSave.id) : null;
+
+    if (
+      taskToSave.isReport &&
+      taskToSave.reportStage === 'Próximo Revisor' &&
+      taskToSave.currentReviewer &&
+      (!oldTask || oldTask.currentReviewer !== taskToSave.currentReviewer || oldTask.reportStage !== 'Próximo Revisor')
+    ) {
+      const newNotification: AppNotification = {
+        id: `notif_${Date.now()}`,
+        userId: taskToSave.currentReviewer,
+        message: `Revisão: ${taskToSave.activity}`,
+        timestamp: new Date().toISOString(),
+        read: false,
+        type: 'REVIEW_ASSIGNED',
+        refId: taskToSave.id,
+      };
+      setNotifications(prev => [...prev, newNotification]);
+    }
+
+    setTasks(prev => isEditing ? prev.map(t => t.id === taskToSave.id ? taskToSave : t) : [taskToSave, ...prev]);
     setIsModalOpen(false);
     setSelectedTask(null);
   };
@@ -236,11 +262,42 @@ const App: React.FC = () => {
     setSelectedTask(null);
   };
 
+  const handleNotificationClick = (notification: AppNotification) => {
+    const task = tasks.find(t => t.id === notification.refId);
+    if (task) {
+      setSelectedTask(task);
+      setIsDetailsOpen(true);
+      setNotifications(current => current.map(n => n.id === notification.id ? { ...n, read: true } : n));
+    }
+  };
+  
+  const handleClearSingleNotification = (notificationId: string) => {
+    setNotifications(current => current.map(n => n.id === notificationId ? { ...n, read: true } : n));
+  };
+
+  const handleClearAllReviewNotifications = () => {
+    if (!selectedProfile) return;
+    setNotifications(current => current.map(n => 
+      (n.userId === selectedProfile.name && n.type === 'REVIEW_ASSIGNED') ? { ...n, read: true } : n
+    ));
+  };
+
   const pendingReviewCount = useMemo(() => {
     const user = selectedProfile?.name;
-    if (!user) return 0;
-    return notifications.filter(n => (n.userId === user || filterMember === 'Todos') && !n.read && n.type === 'REVIEW_ASSIGNED').length;
-  }, [notifications, selectedProfile, filterMember]);
+    if (!user || user === 'Visão Geral da Equipe') return 0;
+    return notifications.filter(n => n.userId === user && !n.read && n.type === 'REVIEW_ASSIGNED').length;
+  }, [notifications, selectedProfile]);
+
+  const tasksForBoard = useMemo(() => {
+    return tasks.filter(t => 
+      !t.deleted && (
+        filterMember === 'Todos' || 
+        t.projectLead === filterMember || 
+        (Array.isArray(t.collaborators) && t.collaborators.includes(filterMember)) ||
+        t.currentReviewer === filterMember
+      )
+    );
+  }, [tasks, filterMember]);
 
 
   if (isLoading) {
@@ -371,9 +428,9 @@ const App: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-2">
-               <button onClick={() => {}} className="relative p-3 bg-white border border-slate-200 rounded-full text-slate-500 hover:bg-slate-100 transition">
+               <button onClick={() => {}} className={`relative p-3 bg-white border border-slate-200 rounded-full hover:bg-slate-100 transition ${pendingReviewCount > 0 ? 'text-amber-500' : 'text-slate-500'}`}>
                   <Bell size={20}/>
-                  {pendingReviewCount > 0 && <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{pendingReviewCount}</span>}
+                  {pendingReviewCount > 0 && <span className="absolute top-0 right-0 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{pendingReviewCount}</span>}
                </button>
                <button onClick={() => setIsReportModalOpen(true)} className="p-3 bg-white border border-slate-200 rounded-full text-slate-500 hover:bg-slate-100 transition">
                   <FileText size={20}/>
@@ -392,7 +449,7 @@ const App: React.FC = () => {
         <div className="animation-in">
           {view === 'dashboard' && <Dashboard tasks={tasks} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />}
           {view === 'quality' && hasFullAccess && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} appUsers={appUsers} onUpdateAppUsers={setAppUsers} />}
-          {view === 'tasks' && <TaskBoard tasks={tasks.filter(t => !t.deleted && (filterMember === 'Todos' || t.projectLead === filterMember || t.collaborators.includes(filterMember)))} currentUser={filterMember} onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} onDelete={(task) => { setSelectedTask(task); setIsDeleteModalOpen(true); }} onAssignReview={() => {}} onNotificationClick={() => {}} onClearSingleNotification={() => {}} notifications={notifications.filter(n => n.userId === selectedProfile?.name)} />}
+          {view === 'tasks' && <TaskBoard tasks={tasksForBoard} currentUser={selectedProfile?.name || 'Todos'} onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} onDelete={(task) => { setSelectedTask(task); setIsDeleteModalOpen(true); }} onAssignReview={() => {}} onNotificationClick={handleNotificationClick} onClearSingleNotification={handleClearSingleNotification} onClearAllNotifications={handleClearAllReviewNotifications} notifications={notifications} />}
           {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={() => {}} teamMembers={teamMembers} />}
           {view === 'traceability' && hasFullAccess && <ActivityLogView logs={logs} />}
         </div>
