@@ -1,18 +1,19 @@
 
 import React, { useMemo, useState } from 'react';
-import { Task, AppNotification } from '../types';
+import { Task, AppNotification, Project } from '../types';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Briefcase, CheckCircle, FolderKanban, Activity, AlertTriangle, FileSignature } from 'lucide-react';
 import AlertsDetailModal from './AlertsDetailModal';
 
 interface DashboardProps {
   tasks: Task[];
+  projects: Project[];
   filteredUser: string | 'Todos';
   notifications: AppNotification[];
   onViewTaskDetails: (task: Task) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ tasks, filteredUser, notifications, onViewTaskDetails }) => {
+const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, notifications, onViewTaskDetails }) => {
   const [isAlertModalOpen, setAlertModalOpen] = useState(false);
   const [alertModalContent, setAlertModalContent] = useState<{ title: string; items: any[] }>({ title: '', items: [] });
   
@@ -34,7 +35,10 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, filteredUser, notification
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const lateTasks = lastMonthTasks.filter(t => t.completionDate && new Date(t.completionDate + 'T00:00:00') < today && t.status !== 'Concluída');
-    const projectsTracked = new Set(lastMonthTasks.map(t => t.project)).size;
+    
+    const projectsTracked = filteredUser === 'Todos'
+        ? projects.length
+        : projects.filter(p => p.responsible === filteredUser).length;
 
     return {
       total: lastMonthTasks.length,
@@ -43,7 +47,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, filteredUser, notification
       late: lateTasks.length,
       projects: projectsTracked,
     };
-  }, [lastMonthTasks]);
+  }, [lastMonthTasks, projects, filteredUser]);
 
   const priorityData = useMemo(() => [
     { name: 'Urgente', value: lastMonthTasks.filter(t => t.priority === 'Urgente').length, color: '#ef4444' },

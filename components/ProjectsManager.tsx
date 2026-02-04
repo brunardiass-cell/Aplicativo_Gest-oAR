@@ -198,6 +198,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           onClose={() => setIsNewProjectModalOpen(false)}
           plans={activityPlans}
           onAddProject={addProject}
+          teamMembers={teamMembers}
         />
       )}
     </div>

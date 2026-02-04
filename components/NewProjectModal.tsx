@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Project, ActivityPlanTemplate, MacroActivity } from '../types';
+import { Project, ActivityPlanTemplate, MacroActivity, TeamMember } from '../types';
 import { X, FolderPlus } from 'lucide-react';
 
 interface NewProjectModalProps {
@@ -8,16 +8,18 @@ interface NewProjectModalProps {
   onClose: () => void;
   plans: ActivityPlanTemplate[];
   onAddProject: (project: Project) => void;
+  teamMembers: TeamMember[];
 }
 
-const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plans, onAddProject }) => {
+const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plans, onAddProject, teamMembers }) => {
   const [projectName, setProjectName] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState<string>(plans[0]?.id || '');
+  const [responsibleMember, setResponsibleMember] = useState<string>(teamMembers[0]?.name || '');
   const [error, setError] = useState('');
 
   const handleSubmit = () => {
-    if (!projectName.trim() || !selectedPlanId) {
-      setError('Nome do projeto e plano são obrigatórios.');
+    if (!projectName.trim() || !selectedPlanId || !responsibleMember) {
+      setError('Todos os campos são obrigatórios.');
       return;
     }
 
@@ -31,6 +33,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plan
       id: Math.random().toString(36).substr(2, 9),
       name: projectName.trim(),
       status: 'Em Planejamento',
+      responsible: responsibleMember,
       templateId: selectedPlanId,
       macroActivities: selectedPlan.macroActivities.map((macroName): MacroActivity => ({
         id: Math.random().toString(36).substr(2, 9),
@@ -72,11 +75,23 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plan
             />
           </div>
           <div>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Responsável pelo Projeto</label>
+            <select 
+              value={responsibleMember}
+              onChange={e => { setResponsibleMember(e.target.value); setError(''); }}
+              className="mt-1 w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none"
+            >
+              {teamMembers.map(member => (
+                <option key={member.id} value={member.name}>{member.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Plano de Atividades Base</label>
             <select 
               value={selectedPlanId}
               onChange={e => { setSelectedPlanId(e.target.value); setError(''); }}
-              className="mt-1 w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none appearance-none"
+              className="mt-1 w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none"
             >
               {plans.map(plan => (
                 <option key={plan.id} value={plan.id}>{plan.name}</option>

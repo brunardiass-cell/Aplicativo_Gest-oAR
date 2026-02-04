@@ -447,7 +447,7 @@ const App: React.FC = () => {
         </header>
 
         <div className="animation-in">
-          {view === 'dashboard' && <Dashboard tasks={tasks} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />}
+          {view === 'dashboard' && <Dashboard projects={projects} tasks={tasks} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />}
           {view === 'quality' && hasFullAccess && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} appUsers={appUsers} onUpdateAppUsers={setAppUsers} />}
           {view === 'tasks' && <TaskBoard tasks={tasksForBoard} currentUser={selectedProfile?.name || 'Todos'} onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} onDelete={(task) => { setSelectedTask(task); setIsDeleteModalOpen(true); }} onAssignReview={() => {}} onNotificationClick={handleNotificationClick} onClearSingleNotification={handleClearSingleNotification} onClearAllNotifications={handleClearAllReviewNotifications} notifications={notifications} />}
           {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={() => {}} teamMembers={teamMembers} />}

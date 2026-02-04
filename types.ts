@@ -116,6 +116,7 @@ export interface MacroActivity {
 export interface Project {
   id: string;
   name: string;
+  responsible?: string;
   status: 'Em Planejamento' | 'Ativo' | 'Suspenso' | 'Concluído';
   templateId: string;
   macroActivities: MacroActivity[];
