@@ -58,19 +58,24 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
     const microIndex = updatedProject.macroActivities[macroIndex].microActivities.findIndex(m => m.id === microId);
     if (microIndex === -1) return;
 
-    // Apply updates
-    updatedProject.macroActivities[macroIndex].microActivities[microIndex] = {
-      ...updatedProject.macroActivities[macroIndex].microActivities[microIndex],
-      ...updates
-    };
-    
-    // Update completionDate if status is Concluída
-    if(updates.status === 'Concluída' && !updatedProject.macroActivities[macroIndex].microActivities[microIndex].completionDate) {
-      updatedProject.macroActivities[macroIndex].microActivities[microIndex].completionDate = new Date().toISOString();
+    const finalUpdates = { ...updates };
+
+    if (updates.status) {
+        if (updates.status === 'Concluída') {
+            finalUpdates.progress = 100;
+            if (!updatedProject.macroActivities[macroIndex].microActivities[microIndex].completionDate) {
+                finalUpdates.completionDate = new Date().toISOString().split('T')[0];
+            }
+        } else if (updates.status === 'Planejada' || updates.status === 'Bloqueada') {
+            finalUpdates.progress = 0;
+        }
     }
 
+    updatedProject.macroActivities[macroIndex].microActivities[microIndex] = {
+      ...updatedProject.macroActivities[macroIndex].microActivities[microIndex],
+      ...finalUpdates
+    };
 
-    // Recalculate macro status
     const updatedMacro = updatedProject.macroActivities[macroIndex];
     updatedProject.macroActivities[macroIndex].status = updateMacroStatus(updatedMacro);
     
@@ -86,6 +91,7 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
       status: 'Planejada',
       completionStatus: 'Não Finalizada',
       observations: '',
+      progress: 0,
     };
     
     const updatedProject = { ...project };
@@ -116,67 +122,73 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
 
   return (
     <div className="space-y-4">
-      {project.macroActivities.map(macro => (
-        <div key={macro.id} className="bg-slate-50/50 border border-slate-100 rounded-3xl overflow-hidden">
-          <div className="w-full p-6 flex justify-between items-center text-left hover:bg-slate-100/50 group">
-            <div className="flex items-center gap-4 flex-1">
-              <button onClick={() => toggleMacro(macro.id)} className={`w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0 ${macro.status === 'Concluída' ? 'bg-emerald-500' : 'bg-slate-800'}`}>
-                <ChevronDown size={20} className={`transition-transform ${expandedMacros.has(macro.id) ? 'rotate-180' : ''}`} />
-              </button>
-              {editingMacro === macro.id ? (
-                <div className="flex-1 flex gap-2 items-center">
-                   <input 
-                      value={editingMacroName}
-                      onChange={e => setEditingMacroName(e.target.value)}
-                      autoFocus
-                      className="w-full text-sm font-black text-slate-800 uppercase tracking-tight bg-white border border-teal-300 rounded-md px-3 py-2"
-                   />
-                   <button onClick={() => handleSaveMacroName(macro.id)} className="p-2 text-emerald-500 hover:bg-emerald-100 rounded-md"><Save size={16}/></button>
-                   <button onClick={() => setEditingMacro(null)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-md"><X size={16}/></button>
-                </div>
-              ) : (
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">{macro.name}</h3>
-              )}
+      {project.macroActivities.map(macro => {
+        const totalMicros = macro.microActivities.length;
+        const completedMicros = macro.microActivities.filter(m => m.status === 'Concluída').length;
+        const progress = totalMicros > 0 ? (completedMicros / totalMicros) * 100 : 0;
+        
+        return (
+          <div key={macro.id} className="bg-slate-50/50 border border-slate-100 rounded-3xl overflow-hidden">
+            <div className="w-full p-6 flex justify-between items-center text-left hover:bg-slate-100/50 group">
+              <div className="flex items-center gap-4 flex-1">
+                <button onClick={() => toggleMacro(macro.id)} className={`w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0 ${macro.status === 'Concluída' ? 'bg-emerald-500' : 'bg-slate-800'}`}>
+                  <ChevronDown size={20} className={`transition-transform ${expandedMacros.has(macro.id) ? 'rotate-180' : ''}`} />
+                </button>
+                {editingMacro === macro.id ? (
+                  <div className="flex-1 flex gap-2 items-center">
+                     <input 
+                        value={editingMacroName}
+                        onChange={e => setEditingMacroName(e.target.value)}
+                        autoFocus
+                        className="w-full text-sm font-black text-slate-800 uppercase tracking-tight bg-white border border-teal-300 rounded-md px-3 py-2"
+                     />
+                     <button onClick={() => handleSaveMacroName(macro.id)} className="p-2 text-emerald-500 hover:bg-emerald-100 rounded-md"><Save size={16}/></button>
+                     <button onClick={() => setEditingMacro(null)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-md"><X size={16}/></button>
+                  </div>
+                ) : (
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">{macro.name}</h3>
+                )}
+              </div>
+              <div className="flex items-center gap-4">
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
+                      <button onClick={() => handleStartEditMacro(macro)} className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-md"><Edit size={16}/></button>
+                      <button onClick={() => onOpenDeletionModal({ type: 'macro', projectId: project.id, macroId: macro.id, name: macro.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"><Trash2 size={16}/></button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-800">{Math.round(progress)}%</span>
+                      <div className="w-16 h-1.5 bg-slate-200 rounded-full">
+                          <div className="bg-brand-primary h-1.5 rounded-full" style={{ width: `${progress}%` }}></div>
+                      </div>
+                      <span className="text-[10px] font-black text-slate-400">{completedMicros}/{totalMicros}</span>
+                  </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
-                    <button onClick={() => handleStartEditMacro(macro)} className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-md"><Edit size={16}/></button>
-                    <button onClick={() => onOpenDeletionModal({ type: 'macro', projectId: project.id, macroId: macro.id, name: macro.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"><Trash2 size={16}/></button>
-                </div>
-                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                    macro.status === 'Concluída' ? 'bg-emerald-100 text-emerald-600' : 
-                    macro.status === 'Em Andamento' ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-500'
-                }`}>
-                {macro.status}
-                </span>
-            </div>
-          </div>
 
-          {expandedMacros.has(macro.id) && (
-            <div className="bg-white p-4 space-y-3">
-              {macro.microActivities.map(micro => (
-                 <MicroActivityRow 
-                    key={micro.id} 
-                    micro={micro}
-                    assignees={projectAssignees}
-                    onUpdate={(updates) => handleMicroUpdate(macro.id, micro.id, updates)}
-                    onDelete={() => onOpenDeletionModal({ type: 'micro', projectId: project.id, macroId: macro.id, microId: micro.id, name: micro.name })}
-                    isEditing={editingMicro === micro.id}
-                    onSetEditing={setEditingMicro}
-                 />
-              ))}
-              <button onClick={() => addMicroActivity(macro.id)} className="w-full mt-2 p-3 bg-slate-50 text-slate-500 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition">
-                <Plus size={14}/> Adicionar Microatividade
-              </button>
-            </div>
-          )}
-        </div>
-      ))}
+            {expandedMacros.has(macro.id) && (
+              <div className="bg-white p-4 space-y-3">
+                {macro.microActivities.map(micro => (
+                   <MicroActivityRow 
+                      key={micro.id} 
+                      micro={micro}
+                      assignees={projectAssignees}
+                      onUpdate={(updates) => handleMicroUpdate(macro.id, micro.id, updates)}
+                      onDelete={() => onOpenDeletionModal({ type: 'micro', projectId: project.id, macroId: macro.id, microId: micro.id, name: micro.name })}
+                      isEditing={editingMicro === micro.id}
+                      onSetEditing={setEditingMicro}
+                   />
+                ))}
+                <button onClick={() => addMicroActivity(macro.id)} className="w-full mt-2 p-3 bg-slate-50 text-slate-500 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition">
+                  <Plus size={14}/> Adicionar Microatividade
+                </button>
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   );
 };
 
-// Sub-componente para a linha de Microatividade
 interface MicroActivityRowProps {
   micro: MicroActivity;
   onUpdate: (updates: Partial<MicroActivity>) => void;
@@ -262,6 +274,23 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
            <button onClick={onDelete} className="p-2 text-slate-300 hover:text-red-500 rounded-xl transition"><Trash2 size={14}/></button>
         </div>
       </div>
+
+      {micro.status === 'Em Andamento' && (
+        <div className="mt-3 pt-3 border-t border-slate-100/80 flex items-center gap-4">
+            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Progresso</label>
+            <input 
+                type="range" 
+                min="0" 
+                max="100" 
+                step="5" 
+                value={micro.progress || 0} 
+                onChange={e => onUpdate({ progress: parseInt(e.target.value) })}
+                className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-brand-primary"
+            />
+            <span className="text-sm font-bold text-brand-primary w-12 text-right">{micro.progress || 0}%</span>
+        </div>
+      )}
+
       {(isEditing || micro.observations || micro.reportLink) && (
           <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-4">
               <div>

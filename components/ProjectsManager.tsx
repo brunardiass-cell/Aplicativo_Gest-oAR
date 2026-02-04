@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember, AppUser } from '../types';
 import { FolderPlus, ListPlus, FolderKanban, Workflow, GanttChartSquare, Copy, Edit, User, Save, X, Users, Plus } from 'lucide-react';
 import PlanManagerModal from './PlanManagerModal';
@@ -37,6 +37,36 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   const [newTeamMemberName, setNewTeamMemberName] = useState('');
 
   const isAdmin = currentUserRole === 'admin';
+
+  const projectStats = useMemo(() => {
+    if (!selectedProject) return null;
+
+    let totalMicros = 0;
+    let completedMicros = 0;
+    let lateMicros = 0;
+    let ongoingMicros = 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    selectedProject.macroActivities.forEach(macro => {
+        macro.microActivities.forEach(micro => {
+            totalMicros++;
+            if (micro.status === 'Concluída') {
+                completedMicros++;
+            }
+            if (micro.status === 'Em Andamento') {
+                ongoingMicros++;
+            }
+            if (micro.dueDate && new Date(micro.dueDate + 'T00:00:00') < today && micro.status !== 'Concluída') {
+                lateMicros++;
+            }
+        });
+    });
+
+    const progress = totalMicros > 0 ? (completedMicros / totalMicros) * 100 : 0;
+
+    return { totalMicros, completedMicros, lateMicros, ongoingMicros, progress };
+  }, [selectedProject]);
 
   const addProject = (project: Project) => {
     const updatedProjects = [...projects, project];
@@ -224,41 +254,58 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                        </div>
                     </div>
                   ) : (
-                    <div className="flex justify-between items-start">
-                      <div>
-                          <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">{selectedProject.name}</h3>
-                          <div className="flex items-center gap-2 mt-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                             <User size={14}/> Responsável: <span className="text-slate-800">{selectedProject.responsible || 'Não definido'}</span>
+                    <div>
+                      <div className="flex justify-between items-start">
+                          <div>
+                              <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">{selectedProject.name}</h3>
+                              <div className="flex items-center gap-2 mt-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                 <User size={14}/> Responsável: <span className="text-slate-800">{selectedProject.responsible || 'Não definido'}</span>
+                              </div>
+                              <div className="flex items-center gap-2 mt-4">
+                                <select 
+                                  value={selectedProject.status} 
+                                  onChange={(e) => handleStatusChange(selectedProject.id, e.target.value as Project['status'])}
+                                  className="px-3 py-1 text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 rounded-lg border border-slate-200 appearance-none outline-none"
+                                >
+                                    <option value="Em Planejamento">Em Planejamento</option>
+                                    <option value="Ativo">Ativo</option>
+                                    <option value="Suspenso">Suspenso</option>
+                                    <option value="Concluído">Concluído</option>
+                                </select>
+                                <button onClick={() => handleDuplicateProject(selectedProject)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Criar Versão 2 do Projeto">
+                                    <Copy size={14} />
+                                </button>
+                                {isAdmin && (
+                                  <button onClick={handleStartEdit} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Editar Projeto">
+                                      <Edit size={14} />
+                                  </button>
+                                )}
+                              </div>
                           </div>
-                          <div className="flex items-center gap-2 mt-4">
-                            <select 
-                              value={selectedProject.status} 
-                              onChange={(e) => handleStatusChange(selectedProject.id, e.target.value as Project['status'])}
-                              className="px-3 py-1 text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 rounded-lg border border-slate-200 appearance-none outline-none"
-                            >
-                                <option value="Em Planejamento">Em Planejamento</option>
-                                <option value="Ativo">Ativo</option>
-                                <option value="Suspenso">Suspenso</option>
-                                <option value="Concluído">Concluído</option>
-                            </select>
-                            <button onClick={() => handleDuplicateProject(selectedProject)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Criar Versão 2 do Projeto">
-                                <Copy size={14} />
-                            </button>
-                            {isAdmin && (
-                              <button onClick={handleStartEdit} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Editar Projeto">
-                                  <Edit size={14} />
+                          <div className="bg-slate-100 p-1 rounded-full flex gap-1">
+                              <button onClick={() => setViewMode('timeline')} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase flex items-center gap-2 ${viewMode === 'timeline' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
+                                <GanttChartSquare size={14}/> Cronograma
                               </button>
-                            )}
+                              <button onClick={() => setViewMode('flow')} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase flex items-center gap-2 ${viewMode === 'flow' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
+                                <Workflow size={14}/> Fluxo Finalizado
+                              </button>
                           </div>
                       </div>
-                      <div className="bg-slate-100 p-1 rounded-full flex gap-1">
-                          <button onClick={() => setViewMode('timeline')} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase flex items-center gap-2 ${viewMode === 'timeline' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
-                            <GanttChartSquare size={14}/> Cronograma
-                          </button>
-                          <button onClick={() => setViewMode('flow')} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase flex items-center gap-2 ${viewMode === 'flow' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
-                            <Workflow size={14}/> Fluxo Finalizado
-                          </button>
-                      </div>
+                       {projectStats && (
+                            <div className="mt-6 space-y-2">
+                                <div className="flex items-center gap-4">
+                                    <span className="font-bold text-slate-500 w-12 text-left">{Math.round(projectStats.progress)}%</span>
+                                    <div className="w-full bg-slate-200 rounded-full h-2">
+                                        <div className="bg-brand-primary h-2 rounded-full" style={{ width: `${projectStats.progress}%` }}></div>
+                                    </div>
+                                </div>
+                                <p className="text-center text-xs text-slate-500 font-semibold">
+                                    {projectStats.completedMicros}/{projectStats.totalMicros} microatividades concluídas
+                                    {projectStats.lateMicros > 0 && <span className="text-red-500"> • {projectStats.lateMicros} em atraso</span>}
+                                    {projectStats.ongoingMicros > 0 && <span className="text-teal-600"> • {projectStats.ongoingMicros} em andamento</span>}
+                                </p>
+                            </div>
+                        )}
                     </div>
                   )}
                 </div>

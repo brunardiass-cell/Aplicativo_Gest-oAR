@@ -113,6 +113,7 @@ export interface MicroActivity {
   observations: string;
   reportLink?: string;
   completionDate?: string;
+  progress?: number;
 }
 
 export interface MacroActivity {
