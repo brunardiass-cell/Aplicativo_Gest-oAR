@@ -9,6 +9,22 @@ export const DEFAULT_APP_USERS: AppUser[] = [
     role: 'admin',
     status: 'active',
     joinedAt: new Date().toISOString()
+  },
+  {
+    id: 'user_user_ester',
+    username: 'Ester (Acesso)',
+    email: 'ester@ctvacinas.org',
+    role: 'user_team_2',
+    status: 'active',
+    joinedAt: new Date().toISOString()
+  },
+  {
+    id: 'user_user_general',
+    username: 'Usuário Geral',
+    email: 'geral@ctvacinas.org',
+    role: 'user_general',
+    status: 'active',
+    joinedAt: new Date().toISOString()
   }
 ];
 

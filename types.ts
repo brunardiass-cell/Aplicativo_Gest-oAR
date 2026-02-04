@@ -70,11 +70,20 @@ export interface AccessUser {
   status: 'active' | 'inactive';
 }
 
+export type AppUserRole = 
+  | 'admin' 
+  | 'user_team_1'
+  | 'user_team_2'
+  | 'user_team_3'
+  | 'user_team_4'
+  | 'user_team_5'
+  | 'user_general';
+
 export interface AppUser {
   id: string;
   username: string;
   email: string;
-  role: 'admin' | 'user';
+  role: AppUserRole;
   status: 'active' | 'pending' | 'blocked';
   joinedAt: string;
 }

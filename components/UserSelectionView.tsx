@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { TeamMember, AppUser } from '../types';
+import { TeamMember, AppUser, AppUserRole } from '../types';
 import { Crown, LogOut, Users, Eye } from 'lucide-react';
 
 interface UserSelectionViewProps {
@@ -8,7 +8,7 @@ interface UserSelectionViewProps {
   onSelectUser: (user: TeamMember) => void;
   onSelectTeamView: () => void;
   onLogout: () => void;
-  currentUserRole: AppUser['role'] | null;
+  currentUserRole: AppUserRole | null;
 }
 
 const getInitials = (name: string): string => {
@@ -18,6 +18,15 @@ const getInitials = (name: string): string => {
   }
   return name.substring(0, 2).toUpperCase();
 };
+
+const ROLE_TO_MEMBER_ID_MAP: Record<string, string> = {
+  user_team_1: 'tm_2', // Bruna Dias
+  user_team_2: 'tm_3', // Ester
+  user_team_3: 'tm_4', // Marjorie
+  user_team_4: 'tm_5', // Ana Luiza
+  user_team_5: 'tm_6', // Ana Terzian
+};
+
 
 const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSelectUser, onSelectTeamView, onLogout, currentUserRole }) => {
   return (
@@ -35,14 +44,33 @@ const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSe
         <div className="mt-12 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
             {teamMembers.map(member => {
-              const isDisabled = currentUserRole === 'user' && member.isLeader;
+              const isLeaderProfile = member.isLeader;
+              let isDisabled = false;
+              let title = member.name;
+
+              if (currentUserRole !== 'admin') {
+                if (isLeaderProfile) {
+                  isDisabled = true;
+                  title = "Acesso restrito ao perfil de liderança.";
+                } else if (currentUserRole === 'user_general') {
+                  isDisabled = true;
+                  title = "Seu perfil só permite a Visão Geral.";
+                } else if (currentUserRole && currentUserRole.startsWith('user_team_')) {
+                  const allowedMemberId = ROLE_TO_MEMBER_ID_MAP[currentUserRole];
+                  if (member.id !== allowedMemberId) {
+                      isDisabled = true;
+                      title = "Acesso restrito a este perfil.";
+                  }
+                }
+              }
+
               return (
                 <button 
                   key={member.id} 
                   onClick={() => onSelectUser(member)}
                   disabled={isDisabled}
-                  title={isDisabled ? "Acesso ao perfil de liderança restrito." : member.name}
-                  className={`group flex flex-col items-center gap-3 p-4 rounded-2xl transition ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'}`}
+                  title={title}
+                  className={`group flex flex-col items-center gap-3 p-4 rounded-2xl transition ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-50'}`}
                 >
                   <div className="relative">
                     <div className="w-20 h-20 bg-brand-primary/10 rounded-full flex items-center justify-center text-2xl font-black text-brand-primary group-hover:scale-105 transition-transform">

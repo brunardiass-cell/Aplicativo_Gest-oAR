@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { TeamMember, AppUser } from '../types';
+import { TeamMember, AppUser, AppUserRole } from '../types';
 import { ShieldCheck, UserPlus, Trash2, Edit, User, Briefcase, X, Save, CheckCircle, Ban, Clock, Mail, ShieldAlert } from 'lucide-react';
 
 interface AccessControlProps {
@@ -15,7 +15,7 @@ const AccessControl: React.FC<AccessControlProps> = ({ teamMembers, onUpdateTeam
   
   // States para Usuários (AppUsers)
   const [isAddingUser, setIsAddingUser] = useState(false);
-  const [newUser, setNewUser] = useState({ username: '', email: '', role: 'user' as const });
+  const [newUser, setNewUser] = useState<{username: string; email: string; role: AppUserRole}>({ username: '', email: '', role: 'user_general' });
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
 
   // States para Membros da Equipe (TeamMembers)
@@ -36,7 +36,7 @@ const AccessControl: React.FC<AccessControlProps> = ({ teamMembers, onUpdateTeam
     };
     
     onUpdateAppUsers([...appUsers, user]);
-    setNewUser({ username: '', email: '', role: 'user' });
+    setNewUser({ username: '', email: '', role: 'user_general' });
     setIsAddingUser(false);
   };
 
@@ -44,7 +44,7 @@ const AccessControl: React.FC<AccessControlProps> = ({ teamMembers, onUpdateTeam
     onUpdateAppUsers(appUsers.map(u => u.id === userId ? { ...u, status: newStatus } : u));
   };
 
-  const handleUpdateUserRole = (userId: string, newRole: AppUser['role']) => {
+  const handleUpdateUserRole = (userId: string, newRole: AppUserRole) => {
     onUpdateAppUsers(appUsers.map(u => u.id === userId ? { ...u, role: newRole } : u));
   };
 
@@ -131,8 +131,13 @@ const AccessControl: React.FC<AccessControlProps> = ({ teamMembers, onUpdateTeam
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Papel</label>
                   <select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as any})} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-black outline-none">
-                    <option value="user">Usuário Comum</option>
                     <option value="admin">Administrador</option>
+                    <option value="user_team_1">Equipe 1 (Bruna)</option>
+                    <option value="user_team_2">Equipe 2 (Ester)</option>
+                    <option value="user_team_3">Equipe 3 (Marjorie)</option>
+                    <option value="user_team_4">Equipe 4 (Ana L.)</option>
+                    <option value="user_team_5">Equipe 5 (Ana T.)</option>
+                    <option value="user_general">Usuário Geral</option>
                   </select>
                 </div>
                 <button type="submit" className="px-6 py-3.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition shadow-lg flex items-center justify-center gap-2">
@@ -152,7 +157,7 @@ const AccessControl: React.FC<AccessControlProps> = ({ teamMembers, onUpdateTeam
                       <div className="flex items-center gap-2">
                         <h4 className="text-sm font-black text-slate-900 uppercase tracking-tighter">{user.username}</h4>
                         <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${user.role === 'admin' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                           {user.role}
+                           {user.role.replace('user_team_', 'Equipe ').replace('user_general', 'Geral')}
                         </span>
                       </div>
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">{user.email}</p>
@@ -175,8 +180,13 @@ const AccessControl: React.FC<AccessControlProps> = ({ teamMembers, onUpdateTeam
                             onChange={(e) => handleUpdateUserRole(user.id, e.target.value as any)}
                             className="bg-slate-100 border border-slate-200 rounded-lg px-2 py-1.5 text-[9px] font-black uppercase text-slate-600 outline-none"
                           >
-                            <option value="user">USER</option>
-                            <option value="admin">ADMIN</option>
+                            <option value="admin">Admin</option>
+                            <option value="user_team_1">Equipe 1</option>
+                            <option value="user_team_2">Equipe 2</option>
+                            <option value="user_team_3">Equipe 3</option>
+                            <option value="user_team_4">Equipe 4</option>
+                            <option value="user_team_5">Equipe 5</option>
+                            <option value="user_general">Geral</option>
                           </select>
                           <button onClick={() => setEditingUser(user)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Editar Dados">
                             <Edit size={16}/>
@@ -289,8 +299,13 @@ const AccessControl: React.FC<AccessControlProps> = ({ teamMembers, onUpdateTeam
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Papel no Sistema</label>
                 <select value={editingUser.role} onChange={e => setEditingUser({...editingUser, role: e.target.value as any})} className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none">
-                  <option value="user">Usuário Comum</option>
                   <option value="admin">Administrador</option>
+                  <option value="user_team_1">Equipe 1 (Bruna)</option>
+                  <option value="user_team_2">Equipe 2 (Ester)</option>
+                  <option value="user_team_3">Equipe 3 (Marjorie)</option>
+                  <option value="user_team_4">Equipe 4 (Ana L.)</option>
+                  <option value="user_team_5">Equipe 5 (Ana T.)</option>
+                  <option value="user_general">Usuário Geral</option>
                 </select>
               </div>
             </div>
