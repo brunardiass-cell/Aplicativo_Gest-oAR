@@ -49,6 +49,12 @@ const App: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'Todos' | Status>('Todos');
   const [leadFilter, setLeadFilter] = useState<string>('Todos');
 
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: 'task' | 'macro' | 'micro';
+    name: string;
+    ids: { taskId?: string; projectId?: string; macroId?: string; microId?: string };
+  } | null>(null);
+
   const isInitialLoad = useRef(true);
   const saveDataTimeout = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -308,11 +314,58 @@ const App: React.FC = () => {
     setSelectedTask(null);
   };
 
-  const handleDeleteTask = (reason: string) => {
-    if (!selectedTask) return;
-    setTasks(prev => prev.map(t => t.id === selectedTask.id ? { ...t, deleted: true, deletionReason: reason, deletionDate: new Date().toISOString() } : t));
+  const handleOpenProjectItemDeletionModal = (item: { type: 'macro' | 'micro', projectId: string; macroId: string; microId?: string; name: string }) => {
+    setDeleteTarget({
+      type: item.type,
+      name: item.name,
+      ids: { projectId: item.projectId, macroId: item.macroId, microId: item.microId }
+    });
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDeletion = (reason: string) => {
+    if (!deleteTarget || !selectedProfile) return;
+
+    const newLog: ActivityLog = {
+      id: `log_${Date.now()}`,
+      action: 'EXCLUSÃO',
+      taskTitle: deleteTarget.name,
+      user: selectedProfile.name,
+      timestamp: new Date().toISOString(),
+      reason: reason,
+    };
+    setLogs(prev => [newLog, ...prev]);
+
+    const { type, ids } = deleteTarget;
+
+    if (type === 'task' && ids.taskId) {
+      setTasks(prev => prev.map(t =>
+        t.id === ids.taskId ? { ...t, deleted: true, deletionReason: reason, deletionDate: new Date().toISOString() } : t
+      ));
+    } else if (type === 'macro' && ids.projectId && ids.macroId) {
+      setProjects(prev => prev.map(p =>
+        p.id === ids.projectId
+          ? { ...p, macroActivities: p.macroActivities.filter(m => m.id !== ids.macroId) }
+          : p
+      ));
+    } else if (type === 'micro' && ids.projectId && ids.macroId && ids.microId) {
+      setProjects(prev => prev.map(p => {
+        if (p.id !== ids.projectId) return p;
+        return {
+          ...p,
+          macroActivities: p.macroActivities.map(m => {
+            if (m.id !== ids.macroId) return m;
+            return {
+              ...m,
+              microActivities: m.microActivities.filter(mi => mi.id !== ids.microId)
+            };
+          })
+        };
+      }));
+    }
+
     setIsDeleteModalOpen(false);
-    setSelectedTask(null);
+    setDeleteTarget(null);
   };
 
   const handleNotificationClick = (notification: AppNotification) => {
@@ -391,7 +444,6 @@ const App: React.FC = () => {
 
           <div className="mt-12 bg-slate-50/70 p-8 sm:p-10 rounded-[2.5rem] border border-slate-200/80 shadow-sm text-center">
             <h2 className="font-black text-slate-800 uppercase tracking-wider">Bem-vindo ao sistema</h2>
-            {/* FIX: Completed the truncated JSX for the unauthenticated view. */}
             <p className="mt-2 text-slate-500 text-sm">Para continuar, autentique-se usando sua conta Microsoft corporativa.</p>
             <button
                 onClick={handleLogin}
@@ -504,7 +556,10 @@ const App: React.FC = () => {
               currentUser={selectedProfile?.name || 'Todos'}
               onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }}
               onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }}
-              onDelete={(task) => { setSelectedTask(task); setIsDeleteModalOpen(true); }}
+              onDelete={(task) => {
+                setDeleteTarget({ type: 'task', name: task.activity, ids: { taskId: task.id } });
+                setIsDeleteModalOpen(true);
+              }}
               onAssignReview={() => {}} // Placeholder
               notifications={notifications.filter(n => !n.read)}
               onNotificationClick={handleNotificationClick}
@@ -517,7 +572,7 @@ const App: React.FC = () => {
               uniqueLeads={uniqueLeads}
             />
         )}
-        {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={()=>{}} teamMembers={teamMembers} currentUserRole={currentUserRole} />}
+        {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={handleOpenProjectItemDeletionModal} teamMembers={teamMembers} currentUserRole={currentUserRole} />}
         {view === 'quality' && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} appUsers={appUsers} onUpdateAppUsers={setAppUsers} />}
         {view === 'traceability' && <ActivityLogView logs={logs} />}
 
@@ -541,11 +596,11 @@ const App: React.FC = () => {
         />
       )}
       
-      {isDeleteModalOpen && selectedTask && (
+      {isDeleteModalOpen && deleteTarget && (
         <DeletionModal
-          itemName={selectedTask.activity}
-          onClose={() => setIsDeleteModalOpen(false)}
-          onConfirm={handleDeleteTask}
+          itemName={deleteTarget.name}
+          onClose={() => { setIsDeleteModalOpen(false); setDeleteTarget(null); }}
+          onConfirm={handleConfirmDeletion}
         />
       )}
       

@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { Task } from "../types";
 
@@ -41,6 +40,7 @@ export const generateExecutiveReport = async (tasks: Task[], contextName: string
       model: 'gemini-3-flash-preview',
       contents: prompt,
     });
+    // FIX: Per @google/genai guidelines, access the 'text' property directly instead of calling it as a function.
     return response.text || "Erro ao processar dados.";
   } catch (error) {
     return "Falha na conexão com a IA.";
