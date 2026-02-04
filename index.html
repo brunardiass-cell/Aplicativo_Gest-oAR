@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-br">
   <head>
@@ -44,6 +45,51 @@
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
       .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      
+      @media print {
+        body.is-printing-project #root > div > aside,
+        body.is-printing-project #root > div > main > header,
+        body.is-printing-project .project-manager-header,
+        body.is-printing-project .project-list-container,
+        body.is-printing-project .no-print {
+          display: none !important;
+        }
+
+        body.is-printing-project {
+          background-color: white !important;
+        }
+
+        body.is-printing-project #root,
+        body.is-printing-project #root > div,
+        body.is-printing-project #root > div > main {
+          display: block !important;
+          width: 100% !important;
+          height: auto !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          overflow: visible !important;
+        }
+
+        body.is-printing-project .printable-content {
+          position: static !important;
+          width: 100% !important;
+          height: auto !important;
+          border: none !important;
+          box-shadow: none !important;
+          animation: none !important;
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+        
+        body.is-printing-project h3 {
+          font-size: 1.25rem;
+        }
+        
+        @page {
+          size: A4 landscape;
+          margin: 15mm;
+        }
+      }
     </style>
     <script type="importmap">
 {
