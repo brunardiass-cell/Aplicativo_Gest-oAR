@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Task, AppNotification } from '../types';
 import { 
@@ -40,6 +39,33 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
 }) => {
   const activeTasks = tasks.filter(t => !t.deleted);
   const activeReviews = notifications.filter(n => n.userId === currentUser && !n.read && n.type === 'REVIEW_ASSIGNED');
+
+  const renderReportStageBadge = (task: Task) => {
+    if (!task.isReport || !task.reportStage) return null;
+
+    // FIX: Widened the type of the 'text' variable to 'string' to allow for custom UI labels like "Revisão Solicitada", which are not part of the 'ReportStage' type. This resolves the TypeScript error.
+    let text: string = task.reportStage;
+    let className = 'bg-amber-50 text-amber-600 border-amber-100'; // Padrão para relatórios
+
+    if (task.reportStage === 'Próximo Revisor') {
+      if (currentUser === task.currentReviewer) {
+        text = 'Revisão Solicitada';
+        className = 'bg-amber-50 text-amber-600 border-amber-100'; // Âmbar para o revisor
+      } else {
+        // Verde para o criador ou outros membros da equipe
+        text = 'Próximo Revisor';
+        className = 'bg-emerald-50 text-emerald-600 border-emerald-100';
+      }
+    } else if (task.reportStage.includes('Concluído')) {
+      className = 'bg-emerald-50 text-emerald-600 border-emerald-100';
+    }
+
+    return (
+      <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${className}`}>
+        {text}
+      </span>
+    );
+  };
 
   return (
     <div className="space-y-10">
@@ -107,13 +133,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                 }`}>
                   {task.status}
                 </span>
-                {task.isReport && (
-                  <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                    task.reportStage?.includes('Concluído') ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'
-                  }`}>
-                    {task.reportStage || 'Relatório'}
-                  </span>
-                )}
+                {renderReportStageBadge(task)}
               </div>
               
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
