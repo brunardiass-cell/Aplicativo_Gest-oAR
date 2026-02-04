@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo } from './types';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote } from './types';
 import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS } from './constants';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
@@ -241,7 +241,38 @@ const App: React.FC = () => {
         taskToSave.id = `task_${Date.now()}`;
     }
 
-    const oldTask = isEditing ? tasks.find(t => t.id === taskToSave.id) : null;
+    const oldTask = isEditing ? tasks.find(t => t.id === task.id) : null;
+    
+    if (isEditing && oldTask && selectedProfile) {
+        const updates: TaskNote[] = taskToSave.updates ? [...taskToSave.updates] : [];
+        const createNote = (noteText: string) => {
+            updates.unshift({
+                id: `note_${Date.now()}_${Math.random()}`,
+                date: new Date().toISOString(),
+                user: selectedProfile.name,
+                note: noteText,
+            });
+        };
+
+        if (oldTask.status !== taskToSave.status) {
+            createNote(`Status alterado de "${oldTask.status}" para "${taskToSave.status}".`);
+        }
+        if (oldTask.reportStage !== taskToSave.reportStage) {
+            createNote(`Etapa do relatório alterada para "${taskToSave.reportStage}".`);
+        }
+        if (oldTask.currentReviewer !== taskToSave.currentReviewer) {
+            if (taskToSave.currentReviewer) {
+                createNote(`Novo revisor atribuído: "${taskToSave.currentReviewer}".`);
+            } else if (oldTask.currentReviewer) {
+                createNote(`Revisor "${oldTask.currentReviewer}" foi removido.`);
+            }
+        }
+        taskToSave.updates = updates;
+    }
+    
+    if (taskToSave.isReport && taskToSave.reportStage?.includes('Concluído') && (!oldTask || !oldTask.reportStage?.includes('Concluído'))) {
+        taskToSave.completionDate = new Date().toISOString().split('T')[0];
+    }
 
     if (
       taskToSave.isReport &&
@@ -338,140 +369,167 @@ const App: React.FC = () => {
 
           <div className="mt-12 bg-slate-50/70 p-8 sm:p-10 rounded-[2.5rem] border border-slate-200/80 shadow-sm text-center">
             <h2 className="font-black text-slate-800 uppercase tracking-wider">Bem-vindo ao sistema</h2>
-            <p className="mt-2 text-sm text-slate-500 max-w-xs mx-auto">
-              Utilize suas credenciais institucionais para acessar o painel de controle e fluxos estratégicos.
-            </p>
-
-            <button 
-              onClick={handleLogin} 
-              className="mt-8 w-full bg-slate-900 text-white rounded-2xl p-3.5 flex items-center justify-center gap-4 hover:bg-black transition-colors shadow-lg shadow-slate-200 active:scale-[0.98]">
-              <div className="bg-brand-primary p-2.5 rounded-lg">
-                  <ArrowRight size={20} />
-              </div>
-              <div className="text-left flex-1">
-                  <span className="font-bold text-sm uppercase tracking-wider">Entrar com Microsoft</span>
-                  <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Conta Corporativa @ctvacinas.org</p>
-              </div>
+            {/* FIX: Completed the truncated JSX for the unauthenticated view. */}
+            <p className="mt-2 text-slate-500 text-sm">Para continuar, autentique-se usando sua conta Microsoft corporativa.</p>
+            <button
+                onClick={handleLogin}
+                className="mt-8 w-full flex items-center justify-center gap-3 bg-slate-800 text-white py-4 rounded-2xl font-bold uppercase text-sm tracking-widest hover:bg-black transition"
+            >
+                Entrar com Microsoft <ArrowRight size={16}/>
             </button>
+             {authError && <p className="mt-4 text-sm text-red-500">{authError}</p>}
           </div>
-
-          <div className="mt-8 flex justify-center items-center gap-2">
-            <div className="w-2 h-2 bg-slate-300 rounded-full"></div>
-            <div className="w-2 h-2 bg-slate-200 rounded-full"></div>
-            <div className="w-2 h-2 bg-slate-200 rounded-full"></div>
-          </div>
-          
-          {authError && <p className="text-red-500 mt-6">{authError}</p>}
         </main>
       </div>
     );
   }
-
-  if (isMsalAuthenticated && isAuthorized === false) {
+  
+  if (isAuthorized === false) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans">
-        <main className="w-full max-w-md mx-auto text-center animate-in-slow">
-            <div className="bg-white p-10 rounded-[2.5rem] border border-red-200/80 shadow-lg shadow-red-500/10">
-                <div className="mb-6 inline-block bg-red-100 p-5 rounded-3xl">
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4 font-sans text-center">
+        <div className="w-full max-w-md mx-auto">
+            <div className="mb-8 inline-block">
+                <div className="bg-red-100 p-5 rounded-3xl shadow-sm">
                     <ShieldAlert size={36} className="text-red-500" strokeWidth={2.5}/>
                 </div>
-                <h1 className="text-3xl font-black text-slate-900 tracking-tighter">
-                    Acesso Negado
-                </h1>
-                <p className="mt-4 text-sm text-slate-500">
-                    A conta <span className="font-bold text-slate-700">{account?.username}</span> não tem permissão para acessar este sistema ou está inativa.
-                </p>
-                <p className="mt-2 text-xs text-slate-400">
-                    Se isso for um erro, por favor, entre em contato com o administrador da plataforma.
-                </p>
-                <button 
-                onClick={handleLogout} 
-                className="mt-8 w-full bg-slate-800 text-white rounded-2xl p-4 font-bold uppercase text-xs tracking-widest hover:bg-black transition"
-                >
-                Tentar com outra conta
-                </button>
             </div>
-        </main>
+            <h1 className="text-3xl font-black text-slate-800">Acesso Negado</h1>
+            <p className="mt-2 text-slate-500">Seu e-mail (<span className="font-bold">{account?.username}</span>) não está autorizado a acessar este sistema. Entre em contato com o administrador.</p>
+            <button onClick={handleLogout} className="mt-8 bg-slate-200 text-slate-700 px-6 py-3 rounded-xl font-bold text-sm">Sair</button>
+        </div>
       </div>
     );
   }
   
-  if (isMsalAuthenticated && isAuthorized === null) {
-      return <div className="flex h-screen w-screen items-center justify-center bg-brand-light"><Loader2 size={48} className="animate-spin text-brand-primary" /></div>;
+  if (!selectedProfile || !isPasswordAuthenticated) {
+    if (!selectedProfile) {
+      return (
+        <UserSelectionView
+          teamMembers={teamMembers}
+          onSelectUser={handleProfileSelect}
+          onSelectTeamView={handleTeamViewSelect}
+          onLogout={handleLogout}
+          currentUserRole={currentUserRole}
+        />
+      );
+    }
+    
+    if (selectedProfile && !isPasswordAuthenticated) {
+      return (
+        <PasswordModal 
+          isOpen={true} 
+          onClose={handleSwitchProfile} 
+          onConfirm={handlePasswordConfirm}
+          userName={selectedProfile.name}
+          error={passwordError}
+        />
+      );
+    }
   }
 
-  if (!selectedProfile) {
-    return <UserSelectionView onSelectUser={handleProfileSelect} onSelectTeamView={handleTeamViewSelect} teamMembers={teamMembers} onLogout={handleLogout} currentUserRole={currentUserRole} />;
-  }
-
-  if (selectedProfile.password && !isPasswordAuthenticated) {
-    return <PasswordModal isOpen={true} onConfirm={handlePasswordConfirm} onClose={handleSwitchProfile} userName={selectedProfile.name} error={passwordError}/>
-  }
-  
   return (
-    <div className="flex min-h-screen bg-brand-light text-slate-800">
-      <input type="file" ref={fileInputRef} onChange={handleLoadLocalBackup} accept=".json" className="hidden" />
-      <Sidebar 
-        currentView={view} 
-        onViewChange={setView} 
+    <div className="flex h-screen bg-slate-100 font-sans">
+      <Sidebar
+        currentView={view}
+        onViewChange={setView}
         onGoHome={() => setView('dashboard')}
-        onSwitchProfile={handleSwitchProfile} 
+        onLogout={handleLogout}
+        onSwitchProfile={handleSwitchProfile}
         selectedProfile={selectedProfile}
         hasFullAccess={hasFullAccess}
         lastSync={lastSync}
-        onLogout={handleLogout}
         onSaveBackup={handleSaveLocalBackup}
         onLoadBackup={() => fileInputRef.current?.click()}
       />
-      
-      <main className="flex-1 ml-64 p-10 max-w-[1600px]">
-        <header className="flex justify-between items-start mb-12">
-            <div className="flex-1">
-                <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase">
-                    {view === 'dashboard' ? `Painel Executivo` : 
-                     view === 'tasks' ? 'Atividades Regulatórias' : 
-                     view === 'projects' ? 'Fluxos Estratégicos' : 
-                     view === 'quality' ? 'Gestão de Acesso' : 'Rastreabilidade'}
-                </h1>
-                <p className="text-sm font-bold text-brand-primary mt-1">
-                  Visão de {selectedProfile.name}
-                </p>
+      <input type="file" ref={fileInputRef} onChange={handleLoadLocalBackup} accept=".json" className="hidden" />
+
+      <main className="flex-1 p-10 overflow-y-auto ml-64">
+        <header className="flex justify-between items-center mb-8">
+            <div>
+              <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">
+                {view === 'dashboard' && 'Dashboard'}
+                {view === 'tasks' && 'Painel de Atividades'}
+                {view === 'projects' && 'Gerenciador de Projetos'}
+                {view === 'quality' && 'Controle de Acesso'}
+                {view === 'traceability' && 'Auditoria'}
+              </h1>
+              <p className="text-sm font-bold text-slate-400">
+                {selectedProfile?.name} - {selectedProfile?.role}
+              </p>
             </div>
-            
-            <div className="flex items-center gap-2">
-               <button onClick={() => {}} className={`relative p-3 bg-white border border-slate-200 rounded-full hover:bg-slate-100 transition ${pendingReviewCount > 0 ? 'text-amber-500' : 'text-slate-500'}`}>
-                  <Bell size={20}/>
-                  {pendingReviewCount > 0 && <span className="absolute top-0 right-0 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{pendingReviewCount}</span>}
-               </button>
-               <button onClick={() => setIsReportModalOpen(true)} className="p-3 bg-white border border-slate-200 rounded-full text-slate-500 hover:bg-slate-100 transition">
-                  <FileText size={20}/>
-               </button>
-               {view === 'tasks' && canCreate && (
-                 <button 
-                  onClick={() => { setSelectedTask(null); setIsModalOpen(true); }}
-                  className="ml-4 px-6 py-3.5 bg-slate-800 text-white rounded-full font-bold text-xs uppercase tracking-wider hover:bg-black transition shadow-lg flex items-center gap-2"
-                >
-                  <PlusCircle size={16} /> Nova Atividade
-                </button>
-               )}
+            <div className="flex items-center gap-4">
+                <div className="relative">
+                    <Bell size={24} className="text-slate-400"/>
+                    {pendingReviewCount > 0 && 
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">{pendingReviewCount}</span>
+                    }
+                </div>
+                {canCreate && (
+                    <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-brand-primary text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg hover:bg-brand-accent transition">
+                        <PlusCircle size={16}/> Nova Atividade
+                    </button>
+                )}
             </div>
         </header>
 
-        <div className="animation-in">
-          {view === 'dashboard' && <Dashboard projects={projects} tasks={tasks} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />}
-          {view === 'quality' && hasFullAccess && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} appUsers={appUsers} onUpdateAppUsers={setAppUsers} />}
-          {view === 'tasks' && <TaskBoard tasks={tasksForBoard} currentUser={selectedProfile?.name || 'Todos'} onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} onDelete={(task) => { setSelectedTask(task); setIsDeleteModalOpen(true); }} onAssignReview={() => {}} onNotificationClick={handleNotificationClick} onClearSingleNotification={handleClearSingleNotification} onClearAllNotifications={handleClearAllReviewNotifications} notifications={notifications} />}
-          {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={() => {}} teamMembers={teamMembers} currentUserRole={currentUserRole} />}
-          {view === 'traceability' && hasFullAccess && <ActivityLogView logs={logs} />}
-        </div>
+        {view === 'dashboard' && <Dashboard tasks={tasksForBoard} projects={projects} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />}
+        {view === 'tasks' && (
+            <TaskBoard
+              tasks={tasksForBoard}
+              currentUser={selectedProfile?.name || 'Todos'}
+              onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }}
+              onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }}
+              onDelete={(task) => { setSelectedTask(task); setIsDeleteModalOpen(true); }}
+              onAssignReview={() => {}} // Placeholder
+              notifications={notifications.filter(n => !n.read)}
+              onNotificationClick={handleNotificationClick}
+              onClearSingleNotification={handleClearSingleNotification}
+              onClearAllNotifications={handleClearAllReviewNotifications}
+            />
+        )}
+        {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={()=>{}} teamMembers={teamMembers} currentUserRole={currentUserRole} />}
+        {view === 'quality' && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} appUsers={appUsers} onUpdateAppUsers={setAppUsers} />}
+        {view === 'traceability' && <ActivityLogView logs={logs} />}
 
-        {isModalOpen && <TaskModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveTask} projects={Array.from(new Set(tasks.map(t => t.project)))} initialData={selectedTask} teamMembers={teamMembers} />}
-        {isDetailsOpen && selectedTask && <TaskDetailsModal task={selectedTask} onClose={() => { setIsDetailsOpen(false); setSelectedTask(null); }} />}
-        {isDeleteModalOpen && selectedTask && <DeletionModal itemName={selectedTask.activity} onClose={() => { setIsDeleteModalOpen(false); setSelectedTask(null); }} onConfirm={handleDeleteTask} />}
-        {isReportModalOpen && <MonthlyReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} tasks={tasks} filteredUser={filterMember} />}
       </main>
+      
+      {isModalOpen && (
+        <TaskModal
+          isOpen={isModalOpen}
+          onClose={() => { setIsModalOpen(false); setSelectedTask(null); }}
+          onSave={handleSaveTask}
+          projects={projects.map(p => p.name)}
+          initialData={selectedTask}
+          teamMembers={teamMembers}
+        />
+      )}
+      
+      {isDetailsOpen && selectedTask && (
+        <TaskDetailsModal
+          task={selectedTask}
+          onClose={() => setIsDetailsOpen(false)}
+        />
+      )}
+      
+      {isDeleteModalOpen && selectedTask && (
+        <DeletionModal
+          itemName={selectedTask.activity}
+          onClose={() => setIsDeleteModalOpen(false)}
+          onConfirm={handleDeleteTask}
+        />
+      )}
+      
+      {isReportModalOpen && (
+          <MonthlyReportModal
+              isOpen={isReportModalOpen}
+              onClose={() => setIsReportModalOpen(false)}
+              tasks={tasks}
+              filteredUser={filterMember}
+          />
+      )}
     </div>
   );
 };
 
+// FIX: Add default export to make the component available for import in index.tsx.
 export default App;

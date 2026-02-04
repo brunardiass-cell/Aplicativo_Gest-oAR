@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Task, AppNotification } from '../types';
 import { 
@@ -167,12 +168,20 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                      <span className="text-[10px] font-bold text-slate-700 uppercase">{task.projectLead}</span>
                   </div>
                </div>
-               {task.reportStage === 'Próximo Revisor' && task.currentReviewer && (
+               
+               {task.isReport && task.reportStage?.includes('Concluído') && task.completionDate ? (
+                   <div className="flex flex-col text-right">
+                      <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Concluída em</span>
+                      <span className="text-[10px] font-black text-emerald-600 uppercase mt-1">
+                        {new Date(task.completionDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                      </span>
+                   </div>
+               ) : task.reportStage === 'Próximo Revisor' && task.currentReviewer ? (
                  <div className="flex flex-col text-right">
                     <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest">Em Revisão Com</span>
                     <span className="text-[10px] font-black text-amber-600 uppercase mt-1">{task.currentReviewer}</span>
                  </div>
-               )}
+               ) : null}
             </div>
 
             <div className="p-5 bg-slate-50 rounded-[2rem] border border-slate-100 mt-auto">
