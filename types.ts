@@ -1,6 +1,6 @@
 
 export type Priority = 'Baixa' | 'Média' | 'Alta' | 'Urgente';
-export type Status = 'Planejada' | 'Em Andamento' | 'Concluída' | 'Não Aplicável' | 'Bloqueada';
+export type Status = 'Planejada' | 'Em Andamento' | 'Concluída' | 'Não Aplicável' | 'Pausado';
 export type ReportStage = 
   | 'Em Elaboração' 
   | 'Próximo Revisor' 

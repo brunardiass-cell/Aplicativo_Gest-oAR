@@ -168,7 +168,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                     <option value="Planejada">Planejada</option>
                     <option value="Em Andamento">Em Andamento</option>
                     <option value="Concluída">Concluída</option>
-                    <option value="Bloqueada">Bloqueada</option>
+                    <option value="Pausado">Pausado</option>
                     <option value="Não Aplicável">Não Aplicável</option>
                 </select>
             </div>
@@ -194,7 +194,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
               <div className="flex flex-col gap-2">
                 <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
                   task.status === 'Concluída' ? 'bg-emerald-50 text-emerald-600' : 
-                  task.status === 'Bloqueada' ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-500'
+                  task.status === 'Pausado' ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-500'
                 }`}>
                   {task.status}
                 </span>

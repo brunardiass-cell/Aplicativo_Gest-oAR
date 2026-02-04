@@ -281,8 +281,7 @@ const App: React.FC = () => {
     }
     
     const wasJustCompleted = 
-      (taskToSave.status === 'Concluída' && oldTask?.status !== 'Concluída') ||
-      (taskToSave.isReport && taskToSave.reportStage?.includes('Concluído') && !oldTask?.reportStage?.includes('Concluído'));
+      (taskToSave.status === 'Concluída' && oldTask?.status !== 'Concluída');
 
     if (wasJustCompleted) {
       const today = new Date();
@@ -399,15 +398,17 @@ const App: React.FC = () => {
     return notifications.filter(n => n.userId === user && !n.read && n.type === 'REVIEW_ASSIGNED').length;
   }, [notifications, selectedProfile]);
 
+  const activeProjects = useMemo(() => projects.filter(p => !p.deleted), [projects]);
+
   const uniqueLeads = useMemo(() => {
     const leads = new Set(tasks.filter(t => !t.deleted).map(t => t.projectLead));
     return ['Todos', ...Array.from(leads).sort()];
   }, [tasks]);
 
   const uniqueProjects = useMemo(() => {
-    const projectsList = new Set(tasks.filter(t => !t.deleted).map(t => t.project));
-    return ['Todos', ...Array.from(projectsList).sort()];
-  }, [tasks]);
+    const projectsList = new Set(activeProjects.map(p => p.name));
+    return ['Todos', 'Geral', ...Array.from(projectsList).sort()];
+  }, [activeProjects]);
 
   const tasksForBoard = useMemo(() => {
     return tasks.filter(t => {
@@ -426,8 +427,6 @@ const App: React.FC = () => {
       return memberMatch && statusMatch && leadMatch && projectMatch;
     });
   }, [tasks, filterMember, statusFilter, leadFilter, projectFilter]);
-
-  const activeProjects = useMemo(() => projects.filter(p => !p.deleted), [projects]);
 
   if (isLoading) {
     return <div className="flex h-screen w-screen items-center justify-center bg-brand-light"><Loader2 size={48} className="animate-spin text-brand-primary" /></div>;
@@ -597,7 +596,7 @@ const App: React.FC = () => {
           isOpen={isModalOpen}
           onClose={() => { setIsModalOpen(false); setSelectedTask(null); }}
           onSave={handleSaveTask}
-          projects={activeProjects.map(p => p.name)}
+          projects={['Geral', ...activeProjects.map(p => p.name)]}
           initialData={selectedTask}
           teamMembers={teamMembers}
         />

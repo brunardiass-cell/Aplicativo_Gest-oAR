@@ -183,7 +183,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
                   <option value="Planejada">Planejada</option>
                   <option value="Em Andamento">Em Andamento</option>
                   <option value="Concluída">Concluída</option>
-                  <option value="Bloqueada">Bloqueada</option>
+                  <option value="Pausado">Pausado</option>
                   <option value="Não Aplicável">Não Aplicável</option>
                 </select>
               </div>

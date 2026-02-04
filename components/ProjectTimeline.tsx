@@ -68,7 +68,7 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
             if (!updatedProject.macroActivities[macroIndex].microActivities[microIndex].completionDate) {
                 finalUpdates.completionDate = new Date().toISOString().split('T')[0];
             }
-        } else if (updates.status === 'Planejada' || updates.status === 'Bloqueada') {
+        } else if (updates.status === 'Planejada' || updates.status === 'Pausado') {
             finalUpdates.progress = 0;
         }
     }
@@ -309,7 +309,7 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
         </div>
         <div className="col-span-2">
           <select value={micro.status} onChange={e => onUpdate({ status: e.target.value as Status })} className="w-full bg-transparent text-[10px] font-bold text-slate-600">
-             <option value="Planejada">Planejada</option><option value="Em Andamento">Em Andamento</option><option value="Concluída">Concluída</option><option value="Bloqueada">Bloqueada</option>
+             <option value="Planejada">Planejada</option><option value="Em Andamento">Em Andamento</option><option value="Concluída">Concluída</option><option value="Pausado">Pausado</option>
           </select>
         </div>
         <div className="col-span-2 flex items-center justify-end gap-1">
