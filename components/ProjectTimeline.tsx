@@ -16,11 +16,19 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
   const [editingMacro, setEditingMacro] = useState<string | null>(null);
   const [editingMacroName, setEditingMacroName] = useState('');
 
-  const projectTeamMembers = useMemo(() => {
-    if (!project.team || project.team.length === 0) {
-        return teamMembers; // Fallback para todos se nenhuma equipe for definida
+  const projectAssignees = useMemo(() => {
+    const assignees = new Set<string>();
+    if (project.responsible) {
+      assignees.add(project.responsible);
     }
-    return teamMembers.filter(member => project.team!.includes(member.name));
+    if (project.team) {
+      project.team.forEach(name => assignees.add(name));
+    }
+    // Fallback if no team is defined, to avoid empty assignee list
+    if (assignees.size === 0) {
+        return teamMembers.map(m => m.name);
+    }
+    return Array.from(assignees).sort();
   }, [project, teamMembers]);
 
   const toggleMacro = (macroId: string) => {
@@ -73,7 +81,7 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
     const newMicro: MicroActivity = {
       id: 'micro_' + Math.random().toString(36).substr(2, 9),
       name: 'Nova Microatividade',
-      assignee: projectTeamMembers[0]?.name || teamMembers[0].name,
+      assignee: projectAssignees[0] || '',
       dueDate: new Date().toISOString().split('T')[0],
       status: 'Planejada',
       completionStatus: 'Não Finalizada',
@@ -150,7 +158,7 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
                  <MicroActivityRow 
                     key={micro.id} 
                     micro={micro}
-                    teamMembers={projectTeamMembers}
+                    assignees={projectAssignees}
                     onUpdate={(updates) => handleMicroUpdate(macro.id, micro.id, updates)}
                     onDelete={() => onOpenDeletionModal({ type: 'micro', projectId: project.id, macroId: macro.id, microId: micro.id, name: micro.name })}
                     isEditing={editingMicro === micro.id}
@@ -175,10 +183,10 @@ interface MicroActivityRowProps {
   onDelete: () => void;
   isEditing: boolean;
   onSetEditing: (id: string | null) => void;
-  teamMembers: TeamMember[];
+  assignees: string[];
 }
 
-const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, onDelete, isEditing, onSetEditing, teamMembers }) => {
+const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, onDelete, isEditing, onSetEditing, assignees }) => {
     const [localName, setLocalName] = useState(micro.name);
 
     const getDueDateStatus = () => {
@@ -224,7 +232,7 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
         </div>
         <div className="col-span-2">
           <select value={micro.assignee} onChange={e => onUpdate({ assignee: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600">
-            {teamMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+            {assignees.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
         </div>
         <div className="col-span-2 relative">

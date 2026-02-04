@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Project, ActivityPlanTemplate, MacroActivity, TeamMember } from '../types';
-import { X, FolderPlus } from 'lucide-react';
+import { X, FolderPlus, Plus, Trash2 } from 'lucide-react';
 
 interface NewProjectModalProps {
   isOpen: boolean;
@@ -15,13 +15,19 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plan
   const [projectName, setProjectName] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState<string>(plans[0]?.id || '');
   const [responsibleMember, setResponsibleMember] = useState<string>(teamMembers[0]?.name || '');
-  const [selectedTeam, setSelectedTeam] = useState<string[]>([]);
+  const [customTeam, setCustomTeam] = useState<string[]>([]);
+  const [newMemberName, setNewMemberName] = useState('');
   const [error, setError] = useState('');
 
-  const toggleTeamMember = (name: string) => {
-    setSelectedTeam(prev =>
-        prev.includes(name) ? prev.filter(m => m !== name) : [...prev, name]
-    );
+  const handleAddMember = () => {
+    if (newMemberName.trim() && !customTeam.includes(newMemberName.trim())) {
+      setCustomTeam([...customTeam, newMemberName.trim()]);
+      setNewMemberName('');
+    }
+  };
+
+  const handleRemoveMember = (nameToRemove: string) => {
+    setCustomTeam(customTeam.filter(name => name !== nameToRemove));
   };
 
   const handleSubmit = () => {
@@ -42,7 +48,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plan
       status: 'Em Planejamento',
       responsible: responsibleMember,
       templateId: selectedPlanId,
-      team: selectedTeam,
+      team: customTeam,
       macroActivities: selectedPlan.macroActivities.map((macroName): MacroActivity => ({
         id: Math.random().toString(36).substr(2, 9),
         name: macroName,
@@ -94,18 +100,25 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plan
               ))}
             </select>
           </div>
-          <div>
+          <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Equipe do Projeto</label>
-            <div className="mt-1 p-3 bg-slate-50 border border-slate-200 rounded-2xl flex flex-wrap gap-2">
-                {teamMembers.map(member => (
-                    <button
-                        type="button"
-                        key={member.id}
-                        onClick={() => toggleTeamMember(member.name)}
-                        className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition ${selectedTeam.includes(member.name) ? 'bg-[#1a2b4e] text-white border-[#1a2b4e]' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'}`}
-                    >
-                        {member.name}
-                    </button>
+            <div className="flex gap-2">
+              <input 
+                type="text"
+                value={newMemberName}
+                onChange={e => setNewMemberName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddMember())}
+                placeholder="Digite o nome do integrante"
+                className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold"
+              />
+              <button type="button" onClick={handleAddMember} className="px-4 bg-slate-800 text-white rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2"><Plus size={16}/>Adicionar</button>
+            </div>
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex flex-wrap gap-2 min-h-[40px]">
+                {customTeam.map(name => (
+                    <div key={name} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest">
+                        <span>{name}</span>
+                        <button type="button" onClick={() => handleRemoveMember(name)} className="text-slate-400 hover:text-red-500"><X size={12}/></button>
+                    </div>
                 ))}
             </div>
           </div>

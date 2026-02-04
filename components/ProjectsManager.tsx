@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember, AppUser } from '../types';
-import { FolderPlus, ListPlus, FolderKanban, Workflow, GanttChartSquare, Copy, Edit, User, Save, X, Users } from 'lucide-react';
+import { FolderPlus, ListPlus, FolderKanban, Workflow, GanttChartSquare, Copy, Edit, User, Save, X, Users, Plus } from 'lucide-react';
 import PlanManagerModal from './PlanManagerModal';
 import NewProjectModal from './NewProjectModal';
 import ProjectTimeline from './ProjectTimeline';
@@ -34,6 +34,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   const [viewMode, setViewMode] = useState<ProjectView>('timeline');
   const [isEditingProject, setIsEditingProject] = useState(false);
   const [editedProjectData, setEditedProjectData] = useState<Partial<Project>>({});
+  const [newTeamMemberName, setNewTeamMemberName] = useState('');
 
   const isAdmin = currentUserRole === 'admin';
 
@@ -59,6 +60,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   const handleCancelEdit = () => {
     setIsEditingProject(false);
     setEditedProjectData({});
+    setNewTeamMemberName('');
   };
 
   const handleSaveEdit = () => {
@@ -76,12 +78,22 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     }
   };
   
-  const toggleEditTeamMember = (name: string) => {
-    const currentTeam = editedProjectData.team || [];
-    const newTeam = currentTeam.includes(name)
-        ? currentTeam.filter(m => m !== name)
-        : [...currentTeam, name];
-    setEditedProjectData({ ...editedProjectData, team: newTeam });
+  const handleAddMemberToEdit = () => {
+    const name = newTeamMemberName.trim();
+    if (name && !editedProjectData.team?.includes(name)) {
+      setEditedProjectData({
+        ...editedProjectData,
+        team: [...(editedProjectData.team || []), name]
+      });
+      setNewTeamMemberName('');
+    }
+  };
+
+  const handleRemoveMemberFromEdit = (nameToRemove: string) => {
+    setEditedProjectData({
+      ...editedProjectData,
+      team: editedProjectData.team?.filter(name => name !== nameToRemove)
+    });
   };
 
   const handleDuplicateProject = (projectToDuplicate: Project) => {
@@ -186,16 +198,23 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                        </div>
                        <div className="space-y-2">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Users size={14}/> Equipe</label>
-                          <div className="p-3 bg-slate-100 border border-slate-200 rounded-2xl flex flex-wrap gap-2">
-                              {teamMembers.map(member => (
-                                  <button
-                                      type="button"
-                                      key={member.id}
-                                      onClick={() => toggleEditTeamMember(member.name)}
-                                      className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition ${editedProjectData.team?.includes(member.name) ? 'bg-[#1a2b4e] text-white border-[#1a2b4e]' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'}`}
-                                  >
-                                      {member.name}
-                                  </button>
+                          <div className="flex gap-2">
+                            <input 
+                                type="text"
+                                value={newTeamMemberName}
+                                onChange={e => setNewTeamMemberName(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddMemberToEdit())}
+                                placeholder="Adicionar integrante"
+                                className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold"
+                            />
+                            <button type="button" onClick={handleAddMemberToEdit} className="px-4 bg-slate-800 text-white rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2"><Plus size={16}/>Add</button>
+                          </div>
+                          <div className="p-3 bg-slate-100 border border-slate-200 rounded-2xl flex flex-wrap gap-2 min-h-[40px]">
+                              {editedProjectData.team?.map(name => (
+                                  <div key={name} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest">
+                                      <span>{name}</span>
+                                      <button type="button" onClick={() => handleRemoveMemberFromEdit(name)} className="text-slate-400 hover:text-red-500"><X size={12}/></button>
+                                  </div>
                               ))}
                           </div>
                        </div>
