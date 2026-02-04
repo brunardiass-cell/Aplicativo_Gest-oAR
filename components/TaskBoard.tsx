@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Task, AppNotification } from '../types';
+import { Task, AppNotification, Status } from '../types';
 import { 
   ArrowRight, 
   MessageSquare, 
@@ -10,7 +10,8 @@ import {
   Eye,
   Edit2,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  SlidersHorizontal
 } from 'lucide-react';
 
 interface TaskBoardProps {
@@ -24,6 +25,11 @@ interface TaskBoardProps {
   onClearSingleNotification: (notificationId: string) => void;
   onClearAllNotifications: () => void;
   notifications: AppNotification[];
+  statusFilter: 'Todos' | Status;
+  leadFilter: string;
+  onStatusFilterChange: (status: 'Todos' | Status) => void;
+  onLeadFilterChange: (lead: string) => void;
+  uniqueLeads: string[];
 }
 
 const TaskBoard: React.FC<TaskBoardProps> = ({ 
@@ -36,7 +42,12 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   onNotificationClick,
   onClearSingleNotification,
   onClearAllNotifications,
-  notifications
+  notifications,
+  statusFilter,
+  leadFilter,
+  onStatusFilterChange,
+  onLeadFilterChange,
+  uniqueLeads
 }) => {
   const activeTasks = tasks.filter(t => !t.deleted);
   const activeReviews = notifications.filter(n => n.userId === currentUser && !n.read && n.type === 'REVIEW_ASSIGNED');
@@ -122,6 +133,41 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
            </div>
         </div>
       )}
+
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 pr-4 border-r border-slate-200">
+            <SlidersHorizontal size={14}/> Filtros
+        </h3>
+        <div className="flex-1 grid grid-cols-2 gap-4">
+            <div>
+                <label className="text-[9px] font-bold text-slate-500">Status</label>
+                <select
+                    value={statusFilter}
+                    onChange={(e) => onStatusFilterChange(e.target.value as 'Todos' | Status)}
+                    className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
+                >
+                    <option value="Todos">Todos</option>
+                    <option value="Planejada">Planejada</option>
+                    <option value="Em Andamento">Em Andamento</option>
+                    <option value="Concluída">Concluída</option>
+                    <option value="Bloqueada">Bloqueada</option>
+                    <option value="Não Aplicável">Não Aplicável</option>
+                </select>
+            </div>
+            <div>
+                <label className="text-[9px] font-bold text-slate-500">Líder da Atividade</label>
+                <select
+                    value={leadFilter}
+                    onChange={(e) => onLeadFilterChange(e.target.value)}
+                    className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
+                >
+                    {uniqueLeads.map(lead => (
+                        <option key={lead} value={lead}>{lead}</option>
+                    ))}
+                </select>
+            </div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {activeTasks.map(task => (
@@ -212,7 +258,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
         {activeTasks.length === 0 && (
           <div className="col-span-full py-20 text-center bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
             <AlertTriangle className="mx-auto text-slate-300 mb-4" size={48} />
-            <p className="text-slate-400 font-black uppercase text-xs tracking-widest italic">Nenhuma atividade ativa no momento.</p>
+            <p className="text-slate-400 font-black uppercase text-xs tracking-widest italic">Nenhuma atividade encontrada para os filtros selecionados.</p>
           </div>
         )}
       </div>

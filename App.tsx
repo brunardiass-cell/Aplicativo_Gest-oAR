@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote } from './types';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status } from './types';
 import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS } from './constants';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
@@ -45,6 +45,9 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  const [statusFilter, setStatusFilter] = useState<'Todos' | Status>('Todos');
+  const [leadFilter, setLeadFilter] = useState<string>('Todos');
 
   const isInitialLoad = useRef(true);
   const saveDataTimeout = useRef<number | null>(null);
@@ -338,16 +341,27 @@ const App: React.FC = () => {
     return notifications.filter(n => n.userId === user && !n.read && n.type === 'REVIEW_ASSIGNED').length;
   }, [notifications, selectedProfile]);
 
+  const uniqueLeads = useMemo(() => {
+    const leads = new Set(tasks.filter(t => !t.deleted).map(t => t.projectLead));
+    return ['Todos', ...Array.from(leads).sort()];
+  }, [tasks]);
+
   const tasksForBoard = useMemo(() => {
-    return tasks.filter(t => 
-      !t.deleted && (
-        filterMember === 'Todos' || 
-        t.projectLead === filterMember || 
+    return tasks.filter(t => {
+      if (t.deleted) return false;
+
+      const memberMatch =
+        filterMember === 'Todos' ||
+        t.projectLead === filterMember ||
         (Array.isArray(t.collaborators) && t.collaborators.includes(filterMember)) ||
-        t.currentReviewer === filterMember
-      )
-    );
-  }, [tasks, filterMember]);
+        t.currentReviewer === filterMember;
+
+      const statusMatch = statusFilter === 'Todos' || t.status === statusFilter;
+      const leadMatch = leadFilter === 'Todos' || t.projectLead === leadFilter;
+
+      return memberMatch && statusMatch && leadMatch;
+    });
+  }, [tasks, filterMember, statusFilter, leadFilter]);
 
 
   if (isLoading) {
@@ -496,6 +510,11 @@ const App: React.FC = () => {
               onNotificationClick={handleNotificationClick}
               onClearSingleNotification={handleClearSingleNotification}
               onClearAllNotifications={handleClearAllReviewNotifications}
+              statusFilter={statusFilter}
+              leadFilter={leadFilter}
+              onStatusFilterChange={setStatusFilter}
+              onLeadFilterChange={setLeadFilter}
+              uniqueLeads={uniqueLeads}
             />
         )}
         {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={()=>{}} teamMembers={teamMembers} currentUserRole={currentUserRole} />}
