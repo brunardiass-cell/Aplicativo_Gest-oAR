@@ -17,14 +17,14 @@ const TaskTable: React.FC<TaskTableProps> = ({ tasks, canEdit, onEdit, onViewDet
       case 'Urgente': return 'bg-red-100 text-red-700 border-red-200';
       case 'Alta': return 'bg-orange-100 text-orange-700 border-orange-200';
       case 'Média': return 'bg-amber-100 text-amber-700 border-amber-200';
-      default: return 'bg-blue-100 text-blue-700 border-blue-200';
+      default: return 'bg-teal-100 text-teal-700 border-teal-200';
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Concluída': return 'bg-emerald-100 text-emerald-700';
-      case 'Em Andamento': return 'bg-blue-100 text-blue-700';
+      case 'Em Andamento': return 'bg-teal-100 text-teal-700';
       case 'Bloqueada': return 'bg-slate-200 text-slate-700';
       default: return 'bg-slate-100 text-slate-500';
     }
@@ -50,17 +50,17 @@ const TaskTable: React.FC<TaskTableProps> = ({ tasks, canEdit, onEdit, onViewDet
                   <div className="flex flex-col">
                     <button 
                       onClick={() => onViewDetails(task)}
-                      className="text-left font-bold text-slate-900 group-hover:text-indigo-600 transition truncate max-w-[250px] hover:underline decoration-2"
+                      className="text-left font-bold text-slate-900 group-hover:text-brand-primary transition truncate max-w-[250px] hover:underline decoration-2"
                     >
                       {task.activity}
                     </button>
-                    <span className="text-[10px] font-black text-indigo-500 uppercase mt-1 tracking-tight">{task.project}</span>
+                    <span className="text-[10px] font-black text-brand-primary uppercase mt-1 tracking-tight">{task.project}</span>
                     <span className="text-[11px] text-slate-400 truncate max-w-[250px] mt-1 line-clamp-1">{task.description}</span>
                   </div>
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-[10px] font-black text-indigo-600">
+                    <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-[10px] font-black text-teal-600">
                       {task.projectLead.charAt(0)}
                     </div>
                     <span className="text-sm font-medium text-slate-600">{task.projectLead}</span>
@@ -80,7 +80,7 @@ const TaskTable: React.FC<TaskTableProps> = ({ tasks, canEdit, onEdit, onViewDet
                   <div className="flex items-center justify-end gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-200">
                     <button 
                       onClick={() => onViewDetails(task)}
-                      className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                      className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-lg transition"
                       title="Ver Detalhes"
                     >
                       <Eye size={18} />
@@ -89,7 +89,7 @@ const TaskTable: React.FC<TaskTableProps> = ({ tasks, canEdit, onEdit, onViewDet
                       <>
                         <button 
                           onClick={() => onEdit(task)}
-                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                          className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-lg transition"
                           title="Editar"
                         >
                           <Edit2 size={18} />

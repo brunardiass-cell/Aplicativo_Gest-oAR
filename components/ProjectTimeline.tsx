@@ -129,7 +129,7 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
                       value={editingMacroName}
                       onChange={e => setEditingMacroName(e.target.value)}
                       autoFocus
-                      className="w-full text-sm font-black text-slate-800 uppercase tracking-tight bg-white border border-indigo-300 rounded-md px-3 py-2"
+                      className="w-full text-sm font-black text-slate-800 uppercase tracking-tight bg-white border border-teal-300 rounded-md px-3 py-2"
                    />
                    <button onClick={() => handleSaveMacroName(macro.id)} className="p-2 text-emerald-500 hover:bg-emerald-100 rounded-md"><Save size={16}/></button>
                    <button onClick={() => setEditingMacro(null)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-md"><X size={16}/></button>
@@ -140,12 +140,12 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
             </div>
             <div className="flex items-center gap-2">
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
-                    <button onClick={() => handleStartEditMacro(macro)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md"><Edit size={16}/></button>
+                    <button onClick={() => handleStartEditMacro(macro)} className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-md"><Edit size={16}/></button>
                     <button onClick={() => onOpenDeletionModal({ type: 'macro', projectId: project.id, macroId: macro.id, name: macro.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"><Trash2 size={16}/></button>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
                     macro.status === 'Concluída' ? 'bg-emerald-100 text-emerald-600' : 
-                    macro.status === 'Em Andamento' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'
+                    macro.status === 'Em Andamento' ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-500'
                 }`}>
                 {macro.status}
                 </span>
@@ -215,12 +215,12 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
     };
 
     return (
-    <div className={`p-4 border rounded-2xl transition-all ${isEditing ? 'bg-indigo-50/50 border-indigo-200 shadow-lg' : 'bg-white border-slate-100'}`}>
+    <div className={`p-4 border rounded-2xl transition-all ${isEditing ? 'bg-teal-50/50 border-teal-200 shadow-lg' : 'bg-white border-slate-100'}`}>
       <div className="grid grid-cols-12 gap-4 items-center">
         <div className="col-span-4 flex items-center gap-2">
             {isEditing ? (
                 <>
-                <input value={localName} onChange={e => setLocalName(e.target.value)} autoFocus className="w-full text-xs font-bold text-slate-900 bg-white border border-indigo-300 rounded-md px-2 py-1"/>
+                <input value={localName} onChange={e => setLocalName(e.target.value)} autoFocus className="w-full text-xs font-bold text-slate-900 bg-white border border-teal-300 rounded-md px-2 py-1"/>
                 <button onClick={handleSaveName} className="p-1 text-emerald-500 hover:bg-emerald-100 rounded-md"><Save size={14}/></button>
                 </>
             ) : (

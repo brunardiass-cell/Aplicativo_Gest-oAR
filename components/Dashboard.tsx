@@ -52,13 +52,13 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
   const priorityData = useMemo(() => [
     { name: 'Urgente', value: lastMonthTasks.filter(t => t.priority === 'Urgente').length, color: '#ef4444' },
     { name: 'Alta', value: lastMonthTasks.filter(t => t.priority === 'Alta').length, color: '#f59e0b' },
-    { name: 'Média', value: lastMonthTasks.filter(t => t.priority === 'Média').length, color: '#6366f1' },
+    { name: 'Média', value: lastMonthTasks.filter(t => t.priority === 'Média').length, color: '#2dd4bf' },
     { name: 'Baixa', value: lastMonthTasks.filter(t => t.priority === 'Baixa').length, color: '#94a3b8' },
   ], [lastMonthTasks]);
 
   const statusChartData = useMemo(() => [
     { name: 'Finalizadas', value: stats.done, color: '#10b981' },
-    { name: 'Em Andamento', value: stats.ongoing, color: '#3b82f6' },
+    { name: 'Em Andamento', value: stats.ongoing, color: '#5eead4' },
     { name: 'Atrasadas', value: stats.late, color: '#f43f5e' },
   ], [stats]);
 
@@ -106,9 +106,9 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
     <div className="space-y-8">
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard label="Atividades no Mês" value={stats.total} icon={<Briefcase size={20}/>} color="bg-indigo-600" />
+        <StatCard label="Atividades no Mês" value={stats.total} icon={<Briefcase size={20}/>} color="bg-brand-primary" />
         <StatCard label="Finalizadas no Mês" value={stats.done} icon={<CheckCircle size={20}/>} color="bg-emerald-600" />
-        <StatCard label="Projetos Acompanhados" value={stats.projects} icon={<FolderKanban size={20}/>} color="bg-sky-600" />
+        <StatCard label="Projetos Acompanhados" value={stats.projects} icon={<FolderKanban size={20}/>} color="bg-teal-700" />
       </div>
 
       {/* Charts */}
@@ -150,7 +150,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
                   <div key={task.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
                     <div>
                       <p className="text-xs font-bold text-slate-900">{task.activity}</p>
-                      <p className="text-[9px] font-bold text-blue-600 uppercase">{task.project}</p>
+                      <p className="text-[9px] font-bold text-brand-primary uppercase">{task.project}</p>
                     </div>
                     <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${daysLeft <= 2 ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
                        {daysLeft <= 1 ? 'Vence hoje/amanhã' : `Vence em ${daysLeft} dias`}
@@ -166,7 +166,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
            <div className="space-y-4">
              <AlertItem value={alerts.overdue.length} label="Atividade(s) Vencida(s)" icon={<AlertTriangle size={18}/>} color="text-red-500" onClick={() => handleAlertClick('overdue')}/>
              <AlertItem value={alerts.pendingReviews.length} label="Relatório(s) Pendente(s)" icon={<FileSignature size={18}/>} color="text-amber-500" onClick={() => handleAlertClick('pending')}/>
-             <AlertItem value={alerts.projectsAtRisk.length} label="Projeto(s) em Atraso" icon={<Activity size={18}/>} color="text-blue-500" onClick={() => handleAlertClick('risk')}/>
+             <AlertItem value={alerts.projectsAtRisk.length} label="Projeto(s) em Atraso" icon={<Activity size={18}/>} color="text-teal-600" onClick={() => handleAlertClick('risk')}/>
            </div>
         </div>
       </div>

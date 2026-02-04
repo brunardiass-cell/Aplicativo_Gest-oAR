@@ -97,12 +97,12 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden border border-white flex flex-col">
-        <header className="bg-[#1a2b4e] px-10 py-8 flex justify-between items-center shrink-0">
+        <header className="bg-brand-primary px-10 py-8 flex justify-between items-center shrink-0">
           <div>
             <h2 className="text-2xl font-black text-white uppercase tracking-tighter">
               {initialData ? 'Editar Atividade' : 'Nova Atividade Setorial'}
             </h2>
-            <p className="text-[10px] font-bold text-blue-300 uppercase tracking-widest mt-1">Garantindo a integridade dos dados regulatórios</p>
+            <p className="text-[10px] font-bold text-teal-300 uppercase tracking-widest mt-1">Garantindo a integridade dos dados regulatórios</p>
           </div>
           <button onClick={onClose} className="p-3 bg-white/10 rounded-2xl text-white hover:bg-white/20 transition">
             <X size={24} />
@@ -115,7 +115,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b pb-2"><ClipboardList size={14}/> Dados Básicos</h3>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Atividade / Documento</label>
-                <input required value={formData.activity} onChange={e => setFormData({...formData, activity: e.target.value})} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none focus:ring-2 focus:ring-[#1a2b4e]" />
+                <input required value={formData.activity} onChange={e => setFormData({...formData, activity: e.target.value})} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none focus:ring-2 focus:ring-brand-primary" />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Projeto Relacionado</label>
@@ -125,7 +125,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Descrição</label>
-                <textarea rows={3} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none focus:ring-2 focus:ring-[#1a2b4e] resize-none" />
+                <textarea rows={3} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none focus:ring-2 focus:ring-brand-primary resize-none" />
               </div>
             </div>
 
@@ -141,7 +141,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Equipe de Apoio</label>
                 <div className="flex flex-wrap gap-2 p-2 border border-slate-100 rounded-2xl min-h-[100px]">
                   {teamMembers.map(m => (
-                    <button type="button" key={m.id} onClick={() => toggleCollaborator(m.name)} className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition ${formData.collaborators?.includes(m.name) ? 'bg-[#1a2b4e] text-white border-[#1a2b4e]' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'}`}>
+                    <button type="button" key={m.id} onClick={() => toggleCollaborator(m.name)} className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition ${formData.collaborators?.includes(m.name) ? 'bg-brand-primary text-white border-brand-primary' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'}`}>
                       {m.name}
                     </button>
                   ))}
@@ -173,9 +173,9 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
               <div className="space-y-1 pt-4">
                  <div className="flex justify-between items-center mb-2">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">% de Progresso</label>
-                    <span className="text-sm font-black text-[#1a2b4e]">{formData.progress}%</span>
+                    <span className="text-sm font-black text-brand-primary">{formData.progress}%</span>
                  </div>
-                 <input type="range" min="0" max="100" step="5" value={formData.progress} onChange={e => setFormData({...formData, progress: parseInt(e.target.value)})} className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-[#1a2b4e]" />
+                 <input type="range" min="0" max="100" step="5" value={formData.progress} onChange={e => setFormData({...formData, progress: parseInt(e.target.value)})} className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-brand-primary" />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Status Atual</label>
@@ -190,20 +190,20 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
             </div>
           </div>
 
-          <div className="bg-blue-50/50 p-8 rounded-[3rem] border border-blue-100/50 space-y-8">
+          <div className="bg-teal-50/50 p-8 rounded-[3rem] border border-teal-100/50 space-y-8">
             <div className="flex items-center justify-between">
                <div className="flex items-center gap-4">
-                  <div className={`p-4 rounded-2xl ${formData.isReport ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                  <div className={`p-4 rounded-2xl ${formData.isReport ? 'bg-brand-primary text-white' : 'bg-slate-200 text-slate-500'}`}>
                     <FileText size={28} />
                   </div>
                   <div>
-                    <h4 className="text-lg font-black text-[#1a2b4e] uppercase tracking-tighter">Fluxo de Relatório</h4>
-                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Ativar controle de revisão e assinatura</p>
+                    <h4 className="text-lg font-black text-brand-primary uppercase tracking-tighter">Fluxo de Relatório</h4>
+                    <p className="text-[10px] font-bold text-teal-500 uppercase tracking-widest">Ativar controle de revisão e assinatura</p>
                   </div>
                </div>
                <label className="relative inline-flex items-center cursor-pointer scale-125">
                   <input type="checkbox" checked={formData.isReport} onChange={e => setFormData({...formData, isReport: e.target.checked})} className="sr-only peer" />
-                  <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                  <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-brand-primary after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
                </label>
             </div>
 
@@ -214,7 +214,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
                   <select 
                     value={formData.reportStage} 
                     onChange={e => setFormData({...formData, reportStage: e.target.value as ReportStage})}
-                    className="w-full px-6 py-4 bg-white border border-blue-200 rounded-2xl text-sm font-black text-[#1a2b4e] outline-none shadow-sm"
+                    className="w-full px-6 py-4 bg-white border border-teal-200 rounded-2xl text-sm font-black text-brand-primary outline-none shadow-sm"
                   >
                     <option value="Em Elaboração">Em Elaboração</option>
                     <option value="Próximo Revisor">Revisão (Próximo Revisor)</option>
@@ -244,7 +244,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
                     value={formData.fileLocation}
                     onChange={e => setFormData({...formData, fileLocation: e.target.value})}
                     placeholder="Cole o link do SharePoint, Drive, etc."
-                    className="w-full px-6 py-4 bg-white border border-blue-200 rounded-2xl text-sm font-bold text-black outline-none shadow-sm"
+                    className="w-full px-6 py-4 bg-white border border-teal-200 rounded-2xl text-sm font-bold text-black outline-none shadow-sm"
                   />
                 </div>
               </div>
@@ -256,13 +256,13 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b pb-2"><MessageSquare size={14}/> Notas de Atualização</h3>
                 <div className="flex gap-2">
                    <input value={note} onChange={e => setNote(e.target.value)} placeholder="Adicionar nota ao histórico..." className="flex-1 px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none" />
-                   <button type="button" onClick={addNote} className="px-6 bg-[#1a2b4e] text-white rounded-2xl shadow-lg hover:bg-black transition"><PlusCircle size={24}/></button>
+                   <button type="button" onClick={addNote} className="px-6 bg-brand-primary text-white rounded-2xl shadow-lg hover:bg-brand-accent transition"><PlusCircle size={24}/></button>
                 </div>
                 <div className="space-y-3 max-h-40 overflow-y-auto pr-4 custom-scrollbar">
                    {formData.updates?.map(u => (
                      <div key={u.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
                         <div className="flex justify-between mb-1">
-                           <span className="text-[8px] font-black text-blue-600 uppercase tracking-widest">{u.user}</span>
+                           <span className="text-[8px] font-black text-brand-primary uppercase tracking-widest">{u.user}</span>
                            <span className="text-[8px] font-bold text-slate-400">{new Date(u.date).toLocaleDateString()}</span>
                         </div>
                         <p className="text-xs font-bold text-slate-800">{u.note}</p>
@@ -272,14 +272,14 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
              </div>
              <div className="space-y-6">
                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b pb-2"><Info size={14}/> Próximo Passo Estratégico</h3>
-                <textarea rows={6} value={formData.nextStep} onChange={e => setFormData({...formData, nextStep: e.target.value})} placeholder="Defina a próxima ação necessária..." className="w-full px-8 py-6 bg-[#1a2b4e]/5 border border-[#1a2b4e]/10 rounded-[2rem] text-sm font-bold text-black outline-none focus:ring-2 focus:ring-[#1a2b4e] resize-none" />
+                <textarea rows={6} value={formData.nextStep} onChange={e => setFormData({...formData, nextStep: e.target.value})} placeholder="Defina a próxima ação necessária..." className="w-full px-8 py-6 bg-brand-primary/5 border border-brand-primary/10 rounded-[2rem] text-sm font-bold text-black outline-none focus:ring-2 focus:ring-brand-primary resize-none" />
              </div>
           </div>
         </form>
 
         <footer className="px-10 py-8 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 shrink-0">
           <button type="button" onClick={onClose} className="px-8 py-4 text-slate-400 font-black uppercase text-[10px] tracking-widest">Cancelar</button>
-          <button onClick={handleSubmit} className="px-12 py-4 bg-[#1a2b4e] text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-100 hover:bg-[#0f172a] transition active:scale-95">
+          <button onClick={handleSubmit} className="px-12 py-4 bg-brand-primary text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-teal-100 hover:bg-brand-accent transition active:scale-95">
             {initialData ? 'Atualizar Atividade' : 'Publicar Atividade'}
           </button>
         </footer>

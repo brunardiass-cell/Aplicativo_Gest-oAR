@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { X, KeyRound, LogIn } from 'lucide-react';
 
@@ -42,7 +43,7 @@ const PasswordModal: React.FC<PasswordModalProps> = ({ isOpen, onClose, onConfir
             autoFocus
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-[#1a2b4e] text-slate-900 text-lg font-bold text-center tracking-widest"
+            className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-brand-primary text-slate-900 text-lg font-bold text-center tracking-widest"
           />
           {error && <p className="text-red-500 text-xs mt-2 text-center">{error}</p>}
         </div>
@@ -50,7 +51,7 @@ const PasswordModal: React.FC<PasswordModalProps> = ({ isOpen, onClose, onConfir
         <footer className="p-6 bg-slate-50 border-t flex flex-col gap-3">
           <button
             type="submit"
-            className="w-full py-4 bg-[#1a2b4e] text-white rounded-2xl shadow-xl hover:bg-black transition font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2"
+            className="w-full py-4 bg-brand-primary text-white rounded-2xl shadow-xl hover:bg-brand-accent transition font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2"
           >
             <LogIn size={18} /> Entrar no Painel
           </button>

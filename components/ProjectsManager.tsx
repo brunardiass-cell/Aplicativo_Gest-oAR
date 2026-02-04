@@ -128,9 +128,9 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <button
           onClick={() => setIsNewProjectModalOpen(true)}
-          className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all text-left"
+          className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-teal-200 transition-all text-left"
         >
-          <div className="p-5 bg-indigo-600 text-white rounded-3xl shadow-lg shadow-indigo-200 group-hover:scale-110 transition-transform">
+          <div className="p-5 bg-brand-primary text-white rounded-3xl shadow-lg shadow-teal-200 group-hover:scale-110 transition-transform">
             <FolderPlus size={32} />
           </div>
           <div>
@@ -162,7 +162,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
               <button 
                 key={p.id}
                 onClick={() => { setSelectedProject(p); setIsEditingProject(false); }}
-                className={`w-full p-4 rounded-2xl text-left transition ${selectedProject?.id === p.id ? 'bg-[#1a2b4e] text-white shadow-lg' : 'hover:bg-slate-50'}`}
+                className={`w-full p-4 rounded-2xl text-left transition ${selectedProject?.id === p.id ? 'bg-brand-primary text-white shadow-lg' : 'hover:bg-slate-50'}`}
               >
                 <p className="text-sm font-black uppercase tracking-tight truncate">{p.name}</p>
                 <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">{p.status}</span>

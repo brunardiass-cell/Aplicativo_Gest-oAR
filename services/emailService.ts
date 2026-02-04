@@ -26,7 +26,7 @@ export const sendSimulatedEmail = (task: Task, recipientEmail: string, type: 'JO
   `;
 
   // Simulação no Console para Auditoria
-  console.log(`%c📧 E-MAIL DISPARADO PARA: ${recipientEmail}`, "color: #6366f1; font-weight: bold; font-size: 12px;");
+  console.log(`%c📧 E-MAIL DISPARADO PARA: ${recipientEmail}`, "color: #0d9488; font-weight: bold; font-size: 12px;");
   console.log(`Assunto: ${subject}`);
   console.log(`Corpo: ${body}`);
 
@@ -34,11 +34,11 @@ export const sendSimulatedEmail = (task: Task, recipientEmail: string, type: 'JO
   const notification = document.createElement('div');
   notification.className = 'fixed bottom-4 right-4 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl z-[200] animate-in slide-in-from-right duration-300 flex items-center gap-3 border border-slate-700';
   notification.innerHTML = `
-    <div class="bg-indigo-600 p-2 rounded-lg">
+    <div class="bg-brand-primary p-2 rounded-lg">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
     </div>
     <div>
-      <p class="text-[10px] font-black uppercase tracking-widest text-indigo-400">Notificação Enviada</p>
+      <p class="text-[10px] font-black uppercase tracking-widest text-teal-400">Notificação Enviada</p>
       <p class="text-xs font-bold">E-mail de atribuição enviado para ${recipientEmail}</p>
     </div>
   `;
