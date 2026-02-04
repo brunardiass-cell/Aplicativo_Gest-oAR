@@ -253,31 +253,39 @@ const App: React.FC = () => {
 
     const oldTask = isEditing ? tasks.find(t => t.id === task.id) : null;
     
-    if (isEditing && oldTask && selectedProfile) {
+    if (isEditing && oldTask) {
         const updates: TaskNote[] = taskToSave.updates ? [...taskToSave.updates] : [];
-        const createNote = (noteText: string) => {
-            updates.unshift({
-                id: `note_${Date.now()}_${Math.random()}`,
-                date: new Date().toISOString(),
-                user: selectedProfile.name,
-                note: noteText,
-            });
-        };
+        if(selectedProfile) {
+            const createNote = (noteText: string) => {
+                updates.unshift({
+                    id: `note_${Date.now()}_${Math.random()}`,
+                    date: new Date().toISOString(),
+                    user: selectedProfile.name,
+                    note: noteText,
+                });
+            };
 
-        if (oldTask.status !== taskToSave.status) {
-            createNote(`Status alterado de "${oldTask.status}" para "${taskToSave.status}".`);
-        }
-        if (oldTask.reportStage !== taskToSave.reportStage) {
-            createNote(`Etapa do relatório alterada para "${taskToSave.reportStage}".`);
-        }
-        if (oldTask.currentReviewer !== taskToSave.currentReviewer) {
-            if (taskToSave.currentReviewer) {
-                createNote(`Novo revisor atribuído: "${taskToSave.currentReviewer}".`);
-            } else if (oldTask.currentReviewer) {
-                createNote(`Revisor "${oldTask.currentReviewer}" foi removido.`);
+            if (oldTask.status !== taskToSave.status) {
+                createNote(`Status alterado de "${oldTask.status}" para "${taskToSave.status}".`);
+            }
+            if (oldTask.reportStage !== taskToSave.reportStage) {
+                createNote(`Etapa do relatório alterada para "${taskToSave.reportStage}".`);
+            }
+            if (oldTask.currentReviewer !== taskToSave.currentReviewer) {
+                if (taskToSave.currentReviewer) {
+                    createNote(`Novo revisor atribuído: "${taskToSave.currentReviewer}".`);
+                } else if (oldTask.currentReviewer) {
+                    createNote(`Revisor "${oldTask.currentReviewer}" foi removido.`);
+                }
             }
         }
         taskToSave.updates = updates;
+
+        // If the review flow was just disabled, clear the reviewer and stage
+        if (oldTask.isReport && !taskToSave.isReport) {
+            taskToSave.currentReviewer = undefined;
+            taskToSave.reportStage = 'Em Elaboração';
+        }
     }
     
     const wasJustCompleted = 
