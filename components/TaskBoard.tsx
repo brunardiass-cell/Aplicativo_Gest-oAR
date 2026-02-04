@@ -143,7 +143,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                <div className="flex flex-col">
                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Líder</span>
                   <div className="flex items-center gap-2 mt-1">
-                     <div className="w-6 h-6 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-[9px] font-black uppercase">{task.projectLead[0]}</div>
+                     <div className="w-6 h-6 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-[9px] font-black uppercase">{task.projectLead?.charAt(0) || '?'}</div>
                      <span className="text-[10px] font-bold text-slate-700 uppercase">{task.projectLead}</span>
                   </div>
                </div>

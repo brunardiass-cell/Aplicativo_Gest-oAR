@@ -31,9 +31,10 @@ interface SidebarProps {
 }
 
 const getInitials = (name?: string): string => {
-  if (!name) return 'G';
-  const nameParts = name.split(' ');
-  return nameParts[0][0].toUpperCase();
+  if (!name || name.trim() === '') return 'G';
+  const nameParts = name.trim().split(' ');
+  const firstInitial = nameParts[0]?.[0];
+  return firstInitial ? firstInitial.toUpperCase() : 'G';
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ 
