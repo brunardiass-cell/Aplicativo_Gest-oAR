@@ -48,6 +48,7 @@ const App: React.FC = () => {
 
   const [statusFilter, setStatusFilter] = useState<'Todos' | Status>('Todos');
   const [leadFilter, setLeadFilter] = useState<string>('Todos');
+  const [projectFilter, setProjectFilter] = useState<string>('Todos');
 
   const [deleteTarget, setDeleteTarget] = useState<{
     type: 'task' | 'project' | 'macro' | 'micro';
@@ -403,6 +404,11 @@ const App: React.FC = () => {
     return ['Todos', ...Array.from(leads).sort()];
   }, [tasks]);
 
+  const uniqueProjects = useMemo(() => {
+    const projectsList = new Set(tasks.filter(t => !t.deleted).map(t => t.project));
+    return ['Todos', ...Array.from(projectsList).sort()];
+  }, [tasks]);
+
   const tasksForBoard = useMemo(() => {
     return tasks.filter(t => {
       if (t.deleted) return false;
@@ -415,10 +421,11 @@ const App: React.FC = () => {
 
       const statusMatch = statusFilter === 'Todos' || t.status === statusFilter;
       const leadMatch = leadFilter === 'Todos' || t.projectLead === leadFilter;
+      const projectMatch = projectFilter === 'Todos' || t.project === projectFilter;
 
-      return memberMatch && statusMatch && leadMatch;
+      return memberMatch && statusMatch && leadMatch && projectMatch;
     });
-  }, [tasks, filterMember, statusFilter, leadFilter]);
+  }, [tasks, filterMember, statusFilter, leadFilter, projectFilter]);
 
   const activeProjects = useMemo(() => projects.filter(p => !p.deleted), [projects]);
 
@@ -574,6 +581,9 @@ const App: React.FC = () => {
               onStatusFilterChange={setStatusFilter}
               onLeadFilterChange={setLeadFilter}
               uniqueLeads={uniqueLeads}
+              projectFilter={projectFilter}
+              onProjectFilterChange={setProjectFilter}
+              uniqueProjects={uniqueProjects}
             />
         )}
         {view === 'projects' && <ProjectsManager projects={activeProjects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} teamMembers={teamMembers} currentUserRole={currentUserRole} />}

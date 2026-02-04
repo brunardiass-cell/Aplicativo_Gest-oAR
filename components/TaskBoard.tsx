@@ -27,9 +27,12 @@ interface TaskBoardProps {
   notifications: AppNotification[];
   statusFilter: 'Todos' | Status;
   leadFilter: string;
+  projectFilter: string;
   onStatusFilterChange: (status: 'Todos' | Status) => void;
   onLeadFilterChange: (lead: string) => void;
+  onProjectFilterChange: (project: string) => void;
   uniqueLeads: string[];
+  uniqueProjects: string[];
 }
 
 const TaskBoard: React.FC<TaskBoardProps> = ({ 
@@ -45,9 +48,12 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   notifications,
   statusFilter,
   leadFilter,
+  projectFilter,
   onStatusFilterChange,
   onLeadFilterChange,
-  uniqueLeads
+  onProjectFilterChange,
+  uniqueLeads,
+  uniqueProjects
 }) => {
   const activeTasks = tasks.filter(t => !t.deleted);
   const activeReviews = notifications.filter(n => n.userId === currentUser && !n.read && n.type === 'REVIEW_ASSIGNED');
@@ -138,7 +144,19 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
         <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 pr-4 border-r border-slate-200">
             <SlidersHorizontal size={14}/> Filtros
         </h3>
-        <div className="flex-1 grid grid-cols-2 gap-4">
+        <div className="flex-1 grid grid-cols-3 gap-4">
+            <div>
+                <label className="text-[9px] font-bold text-slate-500">Projeto</label>
+                <select
+                    value={projectFilter}
+                    onChange={(e) => onProjectFilterChange(e.target.value)}
+                    className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
+                >
+                    {uniqueProjects.map(project => (
+                        <option key={project} value={project}>{project}</option>
+                    ))}
+                </select>
+            </div>
             <div>
                 <label className="text-[9px] font-bold text-slate-500">Status</label>
                 <select
@@ -155,7 +173,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                 </select>
             </div>
             <div>
-                <label className="text-[9px] font-bold text-slate-500">Líder da Atividade</label>
+                <label className="text-[9px] font-bold text-slate-500">Responsável</label>
                 <select
                     value={leadFilter}
                     onChange={(e) => onLeadFilterChange(e.target.value)}

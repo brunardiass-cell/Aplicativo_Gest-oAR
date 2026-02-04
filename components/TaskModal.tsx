@@ -132,7 +132,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
             <div className="space-y-6">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b pb-2"><Users size={14}/> Atribuição</h3>
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Líder do Processo</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Responsável pela Atividade</label>
                 <select value={formData.projectLead} onChange={e => setFormData({...formData, projectLead: e.target.value})} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none">
                   {teamMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                 </select>
@@ -197,8 +197,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
                     <FileText size={28} />
                   </div>
                   <div>
-                    <h4 className="text-lg font-black text-brand-primary uppercase tracking-tighter">Fluxo de Relatório</h4>
-                    <p className="text-[10px] font-bold text-teal-500 uppercase tracking-widest">Ativar controle de revisão e assinatura</p>
+                    <h4 className="text-lg font-black text-brand-primary uppercase tracking-tighter">Fluxo de Revisão</h4>
+                    <p className="text-[10px] font-bold text-teal-500 uppercase tracking-widest">Ativar controle de etapas de revisão</p>
                   </div>
                </div>
                <label className="relative inline-flex items-center cursor-pointer scale-125">
@@ -210,16 +210,16 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
             {formData.isReport && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-top-2">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><Info size={14}/> Etapa do Relatório</label>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><Info size={14}/> Etapa da Revisão</label>
                   <select 
                     value={formData.reportStage} 
                     onChange={e => setFormData({...formData, reportStage: e.target.value as ReportStage})}
                     className="w-full px-6 py-4 bg-white border border-teal-200 rounded-2xl text-sm font-black text-brand-primary outline-none shadow-sm"
                   >
                     <option value="Em Elaboração">Em Elaboração</option>
-                    <option value="Próximo Revisor">Revisão (Próximo Revisor)</option>
-                    <option value="Revisão Colaboradores">Revisão Colaboradores</option>
-                    <option value="Revisão Comitê Gestor">Revisão Comitê Gestor</option>
+                    <option value="Próximo Revisor">Próximo Revisor</option>
+                    <option value="Revisão Colaboradores">Em Revisão (Colaboradores)</option>
+                    <option value="Revisão Comitê Gestor">Em Revisão (Comitê Gestor)</option>
                     <option value="Concluído">Concluído</option>
                     <option value="Concluído e Assinado">Concluído e Assinado</option>
                   </select>

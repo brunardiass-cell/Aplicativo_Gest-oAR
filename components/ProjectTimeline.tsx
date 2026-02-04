@@ -15,6 +15,8 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
   const [editingMicro, setEditingMicro] = useState<string | null>(null);
   const [editingMacro, setEditingMacro] = useState<string | null>(null);
   const [editingMacroName, setEditingMacroName] = useState('');
+  const [isAddingMacro, setIsAddingMacro] = useState(false);
+  const [newMacroNameInput, setNewMacroNameInput] = useState('');
 
   const projectAssignees = useMemo(() => {
     const assignees = new Set<string>();
@@ -119,6 +121,29 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
     }
     setEditingMacro(null);
   };
+  
+  const handleAddMacroActivity = () => {
+    if (!newMacroNameInput.trim()) {
+      setIsAddingMacro(false);
+      return;
+    }
+
+    const newMacro: MacroActivity = {
+      id: 'macro_' + Math.random().toString(36).substr(2, 9),
+      name: newMacroNameInput.trim(),
+      status: 'Planejada',
+      microActivities: [],
+    };
+
+    const updatedProject = {
+      ...project,
+      macroActivities: [...project.macroActivities, newMacro],
+    };
+
+    onUpdateProject(updatedProject);
+    setNewMacroNameInput('');
+    setIsAddingMacro(false);
+  };
 
   return (
     <div className="space-y-4">
@@ -185,6 +210,33 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
           </div>
         )
       })}
+
+      {isAddingMacro ? (
+        <div className="p-4 bg-teal-50/50 border border-teal-200 rounded-3xl flex items-center gap-2 animate-in fade-in duration-300">
+          <input
+            type="text"
+            value={newMacroNameInput}
+            onChange={e => setNewMacroNameInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAddMacroActivity()}
+            placeholder="Nome da nova macroatividade"
+            autoFocus
+            className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-xl text-sm font-bold text-slate-900"
+          />
+          <button onClick={handleAddMacroActivity} className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition">
+            <Save size={16} />
+          </button>
+          <button onClick={() => { setIsAddingMacro(false); setNewMacroNameInput(''); }} className="p-2 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 transition">
+            <X size={16} />
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setIsAddingMacro(true)}
+          className="w-full mt-4 p-4 bg-slate-50 text-slate-500 rounded-3xl border-2 border-dashed border-slate-200 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 hover:border-slate-300 transition"
+        >
+          <Plus size={14} /> Adicionar Macroatividade
+        </button>
+      )}
     </div>
   );
 };
