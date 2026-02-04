@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import { Task, AppNotification, Project } from '../types';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -188,11 +187,11 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
 };
 
 const StatCard = ({ label, value, icon, color }: { label: string, value: string | number, icon: React.ReactNode, color: string }) => (
-  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-5">
-    <div className={`p-4 rounded-2xl ${color} text-white shadow-lg`}>{icon}</div>
+  <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4">
+    <div className={`p-3 rounded-2xl ${color} text-white shadow-lg`}>{icon}</div>
     <div>
       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
-      <h3 className="text-4xl font-black text-slate-900 tracking-tighter">{value}</h3>
+      <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{value}</h3>
     </div>
   </div>
 );
