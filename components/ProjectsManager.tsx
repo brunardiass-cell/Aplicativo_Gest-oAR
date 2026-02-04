@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember } from '../types';
-import { FolderPlus, ListPlus, FolderKanban, Workflow, GanttChartSquare, Copy } from 'lucide-react';
+import { Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember, AppUser } from '../types';
+import { FolderPlus, ListPlus, FolderKanban, Workflow, GanttChartSquare, Copy, Edit, User, Save, X } from 'lucide-react';
 import PlanManagerModal from './PlanManagerModal';
 import NewProjectModal from './NewProjectModal';
 import ProjectTimeline from './ProjectTimeline';
@@ -14,6 +14,7 @@ interface ProjectsManagerProps {
   onUpdateActivityPlans: (plans: ActivityPlanTemplate[]) => void;
   onOpenDeletionModal: (item: { type: 'macro' | 'micro', projectId: string; macroId: string; microId?: string; name: string }) => void;
   teamMembers: TeamMember[];
+  currentUserRole: AppUser['role'] | null;
 }
 
 type ProjectView = 'timeline' | 'flow';
@@ -25,11 +26,16 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   onUpdateActivityPlans,
   onOpenDeletionModal,
   teamMembers,
+  currentUserRole
 }) => {
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(projects[0] || null);
   const [viewMode, setViewMode] = useState<ProjectView>('timeline');
+  const [isEditingProject, setIsEditingProject] = useState(false);
+  const [editedProjectData, setEditedProjectData] = useState<Partial<Project>>({});
+
+  const isAdmin = currentUserRole === 'admin';
 
   const addProject = (project: Project) => {
     const updatedProjects = [...projects, project];
@@ -41,6 +47,25 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     const updatedProjects = projects.map(p => p.id === updatedProject.id ? updatedProject : p);
     onUpdateProjects(updatedProjects);
     setSelectedProject(updatedProject);
+  };
+
+  const handleStartEdit = () => {
+    if (selectedProject) {
+      setEditedProjectData({ name: selectedProject.name, responsible: selectedProject.responsible });
+      setIsEditingProject(true);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingProject(false);
+    setEditedProjectData({});
+  };
+
+  const handleSaveEdit = () => {
+    if (selectedProject) {
+      handleUpdateProject({ ...selectedProject, ...editedProjectData });
+      handleCancelEdit();
+    }
   };
   
   const handleStatusChange = (projectId: string, newStatus: Project['status']) => {
@@ -93,18 +118,20 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Use um plano para gerar um cronograma.</p>
           </div>
         </button>
-        <button
-          onClick={() => setIsPlanModalOpen(true)}
-          className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-amber-200 transition-all text-left"
-        >
-          <div className="p-5 bg-amber-500 text-white rounded-3xl shadow-lg shadow-amber-200 group-hover:scale-110 transition-transform">
-            <ListPlus size={32} />
-          </div>
-          <div>
-            <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Gerenciar Planos</h3>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Crie e edite templates de atividades.</p>
-          </div>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setIsPlanModalOpen(true)}
+            className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-amber-200 transition-all text-left"
+          >
+            <div className="p-5 bg-amber-500 text-white rounded-3xl shadow-lg shadow-amber-200 group-hover:scale-110 transition-transform">
+              <ListPlus size={32} />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Gerenciar Planos</h3>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Crie e edite templates de atividades.</p>
+            </div>
+          </button>
+        )}
       </div>
       
       <div className="grid grid-cols-12 gap-8">
@@ -114,7 +141,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
             {projects.map(p => (
               <button 
                 key={p.id}
-                onClick={() => setSelectedProject(p)}
+                onClick={() => { setSelectedProject(p); setIsEditingProject(false); }}
                 className={`w-full p-4 rounded-2xl text-left transition ${selectedProject?.id === p.id ? 'bg-[#1a2b4e] text-white shadow-lg' : 'hover:bg-slate-50'}`}
               >
                 <p className="text-sm font-black uppercase tracking-tight truncate">{p.name}</p>
@@ -131,33 +158,67 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
         <div className="col-span-8">
             {selectedProject ? (
               <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-8 space-y-6">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-6">
-                    <div>
-                        <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">{selectedProject.name}</h3>
-                        <div className="flex items-center gap-2 mt-2">
+                <div className="border-b border-slate-100 pb-6">
+                  {isEditingProject ? (
+                    <div className="space-y-4 animate-in fade-in duration-300">
+                       <input 
+                         value={editedProjectData.name}
+                         onChange={(e) => setEditedProjectData({...editedProjectData, name: e.target.value})}
+                         className="w-full text-2xl font-black text-slate-800 uppercase tracking-tighter bg-slate-100 border border-slate-200 rounded-lg px-3 py-2"
+                       />
+                       <div className="flex items-center gap-2">
+                           <User size={14} className="text-slate-400"/>
                            <select 
-                             value={selectedProject.status} 
-                             onChange={(e) => handleStatusChange(selectedProject.id, e.target.value as Project['status'])}
-                             className="px-3 py-1 text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 rounded-lg border border-slate-200 appearance-none outline-none"
+                            value={editedProjectData.responsible}
+                            onChange={(e) => setEditedProjectData({...editedProjectData, responsible: e.target.value})}
+                            className="w-full text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 rounded-lg border border-slate-200 appearance-none outline-none px-3 py-1.5"
                            >
-                              <option value="Em Planejamento">Em Planejamento</option>
-                              <option value="Ativo">Ativo</option>
-                              <option value="Suspenso">Suspenso</option>
-                              <option value="Concluído">Concluído</option>
+                              {teamMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                            </select>
-                           <button onClick={() => handleDuplicateProject(selectedProject)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Criar Versão 2 do Projeto">
-                              <Copy size={14} />
-                           </button>
-                        </div>
+                       </div>
+                       <div className="flex items-center gap-2 pt-2">
+                         <button onClick={handleSaveEdit} className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-emerald-600 transition"><Save size={14}/> Salvar</button>
+                         <button onClick={handleCancelEdit} className="px-4 py-2 bg-slate-200 text-slate-600 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-slate-300 transition"><X size={14}/> Cancelar</button>
+                       </div>
                     </div>
-                    <div className="bg-slate-100 p-1 rounded-full flex gap-1">
-                        <button onClick={() => setViewMode('timeline')} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase flex items-center gap-2 ${viewMode === 'timeline' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
-                           <GanttChartSquare size={14}/> Cronograma
-                        </button>
-                        <button onClick={() => setViewMode('flow')} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase flex items-center gap-2 ${viewMode === 'flow' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
-                           <Workflow size={14}/> Fluxo Finalizado
-                        </button>
+                  ) : (
+                    <div className="flex justify-between items-start">
+                      <div>
+                          <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">{selectedProject.name}</h3>
+                          <div className="flex items-center gap-2 mt-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                             <User size={14}/> Responsável: <span className="text-slate-800">{selectedProject.responsible || 'Não definido'}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-4">
+                            <select 
+                              value={selectedProject.status} 
+                              onChange={(e) => handleStatusChange(selectedProject.id, e.target.value as Project['status'])}
+                              className="px-3 py-1 text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 rounded-lg border border-slate-200 appearance-none outline-none"
+                            >
+                                <option value="Em Planejamento">Em Planejamento</option>
+                                <option value="Ativo">Ativo</option>
+                                <option value="Suspenso">Suspenso</option>
+                                <option value="Concluído">Concluído</option>
+                            </select>
+                            <button onClick={() => handleDuplicateProject(selectedProject)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Criar Versão 2 do Projeto">
+                                <Copy size={14} />
+                            </button>
+                            {isAdmin && (
+                              <button onClick={handleStartEdit} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Editar Projeto">
+                                  <Edit size={14} />
+                              </button>
+                            )}
+                          </div>
+                      </div>
+                      <div className="bg-slate-100 p-1 rounded-full flex gap-1">
+                          <button onClick={() => setViewMode('timeline')} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase flex items-center gap-2 ${viewMode === 'timeline' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
+                            <GanttChartSquare size={14}/> Cronograma
+                          </button>
+                          <button onClick={() => setViewMode('flow')} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase flex items-center gap-2 ${viewMode === 'flow' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
+                            <Workflow size={14}/> Fluxo Finalizado
+                          </button>
+                      </div>
                     </div>
+                  )}
                 </div>
 
                  {viewMode === 'timeline' ? (

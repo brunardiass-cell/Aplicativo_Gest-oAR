@@ -122,7 +122,13 @@ const App: React.FC = () => {
     }, 2000);
   }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers]);
 
-  const hasFullAccess = useMemo(() => !!(selectedProfile?.isLeader && isPasswordAuthenticated), [selectedProfile, isPasswordAuthenticated]);
+  const currentUserRole = useMemo(() => {
+    if (!account || !appUsers.length) return null;
+    const userEmail = account.username.toLowerCase();
+    return appUsers.find(u => u.email.toLowerCase() === userEmail)?.role || null;
+  }, [account, appUsers]);
+
+  const hasFullAccess = useMemo(() => currentUserRole === 'admin', [currentUserRole]);
   const canCreate = useMemo(() => isPasswordAuthenticated && selectedProfile?.id !== 'team_view_user', [isPasswordAuthenticated, selectedProfile]);
 
   const handleLogin = async () => {
@@ -390,7 +396,7 @@ const App: React.FC = () => {
   }
 
   if (!selectedProfile) {
-    return <UserSelectionView onSelectUser={handleProfileSelect} onSelectTeamView={handleTeamViewSelect} teamMembers={teamMembers} onLogout={handleLogout} />;
+    return <UserSelectionView onSelectUser={handleProfileSelect} onSelectTeamView={handleTeamViewSelect} teamMembers={teamMembers} onLogout={handleLogout} currentUserRole={currentUserRole} />;
   }
 
   if (selectedProfile.password && !isPasswordAuthenticated) {
@@ -450,7 +456,7 @@ const App: React.FC = () => {
           {view === 'dashboard' && <Dashboard projects={projects} tasks={tasks} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />}
           {view === 'quality' && hasFullAccess && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} appUsers={appUsers} onUpdateAppUsers={setAppUsers} />}
           {view === 'tasks' && <TaskBoard tasks={tasksForBoard} currentUser={selectedProfile?.name || 'Todos'} onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} onDelete={(task) => { setSelectedTask(task); setIsDeleteModalOpen(true); }} onAssignReview={() => {}} onNotificationClick={handleNotificationClick} onClearSingleNotification={handleClearSingleNotification} onClearAllNotifications={handleClearAllReviewNotifications} notifications={notifications} />}
-          {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={() => {}} teamMembers={teamMembers} />}
+          {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={() => {}} teamMembers={teamMembers} currentUserRole={currentUserRole} />}
           {view === 'traceability' && hasFullAccess && <ActivityLogView logs={logs} />}
         </div>
 

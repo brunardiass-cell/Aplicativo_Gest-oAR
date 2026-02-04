@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { TeamMember } from '../types';
+import { TeamMember, AppUser } from '../types';
 import { Crown, LogOut, Users, Eye } from 'lucide-react';
 
 interface UserSelectionViewProps {
@@ -8,6 +8,7 @@ interface UserSelectionViewProps {
   onSelectUser: (user: TeamMember) => void;
   onSelectTeamView: () => void;
   onLogout: () => void;
+  currentUserRole: AppUser['role'] | null;
 }
 
 const getInitials = (name: string): string => {
@@ -18,7 +19,7 @@ const getInitials = (name: string): string => {
   return name.substring(0, 2).toUpperCase();
 };
 
-const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSelectUser, onSelectTeamView, onLogout }) => {
+const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSelectUser, onSelectTeamView, onLogout, currentUserRole }) => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
       <div className="absolute top-6 right-6">
@@ -33,28 +34,33 @@ const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSe
 
         <div className="mt-12 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-            {teamMembers.map(member => (
-              <button 
-                key={member.id} 
-                onClick={() => onSelectUser(member)}
-                className="group flex flex-col items-center gap-3 p-4 rounded-2xl hover:bg-slate-50 transition"
-              >
-                <div className="relative">
-                  <div className="w-20 h-20 bg-brand-primary/10 rounded-full flex items-center justify-center text-2xl font-black text-brand-primary group-hover:scale-105 transition-transform">
-                    {getInitials(member.name)}
-                  </div>
-                  {member.isLeader && (
-                    <div className="absolute -top-1 -right-1 bg-amber-400 p-1.5 rounded-full text-white border-2 border-white">
-                      <Crown size={12} />
+            {teamMembers.map(member => {
+              const isDisabled = currentUserRole === 'user' && member.isLeader;
+              return (
+                <button 
+                  key={member.id} 
+                  onClick={() => onSelectUser(member)}
+                  disabled={isDisabled}
+                  title={isDisabled ? "Acesso ao perfil de liderança restrito." : member.name}
+                  className={`group flex flex-col items-center gap-3 p-4 rounded-2xl transition ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'}`}
+                >
+                  <div className="relative">
+                    <div className="w-20 h-20 bg-brand-primary/10 rounded-full flex items-center justify-center text-2xl font-black text-brand-primary group-hover:scale-105 transition-transform">
+                      {getInitials(member.name)}
                     </div>
-                  )}
-                </div>
-                <div className="text-center">
-                  <p className="font-bold text-slate-800">{member.name}</p>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{member.role}</p>
-                </div>
-              </button>
-            ))}
+                    {member.isLeader && (
+                      <div className="absolute -top-1 -right-1 bg-amber-400 p-1.5 rounded-full text-white border-2 border-white">
+                        <Crown size={12} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-slate-800">{member.name}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{member.role}</p>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
