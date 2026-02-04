@@ -1,5 +1,5 @@
 
-import { ActivityPlanTemplate, TeamMember, AppUser, AppNotification } from './types';
+import { ActivityPlanTemplate, TeamMember, AppUser } from './types';
 
 export const DEFAULT_APP_USERS: AppUser[] = [
   {
@@ -20,28 +20,6 @@ export const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
   { id: 'tm_5', name: 'Ana Luiza', role: 'Equipe', isLeader: false },
   { id: 'tm_6', name: 'Ana Terzian', role: 'Equipe', isLeader: false }
 ];
-
-export const DEFAULT_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: 'notif_1',
-    userId: 'Graziella',
-    message: 'Revisão: Relatório de Estabilidade Lote P01',
-    timestamp: new Date().toISOString(),
-    read: false,
-    type: 'REVIEW_ASSIGNED',
-    refId: 'task_1', 
-  },
-  {
-    id: 'notif_2',
-    userId: 'Graziella',
-    message: 'Revisão: Submissão de Dossiê para Fase II',
-    timestamp: new Date().toISOString(),
-    read: false,
-    type: 'REVIEW_ASSIGNED',
-    refId: 'task_2',
-  },
-];
-
 
 export const ADMIN_WHITELIST = [
   'priscilapassos@ctvacinas.org'
