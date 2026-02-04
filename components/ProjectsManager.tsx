@@ -1,7 +1,7 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember, AppUser } from '../types';
-import { FolderPlus, ListPlus, FolderKanban, Workflow, GanttChartSquare, Copy, Edit, User, Save, X, Users, Plus } from 'lucide-react';
+import { FolderPlus, ListPlus, FolderKanban, Workflow, GanttChartSquare, Copy, Edit, User, Save, X, Users, Plus, Trash2 } from 'lucide-react';
 import PlanManagerModal from './PlanManagerModal';
 import NewProjectModal from './NewProjectModal';
 import ProjectTimeline from './ProjectTimeline';
@@ -12,7 +12,7 @@ interface ProjectsManagerProps {
   onUpdateProjects: (projects: Project[]) => void;
   activityPlans: ActivityPlanTemplate[];
   onUpdateActivityPlans: (plans: ActivityPlanTemplate[]) => void;
-  onOpenDeletionModal: (item: { type: 'macro' | 'micro', projectId: string; macroId: string; microId?: string; name: string }) => void;
+  onOpenDeletionModal: (item: { type: 'project' | 'macro' | 'micro', ids: { projectId: string; macroId?: string; microId?: string; }, name: string }) => void;
   teamMembers: TeamMember[];
   currentUserRole: AppUser['role'] | null;
 }
@@ -30,13 +30,21 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 }) => {
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(projects[0] || null);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [viewMode, setViewMode] = useState<ProjectView>('timeline');
   const [isEditingProject, setIsEditingProject] = useState(false);
   const [editedProjectData, setEditedProjectData] = useState<Partial<Project>>({});
   const [newTeamMemberName, setNewTeamMemberName] = useState('');
 
   const isAdmin = currentUserRole === 'admin';
+  
+  useEffect(() => {
+    // Garante que um projeto válido seja selecionado ao carregar ou quando a lista mudar.
+    // Se o projeto selecionado atualmente for removido, seleciona o primeiro da lista.
+    if (!selectedProject || !projects.find(p => p.id === selectedProject.id)) {
+      setSelectedProject(projects[0] || null);
+    }
+  }, [projects, selectedProject]);
 
   const projectStats = useMemo(() => {
     if (!selectedProject) return null;
@@ -67,6 +75,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   }, [selectedProject]);
 
   const addProject = (project: Project) => {
+    // A lógica de atualização do estado global (onUpdateProjects) agora pertence ao App.tsx
+    // Esta função agora prepara o novo projeto e o passa para cima.
     const updatedProjects = [...projects, project];
     onUpdateProjects(updatedProjects);
     setSelectedProject(project);
@@ -274,9 +284,14 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                                     <Copy size={14} />
                                 </button>
                                 {isAdmin && (
-                                  <button onClick={handleStartEdit} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Editar Projeto">
-                                      <Edit size={14} />
-                                  </button>
+                                  <>
+                                    <button onClick={handleStartEdit} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Editar Projeto">
+                                        <Edit size={14} />
+                                    </button>
+                                    <button onClick={() => onOpenDeletionModal({ type: 'project', ids: { projectId: selectedProject.id }, name: selectedProject.name })} className="p-2 text-slate-400 hover:bg-red-100 hover:text-red-600 rounded-lg" title="Excluir Projeto">
+                                        <Trash2 size={14} />
+                                    </button>
+                                  </>
                                 )}
                               </div>
                           </div>
@@ -312,7 +327,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                     <ProjectTimeline 
                       project={selectedProject} 
                       onUpdateProject={handleUpdateProject}
-                      onOpenDeletionModal={onOpenDeletionModal}
+                      onOpenDeletionModal={(item) => onOpenDeletionModal(item as any)}
                       teamMembers={teamMembers}
                     />
                  ) : (

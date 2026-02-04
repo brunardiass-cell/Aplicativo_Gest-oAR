@@ -131,6 +131,9 @@ export interface Project {
   templateId: string;
   macroActivities: MacroActivity[];
   team?: string[];
+  deleted?: boolean;
+  deletionReason?: string;
+  deletionDate?: string;
 }
 
 export interface TeamMember {

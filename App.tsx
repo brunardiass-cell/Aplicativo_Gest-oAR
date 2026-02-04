@@ -50,7 +50,7 @@ const App: React.FC = () => {
   const [leadFilter, setLeadFilter] = useState<string>('Todos');
 
   const [deleteTarget, setDeleteTarget] = useState<{
-    type: 'task' | 'macro' | 'micro';
+    type: 'task' | 'project' | 'macro' | 'micro';
     name: string;
     ids: { taskId?: string; projectId?: string; macroId?: string; microId?: string };
   } | null>(null);
@@ -314,11 +314,11 @@ const App: React.FC = () => {
     setSelectedTask(null);
   };
 
-  const handleOpenProjectItemDeletionModal = (item: { type: 'macro' | 'micro', projectId: string; macroId: string; microId?: string; name: string }) => {
+  const handleOpenDeleteItemModal = (item: { type: 'task' | 'project' | 'macro' | 'micro', ids: { taskId?: string; projectId?: string; macroId?: string; microId?: string; }, name: string }) => {
     setDeleteTarget({
       type: item.type,
       name: item.name,
-      ids: { projectId: item.projectId, macroId: item.macroId, microId: item.microId }
+      ids: item.ids,
     });
     setIsDeleteModalOpen(true);
   };
@@ -341,6 +341,10 @@ const App: React.FC = () => {
     if (type === 'task' && ids.taskId) {
       setTasks(prev => prev.map(t =>
         t.id === ids.taskId ? { ...t, deleted: true, deletionReason: reason, deletionDate: new Date().toISOString() } : t
+      ));
+    } else if (type === 'project' && ids.projectId) {
+       setProjects(prev => prev.map(p =>
+        p.id === ids.projectId ? { ...p, deleted: true, deletionReason: reason, deletionDate: new Date().toISOString() } : p
       ));
     } else if (type === 'macro' && ids.projectId && ids.macroId) {
       setProjects(prev => prev.map(p =>
@@ -416,6 +420,7 @@ const App: React.FC = () => {
     });
   }, [tasks, filterMember, statusFilter, leadFilter]);
 
+  const activeProjects = useMemo(() => projects.filter(p => !p.deleted), [projects]);
 
   if (isLoading) {
     return <div className="flex h-screen w-screen items-center justify-center bg-brand-light"><Loader2 size={48} className="animate-spin text-brand-primary" /></div>;
@@ -549,7 +554,7 @@ const App: React.FC = () => {
             </div>
         </header>
 
-        {view === 'dashboard' && <Dashboard tasks={tasksForBoard} projects={projects} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />}
+        {view === 'dashboard' && <Dashboard tasks={tasksForBoard} projects={activeProjects} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />}
         {view === 'tasks' && (
             <TaskBoard
               tasks={tasksForBoard}
@@ -557,8 +562,7 @@ const App: React.FC = () => {
               onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }}
               onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }}
               onDelete={(task) => {
-                setDeleteTarget({ type: 'task', name: task.activity, ids: { taskId: task.id } });
-                setIsDeleteModalOpen(true);
+                handleOpenDeleteItemModal({ type: 'task', name: task.activity, ids: { taskId: task.id } });
               }}
               onAssignReview={() => {}} // Placeholder
               notifications={notifications.filter(n => !n.read)}
@@ -572,7 +576,7 @@ const App: React.FC = () => {
               uniqueLeads={uniqueLeads}
             />
         )}
-        {view === 'projects' && <ProjectsManager projects={projects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={handleOpenProjectItemDeletionModal} teamMembers={teamMembers} currentUserRole={currentUserRole} />}
+        {view === 'projects' && <ProjectsManager projects={activeProjects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} teamMembers={teamMembers} currentUserRole={currentUserRole} />}
         {view === 'quality' && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} appUsers={appUsers} onUpdateAppUsers={setAppUsers} />}
         {view === 'traceability' && <ActivityLogView logs={logs} />}
 
@@ -583,7 +587,7 @@ const App: React.FC = () => {
           isOpen={isModalOpen}
           onClose={() => { setIsModalOpen(false); setSelectedTask(null); }}
           onSave={handleSaveTask}
-          projects={projects.map(p => p.name)}
+          projects={activeProjects.map(p => p.name)}
           initialData={selectedTask}
           teamMembers={teamMembers}
         />
