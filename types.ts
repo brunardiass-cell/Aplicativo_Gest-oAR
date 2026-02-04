@@ -129,6 +129,7 @@ export interface Project {
   status: 'Em Planejamento' | 'Ativo' | 'Suspenso' | 'Concluído';
   templateId: string;
   macroActivities: MacroActivity[];
+  team?: string[];
 }
 
 export interface TeamMember {

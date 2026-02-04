@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember, AppUser } from '../types';
-import { FolderPlus, ListPlus, FolderKanban, Workflow, GanttChartSquare, Copy, Edit, User, Save, X } from 'lucide-react';
+import { FolderPlus, ListPlus, FolderKanban, Workflow, GanttChartSquare, Copy, Edit, User, Save, X, Users } from 'lucide-react';
 import PlanManagerModal from './PlanManagerModal';
 import NewProjectModal from './NewProjectModal';
 import ProjectTimeline from './ProjectTimeline';
@@ -51,7 +51,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
   const handleStartEdit = () => {
     if (selectedProject) {
-      setEditedProjectData({ name: selectedProject.name, responsible: selectedProject.responsible });
+      setEditedProjectData({ name: selectedProject.name, responsible: selectedProject.responsible, team: selectedProject.team || [] });
       setIsEditingProject(true);
     }
   };
@@ -74,6 +74,14 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     if(selectedProject?.id === projectId) {
         setSelectedProject({...selectedProject, status: newStatus});
     }
+  };
+  
+  const toggleEditTeamMember = (name: string) => {
+    const currentTeam = editedProjectData.team || [];
+    const newTeam = currentTeam.includes(name)
+        ? currentTeam.filter(m => m !== name)
+        : [...currentTeam, name];
+    setEditedProjectData({ ...editedProjectData, team: newTeam });
   };
 
   const handleDuplicateProject = (projectToDuplicate: Project) => {
@@ -175,6 +183,21 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                            >
                               {teamMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                            </select>
+                       </div>
+                       <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Users size={14}/> Equipe</label>
+                          <div className="p-3 bg-slate-100 border border-slate-200 rounded-2xl flex flex-wrap gap-2">
+                              {teamMembers.map(member => (
+                                  <button
+                                      type="button"
+                                      key={member.id}
+                                      onClick={() => toggleEditTeamMember(member.name)}
+                                      className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition ${editedProjectData.team?.includes(member.name) ? 'bg-[#1a2b4e] text-white border-[#1a2b4e]' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'}`}
+                                  >
+                                      {member.name}
+                                  </button>
+                              ))}
+                          </div>
                        </div>
                        <div className="flex items-center gap-2 pt-2">
                          <button onClick={handleSaveEdit} className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-emerald-600 transition"><Save size={14}/> Salvar</button>

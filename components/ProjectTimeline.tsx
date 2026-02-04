@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Project, MacroActivity, MicroActivity, Status, CompletionStatus, TeamMember } from '../types';
-import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X } from 'lucide-react';
+import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle } from 'lucide-react';
 
 interface ProjectTimelineProps {
   project: Project;
@@ -15,6 +15,13 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
   const [editingMicro, setEditingMicro] = useState<string | null>(null);
   const [editingMacro, setEditingMacro] = useState<string | null>(null);
   const [editingMacroName, setEditingMacroName] = useState('');
+
+  const projectTeamMembers = useMemo(() => {
+    if (!project.team || project.team.length === 0) {
+        return teamMembers; // Fallback para todos se nenhuma equipe for definida
+    }
+    return teamMembers.filter(member => project.team!.includes(member.name));
+  }, [project, teamMembers]);
 
   const toggleMacro = (macroId: string) => {
     const newSet = new Set(expandedMacros);
@@ -66,7 +73,7 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
     const newMicro: MicroActivity = {
       id: 'micro_' + Math.random().toString(36).substr(2, 9),
       name: 'Nova Microatividade',
-      assignee: teamMembers[0].name,
+      assignee: projectTeamMembers[0]?.name || teamMembers[0].name,
       dueDate: new Date().toISOString().split('T')[0],
       status: 'Planejada',
       completionStatus: 'Não Finalizada',
@@ -143,7 +150,7 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
                  <MicroActivityRow 
                     key={micro.id} 
                     micro={micro}
-                    teamMembers={teamMembers}
+                    teamMembers={projectTeamMembers}
                     onUpdate={(updates) => handleMicroUpdate(macro.id, micro.id, updates)}
                     onDelete={() => onOpenDeletionModal({ type: 'micro', projectId: project.id, macroId: macro.id, microId: micro.id, name: micro.name })}
                     isEditing={editingMicro === micro.id}
@@ -174,6 +181,26 @@ interface MicroActivityRowProps {
 const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, onDelete, isEditing, onSetEditing, teamMembers }) => {
     const [localName, setLocalName] = useState(micro.name);
 
+    const getDueDateStatus = () => {
+        if (micro.status === 'Concluída' || !micro.dueDate) return null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const dueDate = new Date(micro.dueDate + 'T00:00:00');
+        const timeDiff = dueDate.getTime() - today.getTime();
+        const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+    
+        if (dayDiff < 0) {
+            return { status: 'overdue', text: 'Vencida', color: 'text-red-500' };
+        }
+        if (dayDiff <= 7) {
+            const label = dayDiff === 0 ? 'Vence Hoje' : `Vence em ${dayDiff}d`;
+            return { status: 'upcoming', text: label, color: 'text-amber-500' };
+        }
+        return null;
+    };
+    
+    const dueDateStatus = getDueDateStatus();
+
     const handleSaveName = () => {
       onUpdate({ name: localName });
       onSetEditing(null);
@@ -200,8 +227,13 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
             {teamMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
           </select>
         </div>
-        <div className="col-span-2">
+        <div className="col-span-2 relative">
           <input type="date" value={micro.dueDate} onChange={e => onUpdate({ dueDate: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600"/>
+          {dueDateStatus && (
+            <div className={`absolute -top-3.5 right-0 text-[8px] font-bold flex items-center gap-1 ${dueDateStatus.color}`}>
+                <AlertTriangle size={10} /> {dueDateStatus.text}
+            </div>
+          )}
         </div>
         <div className="col-span-2">
           <select value={micro.status} onChange={e => onUpdate({ status: e.target.value as Status })} className="w-full bg-transparent text-[10px] font-bold text-slate-600">

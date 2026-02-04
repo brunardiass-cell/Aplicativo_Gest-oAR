@@ -15,7 +15,14 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plan
   const [projectName, setProjectName] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState<string>(plans[0]?.id || '');
   const [responsibleMember, setResponsibleMember] = useState<string>(teamMembers[0]?.name || '');
+  const [selectedTeam, setSelectedTeam] = useState<string[]>([]);
   const [error, setError] = useState('');
+
+  const toggleTeamMember = (name: string) => {
+    setSelectedTeam(prev =>
+        prev.includes(name) ? prev.filter(m => m !== name) : [...prev, name]
+    );
+  };
 
   const handleSubmit = () => {
     if (!projectName.trim() || !selectedPlanId || !responsibleMember) {
@@ -35,6 +42,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plan
       status: 'Em Planejamento',
       responsible: responsibleMember,
       templateId: selectedPlanId,
+      team: selectedTeam,
       macroActivities: selectedPlan.macroActivities.map((macroName): MacroActivity => ({
         id: Math.random().toString(36).substr(2, 9),
         name: macroName,
@@ -85,6 +93,21 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plan
                 <option key={member.id} value={member.name}>{member.name}</option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Equipe do Projeto</label>
+            <div className="mt-1 p-3 bg-slate-50 border border-slate-200 rounded-2xl flex flex-wrap gap-2">
+                {teamMembers.map(member => (
+                    <button
+                        type="button"
+                        key={member.id}
+                        onClick={() => toggleTeamMember(member.name)}
+                        className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition ${selectedTeam.includes(member.name) ? 'bg-[#1a2b4e] text-white border-[#1a2b4e]' : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'}`}
+                    >
+                        {member.name}
+                    </button>
+                ))}
+            </div>
           </div>
           <div>
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Plano de Atividades Base</label>
