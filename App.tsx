@@ -393,7 +393,7 @@ const App: React.FC = () => {
       !t.deleted && (
         filterMember === 'Todos' || 
         t.projectLead === filterMember || 
-        t.collaborators.includes(filterMember) ||
+        (Array.isArray(t.collaborators) && t.collaborators.includes(filterMember)) ||
         t.currentReviewer === filterMember
       )
     );
