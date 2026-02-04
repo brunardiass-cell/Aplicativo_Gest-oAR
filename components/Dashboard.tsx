@@ -20,7 +20,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, filteredUser, notification
     return tasks.filter(t => {
       if (t.deleted) return false;
       if (filteredUser === 'Todos') return true;
-      return t.projectLead === filteredUser || t.collaborators.includes(filteredUser) || t.currentReviewer === filteredUser;
+      return t.projectLead === filteredUser || (Array.isArray(t.collaborators) && t.collaborators.includes(filteredUser)) || t.currentReviewer === filteredUser;
     });
   }, [tasks, filteredUser]);
 

@@ -146,7 +146,7 @@ const AccessControl: React.FC<AccessControlProps> = ({ teamMembers, onUpdateTeam
                 <div key={user.id} className="py-6 flex items-center justify-between group">
                   <div className="flex items-center gap-4">
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg ${user.status === 'active' ? 'bg-emerald-50 text-emerald-600' : user.status === 'blocked' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
-                      {user.username[0]}
+                      {user.username?.charAt(0) || '?'}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
@@ -240,7 +240,7 @@ const AccessControl: React.FC<AccessControlProps> = ({ teamMembers, onUpdateTeam
                 <div key={member.id} className="p-4 bg-white border border-slate-100 rounded-2xl flex items-center justify-between group hover:border-indigo-100 transition shadow-sm">
                   <div className="flex items-center gap-4">
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg bg-indigo-50 text-indigo-600`}>
-                      {member.name[0]}
+                      {member.name?.charAt(0) || '?'}
                     </div>
                     <div>
                       <h4 className="text-sm font-black text-slate-900 uppercase tracking-tighter">{member.name}</h4>
