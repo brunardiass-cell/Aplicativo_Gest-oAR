@@ -41,31 +41,29 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   const projectStats = useMemo(() => {
     if (!selectedProject) return null;
 
-    let totalMicros = 0;
-    let completedMicros = 0;
+    // Progresso geral baseado nas macroatividades
+    const totalMacros = selectedProject.macroActivities.length;
+    const completedMacros = selectedProject.macroActivities.filter(macro => macro.status === 'Concluída').length;
+    const progress = totalMacros > 0 ? (completedMacros / totalMacros) * 100 : 0;
+
+    // Estatísticas detalhadas das microatividades para o texto
     let lateMicros = 0;
     let ongoingMicros = 0;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     selectedProject.macroActivities.forEach(macro => {
-        macro.microActivities.forEach(micro => {
-            totalMicros++;
-            if (micro.status === 'Concluída') {
-                completedMicros++;
-            }
-            if (micro.status === 'Em Andamento') {
-                ongoingMicros++;
-            }
-            if (micro.dueDate && new Date(micro.dueDate + 'T00:00:00') < today && micro.status !== 'Concluída') {
-                lateMicros++;
-            }
-        });
+      macro.microActivities.forEach(micro => {
+        if (micro.status === 'Em Andamento') {
+          ongoingMicros++;
+        }
+        if (micro.dueDate && new Date(micro.dueDate + 'T00:00:00') < today && micro.status !== 'Concluída') {
+          lateMicros++;
+        }
+      });
     });
 
-    const progress = totalMicros > 0 ? (completedMicros / totalMicros) * 100 : 0;
-
-    return { totalMicros, completedMicros, lateMicros, ongoingMicros, progress };
+    return { totalMacros, completedMacros, lateMicros, ongoingMicros, progress };
   }, [selectedProject]);
 
   const addProject = (project: Project) => {
@@ -300,7 +298,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                                     </div>
                                 </div>
                                 <p className="text-center text-xs text-slate-500 font-semibold">
-                                    {projectStats.completedMicros}/{projectStats.totalMicros} microatividades concluídas
+                                    {projectStats.completedMacros}/{projectStats.totalMacros} macroatividades concluídas
                                     {projectStats.lateMicros > 0 && <span className="text-red-500"> • {projectStats.lateMicros} em atraso</span>}
                                     {projectStats.ongoingMicros > 0 && <span className="text-teal-600"> • {projectStats.ongoingMicros} em andamento</span>}
                                 </p>
