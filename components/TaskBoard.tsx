@@ -226,7 +226,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                   <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Avanço</span>
                   <span className="text-[11px] font-black text-slate-900">{task.progress}%</span>
                </div>
-               <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+               <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
                   <div className={`h-full transition-all duration-700 ${task.progress === 100 ? 'bg-emerald-500' : 'bg-brand-primary'}`} style={{width: `${task.progress}%`}}></div>
                </div>
             </div>

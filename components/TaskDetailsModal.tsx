@@ -50,7 +50,7 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
             <InfoBlock label="Líder" value={task.projectLead} icon={<User size={14}/>} />
             <div className="space-y-1">
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Progresso</span>
-              <div className="h-2 bg-slate-100 rounded-full overflow-hidden mt-2">
+              <div className="h-2 bg-slate-200 rounded-full overflow-hidden mt-2">
                 <div className="h-full bg-brand-primary" style={{width: `${task.progress}%`}}></div>
               </div>
               <p className="text-[10px] font-black text-brand-primary mt-1">{task.progress}% concluído</p>

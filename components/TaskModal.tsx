@@ -179,7 +179,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">% de Progresso</label>
                     <span className="text-sm font-black text-brand-primary">{formData.progress}%</span>
                  </div>
-                 <input type="range" min="0" max="100" step="5" value={formData.progress} onChange={e => setFormData({...formData, progress: parseInt(e.target.value)})} className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-brand-primary" />
+                 <input type="range" min="0" max="100" step="5" value={formData.progress} onChange={e => setFormData({...formData, progress: parseInt(e.target.value)})} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-brand-primary" />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Status Atual</label>
@@ -207,7 +207,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
                </div>
                <label className={`relative inline-flex items-center scale-125 ${canEnableReviewFlow ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
                   <input type="checkbox" checked={formData.isReport} onChange={e => setFormData({...formData, isReport: e.target.checked})} className="sr-only peer" disabled={!canEnableReviewFlow} />
-                  <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:bg-brand-primary after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                  <div className="w-11 h-6 bg-slate-300 rounded-full peer peer-checked:bg-brand-primary after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
                </label>
             </div>
 
