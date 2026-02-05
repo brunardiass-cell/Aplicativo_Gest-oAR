@@ -611,6 +611,7 @@ const App: React.FC = () => {
           projects={['Geral', ...activeProjects.map(p => p.name)]}
           initialData={selectedTask}
           teamMembers={teamMembers}
+          hasFullAccess={hasFullAccess}
         />
       )}
       
