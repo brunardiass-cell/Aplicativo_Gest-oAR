@@ -7,6 +7,7 @@ import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
+import ProjectsDashboard from './components/ProjectsDashboard';
 import TaskBoard from './components/TaskBoard';
 import TaskModal from './components/TaskModal';
 import TaskDetailsModal from './components/TaskDetailsModal';
@@ -16,7 +17,7 @@ import MonthlyReportModal from './components/MonthlyReportModal';
 import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
-import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert } from 'lucide-react';
+import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, Activity, FolderKanban } from 'lucide-react';
 
 const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -49,6 +50,9 @@ const App: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'Todos' | Status>('Todos');
   const [leadFilter, setLeadFilter] = useState<string>('Todos');
   const [projectFilter, setProjectFilter] = useState<string>('Todos');
+  
+  const [dashboardView, setDashboardView] = useState<'activities' | 'projects'>('activities');
+  const [initialProjectId, setInitialProjectId] = useState<string | null>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<{
     type: 'task' | 'project' | 'macro' | 'micro';
@@ -403,6 +407,11 @@ const App: React.FC = () => {
       (n.userId === selectedProfile.name && n.type === 'REVIEW_ASSIGNED') ? { ...n, read: true } : n
     ));
   };
+  
+  const handleNavigateToProject = (projectId: string) => {
+    setInitialProjectId(projectId);
+    setView('projects');
+  };
 
   const pendingReviewCount = useMemo(() => {
     const user = selectedProfile?.name;
@@ -572,7 +581,35 @@ const App: React.FC = () => {
             </div>
         </header>
 
-        {view === 'dashboard' && <Dashboard tasks={tasksForBoard} projects={activeProjects} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />}
+        {view === 'dashboard' && (
+          <div className="space-y-6">
+            <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-fit">
+              <button 
+                onClick={() => setDashboardView('activities')} 
+                className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'activities' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
+              >
+                 <Activity size={14} /> Dashboard de Atividades
+              </button>
+              <button 
+                onClick={() => setDashboardView('projects')} 
+                className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'projects' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
+              >
+                 <FolderKanban size={14} /> Dashboard de Projetos
+              </button>
+            </div>
+            
+            {dashboardView === 'activities' ? (
+              <Dashboard tasks={tasksForBoard} projects={activeProjects} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />
+            ) : (
+              <ProjectsDashboard 
+                projects={activeProjects} 
+                tasks={tasks} 
+                filteredUser={filterMember}
+                onNavigateToProject={handleNavigateToProject}
+              />
+            )}
+          </div>
+        )}
         {view === 'tasks' && (
             <TaskBoard
               tasks={tasksForBoard}
@@ -597,7 +634,7 @@ const App: React.FC = () => {
               uniqueProjects={uniqueProjects}
             />
         )}
-        {view === 'projects' && <ProjectsManager projects={activeProjects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} teamMembers={teamMembers} currentUserRole={currentUserRole} />}
+        {view === 'projects' && <ProjectsManager projects={activeProjects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} teamMembers={teamMembers} currentUserRole={currentUserRole} initialProjectId={initialProjectId} />}
         {view === 'quality' && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} appUsers={appUsers} onUpdateAppUsers={setAppUsers} />}
         {view === 'traceability' && <ActivityLogView logs={logs} />}
 

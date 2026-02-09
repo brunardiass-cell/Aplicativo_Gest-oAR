@@ -15,6 +15,7 @@ interface ProjectsManagerProps {
   onOpenDeletionModal: (item: { type: 'project' | 'macro' | 'micro', ids: { projectId: string; macroId?: string; microId?: string; }, name: string }) => void;
   teamMembers: TeamMember[];
   currentUserRole: AppUser['role'] | null;
+  initialProjectId?: string | null;
 }
 
 type ProjectView = 'timeline' | 'flow';
@@ -26,7 +27,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   onUpdateActivityPlans,
   onOpenDeletionModal,
   teamMembers,
-  currentUserRole
+  currentUserRole,
+  initialProjectId
 }) => {
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
@@ -39,12 +41,17 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   const isAdmin = currentUserRole === 'admin';
   
   useEffect(() => {
-    // Garante que um projeto válido seja selecionado ao carregar ou quando a lista mudar.
-    // Se o projeto selecionado atualmente for removido, seleciona o primeiro da lista.
+    if (initialProjectId) {
+      const projectToSelect = projects.find(p => p.id === initialProjectId);
+      if (projectToSelect) {
+        setSelectedProject(projectToSelect);
+        return;
+      }
+    }
     if (!selectedProject || !projects.find(p => p.id === selectedProject.id)) {
       setSelectedProject(projects[0] || null);
     }
-  }, [projects, selectedProject]);
+  }, [projects, selectedProject, initialProjectId]);
 
   useEffect(() => {
     const afterPrintHandler = () => {
