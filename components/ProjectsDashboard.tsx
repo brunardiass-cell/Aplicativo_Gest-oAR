@@ -113,12 +113,12 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
         <StatCard label="Atividades Atrasadas" value={projectStats.lateTasks} icon={<AlertTriangle size={20}/>} color="bg-red-600" />
       </div>
 
-      {/* Lists */}
+      {/* Lists & Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-7 space-y-8">
-            <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
+        <div className="lg:col-span-7">
+            <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200 h-full">
                 <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Status dos Projetos (baseado em Macroatividades)</h3>
-                <div className="space-y-5 max-h-[250px] overflow-y-auto custom-scrollbar pr-4">
+                <div className="space-y-5 max-h-[600px] overflow-y-auto custom-scrollbar pr-4">
                     {userProjects.length > 0 ? userProjects.map(project => {
                     const progress = calculateProjectProgress(project);
                     const totalMacros = project.macroActivities.length;
@@ -146,13 +146,15 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
                     }) : <p className="text-center text-slate-400 text-xs py-20 italic">Nenhum projeto associado a este perfil.</p>}
                 </div>
             </div>
-
+        </div>
+        
+        <div className="lg:col-span-5 space-y-6">
             <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
                 <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Status das Microatividades</h3>
-                <div className="h-[250px]">
+                <div className="h-[200px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={microStatusChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} labelLine={false} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                      <Pie data={microStatusChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} labelLine={false} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
                         {microStatusChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                       </Pie>
                       <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
@@ -160,50 +162,44 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
                   </ResponsiveContainer>
                 </div>
             </div>
-        </div>
-        
-        <div className="lg:col-span-5 space-y-6">
-            <div className="bg-red-50 p-8 rounded-[2rem] border border-red-200">
-                <h3 className="text-xs font-black text-red-900 uppercase tracking-widest mb-6 flex items-center gap-2">
+
+            <div className="bg-red-50 p-6 rounded-[2rem] border border-red-200">
+                <h3 className="text-xs font-black text-red-900 uppercase tracking-widest mb-4 flex items-center gap-2">
                     <AlertTriangle size={14}/> Microatividades Vencidas
                 </h3>
-                <div className="space-y-3 max-h-[200px] overflow-y-auto custom-scrollbar pr-2">
+                <div className="space-y-3 max-h-[150px] overflow-y-auto custom-scrollbar pr-2">
                     {overdueMicroActivities.length > 0 ? overdueMicroActivities.map(micro => (
-                        <button key={micro.id} onClick={() => onNavigateToProject(micro.projectId)} className="w-full text-left p-4 bg-white border border-red-200 rounded-2xl group hover:bg-red-100/50 transition">
+                        <button key={micro.id} onClick={() => onNavigateToProject(micro.projectId)} className="w-full text-left p-3 bg-white border border-red-200 rounded-xl group hover:bg-red-100/50 transition">
                             <div className="flex justify-between items-center">
                                 <div>
                                 <p className="text-xs font-bold text-slate-800">{micro.name}</p>
-                                <p className="text-[9px] font-bold text-slate-400 uppercase">{micro.projectName} / {micro.macroName}</p>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase">{micro.projectName}</p>
                                 </div>
                                 <ArrowRight size={16} className="text-red-400 group-hover:translate-x-1 transition-transform" />
                             </div>
-                            <p className="text-right text-[9px] font-bold text-red-600 mt-2">
-                                Venceu em: {new Date(micro.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}
-                            </p>
                         </button>
-                    )) : <p className="text-center text-red-800/60 text-xs py-10 italic">Nenhuma microatividade vencida!</p>}
+                    )) : <p className="text-center text-red-800/60 text-xs py-10 italic">Nenhuma vencida!</p>}
                 </div>
             </div>
 
-            <div className="bg-amber-50 p-8 rounded-[2rem] border border-amber-200">
-                <h3 className="text-xs font-black text-amber-900 uppercase tracking-widest mb-6 flex items-center gap-2">
+            <div className="bg-amber-50 p-6 rounded-[2rem] border border-amber-200">
+                <h3 className="text-xs font-black text-amber-900 uppercase tracking-widest mb-4 flex items-center gap-2">
                     <Clock size={14}/> Prazos Próximos (Top 5)
                 </h3>
-                <div className="space-y-3 max-h-[280px] overflow-y-auto custom-scrollbar pr-2">
+                <div className="space-y-3 max-h-[150px] overflow-y-auto custom-scrollbar pr-2">
                     {upcomingMicroActivities.length > 0 ? upcomingMicroActivities.map(micro => (
-                        <button key={micro.id} onClick={() => onNavigateToProject(micro.projectId)} className="w-full text-left p-4 bg-white border border-amber-200 rounded-2xl group hover:bg-amber-100/50 transition">
+                        <button key={micro.id} onClick={() => onNavigateToProject(micro.projectId)} className="w-full text-left p-3 bg-white border border-amber-200 rounded-xl group hover:bg-amber-100/50 transition">
                            <div className="flex justify-between items-center">
                                 <div>
                                     <p className="text-xs font-bold text-slate-800">{micro.name}</p>
-                                    <p className="text-[9px] font-bold text-slate-400 uppercase">{micro.projectName} / {micro.macroName}</p>
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase">{micro.projectName}</p>
                                 </div>
-                                <ArrowRight size={16} className="text-amber-500 group-hover:translate-x-1 transition-transform" />
+                                <span className="text-[9px] font-bold text-amber-700">
+                                    {new Date(micro.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                </span>
                             </div>
-                            <p className="text-right text-[9px] font-bold text-amber-700 mt-2">
-                                Prazo: {new Date(micro.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}
-                            </p>
                         </button>
-                    )) : <p className="text-center text-amber-800/60 text-xs py-10 italic">Nenhum prazo relevante nos próximos dias.</p>}
+                    )) : <p className="text-center text-amber-800/60 text-xs py-10 italic">Nenhum prazo próximo.</p>}
                 </div>
             </div>
         </div>
