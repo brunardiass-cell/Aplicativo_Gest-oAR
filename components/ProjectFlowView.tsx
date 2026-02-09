@@ -1,91 +1,72 @@
 
 import React from 'react';
-import { Project, CompletionStatus } from '../types';
-import { CheckCircle, AlertTriangle, Repeat, FileText, MessageSquare } from 'lucide-react';
+import { Project, MacroActivity, Status } from '../types';
+import { Clock, Activity, PauseCircle, CheckCircle } from 'lucide-react';
 
 interface ProjectFlowViewProps {
   project: Project;
 }
 
+const KANBAN_COLUMNS: { title: string; status: Status; icon: React.ReactNode; color: string }[] = [
+  { title: 'Planejado', status: 'Planejada', icon: <Clock size={14}/>, color: 'text-slate-500' },
+  { title: 'Em Andamento', status: 'Em Andamento', icon: <Activity size={14}/>, color: 'text-teal-500' },
+  { title: 'Pausado', status: 'Pausado', icon: <PauseCircle size={14}/>, color: 'text-amber-500' },
+  { title: 'Concluído', status: 'Concluída', icon: <CheckCircle size={14}/>, color: 'text-emerald-500' },
+];
+
 const ProjectFlowView: React.FC<ProjectFlowViewProps> = ({ project }) => {
-  const completedMacros = project.macroActivities.filter(
-    (macro) => macro.status === 'Concluída' && macro.microActivities.some(micro => micro.status === 'Concluída')
-  );
+
+  const macrosByStatus = KANBAN_COLUMNS.map(col => ({
+    ...col,
+    macros: project.macroActivities.filter(macro => macro.status === col.status)
+  }));
 
   return (
-    <div className="space-y-8">
-      {completedMacros.length === 0 ? (
-        <div className="text-center py-20">
-          <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Nenhuma macroatividade foi concluída ainda.</p>
-        </div>
-      ) : (
-        <div className="relative pl-8 before:content-[''] before:absolute before:left-4 before:top-0 before:bottom-0 before:w-1 before:bg-slate-100">
-          {completedMacros.map((macro, idx) => (
-            <div key={macro.id} className="mb-12 relative">
-              <div className="absolute -left-[22px] top-1 w-6 h-6 rounded-full bg-emerald-500 border-4 border-white shadow-md flex items-center justify-center text-white font-black text-xs">
-                {idx + 1}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 h-[500px]">
+      {macrosByStatus.map(({ title, status, macros, icon, color }) => (
+        <div key={status} className="bg-slate-100/80 rounded-2xl p-4 flex flex-col">
+          <h3 className={`text-xs font-black uppercase tracking-widest p-2 flex items-center gap-2 ${color}`}>
+            {icon}
+            {title}
+            <span className="ml-auto px-2 py-0.5 bg-white rounded-full text-slate-500 text-[9px]">{macros.length}</span>
+          </h3>
+          <div className="space-y-3 mt-2 pr-2 flex-1 overflow-y-auto custom-scrollbar">
+            {macros.length === 0 ? (
+              <div className="text-center py-16 text-xs text-slate-400 italic">
+                Nenhuma macroatividade aqui.
               </div>
-              <h3 className="text-base font-black text-slate-800 uppercase tracking-tight mb-4">{macro.name}</h3>
-              
-              <div className="space-y-3">
-                {macro.microActivities.filter(m => m.status === 'Concluída').map(micro => (
-                  <div key={micro.id} className="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-xs font-bold text-slate-700">{micro.name}</p>
-                        <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">
-                          Finalizada por <span className="text-slate-600">{micro.assignee}</span> em {micro.completionDate ? new Date(micro.completionDate).toLocaleDateString() : 'N/D'}
-                        </p>
-                      </div>
-                      <CompletionBadge status={micro.completionStatus} />
-                    </div>
-                    {micro.observations && (
-                       <div className="mt-3 pt-3 border-t border-slate-100 flex items-start gap-2 text-slate-500">
-                         <MessageSquare size={14} className="shrink-0 mt-0.5"/>
-                         <p className="text-xs italic">"{micro.observations}"</p>
-                       </div>
-                    )}
-                     {micro.reportLink && (
-                       <a href={micro.reportLink} target="_blank" rel="noopener noreferrer" className="mt-2 text-indigo-600 text-[10px] font-bold uppercase flex items-center gap-1 hover:underline">
-                         <FileText size={12}/> Ver Relatório
-                       </a>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+            ) : (
+              macros.map(macro => <MacroCard key={macro.id} macro={macro} />)
+            )}
+          </div>
         </div>
-      )}
+      ))}
     </div>
   );
 };
 
-const CompletionBadge = ({ status }: { status: CompletionStatus }) => {
-  const badgeStyles: Partial<Record<CompletionStatus, string>> = {
-    'Aprovada': 'bg-emerald-100 text-emerald-700',
-    'Finalizada com Restrições': 'bg-amber-100 text-amber-700',
-    'A ser Repetida': 'bg-red-100 text-red-700',
-  };
-  const icon: Partial<Record<CompletionStatus, React.ReactNode>> = {
-    'Aprovada': <CheckCircle size={12} />,
-    'Finalizada com Restrições': <AlertTriangle size={12} />,
-    'A ser Repetida': <Repeat size={12} />,
-  };
-  const text = status.replace('Finalizada com', 'Com');
+const MacroCard: React.FC<{ macro: MacroActivity }> = ({ macro }) => {
+    const totalMicros = macro.microActivities.length;
+    const completedMicros = macro.microActivities.filter(m => m.status === 'Concluída').length;
+    const progress = totalMicros > 0 ? Math.round((completedMicros / totalMicros) * 100) : 0;
 
-  const style = badgeStyles[status];
-  const iconEl = icon[status];
-
-  if (!style || !iconEl) {
-    return null;
-  }
-  
-  return (
-    <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 ${style}`}>
-      {iconEl} {text}
-    </span>
-  );
+    return (
+        <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm hover:shadow-md hover:border-teal-100 transition-all cursor-grab">
+            <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight line-clamp-2">{macro.name}</h4>
+            <div className="mt-4 space-y-2">
+                <div className="flex justify-between items-center">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase">Progresso</span>
+                    <span className="text-xs font-bold text-brand-primary">{progress}%</span>
+                </div>
+                <div className="w-full bg-slate-200 rounded-full h-1.5">
+                    <div className={`h-1.5 rounded-full transition-all duration-500 ${progress === 100 ? 'bg-emerald-500' : 'bg-brand-primary'}`} style={{ width: `${progress}%` }}></div>
+                </div>
+                <div className="text-right text-[9px] font-bold text-slate-400">
+                    {completedMicros} de {totalMicros} concluídas
+                </div>
+            </div>
+        </div>
+    );
 };
 
 
