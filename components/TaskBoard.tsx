@@ -70,6 +70,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
 }) => {
   const activeTasks = tasks.filter(t => !t.deleted);
   const activeReviews = notifications.filter(n => n.userId === currentUser && !n.read && n.type === 'REVIEW_ASSIGNED');
+  const isTeamView = currentUser === 'Visão Geral da Equipe';
 
   const sortedTasks = useMemo(() => {
     return [...activeTasks].sort((a, b) => {
@@ -181,7 +182,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
             </h3>
         </div>
         <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className={`grid grid-cols-1 ${isTeamView ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
                 <div>
                     <label className="text-[9px] font-bold text-slate-500">Projeto</label>
                     <select
@@ -209,18 +210,20 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                         <option value="Não Aplicável">Não Aplicável</option>
                     </select>
                 </div>
-                <div>
-                    <label className="text-[9px] font-bold text-slate-500">Responsável</label>
-                    <select
-                        value={leadFilter}
-                        onChange={(e) => onLeadFilterChange(e.target.value)}
-                        className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
-                    >
-                        {uniqueLeads.map(lead => (
-                            <option key={lead} value={lead}>{lead}</option>
-                        ))}
-                    </select>
-                </div>
+                {isTeamView && (
+                  <div>
+                      <label className="text-[9px] font-bold text-slate-500">Responsável</label>
+                      <select
+                          value={leadFilter}
+                          onChange={(e) => onLeadFilterChange(e.target.value)}
+                          className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
+                      >
+                          {uniqueLeads.map(lead => (
+                              <option key={lead} value={lead}>{lead}</option>
+                          ))}
+                      </select>
+                  </div>
+                )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-100 pt-4">
                 <div>

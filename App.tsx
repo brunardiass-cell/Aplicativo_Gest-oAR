@@ -225,6 +225,7 @@ const App: React.FC = () => {
   const handleProfileSelect = (user: TeamMember) => {
     setSelectedProfile(user);
     setFilterMember(user.name);
+    setLeadFilter('Todos'); // Garante que o filtro de responsável seja limpo para visões individuais
     if (!user.password) {
       setIsPasswordAuthenticated(true);
     }
