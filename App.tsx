@@ -50,7 +50,11 @@ const App: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'Todos' | Status>('Todos');
   const [leadFilter, setLeadFilter] = useState<string>('Todos');
   const [projectFilter, setProjectFilter] = useState<string>('Todos');
-  const [periodFilter, setPeriodFilter] = useState<'all' | 'week' | 'month' | 'year'>('all');
+  
+  const [dateFilterType, setDateFilterType] = useState<'all' | 'requestDate' | 'completionDate'>('all');
+  const [startDateFilter, setStartDateFilter] = useState<string>('');
+  const [endDateFilter, setEndDateFilter] = useState<string>('');
+
   
   const [dashboardView, setDashboardView] = useState<'activities' | 'projects'>('activities');
   const [initialProjectId, setInitialProjectId] = useState<string | null>(null);
@@ -433,30 +437,6 @@ const App: React.FC = () => {
   }, [activeProjects]);
 
   const tasksForBoard = useMemo(() => {
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-
-    const checkPeriod = (task: Task): boolean => {
-      if (periodFilter === 'all') return true;
-      if (!task.completionDate) return false; // Apenas tarefas com prazo podem ser filtradas por período
-      
-      const completionDate = new Date(task.completionDate + 'T00:00:00');
-
-      switch (periodFilter) {
-          case 'week': {
-              const oneWeekFromNow = new Date(now);
-              oneWeekFromNow.setDate(now.getDate() + 7);
-              return completionDate >= now && completionDate <= oneWeekFromNow;
-          }
-          case 'month':
-              return completionDate.getMonth() === now.getMonth() && completionDate.getFullYear() === now.getFullYear();
-          case 'year':
-              return completionDate.getFullYear() === now.getFullYear();
-          default:
-              return true;
-      }
-    };
-
     return tasks.filter(t => {
       if (t.deleted) return false;
 
@@ -469,11 +449,29 @@ const App: React.FC = () => {
       const statusMatch = statusFilter === 'Todos' || t.status === statusFilter;
       const leadMatch = leadFilter === 'Todos' || t.projectLead === leadFilter;
       const projectMatch = projectFilter === 'Todos' || t.project === projectFilter;
-      const periodMatch = checkPeriod(t);
 
-      return memberMatch && statusMatch && leadMatch && projectMatch;
+      const dateFilterMatch = (() => {
+        if (dateFilterType === 'all' || (!startDateFilter && !endDateFilter)) {
+          return true;
+        }
+
+        const dateField = dateFilterType === 'requestDate' ? t.requestDate : t.completionDate;
+        if (!dateField) return false;
+
+        const taskDate = new Date(dateField + 'T00:00:00');
+        
+        const start = startDateFilter ? new Date(startDateFilter + 'T00:00:00') : null;
+        const end = endDateFilter ? new Date(endDateFilter + 'T00:00:00') : null;
+
+        if (start && taskDate < start) return false;
+        if (end && taskDate > end) return false;
+        
+        return true;
+      })();
+
+      return memberMatch && statusMatch && leadMatch && projectMatch && dateFilterMatch;
     });
-  }, [tasks, filterMember, statusFilter, leadFilter, projectFilter, periodFilter]);
+  }, [tasks, filterMember, statusFilter, leadFilter, projectFilter, dateFilterType, startDateFilter, endDateFilter]);
 
 
   if (isLoading) {
@@ -659,8 +657,12 @@ const App: React.FC = () => {
               projectFilter={projectFilter}
               onProjectFilterChange={setProjectFilter}
               uniqueProjects={uniqueProjects}
-              periodFilter={periodFilter}
-              onPeriodFilterChange={setPeriodFilter}
+              dateFilterType={dateFilterType}
+              onDateFilterTypeChange={setDateFilterType}
+              startDateFilter={startDateFilter}
+              onStartDateFilterChange={setStartDateFilter}
+              endDateFilter={endDateFilter}
+              onEndDateFilterChange={setEndDateFilter}
             />
         )}
         {view === 'projects' && <ProjectsManager projects={activeProjects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} teamMembers={teamMembers} currentUserRole={currentUserRole} initialProjectId={initialProjectId} />}

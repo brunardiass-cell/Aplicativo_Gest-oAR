@@ -29,13 +29,17 @@ interface TaskBoardProps {
   statusFilter: 'Todos' | Status;
   leadFilter: string;
   projectFilter: string;
-  periodFilter: 'all' | 'week' | 'month' | 'year';
   onStatusFilterChange: (status: 'Todos' | Status) => void;
   onLeadFilterChange: (lead: string) => void;
   onProjectFilterChange: (project: string) => void;
-  onPeriodFilterChange: (period: 'all' | 'week' | 'month' | 'year') => void;
   uniqueLeads: string[];
   uniqueProjects: string[];
+  dateFilterType: 'all' | 'requestDate' | 'completionDate';
+  onDateFilterTypeChange: (type: 'all' | 'requestDate' | 'completionDate') => void;
+  startDateFilter: string;
+  onStartDateFilterChange: (date: string) => void;
+  endDateFilter: string;
+  onEndDateFilterChange: (date: string) => void;
 }
 
 const TaskBoard: React.FC<TaskBoardProps> = ({ 
@@ -52,13 +56,17 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   statusFilter,
   leadFilter,
   projectFilter,
-  periodFilter,
   onStatusFilterChange,
   onLeadFilterChange,
   onProjectFilterChange,
-  onPeriodFilterChange,
   uniqueLeads,
-  uniqueProjects
+  uniqueProjects,
+  dateFilterType,
+  onDateFilterTypeChange,
+  startDateFilter,
+  onStartDateFilterChange,
+  endDateFilter,
+  onEndDateFilterChange
 }) => {
   const activeTasks = tasks.filter(t => !t.deleted);
   const activeReviews = notifications.filter(n => n.userId === currentUser && !n.read && n.type === 'REVIEW_ASSIGNED');
@@ -166,62 +174,87 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
         </div>
       )}
 
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 pr-4 border-r border-slate-200">
-            <SlidersHorizontal size={14}/> Filtros
-        </h3>
-        <div className="flex-1 grid grid-cols-4 gap-4">
-            <div>
-                <label className="text-[9px] font-bold text-slate-500">Projeto</label>
-                <select
-                    value={projectFilter}
-                    onChange={(e) => onProjectFilterChange(e.target.value)}
-                    className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
-                >
-                    {uniqueProjects.map(project => (
-                        <option key={project} value={project}>{project}</option>
-                    ))}
-                </select>
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex items-center gap-4 mb-4">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 pr-4">
+                <SlidersHorizontal size={14}/> Filtros
+            </h3>
+        </div>
+        <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label className="text-[9px] font-bold text-slate-500">Projeto</label>
+                    <select
+                        value={projectFilter}
+                        onChange={(e) => onProjectFilterChange(e.target.value)}
+                        className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
+                    >
+                        {uniqueProjects.map(project => (
+                            <option key={project} value={project}>{project}</option>
+                        ))}
+                    </select>
+                </div>
+                <div>
+                    <label className="text-[9px] font-bold text-slate-500">Status</label>
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => onStatusFilterChange(e.target.value as 'Todos' | Status)}
+                        className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
+                    >
+                        <option value="Todos">Todos</option>
+                        <option value="Planejada">Planejada</option>
+                        <option value="Em Andamento">Em Andamento</option>
+                        <option value="Concluída">Concluída</option>
+                        <option value="Pausado">Pausado</option>
+                        <option value="Não Aplicável">Não Aplicável</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="text-[9px] font-bold text-slate-500">Responsável</label>
+                    <select
+                        value={leadFilter}
+                        onChange={(e) => onLeadFilterChange(e.target.value)}
+                        className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
+                    >
+                        {uniqueLeads.map(lead => (
+                            <option key={lead} value={lead}>{lead}</option>
+                        ))}
+                    </select>
+                </div>
             </div>
-            <div>
-                <label className="text-[9px] font-bold text-slate-500">Status</label>
-                <select
-                    value={statusFilter}
-                    onChange={(e) => onStatusFilterChange(e.target.value as 'Todos' | Status)}
-                    className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
-                >
-                    <option value="Todos">Todos</option>
-                    <option value="Planejada">Planejada</option>
-                    <option value="Em Andamento">Em Andamento</option>
-                    <option value="Concluída">Concluída</option>
-                    <option value="Pausado">Pausado</option>
-                    <option value="Não Aplicável">Não Aplicável</option>
-                </select>
-            </div>
-            <div>
-                <label className="text-[9px] font-bold text-slate-500">Responsável</label>
-                <select
-                    value={leadFilter}
-                    onChange={(e) => onLeadFilterChange(e.target.value)}
-                    className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
-                >
-                    {uniqueLeads.map(lead => (
-                        <option key={lead} value={lead}>{lead}</option>
-                    ))}
-                </select>
-            </div>
-            <div>
-                <label className="text-[9px] font-bold text-slate-500">Período</label>
-                <select
-                    value={periodFilter}
-                    onChange={(e) => onPeriodFilterChange(e.target.value as any)}
-                    className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
-                >
-                    <option value="all">Todos</option>
-                    <option value="week">Próxima Semana</option>
-                    <option value="month">Este Mês</option>
-                    <option value="year">Este Ano</option>
-                </select>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-100 pt-4">
+                <div>
+                    <label className="text-[9px] font-bold text-slate-500">Filtrar por Data</label>
+                    <select
+                        value={dateFilterType}
+                        onChange={(e) => onDateFilterTypeChange(e.target.value as any)}
+                        className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
+                    >
+                        <option value="all">Não filtrar</option>
+                        <option value="requestDate">Data de Criação</option>
+                        <option value="completionDate">Data de Entrega</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="text-[9px] font-bold text-slate-500">De</label>
+                    <input
+                        type="date"
+                        value={startDateFilter}
+                        onChange={(e) => onStartDateFilterChange(e.target.value)}
+                        disabled={dateFilterType === 'all'}
+                        className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none disabled:opacity-50"
+                    />
+                </div>
+                <div>
+                    <label className="text-[9px] font-bold text-slate-500">Até</label>
+                    <input
+                        type="date"
+                        value={endDateFilter}
+                        onChange={(e) => onEndDateFilterChange(e.target.value)}
+                        disabled={dateFilterType === 'all'}
+                        className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none disabled:opacity-50"
+                    />
+                </div>
             </div>
         </div>
       </div>
