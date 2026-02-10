@@ -145,7 +145,6 @@ export interface TeamMember {
 }
 
 
-// Interfaces de suporte que podem ser úteis em outros contextos
 export interface DashboardStats {
   totalTasks: number;
   monthlyDeliveries: number;
@@ -162,7 +161,6 @@ export interface Person {
   active: boolean;
 }
 
-// FIX: Add missing type definitions for ProjectData and AppConfig.
 export type MicroTaskStatus = 'Pendente' | 'Em Andamento' | 'Concluído' | 'Validado';
 
 export interface MicroTask {

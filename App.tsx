@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status } from './types';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity } from './types';
 import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS } from './constants';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
@@ -9,6 +9,7 @@ import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import ProjectsDashboard from './components/ProjectsDashboard';
 import TaskBoard from './components/TaskBoard';
+import ProjectTaskBoard from './components/ProjectTaskBoard';
 import TaskModal from './components/TaskModal';
 import TaskDetailsModal from './components/TaskDetailsModal';
 import DeletionModal from './components/DeletionModal';
@@ -17,7 +18,14 @@ import MonthlyReportModal from './components/MonthlyReportModal';
 import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
-import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, Activity, FolderKanban } from 'lucide-react';
+import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, Activity, FolderKanban, ListTodo } from 'lucide-react';
+
+export type AugmentedMicroActivity = MicroActivity & {
+  projectId: string;
+  projectName: string;
+  macroId: string;
+  macroName: string;
+};
 
 const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -46,18 +54,28 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
-
+  
+  // Filters for Sector Tasks
   const [statusFilter, setStatusFilter] = useState<'Todos' | Status>('Todos');
   const [leadFilter, setLeadFilter] = useState<string>('Todos');
   const [projectFilter, setProjectFilter] = useState<string>('Todos');
-  
   const [dateFilterType, setDateFilterType] = useState<'all' | 'requestDate' | 'completionDate'>('all');
   const [startDateFilter, setStartDateFilter] = useState<string>('');
   const [endDateFilter, setEndDateFilter] = useState<string>('');
 
-  
+  // Tabs
   const [dashboardView, setDashboardView] = useState<'activities' | 'projects'>('activities');
+  const [taskViewTab, setTaskViewTab] = useState<'sector' | 'projects'>('sector');
   const [initialProjectId, setInitialProjectId] = useState<string | null>(null);
+
+  // Filters for Project Tasks (MicroActivities)
+  const [projTask_projectFilter, setProjTask_projectFilter] = useState('Todos');
+  const [projTask_statusFilter, setProjTask_statusFilter] = useState<'Todos' | Status>('Todos');
+  const [projTask_assigneeFilter, setProjTask_assigneeFilter] = useState('Todos');
+  const [projTask_dateFilterType, setProjTask_dateFilterType] = useState<'all' | 'dueDate'>('all');
+  const [projTask_startDateFilter, setProjTask_startDateFilter] = useState('');
+  const [projTask_endDateFilter, setProjTask_endDateFilter] = useState('');
+
 
   const [deleteTarget, setDeleteTarget] = useState<{
     type: 'task' | 'project' | 'macro' | 'micro';
@@ -117,7 +135,6 @@ const App: React.FC = () => {
       setAuthError("Falha ao carregar dados do SharePoint.");
       setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'Cloud' });
     } finally {
-      // Don't set isLoading to false here if user might be unauthorized
       if (isAuthorized !== false) {
         setIsLoading(false);
       }
@@ -225,7 +242,7 @@ const App: React.FC = () => {
   const handleProfileSelect = (user: TeamMember) => {
     setSelectedProfile(user);
     setFilterMember(user.name);
-    setLeadFilter('Todos'); // Garante que o filtro de responsável seja limpo para visões individuais
+    setLeadFilter('Todos');
     if (!user.password) {
       setIsPasswordAuthenticated(true);
     }
@@ -288,22 +305,19 @@ const App: React.FC = () => {
                     createNote(`Revisor "${oldTask.currentReviewer}" foi removido.`);
                 }
             }
-            // Adiciona nota quando o fluxo de revisão é desativado
             if (oldTask.isReport && !taskToSave.isReport) {
                 createNote('Fluxo de revisão desativado.');
             }
         }
         taskToSave.updates = updates;
 
-        // Se o fluxo de revisão foi desativado, limpa os campos relacionados
         if (oldTask.isReport && !taskToSave.isReport) {
             taskToSave.currentReviewer = undefined;
             taskToSave.reportStage = 'Em Elaboração';
         }
     }
     
-    const wasJustCompleted = 
-      (taskToSave.status === 'Concluída' && oldTask?.status !== 'Concluída');
+    const wasJustCompleted = (taskToSave.status === 'Concluída' && oldTask?.status !== 'Concluída');
 
     if (wasJustCompleted) {
       const today = new Date();
@@ -473,6 +487,60 @@ const App: React.FC = () => {
       return memberMatch && statusMatch && leadMatch && projectMatch && dateFilterMatch;
     });
   }, [tasks, filterMember, statusFilter, leadFilter, projectFilter, dateFilterType, startDateFilter, endDateFilter]);
+  
+  const allMicroTasksForUser = useMemo(() => {
+    if (!selectedProfile) return [];
+    
+    const userIsTeamView = selectedProfile.name === 'Visão Geral da Equipe';
+
+    const relevantProjects = projects.filter(p => 
+      !p.deleted && 
+      (userIsTeamView || p.responsible === selectedProfile.name || p.team?.includes(selectedProfile.name))
+    );
+    
+    const allMicroTasks: AugmentedMicroActivity[] = [];
+    for (const project of relevantProjects) {
+        for (const macro of project.macroActivities) {
+            for (const micro of macro.microActivities) {
+                allMicroTasks.push({
+                    ...micro,
+                    projectId: project.id,
+                    projectName: project.name,
+                    macroId: macro.id,
+                    macroName: macro.name,
+                });
+            }
+        }
+    }
+    return allMicroTasks;
+  }, [projects, selectedProfile]);
+
+  const microTasksForBoard = useMemo(() => {
+    return allMicroTasksForUser.filter(micro => {
+        const projectMatch = projTask_projectFilter === 'Todos' || micro.projectName === projTask_projectFilter;
+        const statusMatch = projTask_statusFilter === 'Todos' || micro.status === projTask_statusFilter;
+        const assigneeMatch = projTask_assigneeFilter === 'Todos' || micro.assignee === projTask_assigneeFilter;
+        
+        const dateFilterMatch = (() => {
+            if (projTask_dateFilterType === 'all' || (!projTask_startDateFilter && !projTask_endDateFilter)) return true;
+            if (!micro.dueDate) return false;
+            
+            const taskDate = new Date(micro.dueDate + 'T00:00:00');
+            const start = projTask_startDateFilter ? new Date(projTask_startDateFilter + 'T00:00:00') : null;
+            const end = projTask_endDateFilter ? new Date(projTask_endDateFilter + 'T00:00:00') : null;
+
+            if (start && taskDate < start) return false;
+            if (end && taskDate > end) return false;
+            
+            return true;
+        })();
+
+        return projectMatch && statusMatch && assigneeMatch && dateFilterMatch;
+    });
+  }, [allMicroTasksForUser, projTask_projectFilter, projTask_statusFilter, projTask_assigneeFilter, projTask_dateFilterType, projTask_startDateFilter, projTask_endDateFilter]);
+  
+  const uniqueProjectsForMicroTasks = useMemo(() => ['Todos', ...Array.from(new Set(allMicroTasksForUser.map(m => m.projectName)))], [allMicroTasksForUser]);
+  const uniqueAssigneesForMicroTasks = useMemo(() => ['Todos', ...Array.from(new Set(allMicroTasksForUser.map(m => m.assignee)))], [allMicroTasksForUser]);
 
 
   if (isLoading) {
@@ -483,33 +551,14 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4 font-sans">
         <main className="w-full max-w-md mx-auto text-center animate-in-slow">
-          
-          <div className="mb-8 inline-block">
-            <div className="bg-slate-100 p-5 rounded-3xl shadow-sm">
-              <FileText size={36} className="text-brand-primary" strokeWidth={2.5}/>
-            </div>
-          </div>
-
-          <h1 className="text-5xl font-black tracking-tighter">
-            <span className="text-slate-900">GESTÃO</span>
-            <span className="text-brand-primary"> REGULATÓRIA</span>
-          </h1>
-
-          <p className="mt-4 text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center justify-center gap-2">
-            <ShieldCheck size={14} className="text-emerald-500"/>
-            Portal de Atividades • CTVacinas
-          </p>
-
+          <div className="mb-8 inline-block"><div className="bg-slate-100 p-5 rounded-3xl shadow-sm"><FileText size={36} className="text-brand-primary" strokeWidth={2.5}/></div></div>
+          <h1 className="text-5xl font-black tracking-tighter"><span className="text-slate-900">GESTÃO</span><span className="text-brand-primary"> REGULATÓRIA</span></h1>
+          <p className="mt-4 text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center justify-center gap-2"><ShieldCheck size={14} className="text-emerald-500"/>Portal de Atividades • CTVacinas</p>
           <div className="mt-12 bg-slate-50/70 p-8 sm:p-10 rounded-[2.5rem] border border-slate-200/80 shadow-sm text-center">
             <h2 className="font-black text-slate-800 uppercase tracking-wider">Bem-vindo ao sistema</h2>
             <p className="mt-2 text-slate-500 text-sm">Para continuar, autentique-se usando sua conta Microsoft corporativa.</p>
-            <button
-                onClick={handleLogin}
-                className="mt-8 w-full flex items-center justify-center gap-3 bg-slate-800 text-white py-4 rounded-2xl font-bold uppercase text-sm tracking-widest hover:bg-black transition"
-            >
-                Entrar com Microsoft <ArrowRight size={16}/>
-            </button>
-             {authError && <p className="mt-4 text-sm text-red-500">{authError}</p>}
+            <button onClick={handleLogin} className="mt-8 w-full flex items-center justify-center gap-3 bg-slate-800 text-white py-4 rounded-2xl font-bold uppercase text-sm tracking-widest hover:bg-black transition">Entrar com Microsoft <ArrowRight size={16}/></button>
+            {authError && <p className="mt-4 text-sm text-red-500">{authError}</p>}
           </div>
         </main>
       </div>
@@ -520,11 +569,7 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4 font-sans text-center">
         <div className="w-full max-w-md mx-auto">
-            <div className="mb-8 inline-block">
-                <div className="bg-red-100 p-5 rounded-3xl shadow-sm">
-                    <ShieldAlert size={36} className="text-red-500" strokeWidth={2.5}/>
-                </div>
-            </div>
+            <div className="mb-8 inline-block"><div className="bg-red-100 p-5 rounded-3xl shadow-sm"><ShieldAlert size={36} className="text-red-500" strokeWidth={2.5}/></div></div>
             <h1 className="text-3xl font-black text-slate-800">Acesso Negado</h1>
             <p className="mt-2 text-slate-500">Seu e-mail (<span className="font-bold">{account?.username}</span>) não está autorizado a acessar este sistema. Entre em contato com o administrador.</p>
             <button onClick={handleLogout} className="mt-8 bg-slate-200 text-slate-700 px-6 py-3 rounded-xl font-bold text-sm">Sair</button>
@@ -535,44 +580,16 @@ const App: React.FC = () => {
   
   if (!selectedProfile || !isPasswordAuthenticated) {
     if (!selectedProfile) {
-      return (
-        <UserSelectionView
-          teamMembers={teamMembers}
-          onSelectUser={handleProfileSelect}
-          onSelectTeamView={handleTeamViewSelect}
-          onLogout={handleLogout}
-          currentUserRole={currentUserRole}
-        />
-      );
+      return (<UserSelectionView teamMembers={teamMembers} onSelectUser={handleProfileSelect} onSelectTeamView={handleTeamViewSelect} onLogout={handleLogout} currentUserRole={currentUserRole}/>);
     }
-    
     if (selectedProfile && !isPasswordAuthenticated) {
-      return (
-        <PasswordModal 
-          isOpen={true} 
-          onClose={handleSwitchProfile} 
-          onConfirm={handlePasswordConfirm}
-          userName={selectedProfile.name}
-          error={passwordError}
-        />
-      );
+      return (<PasswordModal isOpen={true} onClose={handleSwitchProfile} onConfirm={handlePasswordConfirm} userName={selectedProfile.name} error={passwordError}/>);
     }
   }
 
   return (
     <div className="flex h-screen bg-slate-100 font-sans">
-      <Sidebar
-        currentView={view}
-        onViewChange={setView}
-        onGoHome={() => setView('dashboard')}
-        onLogout={handleLogout}
-        onSwitchProfile={handleSwitchProfile}
-        selectedProfile={selectedProfile}
-        hasFullAccess={hasFullAccess}
-        lastSync={lastSync}
-        onSaveBackup={handleSaveLocalBackup}
-        onLoadBackup={() => fileInputRef.current?.click()}
-      />
+      <Sidebar currentView={view} onViewChange={setView} onGoHome={() => setView('dashboard')} onLogout={handleLogout} onSwitchProfile={handleSwitchProfile} selectedProfile={selectedProfile} hasFullAccess={hasFullAccess} lastSync={lastSync} onSaveBackup={handleSaveLocalBackup} onLoadBackup={() => fileInputRef.current?.click()}/>
       <input type="file" ref={fileInputRef} onChange={handleLoadLocalBackup} accept=".json" className="hidden" />
 
       <main className="flex-1 p-10 overflow-y-auto ml-64">
@@ -585,136 +602,67 @@ const App: React.FC = () => {
                 {view === 'quality' && 'Controle de Acesso'}
                 {view === 'traceability' && 'Auditoria'}
               </h1>
-              <p className="text-sm font-bold text-slate-400">
-                {selectedProfile?.name} - {selectedProfile?.role}
-              </p>
+              <p className="text-sm font-bold text-slate-400">{selectedProfile?.name} - {selectedProfile?.role}</p>
             </div>
             <div className="flex items-center gap-4">
                 <div className="relative">
                     <Bell size={24} className="text-slate-400"/>
-                    {pendingReviewCount > 0 && 
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">{pendingReviewCount}</span>
-                    }
+                    {pendingReviewCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">{pendingReviewCount}</span>}
                 </div>
-                 <button onClick={() => setIsReportModalOpen(true)} className="p-3 bg-white border border-slate-200 rounded-full text-slate-500 hover:bg-slate-100 transition">
-                  <FileText size={20}/>
-               </button>
-                {canCreate && (
-                    <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-brand-primary text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg hover:bg-brand-accent transition">
-                        <PlusCircle size={16}/> Nova Atividade
-                    </button>
-                )}
+                 <button onClick={() => setIsReportModalOpen(true)} className="p-3 bg-white border border-slate-200 rounded-full text-slate-500 hover:bg-slate-100 transition"><FileText size={20}/></button>
+                {canCreate && (<button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-brand-primary text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg hover:bg-brand-accent transition"><PlusCircle size={16}/> Nova Atividade</button>)}
             </div>
         </header>
 
         {view === 'dashboard' && (
           <div className="space-y-6">
             <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-fit">
-              <button 
-                onClick={() => setDashboardView('activities')} 
-                className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'activities' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
-              >
-                 <Activity size={14} /> Dashboard de Atividades
-              </button>
-              <button 
-                onClick={() => setDashboardView('projects')} 
-                className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'projects' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
-              >
-                 <FolderKanban size={14} /> Dashboard de Projetos
-              </button>
+              <button onClick={() => setDashboardView('activities')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'activities' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Activity size={14} /> Dashboard de Atividades</button>
+              <button onClick={() => setDashboardView('projects')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'projects' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><FolderKanban size={14} /> Dashboard de Projetos</button>
+            </div>
+            {dashboardView === 'activities' ? (<Dashboard tasks={tasks} projects={activeProjects} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />) : (<ProjectsDashboard projects={activeProjects} tasks={tasks} filteredUser={filterMember} onNavigateToProject={handleNavigateToProject}/>)}
+          </div>
+        )}
+        {view === 'tasks' && (
+          <div className="space-y-6">
+            <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-fit">
+              <button onClick={() => setTaskViewTab('sector')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${taskViewTab === 'sector' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><ListTodo size={14} /> Painel Setorial</button>
+              <button onClick={() => setTaskViewTab('projects')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${taskViewTab === 'projects' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><FolderKanban size={14} /> Painel de Projetos</button>
             </div>
             
-            {dashboardView === 'activities' ? (
-              <Dashboard tasks={tasks} projects={activeProjects} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />
+            {taskViewTab === 'sector' ? (
+              <TaskBoard tasks={tasksForBoard} currentUser={selectedProfile?.name || 'Todos'} onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} onDelete={(task) => {handleOpenDeleteItemModal({ type: 'task', name: task.activity, ids: { taskId: task.id } });}} onAssignReview={() => {}} notifications={notifications.filter(n => !n.read)} onNotificationClick={handleNotificationClick} onClearSingleNotification={handleClearSingleNotification} onClearAllNotifications={handleClearAllReviewNotifications} statusFilter={statusFilter} leadFilter={leadFilter} onStatusFilterChange={setStatusFilter} onLeadFilterChange={setLeadFilter} uniqueLeads={uniqueLeads} projectFilter={projectFilter} onProjectFilterChange={setProjectFilter} uniqueProjects={uniqueProjects} dateFilterType={dateFilterType} onDateFilterTypeChange={setDateFilterType} startDateFilter={startDateFilter} onStartDateFilterChange={setStartDateFilter} endDateFilter={endDateFilter} onEndDateFilterChange={setEndDateFilter} />
             ) : (
-              <ProjectsDashboard 
-                projects={activeProjects} 
-                tasks={tasks} 
-                filteredUser={filterMember}
+              <ProjectTaskBoard 
+                microTasks={microTasksForBoard} 
                 onNavigateToProject={handleNavigateToProject}
+                projectFilter={projTask_projectFilter}
+                onProjectFilterChange={setProjTask_projectFilter}
+                uniqueProjects={uniqueProjectsForMicroTasks}
+                statusFilter={projTask_statusFilter}
+                onStatusFilterChange={setProjTask_statusFilter}
+                assigneeFilter={projTask_assigneeFilter}
+                onAssigneeFilterChange={setProjTask_assigneeFilter}
+                uniqueAssignees={uniqueAssigneesForMicroTasks}
+                dateFilterType={projTask_dateFilterType}
+                onDateFilterTypeChange={setProjTask_dateFilterType}
+                startDateFilter={projTask_startDateFilter}
+                onStartDateFilterChange={setProjTask_startDateFilter}
+                endDateFilter={projTask_endDateFilter}
+                onEndDateFilterChange={setProjTask_endDateFilter}
               />
             )}
           </div>
         )}
-        {view === 'tasks' && (
-            <TaskBoard
-              tasks={tasksForBoard}
-              currentUser={selectedProfile?.name || 'Todos'}
-              onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }}
-              onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }}
-              onDelete={(task) => {
-                handleOpenDeleteItemModal({ type: 'task', name: task.activity, ids: { taskId: task.id } });
-              }}
-              onAssignReview={() => {}} // Placeholder
-              notifications={notifications.filter(n => !n.read)}
-              onNotificationClick={handleNotificationClick}
-              onClearSingleNotification={handleClearSingleNotification}
-              onClearAllNotifications={handleClearAllReviewNotifications}
-              statusFilter={statusFilter}
-              leadFilter={leadFilter}
-              onStatusFilterChange={setStatusFilter}
-              onLeadFilterChange={setLeadFilter}
-              uniqueLeads={uniqueLeads}
-              projectFilter={projectFilter}
-              onProjectFilterChange={setProjectFilter}
-              uniqueProjects={uniqueProjects}
-              dateFilterType={dateFilterType}
-              onDateFilterTypeChange={setDateFilterType}
-              startDateFilter={startDateFilter}
-              onStartDateFilterChange={setStartDateFilter}
-              endDateFilter={endDateFilter}
-              onEndDateFilterChange={setEndDateFilter}
-            />
-        )}
         {view === 'projects' && <ProjectsManager projects={activeProjects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} teamMembers={teamMembers} currentUserRole={currentUserRole} initialProjectId={initialProjectId} />}
         {view === 'quality' && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} appUsers={appUsers} onUpdateAppUsers={setAppUsers} />}
         {view === 'traceability' && <ActivityLogView logs={logs} />}
-
       </main>
       
-      {isModalOpen && (
-        <TaskModal
-          isOpen={isModalOpen}
-          onClose={() => { setIsModalOpen(false); setSelectedTask(null); }}
-          onSave={handleSaveTask}
-          projects={['Geral', ...activeProjects.map(p => p.name)]}
-          initialData={selectedTask}
-          teamMembers={teamMembers}
-          hasFullAccess={hasFullAccess}
-        />
-      )}
-      
-      {isDetailsOpen && selectedTask && (
-        <TaskDetailsModal
-          task={selectedTask}
-          onClose={() => setIsDetailsOpen(false)}
-        />
-      )}
-      
-      {isDeleteModalOpen && deleteTarget && (
-        <DeletionModal
-          itemName={deleteTarget.name}
-          onClose={() => { setIsDeleteModalOpen(false); setDeleteTarget(null); }}
-          onConfirm={handleConfirmDeletion}
-        />
-      )}
-      
-      {isReportModalOpen && (
-          <MonthlyReportModal
-              isOpen={isReportModalOpen}
-              onClose={() => setIsReportModalOpen(false)}
-              tasks={tasksForBoard}
-              filteredUser={filterMember}
-              filters={{
-                dateFilterType,
-                startDateFilter,
-                endDateFilter,
-                projectFilter,
-                statusFilter,
-                leadFilter
-              }}
-          />
-      )}
+      {isModalOpen && (<TaskModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setSelectedTask(null); }} onSave={handleSaveTask} projects={['Geral', ...activeProjects.map(p => p.name)]} initialData={selectedTask} teamMembers={teamMembers} hasFullAccess={hasFullAccess}/>)}
+      {isDetailsOpen && selectedTask && (<TaskDetailsModal task={selectedTask} onClose={() => setIsDetailsOpen(false)}/>)}
+      {isDeleteModalOpen && deleteTarget && (<DeletionModal itemName={deleteTarget.name} onClose={() => { setIsDeleteModalOpen(false); setDeleteTarget(null); }} onConfirm={handleConfirmDeletion}/>)}
+      {isReportModalOpen && (<MonthlyReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} tasks={tasksForBoard} filteredUser={filterMember} filters={{dateFilterType, startDateFilter, endDateFilter, projectFilter, statusFilter, leadFilter}}/>)}
     </div>
   );
 };
