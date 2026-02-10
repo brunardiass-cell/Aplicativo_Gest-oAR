@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { Task, AppNotification, Project } from '../types';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -24,42 +25,56 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
     });
   }, [tasks, filteredUser]);
 
-  const lastMonthTasks = useMemo(() => {
+  const dashboardStats = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
     const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    return userTasks.filter(t => new Date(t.requestDate) >= thirtyDaysAgo);
-  }, [userTasks]);
+    thirtyDaysAgo.setDate(now.getDate() - 30);
 
-  const stats = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const lateTasks = lastMonthTasks.filter(t => t.completionDate && new Date(t.completionDate + 'T00:00:00') < today && t.status !== 'Concluída');
+    const createdLast30Days = userTasks.filter(t => new Date(t.requestDate) >= thirtyDaysAgo);
+
+    const tasksDueThisMonth = userTasks.filter(t => {
+        if (!t.completionDate) return false;
+        const completion = new Date(t.completionDate + 'T00:00:00');
+        return completion.getMonth() === currentMonth && completion.getFullYear() === currentYear;
+    });
     
-    const projectsTracked = filteredUser === 'Todos'
-        ? projects.length
-        : projects.filter(p => p.responsible === filteredUser).length;
+    const lateTasks = createdLast30Days.filter(t => t.completionDate && new Date(t.completionDate + 'T00:00:00') < now && t.status !== 'Concluída');
 
     return {
-      total: lastMonthTasks.length,
-      done: lastMonthTasks.filter(t => t.status === 'Concluída').length,
-      ongoing: lastMonthTasks.filter(t => t.status === 'Em Andamento').length,
+      createdLast30Days: createdLast30Days.length,
+      scheduledThisMonth: tasksDueThisMonth.filter(t => t.status !== 'Concluída').length,
+      finishedThisMonth: userTasks.filter(t => {
+          if (t.status !== 'Concluída' || !t.completionDate) return false;
+          const completion = new Date(t.completionDate + 'T00:00:00');
+          return completion.getMonth() === currentMonth && completion.getFullYear() === currentYear;
+      }).length,
+      projects: projects.filter(p => filteredUser === 'Todos' || p.responsible === filteredUser || p.team?.includes(filteredUser)).length,
+      ongoing: createdLast30Days.filter(t => t.status === 'Em Andamento').length,
       late: lateTasks.length,
-      projects: projectsTracked,
     };
-  }, [lastMonthTasks, projects, filteredUser]);
+}, [userTasks, projects, filteredUser]);
 
-  const priorityData = useMemo(() => [
-    { name: 'Urgente', value: lastMonthTasks.filter(t => t.priority === 'Urgente').length, color: '#ef4444' },
-    { name: 'Alta', value: lastMonthTasks.filter(t => t.priority === 'Alta').length, color: '#f59e0b' },
-    { name: 'Média', value: lastMonthTasks.filter(t => t.priority === 'Média').length, color: '#2dd4bf' },
-    { name: 'Baixa', value: lastMonthTasks.filter(t => t.priority === 'Baixa').length, color: '#94a3b8' },
-  ], [lastMonthTasks]);
+  const priorityData = useMemo(() => {
+    const lastMonthTasks = userTasks.filter(t => {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        return new Date(t.requestDate) >= thirtyDaysAgo;
+    });
+    return [
+        { name: 'Urgente', value: lastMonthTasks.filter(t => t.priority === 'Urgente').length, color: '#ef4444' },
+        { name: 'Alta', value: lastMonthTasks.filter(t => t.priority === 'Alta').length, color: '#f59e0b' },
+        { name: 'Média', value: lastMonthTasks.filter(t => t.priority === 'Média').length, color: '#2dd4bf' },
+        { name: 'Baixa', value: lastMonthTasks.filter(t => t.priority === 'Baixa').length, color: '#94a3b8' },
+    ];
+  }, [userTasks]);
 
   const statusChartData = useMemo(() => [
-    { name: 'Finalizadas', value: stats.done, color: '#10b981' },
-    { name: 'Em Andamento', value: stats.ongoing, color: '#5eead4' },
-    { name: 'Atrasadas', value: stats.late, color: '#f43f5e' },
-  ], [stats]);
+    { name: 'Finalizadas', value: dashboardStats.finishedThisMonth, color: '#10b981' },
+    { name: 'Em Andamento', value: dashboardStats.ongoing, color: '#5eead4' },
+    { name: 'Atrasadas', value: dashboardStats.late, color: '#f43f5e' },
+  ], [dashboardStats]);
 
   const upcomingTasks = useMemo(() => {
     const today = new Date();
@@ -104,10 +119,11 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
   return (
     <div className="space-y-8">
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard label="Atividades no Mês" value={stats.total} icon={<Briefcase size={20}/>} color="bg-brand-primary" />
-        <StatCard label="Finalizadas no Mês" value={stats.done} icon={<CheckCircle size={20}/>} color="bg-emerald-600" />
-        <StatCard label="Projetos Acompanhados" value={stats.projects} icon={<FolderKanban size={20}/>} color="bg-teal-700" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard label="Atividades no Mês" value={dashboardStats.createdLast30Days} icon={<Briefcase size={20}/>} color="bg-brand-primary" />
+        <StatCard label="Previstas p/ Finalizar" value={dashboardStats.scheduledThisMonth} icon={<Activity size={20}/>} color="bg-blue-600" />
+        <StatCard label="Finalizadas no Mês" value={dashboardStats.finishedThisMonth} icon={<CheckCircle size={20}/>} color="bg-emerald-600" />
+        <StatCard label="Projetos Acompanhados" value={dashboardStats.projects} icon={<FolderKanban size={20}/>} color="bg-teal-700" />
       </div>
 
       {/* Charts */}
@@ -165,7 +181,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
            <div className="space-y-4">
              <AlertItem value={alerts.overdue.length} label="Atividade(s) Vencida(s)" icon={<AlertTriangle size={18}/>} color="text-red-500" onClick={() => handleAlertClick('overdue')}/>
              <AlertItem value={alerts.pendingReviews.length} label="Relatório(s) Pendente(s)" icon={<FileSignature size={18}/>} color="text-amber-500" onClick={() => handleAlertClick('pending')}/>
-             <AlertItem value={alerts.projectsAtRisk.length} label="Projeto(s) em Atraso" icon={<Activity size={18}/>} color="text-teal-600" onClick={() => handleAlertClick('risk')}/>
+             <AlertItem value={alerts.projectsAtRisk.length} label="Projeto(s) em Risco" icon={<Activity size={18}/>} color="text-teal-600" onClick={() => handleAlertClick('risk')}/>
            </div>
         </div>
       </div>

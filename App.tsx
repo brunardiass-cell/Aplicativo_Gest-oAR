@@ -50,6 +50,7 @@ const App: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'Todos' | Status>('Todos');
   const [leadFilter, setLeadFilter] = useState<string>('Todos');
   const [projectFilter, setProjectFilter] = useState<string>('Todos');
+  const [periodFilter, setPeriodFilter] = useState<'all' | 'week' | 'month' | 'year'>('all');
   
   const [dashboardView, setDashboardView] = useState<'activities' | 'projects'>('activities');
   const [initialProjectId, setInitialProjectId] = useState<string | null>(null);
@@ -432,6 +433,30 @@ const App: React.FC = () => {
   }, [activeProjects]);
 
   const tasksForBoard = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    const checkPeriod = (task: Task): boolean => {
+      if (periodFilter === 'all') return true;
+      if (!task.completionDate) return false; // Apenas tarefas com prazo podem ser filtradas por período
+      
+      const completionDate = new Date(task.completionDate + 'T00:00:00');
+
+      switch (periodFilter) {
+          case 'week': {
+              const oneWeekFromNow = new Date(now);
+              oneWeekFromNow.setDate(now.getDate() + 7);
+              return completionDate >= now && completionDate <= oneWeekFromNow;
+          }
+          case 'month':
+              return completionDate.getMonth() === now.getMonth() && completionDate.getFullYear() === now.getFullYear();
+          case 'year':
+              return completionDate.getFullYear() === now.getFullYear();
+          default:
+              return true;
+      }
+    };
+
     return tasks.filter(t => {
       if (t.deleted) return false;
 
@@ -444,10 +469,12 @@ const App: React.FC = () => {
       const statusMatch = statusFilter === 'Todos' || t.status === statusFilter;
       const leadMatch = leadFilter === 'Todos' || t.projectLead === leadFilter;
       const projectMatch = projectFilter === 'Todos' || t.project === projectFilter;
+      const periodMatch = checkPeriod(t);
 
       return memberMatch && statusMatch && leadMatch && projectMatch;
     });
-  }, [tasks, filterMember, statusFilter, leadFilter, projectFilter]);
+  }, [tasks, filterMember, statusFilter, leadFilter, projectFilter, periodFilter]);
+
 
   if (isLoading) {
     return <div className="flex h-screen w-screen items-center justify-center bg-brand-light"><Loader2 size={48} className="animate-spin text-brand-primary" /></div>;
@@ -599,7 +626,7 @@ const App: React.FC = () => {
             </div>
             
             {dashboardView === 'activities' ? (
-              <Dashboard tasks={tasksForBoard} projects={activeProjects} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />
+              <Dashboard tasks={tasks} projects={activeProjects} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />
             ) : (
               <ProjectsDashboard 
                 projects={activeProjects} 
@@ -632,6 +659,8 @@ const App: React.FC = () => {
               projectFilter={projectFilter}
               onProjectFilterChange={setProjectFilter}
               uniqueProjects={uniqueProjects}
+              periodFilter={periodFilter}
+              onPeriodFilterChange={setPeriodFilter}
             />
         )}
         {view === 'projects' && <ProjectsManager projects={activeProjects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} teamMembers={teamMembers} currentUserRole={currentUserRole} initialProjectId={initialProjectId} />}

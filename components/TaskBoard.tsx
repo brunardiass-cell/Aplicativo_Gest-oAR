@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Task, AppNotification, Status } from '../types';
 import { 
   ArrowRight, 
@@ -29,9 +29,11 @@ interface TaskBoardProps {
   statusFilter: 'Todos' | Status;
   leadFilter: string;
   projectFilter: string;
+  periodFilter: 'all' | 'week' | 'month' | 'year';
   onStatusFilterChange: (status: 'Todos' | Status) => void;
   onLeadFilterChange: (lead: string) => void;
   onProjectFilterChange: (project: string) => void;
+  onPeriodFilterChange: (period: 'all' | 'week' | 'month' | 'year') => void;
   uniqueLeads: string[];
   uniqueProjects: string[];
 }
@@ -50,14 +52,35 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   statusFilter,
   leadFilter,
   projectFilter,
+  periodFilter,
   onStatusFilterChange,
   onLeadFilterChange,
   onProjectFilterChange,
+  onPeriodFilterChange,
   uniqueLeads,
   uniqueProjects
 }) => {
   const activeTasks = tasks.filter(t => !t.deleted);
   const activeReviews = notifications.filter(n => n.userId === currentUser && !n.read && n.type === 'REVIEW_ASSIGNED');
+
+  const sortedTasks = useMemo(() => {
+    return [...activeTasks].sort((a, b) => {
+        const aIsCompleted = a.status === 'Concluída';
+        const bIsCompleted = b.status === 'Concluída';
+
+        if (aIsCompleted !== bIsCompleted) {
+            return aIsCompleted ? 1 : -1;
+        }
+
+        const dateA = a.completionDate ? new Date(a.completionDate + 'T00:00:00').getTime() : Number.MAX_SAFE_INTEGER;
+        const dateB = b.completionDate ? new Date(b.completionDate + 'T00:00:00').getTime() : Number.MAX_SAFE_INTEGER;
+        
+        if (dateA === dateB) return 0;
+
+        return dateA - dateB;
+    });
+  }, [activeTasks]);
+
 
   const renderReportStageBadge = (task: Task) => {
     if (!task.isReport || !task.reportStage) return null;
@@ -147,7 +170,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
         <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 pr-4 border-r border-slate-200">
             <SlidersHorizontal size={14}/> Filtros
         </h3>
-        <div className="flex-1 grid grid-cols-3 gap-4">
+        <div className="flex-1 grid grid-cols-4 gap-4">
             <div>
                 <label className="text-[9px] font-bold text-slate-500">Projeto</label>
                 <select
@@ -187,11 +210,24 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                     ))}
                 </select>
             </div>
+            <div>
+                <label className="text-[9px] font-bold text-slate-500">Período</label>
+                <select
+                    value={periodFilter}
+                    onChange={(e) => onPeriodFilterChange(e.target.value as any)}
+                    className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
+                >
+                    <option value="all">Todos</option>
+                    <option value="week">Próxima Semana</option>
+                    <option value="month">Este Mês</option>
+                    <option value="year">Este Ano</option>
+                </select>
+            </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {activeTasks.map(task => {
+        {sortedTasks.map(task => {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           const isCompleted = task.status === 'Concluída';
@@ -201,7 +237,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
           if (isCompleted) {
             cardClasses += ' bg-slate-50 opacity-75 border-slate-200';
           } else if (isOverdue) {
-            cardClasses += ' bg-white border-red-400';
+            cardClasses += ' bg-white border-red-400 ring-2 ring-red-200';
           } else {
             cardClasses += ' bg-white border-slate-200 hover:shadow-xl hover:border-teal-100';
           }
@@ -287,8 +323,8 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
 
               {!task.isReport && (
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-slate-400">
-                     <Clock size={12} />
+                  <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-500' : 'text-slate-400'}`}>
+                     {isOverdue ? <AlertTriangle size={12} /> : <Clock size={12} />}
                      <span className="text-[8px] font-bold uppercase">Prazo: {task.completionDate ? new Date(task.completionDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/D'}</span>
                   </div>
                   {task.updates.length > 0 && (
@@ -302,7 +338,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
             </div>
           )
         })}
-        {activeTasks.length === 0 && (
+        {sortedTasks.length === 0 && (
           <div className="col-span-full py-20 text-center bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
             <AlertTriangle className="mx-auto text-slate-300 mb-4" size={48} />
             <p className="text-slate-400 font-black uppercase text-xs tracking-widest italic">Nenhuma atividade encontrada para os filtros selecionados.</p>
