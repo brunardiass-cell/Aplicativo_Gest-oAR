@@ -29,10 +29,6 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(now.getDate() - 30);
-
-    const createdLast30Days = userTasks.filter(t => new Date(t.requestDate) >= thirtyDaysAgo);
 
     const tasksDueThisMonth = userTasks.filter(t => {
         if (!t.completionDate) return false;
@@ -40,11 +36,13 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
         return completion.getMonth() === currentMonth && completion.getFullYear() === currentYear;
     });
     
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(now.getDate() - 30);
+    const createdLast30Days = userTasks.filter(t => new Date(t.requestDate) >= thirtyDaysAgo);
     const lateTasks = createdLast30Days.filter(t => t.completionDate && new Date(t.completionDate + 'T00:00:00') < now && t.status !== 'Concluída');
 
     return {
-      createdLast30Days: createdLast30Days.length,
-      scheduledThisMonth: tasksDueThisMonth.filter(t => t.status !== 'Concluída').length,
+      scheduledThisMonth: tasksDueThisMonth.length,
       finishedThisMonth: userTasks.filter(t => {
           if (t.status !== 'Concluída' || !t.completionDate) return false;
           const completion = new Date(t.completionDate + 'T00:00:00');
@@ -119,9 +117,8 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
   return (
     <div className="space-y-8">
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard label="Atividades no Mês" value={dashboardStats.createdLast30Days} icon={<Briefcase size={20}/>} color="bg-brand-primary" />
-        <StatCard label="Previstas p/ Finalizar" value={dashboardStats.scheduledThisMonth} icon={<Activity size={20}/>} color="bg-blue-600" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <StatCard label="Entregas Previstas (Mês)" value={dashboardStats.scheduledThisMonth} icon={<Activity size={20}/>} color="bg-blue-600" />
         <StatCard label="Finalizadas no Mês" value={dashboardStats.finishedThisMonth} icon={<CheckCircle size={20}/>} color="bg-emerald-600" />
         <StatCard label="Projetos Acompanhados" value={dashboardStats.projects} icon={<FolderKanban size={20}/>} color="bg-teal-700" />
       </div>

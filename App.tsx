@@ -703,8 +703,16 @@ const App: React.FC = () => {
           <MonthlyReportModal
               isOpen={isReportModalOpen}
               onClose={() => setIsReportModalOpen(false)}
-              tasks={tasks}
+              tasks={tasksForBoard}
               filteredUser={filterMember}
+              filters={{
+                dateFilterType,
+                startDateFilter,
+                endDateFilter,
+                projectFilter,
+                statusFilter,
+                leadFilter
+              }}
           />
       )}
     </div>

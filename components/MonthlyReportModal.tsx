@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Task } from '../types';
+import { Task, Status } from '../types';
 import { X, Printer, FileText } from 'lucide-react';
 
 interface MonthlyReportModalProps {
@@ -8,34 +8,62 @@ interface MonthlyReportModalProps {
   onClose: () => void;
   tasks: Task[];
   filteredUser: string | 'Todos';
+  filters: {
+    dateFilterType: 'all' | 'requestDate' | 'completionDate';
+    startDateFilter: string;
+    endDateFilter: string;
+    projectFilter: string;
+    statusFilter: 'Todos' | Status;
+    leadFilter: string;
+  };
 }
 
-const generateMonthlyReport = (tasks: Task[], filteredUser: string | 'Todos'): string => {
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-  const monthlyTasks = tasks.filter(t => !t.deleted && new Date(t.requestDate) >= thirtyDaysAgo);
-  
-  const relevantTasks = filteredUser === 'Todos'
-    ? monthlyTasks
-    : monthlyTasks.filter(t =>
-        t.projectLead === filteredUser ||
-        (Array.isArray(t.collaborators) && t.collaborators.includes(filteredUser)) ||
-        t.currentReviewer === filteredUser
-      );
-
+const generateMonthlyReport = (tasks: Task[], filteredUser: string | 'Todos', filters: MonthlyReportModalProps['filters']): string => {
   const reportDate = new Date().toLocaleDateString('pt-BR');
-  let reportText = `RELATÓRIO DE ATIVIDADES (ÚLTIMO MÊS) - ${filteredUser === 'Todos' ? 'GERAL' : filteredUser.toUpperCase()}\n`;
-  reportText += `Gerado em: ${reportDate}\n\n`;
-  reportText += `Este relatório resume um total de ${relevantTasks.length} atividades recentes.\n`;
-  reportText += '==================================================\n\n';
+  
+  let reportTitle = `RELATÓRIO DE ATIVIDADES - ${filteredUser === 'Todos' ? 'GERAL' : filteredUser.toUpperCase()}\n`;
+  reportTitle += `Gerado em: ${reportDate}\n\n`;
 
-  if (relevantTasks.length === 0) {
-    reportText += 'Nenhuma atividade registrada no período para este perfil.';
+  let filterSummary = 'FILTROS APLICADOS:\n';
+  let hasFilters = false;
+
+  if (filters.projectFilter !== 'Todos') {
+    filterSummary += `  - Projeto: ${filters.projectFilter}\n`;
+    hasFilters = true;
+  }
+  if (filters.statusFilter !== 'Todos') {
+    filterSummary += `  - Status: ${filters.statusFilter}\n`;
+    hasFilters = true;
+  }
+  if (filteredUser === 'Todos' && filters.leadFilter !== 'Todos') {
+    filterSummary += `  - Responsável: ${filters.leadFilter}\n`;
+    hasFilters = true;
+  }
+
+  if (filters.dateFilterType !== 'all' && (filters.startDateFilter || filters.endDateFilter)) {
+    const type = filters.dateFilterType === 'requestDate' ? 'Solicitação' : 'Entrega';
+    const start = filters.startDateFilter ? new Date(filters.startDateFilter + 'T00:00:00').toLocaleDateString('pt-BR') : 'Início';
+    const end = filters.endDateFilter ? new Date(filters.endDateFilter + 'T00:00:00').toLocaleDateString('pt-BR') : 'Fim';
+    filterSummary += `  - Período de ${type}: ${start} a ${end}\n`;
+    hasFilters = true;
+  }
+
+  if (!hasFilters) {
+    filterSummary += '  - Nenhum filtro de período, projeto ou status aplicado.\n';
+  }
+
+  reportTitle += filterSummary;
+  reportTitle += `\nTotal de ${tasks.length} atividades encontradas.\n`;
+  reportTitle += '==================================================\n\n';
+  
+  let reportText = reportTitle;
+
+  if (tasks.length === 0) {
+    reportText += 'Nenhuma atividade encontrada para os filtros selecionados.';
     return reportText;
   }
 
-  relevantTasks.forEach(task => {
+  tasks.forEach(task => {
     reportText += `ATIVIDADE: ${task.activity.toUpperCase()}\n`;
     reportText += `--------------------------------------------------\n`;
 
@@ -47,6 +75,7 @@ const generateMonthlyReport = (tasks: Task[], filteredUser: string | 'Todos'): s
     reportText += `  - Projeto:    ${task.project}\n`;
     reportText += `  - Status:     ${task.status} (${task.progress}%)\n`;
     reportText += `  - Prioridade: ${task.priority}\n`;
+    reportText += `  - Solicitação: ${task.requestDate ? new Date(task.requestDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/D'}\n`;
     reportText += `  - Prazo:      ${task.completionDate ? new Date(task.completionDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/D'}\n`;
     reportText += `  - Líder:      ${task.projectLead}\n`;
     reportText += `  - Próximo Passo: ${task.nextStep || 'Não definido.'}\n\n`;
@@ -55,10 +84,10 @@ const generateMonthlyReport = (tasks: Task[], filteredUser: string | 'Todos'): s
   return reportText;
 };
 
-const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ isOpen, onClose, tasks, filteredUser }) => {
+const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ isOpen, onClose, tasks, filteredUser, filters }) => {
   if (!isOpen) return null;
 
-  const reportContent = generateMonthlyReport(tasks, filteredUser);
+  const reportContent = generateMonthlyReport(tasks, filteredUser, filters);
   
   const handlePrint = () => {
     const printableContent = `
@@ -91,8 +120,8 @@ const MonthlyReportModal: React.FC<MonthlyReportModalProps> = ({ isOpen, onClose
               <FileText size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-bold tracking-tight">Relatório Mensal</h2>
-              <p className="text-xs text-slate-400 font-medium">Resumo das atividades para impressão</p>
+              <h2 className="text-xl font-bold tracking-tight">Relatório de Atividades</h2>
+              <p className="text-xs text-slate-400 font-medium">Resumo baseado nos filtros atuais</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition">

@@ -234,7 +234,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                         className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
                     >
                         <option value="all">Não filtrar</option>
-                        <option value="requestDate">Data de Criação</option>
+                        <option value="requestDate">Data de Solicitação</option>
                         <option value="completionDate">Data de Entrega</option>
                     </select>
                 </div>
