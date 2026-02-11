@@ -14,7 +14,8 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
   const [isAddingMacroForPhase, setIsAddingMacroForPhase] = useState<string | null>(null);
   const [newMacroNameInput, setNewMacroNameInput] = useState('');
 
-  const projectAssignees = useMemo(() => {
+  // FIX: Explicitly type the useMemo hook to ensure correct type inference for projectAssignees.
+  const projectAssignees = useMemo<string[]>(() => {
     const assignees = new Set<string>();
     if (project.responsible) assignees.add(project.responsible);
     if (project.team) project.team.forEach(name => assignees.add(name));
@@ -162,7 +163,7 @@ interface MacroRowProps {
   macro: MacroActivity;
   project: Project;
   onUpdateProject: (p: Project) => void;
-  onOpenDeletionModal: (item: any) => void;
+  onOpenDeletionModal: (item: { type: 'macro' | 'micro', projectId: string; macroId: string; microId?: string; name: string }) => void;
   teamMembers: TeamMember[];
   assignees: string[];
   onMicroUpdate: (macroId: string, microId: string, updates: Partial<MicroActivity>) => void;

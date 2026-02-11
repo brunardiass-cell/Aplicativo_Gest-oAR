@@ -18,7 +18,8 @@ import MonthlyReportModal from './components/MonthlyReportModal';
 import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
-import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, Activity, FolderKanban, ListTodo } from 'lucide-react';
+import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow } from 'lucide-react';
+import ProjectsVisualBoard from './components/ProjectsVisualBoard';
 
 export type AugmentedMicroActivity = MicroActivity & {
   projectId: string;
@@ -66,6 +67,7 @@ const App: React.FC = () => {
   // Tabs
   const [dashboardView, setDashboardView] = useState<'activities' | 'projects'>('activities');
   const [taskViewTab, setTaskViewTab] = useState<'sector' | 'projects'>('sector');
+  const [projectManagerViewTab, setProjectManagerViewTab] = useState<'management' | 'visual'>('management');
   const [initialProjectId, setInitialProjectId] = useState<string | null>(null);
 
   // Filters for Project Tasks (MicroActivities)
@@ -431,6 +433,7 @@ const App: React.FC = () => {
   const handleNavigateToProject = (projectId: string) => {
     setInitialProjectId(projectId);
     setView('projects');
+    setProjectManagerViewTab('visual');
   };
 
   const pendingReviewCount = useMemo(() => {
@@ -654,7 +657,19 @@ const App: React.FC = () => {
             )}
           </div>
         )}
-        {view === 'projects' && <ProjectsManager projects={activeProjects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} teamMembers={teamMembers} currentUserRole={currentUserRole} initialProjectId={initialProjectId} />}
+        {view === 'projects' && (
+          <div className="space-y-6">
+            <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-fit">
+              <button onClick={() => setProjectManagerViewTab('management')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${projectManagerViewTab === 'management' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><GanttChartSquare size={14} /> Gerenciamento</button>
+              <button onClick={() => setProjectManagerViewTab('visual')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${projectManagerViewTab === 'visual' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Workflow size={14} /> Modelo Visual</button>
+            </div>
+            {projectManagerViewTab === 'management' ? (
+              <ProjectsManager projects={activeProjects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} teamMembers={teamMembers} currentUserRole={currentUserRole} initialProjectId={initialProjectId} />
+            ) : (
+              <ProjectsVisualBoard projects={activeProjects} onUpdateProjects={setProjects} initialProjectId={initialProjectId} onClearInitialProjectId={() => setInitialProjectId(null)} />
+            )}
+          </div>
+        )}
         {view === 'quality' && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} appUsers={appUsers} onUpdateAppUsers={setAppUsers} />}
         {view === 'traceability' && <ActivityLogView logs={logs} />}
       </main>

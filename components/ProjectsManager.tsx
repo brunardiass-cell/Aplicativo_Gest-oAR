@@ -5,7 +5,6 @@ import { FolderPlus, ListPlus, FolderKanban, Workflow, GanttChartSquare, Copy, E
 import PlanManagerModal from './PlanManagerModal';
 import NewProjectModal from './NewProjectModal';
 import ProjectTimeline from './ProjectTimeline';
-import ProjectFlowView from './ProjectFlowView';
 
 interface ProjectsManagerProps {
   projects: Project[];
@@ -17,8 +16,6 @@ interface ProjectsManagerProps {
   currentUserRole: AppUser['role'] | null;
   initialProjectId?: string | null;
 }
-
-type ProjectView = 'timeline' | 'flow';
 
 const ProjectsManager: React.FC<ProjectsManagerProps> = ({ 
   projects, 
@@ -33,7 +30,6 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [viewMode, setViewMode] = useState<ProjectView>('timeline');
   const [isEditingProject, setIsEditingProject] = useState(false);
   const [editedProjectData, setEditedProjectData] = useState<Partial<Project>>({});
   const [newTeamMemberName, setNewTeamMemberName] = useState('');
@@ -264,10 +260,6 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                               </div>
                           </div>
                           <div className="flex items-center gap-2 no-print">
-                            <div className="bg-slate-100 p-1 rounded-full flex gap-1">
-                                <button onClick={() => setViewMode('timeline')} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase flex items-center gap-2 ${viewMode === 'timeline' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}><GanttChartSquare size={14}/> Cronograma</button>
-                                <button onClick={() => setViewMode('flow')} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase flex items-center gap-2 ${viewMode === 'flow' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}><Workflow size={14}/> Modelo Visual</button>
-                            </div>
                             <button onClick={handlePrint} className="p-3 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 transition" title="Maximizar / Imprimir"><Printer size={16}/></button>
                           </div>
                       </div>
@@ -287,12 +279,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                     </div>
                   )}
                 </div>
-
-                 {viewMode === 'timeline' ? (
-                    <ProjectTimeline project={selectedProject} onUpdateProject={handleUpdateProject} onOpenDeletionModal={(item) => onOpenDeletionModal(item as any)} teamMembers={teamMembers}/>
-                 ) : (
-                    <ProjectFlowView project={selectedProject} onUpdateProject={handleUpdateProject} />
-                 )}
+                <ProjectTimeline project={selectedProject} onUpdateProject={handleUpdateProject} onOpenDeletionModal={(item) => onOpenDeletionModal(item as any)} teamMembers={teamMembers}/>
               </div>
             ) : (
                 <div className="flex items-center justify-center h-full bg-white rounded-[2rem] border-2 border-dashed border-slate-200 p-10">
