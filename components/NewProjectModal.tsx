@@ -62,8 +62,6 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plan
       return;
     }
 
-    const defaultPhase = projectPhases[0];
-
     const newProject: Project = {
       id: 'proj_' + Math.random().toString(36).substr(2, 9),
       name: projectName.trim(),
@@ -72,10 +70,10 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plan
       templateId: selectedPlanId,
       team: customTeam,
       phases: projectPhases,
-      macroActivities: selectedPlan.macroActivities.map((macroName): MacroActivity => ({
+      macroActivities: selectedPlan.macroActivities.map((macroTemplate): MacroActivity => ({
         id: 'macro_' + Math.random().toString(36).substr(2, 9),
-        name: macroName,
-        phase: defaultPhase,
+        name: macroTemplate.name,
+        phase: projectPhases.includes(macroTemplate.phase) ? macroTemplate.phase : projectPhases[0],
         microActivities: [],
       }))
     };

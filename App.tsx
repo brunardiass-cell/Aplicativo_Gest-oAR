@@ -124,7 +124,23 @@ const App: React.FC = () => {
         setTasks(cloudData.tasks || []);
         setProjects(cloudData.projects || []);
         setTeamMembers(cloudData.teamMembers || DEFAULT_TEAM_MEMBERS);
-        setActivityPlans(cloudData.activityPlans || []);
+        
+        const loadedPlans = cloudData.activityPlans || [];
+        const migratedPlans = loadedPlans.map((plan: any) => {
+            if (plan.macroActivities.length > 0 && typeof plan.macroActivities[0] === 'string') {
+                const defaultPhase = (plan.phases && plan.phases.length > 0) ? plan.phases[0] : 'Fase Padrão';
+                return {
+                    ...plan,
+                    macroActivities: (plan.macroActivities as string[]).map(macroName => ({
+                        name: macroName,
+                        phase: defaultPhase
+                    }))
+                };
+            }
+            return plan;
+        });
+        setActivityPlans(migratedPlans);
+        
         setNotifications(cloudData.notifications || []);
         setLogs(cloudData.logs || []);
         setAppUsers(cloudData.appUsers || DEFAULT_APP_USERS);

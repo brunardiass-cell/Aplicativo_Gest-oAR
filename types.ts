@@ -98,11 +98,16 @@ export interface ActivityLog {
   reason: string;
 }
 
+export interface MacroActivityTemplate {
+  name: string;
+  phase: string;
+}
+
 export interface ActivityPlanTemplate {
   id: string;
   name: string;
-  phases: string[]; // Adicionado
-  macroActivities: string[];
+  phases: string[];
+  macroActivities: MacroActivityTemplate[];
 }
 
 export interface MicroActivity {

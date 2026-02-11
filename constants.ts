@@ -55,11 +55,11 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
     name: 'Proteína Recombinante',
     phases: defaultPhases,
     macroActivities: [
-      'Desenvolvimento de Dossiê de Insumo (DIFA)',
-      'Coordenação de Estudo de Estabilidade',
-      'Validação de Processo Produtivo',
-      'Elaboração de Relatório Clínico Fase III',
-      'Submissão Regulatória Final'
+      { name: 'Desenvolvimento de Dossiê de Insumo (DIFA)', phase: defaultPhases[0] },
+      { name: 'Coordenação de Estudo de Estabilidade', phase: defaultPhases[0] },
+      { name: 'Validação de Processo Produtivo', phase: defaultPhases[0] },
+      { name: 'Elaboração de Relatório Clínico Fase III', phase: defaultPhases[0] },
+      { name: 'Submissão Regulatória Final', phase: defaultPhases[0] }
     ]
   },
   {
@@ -67,10 +67,10 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
     name: 'Vírus Recombinante',
     phases: defaultPhases,
     macroActivities: [
-      'Caracterização do Banco Viral Mestre/Trabalho',
-      'Gerenciamento de Testes de Adventícios',
-      'Desenvolvimento do Processo de Inativação Viral',
-      'Compilação e Submissão de Dossiê'
+      { name: 'Caracterização do Banco Viral Mestre/Trabalho', phase: defaultPhases[0] },
+      { name: 'Gerenciamento de Testes de Adventícios', phase: defaultPhases[0] },
+      { name: 'Desenvolvimento do Processo de Inativação Viral', phase: defaultPhases[0] },
+      { name: 'Compilação e Submissão de Dossiê', phase: defaultPhases[0] }
     ]
   },
   {
@@ -78,10 +78,10 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
     name: 'RNA (Terapia Gênica)',
     phases: defaultPhases,
     macroActivities: [
-      'Qualificação do Plasmídeo Molde',
-      'Validação da Transcrição in vitro (TIV)',
-      'Análise de Pureza e Integridade do RNA',
-      'Elaboração de Relatório de Segurança Pré-clínica',
+      { name: 'Qualificação do Plasmídeo Molde', phase: defaultPhases[0] },
+      { name: 'Validação da Transcrição in vitro (TIV)', phase: defaultPhases[0] },
+      { name: 'Análise de Pureza e Integridade do RNA', phase: defaultPhases[0] },
+      { name: 'Elaboração de Relatório de Segurança Pré-clínica', phase: defaultPhases[0] },
     ]
   },
   {
@@ -89,10 +89,10 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
     name: 'DNA (Vacina de DNA)',
     phases: defaultPhases,
     macroActivities: [
-      'Construção e Qualificação do Vetor Plasmidial',
-      'Desenvolvimento da Produção em Larga Escala',
-      'Desenvolvimento de Teste de Potência',
-      'Preparação para Submissão de Estudos Clínicos',
+      { name: 'Construção e Qualificação do Vetor Plasmidial', phase: defaultPhases[0] },
+      { name: 'Desenvolvimento da Produção em Larga Escala', phase: defaultPhases[0] },
+      { name: 'Desenvolvimento de Teste de Potência', phase: defaultPhases[0] },
+      { name: 'Preparação para Submissão de Estudos Clínicos', phase: defaultPhases[0] },
     ]
   }
 ];

@@ -144,8 +144,10 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
             ))}
             {isAddingMacroForPhase === phase ? (
               <div className="p-4 bg-teal-50/50 border border-teal-200 rounded-3xl flex items-center gap-2 animate-in fade-in duration-300">
-                <input type="text" value={newMacroNameInput} onChange={e => setNewMacroNameInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddMacroActivity(phase)} placeholder="Nome da nova macroatividade" autoFocus className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-xl text-sm font-bold text-slate-900"/>
-                <button onClick={() => handleAddMacroActivity(phase)} className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition"><Save size={16} /></button>
+                {/* FIX: Explicitly cast 'phase' to a string to resolve potential 'unknown' type inference issues in event handlers. */}
+                <input type="text" value={newMacroNameInput} onChange={e => setNewMacroNameInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddMacroActivity(String(phase))} placeholder="Nome da nova macroatividade" autoFocus className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-xl text-sm font-bold text-slate-900"/>
+                {/* FIX: Explicitly cast 'phase' to a string to resolve potential 'unknown' type inference issues in event handlers. */}
+                <button onClick={() => handleAddMacroActivity(String(phase))} className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition"><Save size={16} /></button>
                 <button onClick={() => { setIsAddingMacroForPhase(null); setNewMacroNameInput(''); }} className="p-2 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 transition"><X size={16} /></button>
               </div>
             ) : (
