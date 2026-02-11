@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Project, MacroActivity, MicroActivity } from '../types';
-import { ChevronDown, Clock, Activity, CheckCircle, AlertTriangle, MessageSquare, Link as LinkIcon } from 'lucide-react';
+import { ChevronDown, Clock, Activity, CheckCircle, MessageSquare, Link as LinkIcon, Layers } from 'lucide-react';
 
 interface ProjectFlowViewProps {
   project: Project;
@@ -9,6 +9,7 @@ interface ProjectFlowViewProps {
 }
 
 const ProjectFlowView: React.FC<ProjectFlowViewProps> = ({ project, onUpdateProject }) => {
+  const phases = project.phases || [];
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, macroId: string) => {
     e.dataTransfer.setData("macroId", macroId);
@@ -29,9 +30,22 @@ const ProjectFlowView: React.FC<ProjectFlowViewProps> = ({ project, onUpdateProj
     e.preventDefault();
   };
 
+  if (phases.length === 0) {
+    return (
+      <div className="h-[600px] flex items-center justify-center bg-slate-50/50 border-2 border-dashed border-slate-200 rounded-3xl p-10">
+          <div className="text-center">
+              <Layers size={48} className="mx-auto text-slate-300 mb-6" />
+              <h3 className="text-slate-600 font-black text-lg uppercase tracking-tight">Modelo Visual Indisponível</h3>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Nenhuma fase foi definida para este projeto.</p>
+              <p className="text-sm text-slate-500 mt-4 max-w-sm mx-auto">Para utilizar o quadro Kanban, por favor, edite o projeto e adicione as fases necessárias no cronograma.</p>
+          </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="grid h-[600px] gap-6" style={{ gridTemplateColumns: `repeat(${project.phases.length}, minmax(0, 1fr))` }}>
-      {project.phases.map((phase) => (
+    <div className="grid h-[600px] gap-6" style={{ gridTemplateColumns: `repeat(${phases.length}, minmax(250px, 1fr))` }}>
+      {phases.map((phase) => (
         <div 
           key={phase}
           onDrop={(e) => handleDrop(e, phase)}

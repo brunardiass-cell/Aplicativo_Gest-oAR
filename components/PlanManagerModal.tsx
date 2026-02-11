@@ -73,9 +73,10 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
 
   const handleAddPhase = () => {
     if (!newPhaseName.trim() || !selectedPlanId) return;
-    const updatedPlans = localPlans.map(p => 
-      p.id === selectedPlanId ? { ...p, phases: [...p.phases, newPhaseName.trim()] } : p
-    );
+    const updatedPlans = localPlans.map(p => {
+      const currentPhases = p.phases || [];
+      return p.id === selectedPlanId ? { ...p, phases: [...currentPhases, newPhaseName.trim()] } : p;
+    });
     setLocalPlans(updatedPlans);
     setNewPhaseName('');
   };
@@ -84,7 +85,7 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
     if (!selectedPlanId) return;
     const updatedPlans = localPlans.map(p => {
       if (p.id === selectedPlanId) {
-        const updatedPhases = p.phases.filter((_, i) => i !== index);
+        const updatedPhases = (p.phases || []).filter((_, i) => i !== index);
         return { ...p, phases: updatedPhases };
       }
       return p;
@@ -137,12 +138,17 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
                     <div className="flex flex-col">
                       <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest px-2 mb-2 flex items-center gap-2"><Layers size={14} /> Fases do Projeto</h3>
                       <div className="p-2 space-y-2 bg-slate-50 rounded-xl border border-slate-100 flex-1">
-                        {selectedPlan.phases.map((phase, index) => (
+                        {(selectedPlan.phases || []).map((phase, index) => (
                           <div key={index} className="flex items-center gap-2 p-3 bg-white border border-slate-200 rounded-xl group">
                             <span className="flex-1 text-xs font-bold text-slate-700">{phase}</span>
                             <button onClick={() => handleDeletePhase(index)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-slate-100 rounded-full transition opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
                           </div>
                         ))}
+                        {(!selectedPlan.phases || selectedPlan.phases.length === 0) && (
+                            <div className="p-10 text-center">
+                                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Nenhuma fase definida.</p>
+                            </div>
+                        )}
                       </div>
                        <div className="p-2 border-t border-slate-100 flex gap-2 mt-auto">
                         <input type="text" value={newPhaseName} onChange={e => setNewPhaseName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPhase()} placeholder="Nova fase..." className="flex-1 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold" />
