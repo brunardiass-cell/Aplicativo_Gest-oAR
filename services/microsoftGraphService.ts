@@ -4,10 +4,11 @@ import * as msal from "@azure/msal-browser";
 const CLIENT_ID = "609422c2-d648-4b50-b1fe-ca614b77ffb5"; 
 const TENANT_ID = "f51c2ea8-6e50-4e8f-a3e3-30c69e99d323";
 
+// Variável para a instância do MSAL já inicializada
 let msalInstance: msal.PublicClientApplication | null = null;
+// Promise para controlar a inicialização e evitar race conditions
+let msalInstancePromise: Promise<msal.PublicClientApplication> | null = null;
 
-// Escopos reduzidos para evitar a necessidade de aprovação do administrador global.
-// Files.ReadWrite permite que o usuário acesse os arquivos que ELE já tem permissão no SharePoint.
 const loginRequest = {
   scopes: ["User.Read", "Files.ReadWrite"]
 };
@@ -19,29 +20,38 @@ const FILE_NAME = "db.json";
 
 export const MicrosoftGraphService = {
   async init() {
-    if (!msalInstance) {
-      msalInstance = new msal.PublicClientApplication({
-        auth: {
-          clientId: CLIENT_ID,
-          authority: `https://login.microsoftonline.com/${TENANT_ID}`,
-          redirectUri: window.location.origin,
-          // Garante que o MSAL trate corretamente usuários convidados (external tenants)
-          // FIX: Removed invalid 'navigateToLoginRequestUrl' property as it does not exist in type 'BrowserAuthOptions'. This behavior is default in MSAL.js v2.
-        },
-        cache: {
-          cacheLocation: "localStorage",
-          // FIX: Removed invalid 'storeAuthStateInCookie' property as it does not exist in type 'CacheOptions'. This behavior is default in MSAL.js v2.
-        }
-      });
-      await msalInstance.initialize();
+    // Se a instância já estiver pronta, retorne-a imediatamente.
+    if (msalInstance) {
+      return msalInstance;
     }
-    return msalInstance;
+
+    // Se a inicialização ainda não começou, crie a promise.
+    if (!msalInstancePromise) {
+      msalInstancePromise = (async () => {
+        const instance = new msal.PublicClientApplication({
+          auth: {
+            clientId: CLIENT_ID,
+            authority: `https://login.microsoftonline.com/${TENANT_ID}`,
+            redirectUri: window.location.origin,
+          },
+          cache: {
+            cacheLocation: "localStorage",
+          }
+        });
+        await instance.initialize();
+        // Após a inicialização, armazene a instância e a retorne.
+        msalInstance = instance;
+        return instance;
+      })();
+    }
+    
+    // Aguarde a promise de inicialização (seja a que foi criada agora ou uma já existente).
+    return await msalInstancePromise;
   },
 
   async login() {
     const instance = await this.init();
     try {
-      // Força a tela de seleção de conta para garantir que o usuário escolha a conta correta do CTVacinas/Convidado
       const loginResponse = await instance.loginPopup({
         ...loginRequest,
         prompt: "select_account"
@@ -103,8 +113,6 @@ export const MicrosoftGraphService = {
 
   async getSiteAndDriveId(token: string) {
     try {
-      // Busca o site diretamente pelo caminho. 
-      // Esta chamada funciona com permissões de usuário (Delegated) se o usuário tiver acesso ao site.
       const siteRes = await fetch(`https://graph.microsoft.com/v1.0/sites/${SHAREPOINT_HOST}:${SITE_PATH}?$select=id`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -180,7 +188,11 @@ export const MicrosoftGraphService = {
       const ids = await this.getSiteAndDriveId(token);
       if (!ids) return false;
 
-      await this.ensureFolderExists(token, ids.driveId);
+      const folderExists = await this.ensureFolderExists(token, ids.driveId);
+      if (!folderExists) {
+        console.error("A pasta 'sistema' não pôde ser encontrada ou criada no SharePoint.");
+        return false;
+      }
 
       const body = JSON.stringify(data, null, 2);
       const url = `https://graph.microsoft.com/v1.0/drives/${ids.driveId}/root:/${FOLDER_NAME}/${FILE_NAME}:/content`;
