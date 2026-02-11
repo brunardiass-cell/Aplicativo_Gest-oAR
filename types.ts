@@ -10,7 +10,8 @@ export type ReportStage =
   | 'Concluído e Assinado';
 
 export type ReportStatus = 'Pendente' | 'Concluído' | 'N/A';
-export type CompletionStatus = 'Não Finalizada' | 'Aprovada' | 'Finalizada com Restrições' | 'A ser Repetida';
+// Novo tipo para status de microatividades
+export type MicroActivityStatus = 'Planejado' | 'Em andamento' | 'Concluído com restrições' | 'A repetir / retrabalho' | 'Concluído e aprovado';
 
 export interface TaskNote {
   id: string;
@@ -100,6 +101,7 @@ export interface ActivityLog {
 export interface ActivityPlanTemplate {
   id: string;
   name: string;
+  phases: string[]; // Adicionado
   macroActivities: string[];
 }
 
@@ -108,8 +110,7 @@ export interface MicroActivity {
   name: string;
   assignee: string;
   dueDate: string;
-  status: Status;
-  completionStatus: CompletionStatus;
+  status: MicroActivityStatus; // Alterado de Status
   observations: string;
   reportLink?: string;
   completionDate?: string;
@@ -119,7 +120,7 @@ export interface MicroActivity {
 export interface MacroActivity {
   id: string;
   name: string;
-  status: Status; // Derivado das microatividades
+  phase: string; // Adicionado
   microActivities: MicroActivity[];
 }
 
@@ -129,6 +130,7 @@ export interface Project {
   responsible?: string;
   status: 'Em Planejamento' | 'Ativo' | 'Suspenso' | 'Concluído';
   templateId: string;
+  phases: string[]; // Adicionado
   macroActivities: MacroActivity[];
   team?: string[];
   deleted?: boolean;

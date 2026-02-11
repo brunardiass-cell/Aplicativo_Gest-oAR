@@ -72,13 +72,9 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
   const projectStats = useMemo(() => {
     if (!selectedProject) return null;
-
-    // Progresso geral baseado nas macroatividades
-    const totalMacros = selectedProject.macroActivities.length;
-    const completedMacros = selectedProject.macroActivities.filter(macro => macro.status === 'Concluída').length;
-    const progress = totalMacros > 0 ? (completedMacros / totalMacros) * 100 : 0;
-
-    // Estatísticas detalhadas das microatividades para o texto
+    
+    let totalMicros = 0;
+    let completedMicros = 0;
     let lateMicros = 0;
     let ongoingMicros = 0;
     const today = new Date();
@@ -86,21 +82,25 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
     selectedProject.macroActivities.forEach(macro => {
       macro.microActivities.forEach(micro => {
-        if (micro.status === 'Em Andamento') {
+        totalMicros++;
+        if (micro.status === 'Concluído e aprovado') {
+          completedMicros++;
+        }
+        if (micro.status === 'Em andamento') {
           ongoingMicros++;
         }
-        if (micro.dueDate && new Date(micro.dueDate + 'T00:00:00') < today && micro.status !== 'Concluída') {
+        if (micro.dueDate && new Date(micro.dueDate + 'T00:00:00') < today && micro.status !== 'Concluído e aprovado') {
           lateMicros++;
         }
       });
     });
 
-    return { totalMacros, completedMacros, lateMicros, ongoingMicros, progress };
+    const progress = totalMicros > 0 ? (completedMicros / totalMicros) * 100 : 0;
+
+    return { totalMacros: selectedProject.macroActivities.length, lateMicros, ongoingMicros, progress };
   }, [selectedProject]);
 
   const addProject = (project: Project) => {
-    // A lógica de atualização do estado global (onUpdateProjects) agora pertence ao App.tsx
-    // Esta função agora prepara o novo projeto e o passa para cima.
     const updatedProjects = [...projects, project];
     onUpdateProjects(updatedProjects);
     setSelectedProject(project);
@@ -169,15 +169,14 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
       macroActivities: projectToDuplicate.macroActivities.map(macro => ({
         ...macro,
         id: 'macro_' + Math.random().toString(36).substr(2, 9),
-        status: 'Planejada',
         microActivities: macro.microActivities.map(micro => ({
           ...micro,
           id: 'micro_' + Math.random().toString(36).substr(2, 9),
-          status: 'Planejada',
-          completionStatus: 'Não Finalizada',
+          status: 'Planejado',
           observations: '',
           reportLink: '',
           completionDate: undefined,
+          progress: 0,
         }))
       }))
     };
@@ -188,26 +187,16 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   return (
     <div className="space-y-8 project-manager-container">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 project-manager-header">
-        <button
-          onClick={() => setIsNewProjectModalOpen(true)}
-          className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-teal-200 transition-all text-left"
-        >
-          <div className="p-5 bg-brand-primary text-white rounded-3xl shadow-lg shadow-teal-200 group-hover:scale-110 transition-transform">
-            <FolderPlus size={32} />
-          </div>
+        <button onClick={() => setIsNewProjectModalOpen(true)} className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-teal-200 transition-all text-left">
+          <div className="p-5 bg-brand-primary text-white rounded-3xl shadow-lg shadow-teal-200 group-hover:scale-110 transition-transform"><FolderPlus size={32} /></div>
           <div>
             <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Criar Novo Projeto</h3>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Use um plano para gerar um cronograma.</p>
           </div>
         </button>
         {isAdmin && (
-          <button
-            onClick={() => setIsPlanModalOpen(true)}
-            className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-amber-200 transition-all text-left"
-          >
-            <div className="p-5 bg-amber-500 text-white rounded-3xl shadow-lg shadow-amber-200 group-hover:scale-110 transition-transform">
-              <ListPlus size={32} />
-            </div>
+          <button onClick={() => setIsPlanModalOpen(true)} className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-amber-200 transition-all text-left">
+            <div className="p-5 bg-amber-500 text-white rounded-3xl shadow-lg shadow-amber-200 group-hover:scale-110 transition-transform"><ListPlus size={32} /></div>
             <div>
               <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Gerenciar Planos</h3>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Crie e edite templates de atividades.</p>
@@ -221,20 +210,12 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar">
             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 pb-2">Projetos Ativos</h3>
             {projects.map(p => (
-              <button 
-                key={p.id}
-                onClick={() => { setSelectedProject(p); setIsEditingProject(false); }}
-                className={`w-full p-4 rounded-2xl text-left transition ${selectedProject?.id === p.id ? 'bg-brand-primary text-white shadow-lg' : 'hover:bg-slate-50'}`}
-              >
+              <button key={p.id} onClick={() => { setSelectedProject(p); setIsEditingProject(false); }} className={`w-full p-4 rounded-2xl text-left transition ${selectedProject?.id === p.id ? 'bg-brand-primary text-white shadow-lg' : 'hover:bg-slate-50'}`}>
                 <p className="text-sm font-black uppercase tracking-tight truncate">{p.name}</p>
                 <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">{p.status}</span>
               </button>
             ))}
-             {projects.length === 0 && (
-                <div className="text-center py-10">
-                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest italic">Nenhum projeto criado.</p>
-                </div>
-             )}
+             {projects.length === 0 && (<div className="text-center py-10"><p className="text-slate-400 text-xs font-bold uppercase tracking-widest italic">Nenhum projeto criado.</p></div>)}
           </div>
         </div>
         <div className="col-span-8">
@@ -243,41 +224,21 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                 <div className="border-b border-slate-100 pb-6">
                   {isEditingProject ? (
                     <div className="space-y-4 animate-in fade-in duration-300">
-                       <input 
-                         value={editedProjectData.name}
-                         onChange={(e) => setEditedProjectData({...editedProjectData, name: e.target.value})}
-                         className="w-full text-2xl font-black text-slate-800 uppercase tracking-tighter bg-slate-100 border border-slate-200 rounded-lg px-3 py-2"
-                       />
+                       <input value={editedProjectData.name} onChange={(e) => setEditedProjectData({...editedProjectData, name: e.target.value})} className="w-full text-2xl font-black text-slate-800 uppercase tracking-tighter bg-slate-100 border border-slate-200 rounded-lg px-3 py-2"/>
                        <div className="flex items-center gap-2">
                            <User size={14} className="text-slate-400"/>
-                           <select 
-                            value={editedProjectData.responsible}
-                            onChange={(e) => setEditedProjectData({...editedProjectData, responsible: e.target.value})}
-                            className="w-full text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 rounded-lg border border-slate-200 appearance-none outline-none px-3 py-1.5"
-                           >
+                           <select value={editedProjectData.responsible} onChange={(e) => setEditedProjectData({...editedProjectData, responsible: e.target.value})} className="w-full text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 rounded-lg border border-slate-200 appearance-none outline-none px-3 py-1.5">
                               {teamMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                            </select>
                        </div>
                        <div className="space-y-2">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Users size={14}/> Equipe</label>
                           <div className="flex gap-2">
-                            <input 
-                                type="text"
-                                value={newTeamMemberName}
-                                onChange={e => setNewTeamMemberName(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddMemberToEdit())}
-                                placeholder="Adicionar integrante"
-                                className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold"
-                            />
+                            <input type="text" value={newTeamMemberName} onChange={e => setNewTeamMemberName(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddMemberToEdit())} placeholder="Adicionar integrante" className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold"/>
                             <button type="button" onClick={handleAddMemberToEdit} className="px-4 bg-slate-800 text-white rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2"><Plus size={16}/>Add</button>
                           </div>
                           <div className="p-3 bg-slate-100 border border-slate-200 rounded-2xl flex flex-wrap gap-2 min-h-[40px]">
-                              {editedProjectData.team?.map(name => (
-                                  <div key={name} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest">
-                                      <span>{name}</span>
-                                      <button type="button" onClick={() => handleRemoveMemberFromEdit(name)} className="text-slate-400 hover:text-red-500"><X size={12}/></button>
-                                  </div>
-                              ))}
+                              {editedProjectData.team?.map(name => (<div key={name} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest"><span>{name}</span><button type="button" onClick={() => handleRemoveMemberFromEdit(name)} className="text-slate-400 hover:text-red-500"><X size={12}/></button></div>))}
                           </div>
                        </div>
                        <div className="flex items-center gap-2 pt-2">
@@ -290,59 +251,34 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                       <div className="flex justify-between items-start">
                           <div>
                               <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">{selectedProject.name}</h3>
-                              <div className="flex items-center gap-2 mt-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                                 <User size={14}/> Responsável: <span className="text-slate-800">{selectedProject.responsible || 'Não definido'}</span>
-                              </div>
+                              <div className="flex items-center gap-2 mt-2 text-[10px] font-black uppercase tracking-widest text-slate-500"><User size={14}/> Responsável: <span className="text-slate-800">{selectedProject.responsible || 'Não definido'}</span></div>
                               <div className="flex items-center gap-2 mt-4 no-print">
-                                <select 
-                                  value={selectedProject.status} 
-                                  onChange={(e) => handleStatusChange(selectedProject.id, e.target.value as Project['status'])}
-                                  className="px-3 py-1 text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 rounded-lg border border-slate-200 appearance-none outline-none"
-                                >
-                                    <option value="Em Planejamento">Em Planejamento</option>
-                                    <option value="Ativo">Ativo</option>
-                                    <option value="Suspenso">Suspenso</option>
-                                    <option value="Concluído">Concluído</option>
+                                <select value={selectedProject.status} onChange={(e) => handleStatusChange(selectedProject.id, e.target.value as Project['status'])} className="px-3 py-1 text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 rounded-lg border border-slate-200 appearance-none outline-none">
+                                    <option value="Em Planejamento">Em Planejamento</option><option value="Ativo">Ativo</option><option value="Suspenso">Suspenso</option><option value="Concluído">Concluído</option>
                                 </select>
-                                <button onClick={() => handleDuplicateProject(selectedProject)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Criar Versão 2 do Projeto">
-                                    <Copy size={14} />
-                                </button>
-                                {isAdmin && (
-                                  <>
-                                    <button onClick={handleStartEdit} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Editar Projeto">
-                                        <Edit size={14} />
-                                    </button>
-                                    <button onClick={() => onOpenDeletionModal({ type: 'project', ids: { projectId: selectedProject.id }, name: selectedProject.name })} className="p-2 text-slate-400 hover:bg-red-100 hover:text-red-600 rounded-lg" title="Excluir Projeto">
-                                        <Trash2 size={14} />
-                                    </button>
-                                  </>
-                                )}
+                                <button onClick={() => handleDuplicateProject(selectedProject)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Criar Versão 2 do Projeto"><Copy size={14} /></button>
+                                {isAdmin && (<>
+                                    <button onClick={handleStartEdit} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Editar Projeto"><Edit size={14} /></button>
+                                    <button onClick={() => onOpenDeletionModal({ type: 'project', ids: { projectId: selectedProject.id }, name: selectedProject.name })} className="p-2 text-slate-400 hover:bg-red-100 hover:text-red-600 rounded-lg" title="Excluir Projeto"><Trash2 size={14} /></button>
+                                  </>)}
                               </div>
                           </div>
                           <div className="flex items-center gap-2 no-print">
                             <div className="bg-slate-100 p-1 rounded-full flex gap-1">
-                                <button onClick={() => setViewMode('timeline')} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase flex items-center gap-2 ${viewMode === 'timeline' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
-                                  <GanttChartSquare size={14}/> Cronograma
-                                </button>
-                                <button onClick={() => setViewMode('flow')} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase flex items-center gap-2 ${viewMode === 'flow' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}>
-                                  <Workflow size={14}/> Fluxo Finalizado
-                                </button>
+                                <button onClick={() => setViewMode('timeline')} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase flex items-center gap-2 ${viewMode === 'timeline' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}><GanttChartSquare size={14}/> Cronograma</button>
+                                <button onClick={() => setViewMode('flow')} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase flex items-center gap-2 ${viewMode === 'flow' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}><Workflow size={14}/> Modelo Visual</button>
                             </div>
-                            <button onClick={handlePrint} className="p-3 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 transition" title="Maximizar / Imprimir">
-                              <Printer size={16}/>
-                            </button>
+                            <button onClick={handlePrint} className="p-3 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 transition" title="Maximizar / Imprimir"><Printer size={16}/></button>
                           </div>
                       </div>
                        {projectStats && (
                             <div className="mt-6 space-y-2">
                                 <div className="flex items-center gap-4">
                                     <span className="font-bold text-slate-500 w-12 text-left">{Math.round(projectStats.progress)}%</span>
-                                    <div className="w-full bg-slate-200 rounded-full h-2">
-                                        <div className="bg-brand-primary h-2 rounded-full" style={{ width: `${projectStats.progress}%` }}></div>
-                                    </div>
+                                    <div className="w-full bg-slate-200 rounded-full h-2"><div className="bg-brand-primary h-2 rounded-full" style={{ width: `${projectStats.progress}%` }}></div></div>
                                 </div>
                                 <p className="text-center text-xs text-slate-500 font-semibold">
-                                    {projectStats.completedMacros}/{projectStats.totalMacros} macroatividades concluídas
+                                    {projectStats.totalMacros} macroatividades no projeto
                                     {projectStats.lateMicros > 0 && <span className="text-red-500"> • {projectStats.lateMicros} em atraso</span>}
                                     {projectStats.ongoingMicros > 0 && <span className="text-teal-600"> • {projectStats.ongoingMicros} em andamento</span>}
                                 </p>
@@ -353,46 +289,22 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                 </div>
 
                  {viewMode === 'timeline' ? (
-                    <ProjectTimeline 
-                      project={selectedProject} 
-                      onUpdateProject={handleUpdateProject}
-                      onOpenDeletionModal={(item) => onOpenDeletionModal(item as any)}
-                      teamMembers={teamMembers}
-                    />
+                    <ProjectTimeline project={selectedProject} onUpdateProject={handleUpdateProject} onOpenDeletionModal={(item) => onOpenDeletionModal(item as any)} teamMembers={teamMembers}/>
                  ) : (
-                    <ProjectFlowView project={selectedProject} />
+                    <ProjectFlowView project={selectedProject} onUpdateProject={handleUpdateProject} />
                  )}
               </div>
             ) : (
                 <div className="flex items-center justify-center h-full bg-white rounded-[2rem] border-2 border-dashed border-slate-200 p-10">
-                    <div className="text-center">
-                        <FolderKanban size={64} className="mx-auto text-slate-100 mb-6" />
-                        <p className="text-slate-400 font-black uppercase text-sm tracking-widest italic">Selecione ou crie um projeto para ver o cronograma.</p>
-                    </div>
+                    <div className="text-center"><FolderKanban size={64} className="mx-auto text-slate-100 mb-6" /><p className="text-slate-400 font-black uppercase text-sm tracking-widest italic">Selecione ou crie um projeto para ver o cronograma.</p></div>
                 </div>
             )}
         </div>
       </div>
 
 
-      {isPlanModalOpen && (
-        <PlanManagerModal 
-          isOpen={isPlanModalOpen}
-          onClose={() => setIsPlanModalOpen(false)}
-          plans={activityPlans}
-          onSave={onUpdateActivityPlans}
-        />
-      )}
-
-      {isNewProjectModalOpen && (
-        <NewProjectModal
-          isOpen={isNewProjectModalOpen}
-          onClose={() => setIsNewProjectModalOpen(false)}
-          plans={activityPlans}
-          onAddProject={addProject}
-          teamMembers={teamMembers}
-        />
-      )}
+      {isPlanModalOpen && (<PlanManagerModal isOpen={isPlanModalOpen} onClose={() => setIsPlanModalOpen(false)} plans={activityPlans} onSave={onUpdateActivityPlans}/>)}
+      {isNewProjectModalOpen && (<NewProjectModal isOpen={isNewProjectModalOpen} onClose={() => setIsNewProjectModalOpen(false)} plans={activityPlans} onAddProject={addProject} teamMembers={teamMembers}/>)}
     </div>
   );
 };

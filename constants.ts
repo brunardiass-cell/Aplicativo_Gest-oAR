@@ -41,10 +41,19 @@ export const ADMIN_WHITELIST = [
   'priscilapassos@ctvacinas.org'
 ];
 
+const defaultPhases = [
+  'Fase 1: Prova de Conceito',
+  'Fase 2: Fase Não Clínica',
+  'Fase 3: Fase Clínica I',
+  'Fase 4: Fase Clínica II',
+  'Fase 5: Fase Clínica III',
+];
+
 export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
   {
     id: 'plan_protein',
     name: 'Proteína Recombinante',
+    phases: defaultPhases,
     macroActivities: [
       'Desenvolvimento de Dossiê de Insumo (DIFA)',
       'Coordenação de Estudo de Estabilidade',
@@ -56,6 +65,7 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
   {
     id: 'plan_virus',
     name: 'Vírus Recombinante',
+    phases: defaultPhases,
     macroActivities: [
       'Caracterização do Banco Viral Mestre/Trabalho',
       'Gerenciamento de Testes de Adventícios',
@@ -64,8 +74,9 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
     ]
   },
   {
-    id: 'plan_dna',
+    id: 'plan_rna',
     name: 'RNA (Terapia Gênica)',
+    phases: defaultPhases,
     macroActivities: [
       'Qualificação do Plasmídeo Molde',
       'Validação da Transcrição in vitro (TIV)',
@@ -76,6 +87,7 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
   {
     id: 'plan_dna',
     name: 'DNA (Vacina de DNA)',
+    phases: defaultPhases,
     macroActivities: [
       'Construção e Qualificação do Vetor Plasmidial',
       'Desenvolvimento da Produção em Larga Escala',

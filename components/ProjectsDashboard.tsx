@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { Project, Task } from '../types';
 import { FolderKanban, Activity, PauseCircle, AlertTriangle, ArrowRight, Clock } from 'lucide-react';
@@ -41,13 +40,16 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
     userProjects.forEach(p => {
         p.macroActivities.forEach(ma => {
             ma.microActivities.forEach(mi => {
-                if (mi.status === 'Concluída') {
+                // FIX: Corrected status check to match MicroActivityStatus type
+                if (mi.status === 'Concluído e aprovado') {
                     stats.completed++;
-                } else if (mi.status === 'Em Andamento') {
+                // FIX: Corrected status check to match MicroActivityStatus type
+                } else if (mi.status === 'Em andamento') {
                     stats.ongoing++;
                 }
                 
-                if (mi.dueDate && new Date(mi.dueDate + 'T00:00:00') < today && mi.status !== 'Concluída') {
+                // FIX: Corrected status check to match MicroActivityStatus type
+                if (mi.dueDate && new Date(mi.dueDate + 'T00:00:00') < today && mi.status !== 'Concluído e aprovado') {
                     stats.overdue++;
                 }
             });
@@ -70,7 +72,8 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
     userProjects.forEach(p => {
       p.macroActivities.forEach(ma => {
         ma.microActivities.forEach(mi => {
-          if (mi.dueDate && new Date(mi.dueDate + 'T00:00:00') < today && mi.status !== 'Concluída') {
+          // FIX: Corrected status check to match MicroActivityStatus type
+          if (mi.dueDate && new Date(mi.dueDate + 'T00:00:00') < today && mi.status !== 'Concluído e aprovado') {
             overdue.push({ ...mi, projectName: p.name, macroName: ma.name, projectId: p.id });
           }
         });
@@ -87,7 +90,8 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
     userProjects.forEach(p => {
         p.macroActivities.forEach(ma => {
             ma.microActivities.forEach(mi => {
-                if (mi.dueDate && new Date(mi.dueDate + 'T00:00:00') >= today && mi.status !== 'Concluída') {
+                // FIX: Corrected status check to match MicroActivityStatus type
+                if (mi.dueDate && new Date(mi.dueDate + 'T00:00:00') >= today && mi.status !== 'Concluído e aprovado') {
                     upcoming.push({ ...mi, projectName: p.name, macroName: ma.name, projectId: p.id });
                 }
             });
@@ -99,7 +103,12 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
   const calculateProjectProgress = (project: Project) => {
     const totalMacros = project.macroActivities.length;
     if (totalMacros === 0) return 0;
-    const completedMacros = project.macroActivities.filter(ma => ma.status === 'Concluída').length;
+    // FIX: Property 'status' does not exist on type 'MacroActivity'.
+    // A macro is considered completed if it has micro-activities and all of them are approved.
+    const completedMacros = project.macroActivities.filter(ma => 
+      ma.microActivities.length > 0 && 
+      ma.microActivities.every(mi => mi.status === 'Concluído e aprovado')
+    ).length;
     return Math.round((completedMacros / totalMacros) * 100);
   };
 
@@ -122,7 +131,12 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
                     {userProjects.length > 0 ? userProjects.map(project => {
                     const progress = calculateProjectProgress(project);
                     const totalMacros = project.macroActivities.length;
-                    const completedMacros = project.macroActivities.filter(m => m.status === 'Concluída').length;
+                    // FIX: Property 'status' does not exist on type 'MacroActivity'.
+                    // A macro is considered completed if it has micro-activities and all of them are approved.
+                    const completedMacros = project.macroActivities.filter(m => 
+                      m.microActivities.length > 0 && 
+                      m.microActivities.every(mi => mi.status === 'Concluído e aprovado')
+                    ).length;
 
                     return (
                         <div key={project.id} className="space-y-2">
