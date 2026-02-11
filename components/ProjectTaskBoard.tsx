@@ -1,6 +1,6 @@
 
 import React, { useMemo } from 'react';
-import { Status } from '../types';
+import { MicroActivityStatus } from '../types';
 import { AugmentedMicroActivity } from '../App';
 import { SlidersHorizontal, AlertTriangle, User, Clock, CheckCircle, ArrowRight, Eye } from 'lucide-react';
 
@@ -10,8 +10,8 @@ interface ProjectTaskBoardProps {
   projectFilter: string;
   onProjectFilterChange: (project: string) => void;
   uniqueProjects: string[];
-  statusFilter: 'Todos' | Status;
-  onStatusFilterChange: (status: 'Todos' | Status) => void;
+  statusFilter: 'Todos' | MicroActivityStatus;
+  onStatusFilterChange: (status: 'Todos' | MicroActivityStatus) => void;
   assigneeFilter: string;
   onAssigneeFilterChange: (assignee: string) => void;
   uniqueAssignees: string[];
@@ -44,8 +44,8 @@ const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
 
   const sortedMicroTasks = useMemo(() => {
     return [...microTasks].sort((a, b) => {
-      const aIsCompleted = a.status === 'Concluída';
-      const bIsCompleted = b.status === 'Concluída';
+      const aIsCompleted = a.status === 'Concluído e aprovado';
+      const bIsCompleted = b.status === 'Concluído e aprovado';
       if (aIsCompleted !== bIsCompleted) return aIsCompleted ? 1 : -1;
 
       const dateA = a.dueDate ? new Date(a.dueDate + 'T00:00:00').getTime() : Number.MAX_SAFE_INTEGER;
@@ -71,7 +71,12 @@ const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
           <div className="flex-1 min-w-[150px]">
               <label className="text-[9px] font-bold text-slate-500">Status</label>
               <select value={statusFilter} onChange={(e) => onStatusFilterChange(e.target.value as any)} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none">
-                  <option value="Todos">Todos</option><option value="Planejada">Planejada</option><option value="Em Andamento">Em Andamento</option><option value="Concluída">Concluída</option><option value="Pausado">Pausado</option>
+                  <option value="Todos">Todos</option>
+                  <option value="Planejado">Planejado</option>
+                  <option value="Em andamento">Em andamento</option>
+                  <option value="Concluído com restrições">Concluído com restrições</option>
+                  <option value="A repetir / retrabalho">A repetir / retrabalho</option>
+                  <option value="Concluído e aprovado">Concluído e aprovado</option>
               </select>
           </div>
            <div className="flex-1 min-w-[150px]">
@@ -101,7 +106,7 @@ const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
         {sortedMicroTasks.map(micro => {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
-          const isCompleted = micro.status === 'Concluída';
+          const isCompleted = micro.status === 'Concluído e aprovado';
           const isOverdue = !isCompleted && micro.dueDate && new Date(micro.dueDate + 'T00:00:00') < today;
           
           let cardClasses = 'rounded-3xl border p-6 shadow-sm transition-all group flex flex-col h-full relative';
@@ -114,7 +119,13 @@ const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
               {isCompleted && (<div className="absolute top-4 right-4 bg-emerald-500 text-white rounded-full p-1.5 z-10"><CheckCircle size={16} /></div>)}
               <div className="flex justify-between items-start mb-4">
                 <div className="flex flex-col gap-2">
-                  <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${isCompleted ? 'bg-emerald-100 text-emerald-700' : micro.status === 'Pausado' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'}`}>{micro.status}</span>
+                  <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                    isCompleted ? 'bg-emerald-100 text-emerald-700' : 
+                    micro.status === 'A repetir / retrabalho' ? 'bg-red-100 text-red-700' :
+                    micro.status === 'Concluído com restrições' ? 'bg-amber-100 text-amber-700' :
+                    micro.status === 'Em andamento' ? 'bg-blue-100 text-blue-700' :
+                    'bg-slate-100 text-slate-500'
+                  }`}>{micro.status}</span>
                 </div>
               </div>
               <div className="mb-4">

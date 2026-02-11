@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity } from './types';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus } from './types';
 import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS } from './constants';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
@@ -70,7 +70,7 @@ const App: React.FC = () => {
 
   // Filters for Project Tasks (MicroActivities)
   const [projTask_projectFilter, setProjTask_projectFilter] = useState('Todos');
-  const [projTask_statusFilter, setProjTask_statusFilter] = useState<'Todos' | Status>('Todos');
+  const [projTask_statusFilter, setProjTask_statusFilter] = useState<'Todos' | MicroActivityStatus>('Todos');
   const [projTask_assigneeFilter, setProjTask_assigneeFilter] = useState('Todos');
   const [projTask_dateFilterType, setProjTask_dateFilterType] = useState<'all' | 'dueDate'>('all');
   const [projTask_startDateFilter, setProjTask_startDateFilter] = useState('');
