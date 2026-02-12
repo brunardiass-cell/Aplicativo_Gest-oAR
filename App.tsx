@@ -322,9 +322,11 @@ const App: React.FC = () => {
                 } else if (oldTask.currentReviewer) {
                     createNote(`Revisor "${oldTask.currentReviewer}" foi removido.`);
                 }
+                taskToSave.completedCollaborators = []; // Limpa o status de conclusão se o revisor mudar
             }
             if (oldTask.isReport && !taskToSave.isReport) {
                 createNote('Fluxo de revisão desativado.');
+                taskToSave.completedCollaborators = []; // Limpa o status se o fluxo for desativado
             }
         }
         taskToSave.updates = updates;
@@ -366,6 +368,31 @@ const App: React.FC = () => {
     setTasks(prev => isEditing ? prev.map(t => t.id === taskToSave.id ? taskToSave : t) : [taskToSave, ...prev]);
     setIsModalOpen(false);
     setSelectedTask(null);
+  };
+
+  const handleCompleteCollaboration = (taskId: string) => {
+    if (!selectedProfile) return;
+    const collaboratorName = selectedProfile.name;
+
+    setTasks(currentTasks => currentTasks.map(task => {
+        if (task.id === taskId) {
+            const completed = task.completedCollaborators || [];
+            if (!completed.includes(collaboratorName)) {
+                const newNote: TaskNote = {
+                    id: `note_collab_${Date.now()}`,
+                    date: new Date().toISOString(),
+                    user: collaboratorName,
+                    note: 'Colaboração/Revisão finalizada.'
+                };
+                return {
+                    ...task,
+                    completedCollaborators: [...completed, collaboratorName],
+                    updates: [newNote, ...task.updates]
+                };
+            }
+        }
+        return task;
+    }));
   };
 
   const handleOpenDeleteItemModal = (item: { type: 'task' | 'project' | 'macro' | 'micro', ids: { taskId?: string; projectId?: string; macroId?: string; microId?: string; }, name: string }) => {
@@ -650,7 +677,7 @@ const App: React.FC = () => {
             </div>
             
             {taskViewTab === 'sector' ? (
-              <TaskBoard tasks={tasksForBoard} currentUser={selectedProfile?.name || 'Todos'} onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} onDelete={(task) => {handleOpenDeleteItemModal({ type: 'task', name: task.activity, ids: { taskId: task.id } });}} onAssignReview={() => {}} notifications={notifications.filter(n => !n.read)} onNotificationClick={handleNotificationClick} onClearSingleNotification={handleClearSingleNotification} onClearAllNotifications={handleClearAllReviewNotifications} statusFilter={statusFilter} leadFilter={leadFilter} onStatusFilterChange={setStatusFilter} onLeadFilterChange={setLeadFilter} uniqueLeads={uniqueLeads} projectFilter={projectFilter} onProjectFilterChange={setProjectFilter} uniqueProjects={uniqueProjects} dateFilterType={dateFilterType} onDateFilterTypeChange={setDateFilterType} startDateFilter={startDateFilter} onStartDateFilterChange={setStartDateFilter} endDateFilter={endDateFilter} onEndDateFilterChange={setEndDateFilter} />
+              <TaskBoard tasks={tasksForBoard} currentUser={selectedProfile?.name || 'Todos'} onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} onDelete={(task) => {handleOpenDeleteItemModal({ type: 'task', name: task.activity, ids: { taskId: task.id } });}} onAssignReview={() => {}} notifications={notifications.filter(n => !n.read)} onNotificationClick={handleNotificationClick} onClearSingleNotification={handleClearSingleNotification} onClearAllNotifications={handleClearAllReviewNotifications} statusFilter={statusFilter} leadFilter={leadFilter} onStatusFilterChange={setStatusFilter} onLeadFilterChange={setLeadFilter} uniqueLeads={uniqueLeads} projectFilter={projectFilter} onProjectFilterChange={setProjectFilter} uniqueProjects={uniqueProjects} dateFilterType={dateFilterType} onDateFilterTypeChange={setDateFilterType} startDateFilter={startDateFilter} onStartDateFilterChange={setStartDateFilter} endDateFilter={endDateFilter} onEndDateFilterChange={setEndDateFilter} onCompleteCollaboration={handleCompleteCollaboration} />
             ) : (
               <ProjectTaskBoard 
                 microTasks={microTasksForBoard} 

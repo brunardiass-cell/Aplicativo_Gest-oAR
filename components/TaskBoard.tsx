@@ -12,7 +12,8 @@ import {
   Trash2,
   AlertTriangle,
   SlidersHorizontal,
-  CheckCircle
+  CheckCircle,
+  UserCheck
 } from 'lucide-react';
 
 interface TaskBoardProps {
@@ -40,6 +41,7 @@ interface TaskBoardProps {
   onStartDateFilterChange: (date: string) => void;
   endDateFilter: string;
   onEndDateFilterChange: (date: string) => void;
+  onCompleteCollaboration: (taskId: string) => void;
 }
 
 const TaskBoard: React.FC<TaskBoardProps> = ({ 
@@ -66,7 +68,8 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   startDateFilter,
   onStartDateFilterChange,
   endDateFilter,
-  onEndDateFilterChange
+  onEndDateFilterChange,
+  onCompleteCollaboration
 }) => {
   const activeTasks = tasks.filter(t => !t.deleted);
   const activeReviews = notifications.filter(n => n.userId === currentUser && !n.read && n.type === 'REVIEW_ASSIGNED');
@@ -204,6 +207,9 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
           const isCompleted = task.status === 'Concluída';
           const isOverdue = !isCompleted && task.completionDate && new Date(task.completionDate + 'T00:00:00') < today;
           
+          const isReviewer = task.isReport && task.currentReviewer === currentUser;
+          const hasCompletedReview = task.completedCollaborators?.includes(currentUser || '');
+
           let cardClasses = 'rounded-3xl border p-6 shadow-sm transition-all group flex flex-col h-full relative overflow-hidden';
           if (isCompleted) cardClasses += ' bg-slate-50 opacity-75 border-slate-200';
           else if (isOverdue) cardClasses += ' bg-white border-red-400 ring-2 ring-red-200';
@@ -215,8 +221,9 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
               <div className="flex justify-between items-start mb-4">
                 <div className="flex flex-col gap-2">
                   <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${task.status === 'Concluída' ? 'bg-emerald-100 text-emerald-700' : task.status === 'Pausado' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'}`}>{task.status}</span>
-                  {renderReportStageBadge(task)}
-                  {isCollaborator(task) && (<span className="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-600 border border-indigo-100">Você é Colaborador</span>)}
+                  {isReviewer && !hasCompletedReview && ( <span className="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest bg-amber-100 text-amber-700 border border-amber-200 animate-pulse">REVISÃO PENDENTE (VOCÊ)</span> )}
+                  {isReviewer && hasCompletedReview && ( <span className="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-700 border border-emerald-200">VOCÊ CONCLUIU SUA COLABORAÇÃO</span> )}
+                  {isCollaborator(task) && !isReviewer && (<span className="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-600 border border-indigo-100">Você é Colaborador</span>)}
                 </div>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button onClick={() => onView(task)} className="p-2 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-xl transition" title="Visualizar"><Eye size={16}/></button>
@@ -252,15 +259,21 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                  <p className="text-[10px] font-bold text-slate-600 leading-tight italic">"{task.nextStep || 'Não definido'}"</p>
               </div>
 
-              {!task.isReport && (
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-500' : 'text-slate-400'}`}>
-                     {isOverdue ? <AlertTriangle size={12} /> : <Clock size={12} />}
-                     <span className="text-[8px] font-bold uppercase">Prazo: {task.completionDate ? new Date(task.completionDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/D'}</span>
-                  </div>
-                  {task.updates.length > 0 && (<div className="flex items-center gap-1.5 text-brand-primary"><MessageSquare size={12} /><span className="text-[9px] font-black">{task.updates.length}</span></div>)}
+              {isReviewer && !hasCompletedReview && (
+                <div className="mt-4 pt-4 border-t border-slate-100">
+                    <button onClick={() => onCompleteCollaboration(task.id)} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-500 text-white rounded-xl font-bold text-[9px] uppercase tracking-widest hover:bg-emerald-600 transition shadow-lg shadow-emerald-100">
+                        <UserCheck size={14}/> Finalizar Revisão
+                    </button>
                 </div>
               )}
+
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-500' : 'text-slate-400'}`}>
+                    {isOverdue ? <AlertTriangle size={12} /> : <Clock size={12} />}
+                    <span className="text-[8px] font-bold uppercase">Prazo: {task.completionDate ? new Date(task.completionDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/D'}</span>
+                </div>
+                {task.updates.length > 0 && (<div className="flex items-center gap-1.5 text-brand-primary"><MessageSquare size={12} /><span className="text-[9px] font-black">{task.updates.length}</span></div>)}
+              </div>
             </div>
           )
         })}

@@ -43,6 +43,7 @@ export interface Task {
   deleted?: boolean;
   deletionReason?: string;
   deletionDate?: string;
+  completedCollaborators?: string[]; // Adicionado para rastrear quem finalizou a revisão
 }
 
 export type ViewMode = 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceability';
