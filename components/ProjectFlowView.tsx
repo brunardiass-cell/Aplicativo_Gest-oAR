@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Project, MacroActivity, MicroActivity } from '../types';
-import { ChevronDown, Clock, Activity, CheckCircle, MessageSquare, Link as LinkIcon, Layers } from 'lucide-react';
+import { ChevronDown, Clock, Activity, CheckCircle, MessageSquare, Link as LinkIcon, Layers, AlertTriangle } from 'lucide-react';
 
 interface ProjectFlowViewProps {
   project: Project;
@@ -77,7 +77,8 @@ const MacroCard: React.FC<{ macro: MacroActivity; onDragStart: (e: React.DragEve
     const [isExpanded, setIsExpanded] = useState(false);
 
     const totalMicros = macro.microActivities.length;
-    const completedMicros = macro.microActivities.filter(m => m.status === 'Concluído e aprovado').length;
+    const completedMicros = macro.microActivities.filter(m => m.status === 'Concluído e aprovado' || m.status === 'Concluído com restrições').length;
+    const restrictedCount = macro.microActivities.filter(m => m.status === 'Concluído com restrições').length;
     const progress = totalMicros > 0 ? Math.round((completedMicros / totalMicros) * 100) : 0;
     const status = progress === 100 ? 'Concluída' : macro.microActivities.some(m => m.status === 'Em andamento') ? 'Em Andamento' : 'Planejada';
 
@@ -107,6 +108,12 @@ const MacroCard: React.FC<{ macro: MacroActivity; onDragStart: (e: React.DragEve
                 <div className="w-full bg-slate-200 rounded-full h-1.5">
                     <div className={`h-1.5 rounded-full transition-all duration-500 ${status === 'Concluída' ? 'bg-emerald-500' : 'bg-brand-primary'}`} style={{ width: `${progress}%` }}></div>
                 </div>
+                {restrictedCount > 0 && (
+                    <div className="flex items-center justify-end gap-1 text-amber-600">
+                        <AlertTriangle size={12} />
+                        <span className="text-[9px] font-black uppercase">{restrictedCount}/{completedMicros} com restrições</span>
+                    </div>
+                )}
             </div>
             {isExpanded && (
                 <div className="mt-4 pt-4 border-t border-slate-100 space-y-3 animate-in fade-in duration-300">
