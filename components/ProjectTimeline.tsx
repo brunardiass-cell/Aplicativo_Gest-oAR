@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Project, MacroActivity, MicroActivity, MicroActivityStatus, TeamMember } from '../types';
 import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle, Layers } from 'lucide-react';
@@ -182,8 +183,9 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
   const [editedName, setEditedName] = useState(macro.name);
 
   const totalMicros = macro.microActivities.length;
-  const completedMicros = macro.microActivities.filter(m => m.status === 'Concluído e aprovado').length;
+  const completedMicros = macro.microActivities.filter(m => m.status === 'Concluído e aprovado' || m.status === 'Concluído com restrições').length;
   const progress = totalMicros > 0 ? (completedMicros / totalMicros) * 100 : 0;
+  const restrictedCount = macro.microActivities.filter(m => m.status === 'Concluído com restrições').length;
 
   const getMacroStatus = (): 'Concluída' | 'Em Andamento' | 'Planejada' => {
     if (totalMicros === 0) return 'Planejada';
@@ -220,10 +222,18 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
                 <button onClick={() => setIsEditing(true)} className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-md"><Edit size={16}/></button>
                 <button onClick={() => onOpenDeletionModal({ type: 'macro', projectId: project.id, macroId: macro.id, name: macro.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"><Trash2 size={16}/></button>
             </div>
-            <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-800">{Math.round(progress)}%</span>
-                <div className="w-16 h-1.5 bg-slate-200 rounded-full"><div className="bg-brand-primary h-1.5 rounded-full" style={{ width: `${progress}%` }}></div></div>
-                <span className="text-[9px] font-black text-slate-400">{completedMicros}/{totalMicros}</span>
+            <div className="flex flex-col items-end">
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-800">{Math.round(progress)}%</span>
+                    <div className="w-16 h-1.5 bg-slate-200 rounded-full"><div className="bg-brand-primary h-1.5 rounded-full" style={{ width: `${progress}%` }}></div></div>
+                    <span className="text-[9px] font-black text-slate-400">{completedMicros}/{totalMicros}</span>
+                </div>
+                {restrictedCount > 0 && (
+                    <div className="flex items-center gap-1 mt-1 text-amber-600">
+                        <AlertTriangle size={12} />
+                        <span className="text-[9px] font-black uppercase">{restrictedCount}/{completedMicros} com restrições</span>
+                    </div>
+                )}
             </div>
         </div>
       </div>

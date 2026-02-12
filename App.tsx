@@ -406,6 +406,18 @@ const App: React.FC = () => {
 
   const handleConfirmDeletion = (reason: string) => {
     if (!deleteTarget || !selectedProfile) return;
+    
+    const { type, ids } = deleteTarget;
+    let refId: string | undefined;
+    let refType: 'task' | 'project' | undefined;
+
+    if (type === 'task' && ids.taskId) {
+        refId = ids.taskId;
+        refType = 'task';
+    } else if (type === 'project' && ids.projectId) {
+        refId = ids.projectId;
+        refType = 'project';
+    }
 
     const newLog: ActivityLog = {
       id: `log_${Date.now()}`,
@@ -414,10 +426,11 @@ const App: React.FC = () => {
       user: selectedProfile.name,
       timestamp: new Date().toISOString(),
       reason: reason,
+      refId: refId,
+      refType: refType,
     };
     setLogs(prev => [newLog, ...prev]);
 
-    const { type, ids } = deleteTarget;
 
     if (type === 'task' && ids.taskId) {
       setTasks(prev => prev.map(t =>
@@ -452,6 +465,48 @@ const App: React.FC = () => {
     setIsDeleteModalOpen(false);
     setDeleteTarget(null);
   };
+
+  const handleRestoreItem = (refId: string, refType: 'task' | 'project') => {
+    if (!selectedProfile) return;
+
+    let itemName = '';
+    if (refType === 'task') {
+      const taskToRestore = tasks.find(t => t.id === refId);
+      if (taskToRestore) {
+        itemName = taskToRestore.activity;
+        setTasks(prev => prev.map(t => t.id === refId ? { ...t, deleted: false, deletionReason: undefined, deletionDate: undefined } : t));
+      }
+    } else if (refType === 'project') {
+      const projectToRestore = projects.find(p => p.id === refId);
+      if (projectToRestore) {
+        itemName = projectToRestore.name;
+        setProjects(prev => prev.map(p => p.id === refId ? { ...p, deleted: false, deletionReason: undefined, deletionDate: undefined } : p));
+      }
+    }
+
+    const newLog: ActivityLog = {
+      id: `log_${Date.now()}`,
+      action: 'RESTAURAÇÃO',
+      taskTitle: itemName,
+      user: selectedProfile.name,
+      timestamp: new Date().toISOString(),
+      reason: 'Item restaurado via painel de auditoria.',
+    };
+    setLogs(prev => [newLog, ...prev]);
+  };
+
+  const handleClearLog = (logId: string) => {
+    if (confirm('Tem certeza que deseja remover este registro de log permanentemente?')) {
+      setLogs(prev => prev.filter(log => log.id !== logId));
+    }
+  };
+
+  const handleClearAllLogs = () => {
+    if (confirm('ATENÇÃO: Isso removerá TODOS os registros de auditoria permanentemente. Deseja continuar?')) {
+      setLogs([]);
+    }
+  };
+
 
   const handleNotificationClick = (notification: AppNotification) => {
     const task = tasks.find(t => t.id === notification.refId);
@@ -655,8 +710,12 @@ const App: React.FC = () => {
                     <Bell size={24} className="text-slate-400"/>
                     {pendingReviewCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">{pendingReviewCount}</span>}
                 </div>
-                 <button onClick={() => setIsReportModalOpen(true)} className="p-3 bg-white border border-slate-200 rounded-full text-slate-500 hover:bg-slate-100 transition"><FileText size={20}/></button>
-                {canCreate && (<button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-brand-primary text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg hover:bg-brand-accent transition"><PlusCircle size={16}/> Nova Atividade</button>)}
+                {view === 'tasks' && (
+                  <>
+                    <button onClick={() => setIsReportModalOpen(true)} className="p-3 bg-white border border-slate-200 rounded-full text-slate-500 hover:bg-slate-100 transition"><FileText size={20}/></button>
+                    {canCreate && (<button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-brand-primary text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg hover:bg-brand-accent transition"><PlusCircle size={16}/> Nova Atividade</button>)}
+                  </>
+                )}
             </div>
         </header>
 
@@ -714,7 +773,7 @@ const App: React.FC = () => {
           </div>
         )}
         {view === 'quality' && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} appUsers={appUsers} onUpdateAppUsers={setAppUsers} />}
-        {view === 'traceability' && <ActivityLogView logs={logs} />}
+        {view === 'traceability' && <ActivityLogView logs={logs} onRestoreItem={handleRestoreItem} onClearLog={handleClearLog} onClearAllLogs={handleClearAllLogs} />}
       </main>
       
       {isModalOpen && (<TaskModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setSelectedTask(null); }} onSave={handleSaveTask} projects={['Geral', ...activeProjects.map(p => p.name)]} initialData={selectedTask} teamMembers={teamMembers} hasFullAccess={hasFullAccess}/>)}

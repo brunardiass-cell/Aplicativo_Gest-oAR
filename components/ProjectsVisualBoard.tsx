@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Project } from '../types';
 import ProjectFlowView from './ProjectFlowView';
-import { SlidersHorizontal, Workflow } from 'lucide-react';
+import { SlidersHorizontal, Workflow, Printer } from 'lucide-react';
 
 interface ProjectsVisualBoardProps {
   projects: Project[];
@@ -27,6 +27,14 @@ const ProjectsVisualBoard: React.FC<ProjectsVisualBoardProps> = ({ projects, onU
     }
   }, [initialProjectId, projects, selectedProjectId, onClearInitialProjectId]);
 
+  useEffect(() => {
+    const afterPrintHandler = () => {
+      document.body.classList.remove('is-printing-visual-board');
+    };
+    window.addEventListener('afterprint', afterPrintHandler);
+    return () => window.removeEventListener('afterprint', afterPrintHandler);
+  }, []);
+
   const selectedProject = projects.find(p => p.id === selectedProjectId);
 
   const handleUpdateProject = (updatedProject: Project) => {
@@ -34,9 +42,14 @@ const ProjectsVisualBoard: React.FC<ProjectsVisualBoardProps> = ({ projects, onU
     onUpdateProjects(updatedProjects);
   };
 
+  const handlePrint = () => {
+    document.body.classList.add('is-printing-visual-board');
+    window.print();
+  };
+
   return (
     <div className="space-y-6">
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm visual-board-header">
         <div className="flex items-center gap-4">
           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 pr-4 self-center shrink-0">
             <SlidersHorizontal size={14} /> Filtro de Projeto
@@ -53,6 +66,9 @@ const ProjectsVisualBoard: React.FC<ProjectsVisualBoardProps> = ({ projects, onU
               ))}
             </select>
           </div>
+          <button onClick={handlePrint} className="p-3 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition" title="Imprimir Modelo Visual">
+            <Printer size={16}/>
+          </button>
         </div>
       </div>
       

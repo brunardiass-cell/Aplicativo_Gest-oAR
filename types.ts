@@ -97,6 +97,8 @@ export interface ActivityLog {
   user: string;
   timestamp: string;
   reason: string;
+  refId?: string;
+  refType?: 'task' | 'project';
 }
 
 export interface MacroActivityTemplate {

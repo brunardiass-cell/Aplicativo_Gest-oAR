@@ -85,6 +85,23 @@
           font-size: 1.25rem;
         }
         
+        body.is-printing-visual-board #root > div > aside,
+        body.is-printing-visual-board #root > div > main > header,
+        body.is-printing-visual-board .visual-board-header {
+          display: none !important;
+        }
+        
+        body.is-printing-visual-board #root,
+        body.is-printing-visual-board #root > div,
+        body.is-printing-visual-board #root > div > main {
+           display: block !important;
+           width: 100% !important;
+           height: auto !important;
+           margin: 0 !important;
+           padding: 0 !important;
+           overflow: visible !important;
+        }
+
         @page {
           size: A4 landscape;
           margin: 15mm;
