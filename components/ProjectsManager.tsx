@@ -253,10 +253,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                                     <option value="Em Planejamento">Em Planejamento</option><option value="Ativo">Ativo</option><option value="Suspenso">Suspenso</option><option value="Concluído">Concluído</option>
                                 </select>
                                 <button onClick={() => handleDuplicateProject(selectedProject)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Criar Versão 2 do Projeto"><Copy size={14} /></button>
-                                {isAdmin && (<>
-                                    <button onClick={handleStartEdit} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Editar Projeto"><Edit size={14} /></button>
-                                    <button onClick={() => onOpenDeletionModal({ type: 'project', ids: { projectId: selectedProject.id }, name: selectedProject.name })} className="p-2 text-slate-400 hover:bg-red-100 hover:text-red-600 rounded-lg" title="Excluir Projeto"><Trash2 size={14} /></button>
-                                  </>)}
+                                  <button onClick={handleStartEdit} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg" title="Editar Projeto"><Edit size={14} /></button>
+                                  <button onClick={() => onOpenDeletionModal({ type: 'project', ids: { projectId: selectedProject.id }, name: selectedProject.name })} className="p-2 text-slate-400 hover:bg-red-100 hover:text-red-600 rounded-lg" title="Excluir Projeto"><Trash2 size={14} /></button>
                               </div>
                           </div>
                           <div className="flex items-center gap-2 no-print">
