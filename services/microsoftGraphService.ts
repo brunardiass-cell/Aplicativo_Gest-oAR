@@ -245,5 +245,34 @@ export const MicrosoftGraphService = {
       console.error('Erro inesperado ao salvar no SharePoint:', error);
       return { success: false, conflict: false };
     }
+  },
+
+  async getCloudVersion() {
+    const token = await this.getToken();
+    if (!token) return null;
+
+    try {
+      const ids = await this.getSiteAndDriveId(token);
+      if (!ids) return null;
+
+      const response = await fetch(`https://graph.microsoft.com/v1.0/drives/${ids.driveId}/root:/${FOLDER_NAME}/${FILE_NAME}?$select=eTag`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.status === 404) {
+        return null;
+      }
+
+      if (!response.ok) {
+        throw new Error('Falha ao obter a versão do arquivo do SharePoint.');
+      }
+
+      const data = await response.json();
+      return data.eTag || null;
+
+    } catch (error) {
+      console.error("Erro ao verificar a versão do arquivo no SharePoint:", error);
+      return null;
+    }
   }
 };

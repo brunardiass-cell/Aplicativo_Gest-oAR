@@ -18,7 +18,7 @@ import MonthlyReportModal from './components/MonthlyReportModal';
 import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
-import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow } from 'lucide-react';
+import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
 
 export type AugmentedMicroActivity = MicroActivity & {
@@ -40,6 +40,7 @@ const App: React.FC = () => {
   const [dataVersion, setDataVersion] = useState<string | null>(null);
   const [syncConflict, setSyncConflict] = useState(false);
   const [isDataDirty, setIsDataDirty] = useState(false);
+  const [showUpdateNotification, setShowUpdateNotification] = useState(false);
   
   const [view, setView] = useState<ViewMode>('dashboard');
   const [isMsalAuthenticated, setIsMsalAuthenticated] = useState(false);
@@ -198,6 +199,19 @@ const App: React.FC = () => {
     }, 2000);
 
   }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, dataVersion, syncConflict, isDataDirty]);
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (!isDataDirty && !syncConflict && isMsalAuthenticated && isAuthorized) {
+        const cloudVersion = await MicrosoftGraphService.getCloudVersion();
+        if (cloudVersion && cloudVersion !== dataVersion) {
+          setShowUpdateNotification(true);
+        }
+      }
+    }, 60000); // Verifica a cada 60 segundos
+
+    return () => clearInterval(interval);
+  }, [isDataDirty, dataVersion, syncConflict, isMsalAuthenticated, isAuthorized]);
 
   const currentUserRole = useMemo(() => {
     if (!account || !appUsers.length) return null;
@@ -734,7 +748,27 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-slate-100 font-sans">
+    <>
+      {showUpdateNotification && (
+        <div className="fixed bottom-5 right-5 bg-sky-500 text-white p-4 rounded-lg shadow-lg z-50 animate-in slide-in-from-bottom">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="font-bold">Novas atualizações disponíveis!</p>
+              <p className="text-sm">Recarregue os dados para ver as informações mais recentes.</p>
+            </div>
+            <button 
+              onClick={() => { setShowUpdateNotification(false); loadDataFromSharePoint(); }}
+              className="bg-white text-sky-600 px-3 py-1 rounded-md font-semibold text-sm hover:bg-sky-100 transition-colors"
+            >
+              Recarregar
+            </button>
+            <button onClick={() => setShowUpdateNotification(false)} className="text-white hover:text-sky-200">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="flex h-screen bg-slate-100 font-sans">
       <Sidebar currentView={view} onViewChange={setView} onGoHome={() => setView('dashboard')} onLogout={handleLogout} onSwitchProfile={handleSwitchProfile} selectedProfile={selectedProfile} hasFullAccess={hasFullAccess} lastSync={lastSync} onSaveBackup={handleSaveLocalBackup} onLoadBackup={() => fileInputRef.current?.click()}/>
       <input type="file" ref={fileInputRef} onChange={handleLoadLocalBackup} accept=".json" className="hidden" />
 
@@ -826,6 +860,7 @@ const App: React.FC = () => {
       {isDeleteModalOpen && deleteTarget && (<DeletionModal itemName={deleteTarget.name} onClose={() => { setIsDeleteModalOpen(false); setDeleteTarget(null); }} onConfirm={handleConfirmDeletion}/>)}
       {isReportModalOpen && (<MonthlyReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} tasks={tasksForBoard} filteredUser={filterMember} filters={{dateFilterType, startDateFilter, endDateFilter, projectFilter, statusFilter, leadFilter}}/>)}
     </div>
+    </>
   );
 };
 export default App;
