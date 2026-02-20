@@ -166,56 +166,84 @@ export const MicrosoftGraphService = {
     try {
       const ids = await this.getSiteAndDriveId(token);
       if (!ids) return null;
-      
-      const response = await fetch(`https://graph.microsoft.com/v1.0/drives/${ids.driveId}/root:/${FOLDER_NAME}/${FILE_NAME}:/content`, {
-        headers: { Authorization: `Bearer ${token}` }
+
+      const itemResponse = await fetch(`https://graph.microsoft.com/v1.0/drives/${ids.driveId}/root:/${FOLDER_NAME}/${FILE_NAME}`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (response.status === 404) return null;
-      if (!response.ok) throw new Error("Erro SharePoint");
-      return await response.json();
+      if (itemResponse.status === 404) {
+        return null; 
+      }
+      if (!itemResponse.ok) {
+        throw new Error('Falha ao obter metadados do arquivo do SharePoint.');
+      }
+
+      const itemData = await itemResponse.json();
+      const downloadUrl = itemData['@microsoft.graph.downloadUrl'];
+      const version = itemData.eTag;
+
+      if (!downloadUrl || !version) {
+        throw new Error('URL de download ou eTag não encontrados nos metadados do arquivo.');
+      }
+
+      const contentResponse = await fetch(downloadUrl);
+      if (!contentResponse.ok) {
+        throw new Error('Falha ao baixar o conteúdo do arquivo.');
+      }
+      
+      const data = await contentResponse.json();
+
+      return { data, version };
     } catch (error) {
-      console.error("Erro carregar:", error);
+      console.error("Erro ao carregar dados do SharePoint:", error);
       throw error;
     }
   },
 
-  async saveToCloud(data: any) {
+  async saveToCloud(data: any, version: string | null) {
     const token = await this.getToken();
-    if (!token) return false;
+    if (!token) return { success: false, conflict: false };
 
     try {
       const ids = await this.getSiteAndDriveId(token);
-      if (!ids) return false;
+      if (!ids) return { success: false, conflict: false };
 
-      const folderExists = await this.ensureFolderExists(token, ids.driveId);
-      if (!folderExists) {
-        console.error("A pasta 'sistema' não pôde ser encontrada ou criada no SharePoint.");
-        return false;
+      await this.ensureFolderExists(token, ids.driveId);
+
+      const url = `https://graph.microsoft.com/v1.0/drives/${ids.driveId}/root:/${FOLDER_NAME}/${FILE_NAME}:/content`;
+      const headers: HeadersInit = {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      };
+
+      if (version) {
+        headers['If-Match'] = version;
       }
 
-      const body = JSON.stringify(data, null, 2);
-      const url = `https://graph.microsoft.com/v1.0/drives/${ids.driveId}/root:/${FOLDER_NAME}/${FILE_NAME}:/content`;
-      
       const response = await fetch(url, {
-        method: "PUT",
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: body
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(data, null, 2),
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        console.error("Falha no upload:", err);
-        return false;
+      if (response.status === 412) {
+        console.warn('Conflito de versão detectado. O salvamento foi abortado.');
+        return { success: false, conflict: true };
       }
 
-      return true;
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Falha ao salvar no SharePoint:', errorData);
+        return { success: false, conflict: false };
+      }
+
+      const responseData = await response.json();
+      const newVersion = responseData.eTag;
+
+      return { success: true, conflict: false, newVersion };
     } catch (error) {
-      console.error("Falha salvamento:", error);
-      return false;
+      console.error('Erro inesperado ao salvar no SharePoint:', error);
+      return { success: false, conflict: false };
     }
   }
 };

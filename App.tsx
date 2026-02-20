@@ -37,6 +37,8 @@ const App: React.FC = () => {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [appUsers, setAppUsers] = useState<AppUser[]>([]);
   const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
+  const [dataVersion, setDataVersion] = useState<string | null>(null);
+  const [syncConflict, setSyncConflict] = useState(false);
   
   const [view, setView] = useState<ViewMode>('dashboard');
   const [isMsalAuthenticated, setIsMsalAuthenticated] = useState(false);
@@ -119,8 +121,9 @@ const App: React.FC = () => {
   const loadDataFromSharePoint = async () => {
     setIsLoading(true);
     try {
-      const cloudData = await MicrosoftGraphService.loadFromCloud();
-      if (cloudData) {
+      const result = await MicrosoftGraphService.loadFromCloud();
+      if (result) {
+        const { data: cloudData, version } = result;
         setTasks(cloudData.tasks || []);
         setProjects(cloudData.projects || []);
         setTeamMembers(cloudData.teamMembers || DEFAULT_TEAM_MEMBERS);
@@ -144,11 +147,14 @@ const App: React.FC = () => {
         setNotifications(cloudData.notifications || []);
         setLogs(cloudData.logs || []);
         setAppUsers(cloudData.appUsers || DEFAULT_APP_USERS);
+        setDataVersion(version);
       } else {
         setTeamMembers(DEFAULT_TEAM_MEMBERS);
         setAppUsers(DEFAULT_APP_USERS);
+        setDataVersion(null);
       }
       setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'Cloud' });
+      setSyncConflict(false);
     } catch (error) {
       setAuthError("Falha ao carregar dados do SharePoint.");
       setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'Cloud' });
@@ -161,20 +167,27 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isInitialLoad.current) return;
+    if (isInitialLoad.current || syncConflict) return;
     if (saveDataTimeout.current) clearTimeout(saveDataTimeout.current);
-    
+
     saveDataTimeout.current = window.setTimeout(async () => {
       setLastSync(prev => ({ ...(prev || { timestamp: '', user: '' }), status: 'syncing' }));
       const dataToSave = { tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers };
-      const success = await MicrosoftGraphService.saveToCloud(dataToSave);
-      setLastSync(prev => ({
-        ...(prev || { user: 'System' }),
-        status: success ? 'synced' : 'error',
-        timestamp: new Date().toISOString(),
-      }));
+      
+      const result = await MicrosoftGraphService.saveToCloud(dataToSave, dataVersion);
+
+      if (result.conflict) {
+        setSyncConflict(true);
+        setLastSync({ status: 'conflict', timestamp: new Date().toISOString(), user: 'System' });
+      } else if (result.success && result.newVersion) {
+        setDataVersion(result.newVersion);
+        setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'System' });
+      } else {
+        setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
+      }
     }, 2000);
-  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers]);
+
+  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, dataVersion, syncConflict]);
 
   const currentUserRole = useMemo(() => {
     if (!account || !appUsers.length) return null;
@@ -686,6 +699,25 @@ const App: React.FC = () => {
     if (selectedProfile && !isPasswordAuthenticated) {
       return (<PasswordModal isOpen={true} onClose={handleSwitchProfile} onConfirm={handlePasswordConfirm} userName={selectedProfile.name} error={passwordError}/>);
     }
+  }
+
+  if (syncConflict) {
+    return (
+      <div className="fixed inset-0 bg-slate-900 bg-opacity-80 flex items-center justify-center z-50 animate-in">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md text-center">
+          <ShieldAlert size={48} className="mx-auto text-amber-500" />
+          <h2 className="mt-4 text-2xl font-black text-slate-800">Conflito de Sincronização</h2>
+          <p className="mt-2 text-slate-600">Outro usuário salvou alterações enquanto você estava trabalhando. Para evitar a perda de dados, suas últimas alterações não foram salvas.</p>
+          <p className="mt-2 font-semibold text-slate-600">Por favor, recarregue os dados para obter a versão mais recente.</p>
+          <button 
+            onClick={() => { setSyncConflict(false); loadDataFromSharePoint(); }}
+            className="mt-6 w-full bg-amber-500 text-white py-3 rounded-lg font-bold hover:bg-amber-600 transition-colors"
+          >
+            Recarregar Dados
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
