@@ -39,6 +39,7 @@ const App: React.FC = () => {
   const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
   const [dataVersion, setDataVersion] = useState<string | null>(null);
   const [syncConflict, setSyncConflict] = useState(false);
+  const [isDataDirty, setIsDataDirty] = useState(false);
   
   const [view, setView] = useState<ViewMode>('dashboard');
   const [isMsalAuthenticated, setIsMsalAuthenticated] = useState(false);
@@ -118,6 +119,12 @@ const App: React.FC = () => {
     }
   }, [isMsalAuthenticated, account, appUsers, isAuthorized]);
   
+  const setDataDirty = () => {
+    if (!isDataDirty) {
+      setIsDataDirty(true);
+    }
+  };
+
   const loadDataFromSharePoint = async () => {
     setIsLoading(true);
     try {
@@ -148,10 +155,12 @@ const App: React.FC = () => {
         setLogs(cloudData.logs || []);
         setAppUsers(cloudData.appUsers || DEFAULT_APP_USERS);
         setDataVersion(version);
+        setIsDataDirty(false);
       } else {
         setTeamMembers(DEFAULT_TEAM_MEMBERS);
         setAppUsers(DEFAULT_APP_USERS);
         setDataVersion(null);
+        setIsDataDirty(false); 
       }
       setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'Cloud' });
       setSyncConflict(false);
@@ -167,7 +176,7 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isInitialLoad.current || syncConflict) return;
+    if (isInitialLoad.current || syncConflict || !isDataDirty) return;
     if (saveDataTimeout.current) clearTimeout(saveDataTimeout.current);
 
     saveDataTimeout.current = window.setTimeout(async () => {
@@ -182,12 +191,13 @@ const App: React.FC = () => {
       } else if (result.success && result.newVersion) {
         setDataVersion(result.newVersion);
         setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'System' });
+        setIsDataDirty(false);
       } else {
         setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
       }
     }, 2000);
 
-  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, dataVersion, syncConflict]);
+  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, dataVersion, syncConflict, isDataDirty]);
 
   const currentUserRole = useMemo(() => {
     if (!account || !appUsers.length) return null;
@@ -257,6 +267,7 @@ const App: React.FC = () => {
             setNotifications(data.notifications || []);
             setLogs(data.logs || []);
             setAppUsers(data.appUsers || []);
+            setDataDirty();
             alert("Backup local carregado com sucesso! Os dados serão sincronizados com a nuvem.");
           }
         } catch (error) {
@@ -375,10 +386,10 @@ const App: React.FC = () => {
         type: 'REVIEW_ASSIGNED',
         refId: taskToSave.id,
       };
-      setNotifications(prev => [...prev, newNotification]);
+      setNotifications(prev => { setDataDirty(); return [...prev, newNotification]; });
     }
 
-    setTasks(prev => isEditing ? prev.map(t => t.id === taskToSave.id ? taskToSave : t) : [taskToSave, ...prev]);
+    setTasks(prev => { setDataDirty(); return isEditing ? prev.map(t => t.id === taskToSave.id ? taskToSave : t) : [taskToSave, ...prev]; });
     setIsModalOpen(false);
     setSelectedTask(null);
   };
@@ -387,7 +398,9 @@ const App: React.FC = () => {
     if (!selectedProfile) return;
     const collaboratorName = selectedProfile.name;
 
-    setTasks(currentTasks => currentTasks.map(task => {
+    setTasks(currentTasks => { 
+      setDataDirty();
+      return currentTasks.map(task => {
         if (task.id === taskId) {
             const completed = task.completedCollaborators || [];
             if (!completed.includes(collaboratorName)) {
@@ -405,7 +418,7 @@ const App: React.FC = () => {
             }
         }
         return task;
-    }));
+    })});
   };
 
   const handleOpenDeleteItemModal = (item: { type: 'task' | 'project' | 'macro' | 'micro', ids: { taskId?: string; projectId?: string; macroId?: string; microId?: string; }, name: string }) => {
@@ -442,25 +455,25 @@ const App: React.FC = () => {
       refId: refId,
       refType: refType,
     };
-    setLogs(prev => [newLog, ...prev]);
+    setLogs(prev => { setDataDirty(); return [newLog, ...prev]; });
 
 
     if (type === 'task' && ids.taskId) {
-      setTasks(prev => prev.map(t =>
+      setTasks(prev => { setDataDirty(); return prev.map(t =>
         t.id === ids.taskId ? { ...t, deleted: true, deletionReason: reason, deletionDate: new Date().toISOString() } : t
-      ));
+      ); });
     } else if (type === 'project' && ids.projectId) {
-       setProjects(prev => prev.map(p =>
+       setProjects(prev => { setDataDirty(); return prev.map(p =>
         p.id === ids.projectId ? { ...p, deleted: true, deletionReason: reason, deletionDate: new Date().toISOString() } : p
-      ));
+      ); });
     } else if (type === 'macro' && ids.projectId && ids.macroId) {
-      setProjects(prev => prev.map(p =>
+      setProjects(prev => { setDataDirty(); return prev.map(p =>
         p.id === ids.projectId
           ? { ...p, macroActivities: p.macroActivities.filter(m => m.id !== ids.macroId) }
           : p
-      ));
+      ); });
     } else if (type === 'micro' && ids.projectId && ids.macroId && ids.microId) {
-      setProjects(prev => prev.map(p => {
+      setProjects(prev => { setDataDirty(); return prev.map(p => {
         if (p.id !== ids.projectId) return p;
         return {
           ...p,
@@ -472,7 +485,7 @@ const App: React.FC = () => {
             };
           })
         };
-      }));
+      }); });
     }
 
     setIsDeleteModalOpen(false);
@@ -487,13 +500,13 @@ const App: React.FC = () => {
       const taskToRestore = tasks.find(t => t.id === refId);
       if (taskToRestore) {
         itemName = taskToRestore.activity;
-        setTasks(prev => prev.map(t => t.id === refId ? { ...t, deleted: false, deletionReason: undefined, deletionDate: undefined } : t));
+        setTasks(prev => { setDataDirty(); return prev.map(t => t.id === refId ? { ...t, deleted: false, deletionReason: undefined, deletionDate: undefined } : t); });
       }
     } else if (refType === 'project') {
       const projectToRestore = projects.find(p => p.id === refId);
       if (projectToRestore) {
         itemName = projectToRestore.name;
-        setProjects(prev => prev.map(p => p.id === refId ? { ...p, deleted: false, deletionReason: undefined, deletionDate: undefined } : p));
+        setProjects(prev => { setDataDirty(); return prev.map(p => p.id === refId ? { ...p, deleted: false, deletionReason: undefined, deletionDate: undefined } : p); });
       }
     }
 
@@ -505,18 +518,18 @@ const App: React.FC = () => {
       timestamp: new Date().toISOString(),
       reason: 'Item restaurado via painel de auditoria.',
     };
-    setLogs(prev => [newLog, ...prev]);
+    setLogs(prev => { setDataDirty(); return [newLog, ...prev]; });
   };
 
   const handleClearLog = (logId: string) => {
     if (confirm('Tem certeza que deseja remover este registro de log permanentemente?')) {
-      setLogs(prev => prev.filter(log => log.id !== logId));
+      setLogs(prev => { setDataDirty(); return prev.filter(log => log.id !== logId); });
     }
   };
 
   const handleClearAllLogs = () => {
     if (confirm('ATENÇÃO: Isso removerá TODOS os registros de auditoria permanentemente. Deseja continuar?')) {
-      setLogs([]);
+      setLogs(() => { setDataDirty(); return []; });
     }
   };
 
@@ -526,19 +539,19 @@ const App: React.FC = () => {
     if (task) {
       setSelectedTask(task);
       setIsDetailsOpen(true);
-      setNotifications(current => current.map(n => n.id === notification.id ? { ...n, read: true } : n));
+      setNotifications(current => { setDataDirty(); return current.map(n => n.id === notification.id ? { ...n, read: true } : n); });
     }
   };
   
   const handleClearSingleNotification = (notificationId: string) => {
-    setNotifications(current => current.map(n => n.id === notificationId ? { ...n, read: true } : n));
+    setNotifications(current => { setDataDirty(); return current.map(n => n.id === notificationId ? { ...n, read: true } : n); });
   };
 
   const handleClearAllReviewNotifications = () => {
     if (!selectedProfile) return;
-    setNotifications(current => current.map(n => 
+    setNotifications(current => { setDataDirty(); return current.map(n => 
       (n.userId === selectedProfile.name && n.type === 'REVIEW_ASSIGNED') ? { ...n, read: true } : n
-    ));
+    ); });
   };
   
   const handleNavigateToProject = (projectId: string) => {
@@ -798,13 +811,13 @@ const App: React.FC = () => {
               <button onClick={() => setProjectManagerViewTab('visual')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${projectManagerViewTab === 'visual' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Workflow size={14} /> Modelo Visual</button>
             </div>
             {projectManagerViewTab === 'management' ? (
-              <ProjectsManager projects={activeProjects} onUpdateProjects={setProjects} activityPlans={activityPlans} onUpdateActivityPlans={setActivityPlans} onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} teamMembers={teamMembers} currentUserRole={currentUserRole} initialProjectId={initialProjectId} />
+              <ProjectsManager projects={activeProjects} onUpdateProjects={(p) => { setProjects(p); setDataDirty(); }} activityPlans={activityPlans} onUpdateActivityPlans={(ap) => { setActivityPlans(ap); setDataDirty(); }} onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} teamMembers={teamMembers} currentUserRole={currentUserRole} initialProjectId={initialProjectId} />
             ) : (
               <ProjectsVisualBoard projects={activeProjects} onUpdateProjects={setProjects} initialProjectId={initialProjectId} onClearInitialProjectId={() => setInitialProjectId(null)} />
             )}
           </div>
         )}
-        {view === 'quality' && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={setTeamMembers} appUsers={appUsers} onUpdateAppUsers={setAppUsers} />}
+        {view === 'quality' && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={(tm) => { setTeamMembers(tm); setDataDirty(); }} appUsers={appUsers} onUpdateAppUsers={(u) => { setAppUsers(u); setDataDirty(); }} />}
         {view === 'traceability' && <ActivityLogView logs={logs} onRestoreItem={handleRestoreItem} onClearLog={handleClearLog} onClearAllLogs={handleClearAllLogs} />}
       </main>
       
