@@ -1,21 +1,31 @@
 
-// Este utilitário fornece funções para gerar um "diff" (diferença) entre dois objetos
-// e para aplicar esse diff a um objeto para atualizá-lo. É a base para a lógica de merge.
+// Lógica de 3-Way Merge e Diff baseada em ID para colaboração em tempo real.
 
 export interface Diff {
   path: (string | number)[];
   type: 'UPDATE' | 'CREATE' | 'DELETE';
-  value?: any; // O novo valor para CREATE/UPDATE
-  oldValue?: any; // O valor antigo para DELETE/UPDATE
+  value?: any; 
+  oldValue?: any;
+  id?: string; // ID do objeto em um array para diffing baseado em ID
 }
 
-// Uma verificação de igualdade profunda simples usando JSON.stringify.
-// Adequada para objetos serializáveis em JSON sem funções ou undefined.
 function isEqual(a: any, b: any): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-// Gera um array de diferenças entre dois objetos (base e a versão atual).
+// Mapeia um array de objetos por seu campo 'id'.
+function mapById(arr: any[]): Map<string, any> {
+  const map = new Map<string, any>();
+  if (!Array.isArray(arr)) return map;
+  for (const item of arr) {
+    if (item && typeof item === 'object' && item.id) {
+      map.set(item.id, item);
+    }
+  }
+  return map;
+}
+
+// Gera um diff entre dois estados, tratando arrays de objetos com base em seus IDs.
 export function generateDiff(base: any, current: any): Diff[] {
   const diffs: Diff[] = [];
 
@@ -24,37 +34,44 @@ export function generateDiff(base: any, current: any): Diff[] {
       return;
     }
 
-    // Se não forem objetos, é uma atualização simples de valor.
     if (typeof obj1 !== 'object' || obj1 === null || typeof obj2 !== 'object' || obj2 === null) {
       diffs.push({ path, type: 'UPDATE', oldValue: obj1, value: obj2 });
       return;
     }
 
-    // Lógica para comparar arrays.
     if (Array.isArray(obj1) && Array.isArray(obj2)) {
-      const maxLength = Math.max(obj1.length, obj2.length);
-      for (let i = 0; i < maxLength; i++) {
-        if (i >= obj1.length) {
-          // Item adicionado ao final do array.
-          diffs.push({ path: [...path, i], type: 'CREATE', value: obj2[i] });
-        } else if (i >= obj2.length) {
-          // Item removido do final do array.
-          diffs.push({ path: [...path, i], type: 'DELETE', oldValue: obj1[i] });
+      const baseMap = mapById(obj1);
+      const currentMap = mapById(obj2);
+
+      // Verifica por itens criados ou atualizados
+      for (const [id, currentItem] of currentMap.entries()) {
+        if (!baseMap.has(id)) {
+          diffs.push({ path: [...path], type: 'CREATE', id, value: currentItem });
         } else {
-          // Compara itens no mesmo índice.
-          compare(obj1[i], obj2[i], [...path, i]);
+          const baseItem = baseMap.get(id);
+          if (!isEqual(baseItem, currentItem)) {
+            // Em vez de um UPDATE genérico no item, mergulha para encontrar as mudanças específicas.
+            compare(baseItem, currentItem, [...path, { id }]);
+          }
+        }
+      }
+
+      // Verifica por itens deletados
+      for (const [id, baseItem] of baseMap.entries()) {
+        if (!currentMap.has(id)) {
+          diffs.push({ path: [...path], type: 'DELETE', id, oldValue: baseItem });
         }
       }
     } else {
-      // Lógica para comparar objetos.
       const allKeys = new Set([...Object.keys(obj1), ...Object.keys(obj2)]);
       for (const key of allKeys) {
+        const newPath = [...path, key];
         if (!(key in obj1)) {
-          diffs.push({ path: [...path, key], type: 'CREATE', value: obj2[key] });
+          diffs.push({ path: newPath, type: 'CREATE', value: obj2[key] });
         } else if (!(key in obj2)) {
-          diffs.push({ path: [...path, key], type: 'DELETE', oldValue: obj1[key] });
+          diffs.push({ path: newPath, type: 'DELETE', oldValue: obj1[key] });
         } else {
-          compare(obj1[key], obj2[key], [...path, key]);
+          compare(obj1[key], obj2[key], newPath);
         }
       }
     }
@@ -64,31 +81,47 @@ export function generateDiff(base: any, current: any): Diff[] {
   return diffs;
 }
 
-// Aplica um array de diffs a um objeto alvo, retornando um novo objeto com as alterações.
+// Aplica um diff a um estado alvo.
 export function applyDiff(target: any, diffs: Diff[]): any {
-  // Cria uma cópia profunda para não modificar o objeto original.
   const newTarget = JSON.parse(JSON.stringify(target));
 
   for (const diff of diffs) {
     let current = newTarget;
-    // Navega até o penúltimo nível do caminho.
-    for (let i = 0; i < diff.path.length - 1; i++) {
-      current = current[diff.path[i]];
+    let parent: any = null;
+    let lastKey: string | number | { id: string } | undefined = undefined;
+
+    for (const key of diff.path) {
+        parent = current;
+        lastKey = key;
+        if (typeof key === 'object' && key.id) {
+            // Se for um objeto com ID, encontramos o item correspondente no array.
+            current = current.find((item: any) => item.id === key.id);
+        } else {
+            current = current[key as string | number];
+        }
     }
+
     const finalKey = diff.path[diff.path.length - 1];
 
     switch (diff.type) {
-      case 'UPDATE':
       case 'CREATE':
-        current[finalKey] = diff.value;
+        if (diff.id && Array.isArray(parent)) {
+          parent.push(diff.value);
+        } else {
+          current[finalKey as string | number] = diff.value;
+        }
+        break;
+      case 'UPDATE':
+        parent[lastKey as string | number] = diff.value;
         break;
       case 'DELETE':
-        if (Array.isArray(current)) {
-          // Remove o item do array pelo índice.
-          current.splice(finalKey as number, 1);
+        if (diff.id && Array.isArray(parent)) {
+          const index = parent.findIndex((item: any) => item.id === diff.id);
+          if (index > -1) {
+            parent.splice(index, 1);
+          }
         } else {
-          // Deleta a propriedade do objeto.
-          delete current[finalKey];
+          delete parent[lastKey as string | number];
         }
         break;
     }

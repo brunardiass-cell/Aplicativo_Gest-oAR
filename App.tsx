@@ -22,6 +22,11 @@ import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAle
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
 import ConflictResolutionModal, { Conflict } from './components/ConflictResolutionModal';
 import { generateDiff, applyDiff, Diff } from './utils/diff';
+import PreSaveConfirmationModal from './components/PreSaveConfirmationModal';
+
+function isEqual(a: any, b: any): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 export type AugmentedMicroActivity = MicroActivity & {
   projectId: string;
@@ -47,6 +52,8 @@ const App: React.FC = () => {
   const [baseData, setBaseData] = useState<any>(null);
   const [pendingUserChanges, setPendingUserChanges] = useState<Diff[] | null>(null);
   const [detectedConflicts, setDetectedConflicts] = useState<Conflict[]>([]);
+  const [isPreSaveModalOpen, setIsPreSaveModalOpen] = useState(false);
+  const [serverStateOnSave, setServerStateOnSave] = useState<any>(null);
   
   const [view, setView] = useState<ViewMode>('dashboard');
   const [isMsalAuthenticated, setIsMsalAuthenticated] = useState(false);
@@ -198,19 +205,67 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveChanges = async () => {
-    if (!isDataDirty || !baseData) return;
-
-    setLastSync(prev => ({ ...(prev || { timestamp: '', user: '' }), status: 'syncing' }));
+  const resolveConflictsAndSave = async (mergeStrategy: 'merge' | 'overwrite_user' | 'overwrite_server') => {
+    setIsPreSaveModalOpen(false);
+    if (!baseData || !serverStateOnSave) return;
 
     const currentState = { tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers };
-    const userDiffs = generateDiff(baseData, currentState);
+    let dataToSave: any;
+    let versionToServer = serverStateOnSave.version;
 
-    if (userDiffs.length === 0) {
-      setIsDataDirty(false);
-      setLastSync(prev => ({ ...(prev || { user: 'System' }), status: 'synced', timestamp: new Date().toISOString() }));
+    if (mergeStrategy === 'overwrite_user') {
+      dataToSave = currentState;
+    } else if (mergeStrategy === 'overwrite_server') {
+      loadDataFromSharePoint();
       return;
+    } else { // 'merge'
+      const userDiffs = generateDiff(baseData, currentState);
+      const serverDiffs = generateDiff(baseData, serverStateOnSave.data);
+      
+      const conflicts: Conflict[] = [];
+      const nonConflictingUserDiffs: Diff[] = [];
+
+      const serverChangesMap = new Map(serverDiffs.map(d => [JSON.stringify(d.path), d]));
+
+      for (const userDiff of userDiffs) {
+        const pathKey = JSON.stringify(userDiff.path);
+        if (serverChangesMap.has(pathKey)) {
+          const serverDiff = serverChangesMap.get(pathKey)!;
+          if (!isEqual(userDiff.value, serverDiff.value)) { // Simplistic equality check
+            conflicts.push({ path: pathKey, userDiff, serverDiff });
+          }
+        } else {
+          nonConflictingUserDiffs.push(userDiff);
+        }
+      }
+
+      if (conflicts.length > 0) {
+        setDetectedConflicts(conflicts);
+        setPendingUserChanges(userDiffs);
+        setLastSync({ status: 'conflict', timestamp: new Date().toISOString(), user: 'System' });
+        return;
+      }
+      dataToSave = applyDiff(serverStateOnSave.data, nonConflictingUserDiffs);
     }
+
+    const result = await MicrosoftGraphService.saveToCloud(dataToSave, versionToServer);
+
+    if (result.success && result.newVersion) {
+      const updatedBase = JSON.parse(JSON.stringify(dataToSave));
+      setBaseData(updatedBase);
+      setDataVersion(result.newVersion);
+      setIsDataDirty(false);
+      setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'System' });
+    } else {
+      setSyncConflict(true);
+      setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
+    }
+    setServerStateOnSave(null);
+  };
+
+  const handleSaveChanges = async () => {
+    if (!isDataDirty || !baseData) return;
+    setLastSync(prev => ({ ...(prev || { timestamp: '', user: '' }), status: 'syncing' }));
 
     const serverStateResponse = await MicrosoftGraphService.loadFromCloud();
     if (!serverStateResponse) {
@@ -218,42 +273,22 @@ const App: React.FC = () => {
       return;
     }
 
-    const { data: serverData, version: serverVersion } = serverStateResponse;
-    const serverDiffs = generateDiff(baseData, serverData);
-
-    const conflicts: Conflict[] = [];
-    const userPatches: Diff[] = [];
-
-    for (const userDiff of userDiffs) {
-      const userPath = userDiff.path.join('.');
-      const serverConflict = serverDiffs.find(sd => sd.path.join('.') === userPath);
-
-      if (serverConflict) {
-        conflicts.push({ path: userPath, userDiff, serverDiff: serverConflict });
-      } else {
-        userPatches.push(userDiff);
-      }
-    }
-
-    if (conflicts.length > 0) {
-      setDetectedConflicts(conflicts);
-      setPendingUserChanges(userDiffs);
-      setLastSync({ status: 'conflict', timestamp: new Date().toISOString(), user: 'System' });
-      return;
-    }
-
-    const mergedData = applyDiff(serverData, userPatches);
-    const result = await MicrosoftGraphService.saveToCloud(mergedData, serverVersion);
-
-    if (result.success && result.newVersion) {
-      const updatedBase = JSON.parse(JSON.stringify(mergedData));
-      setBaseData(updatedBase);
-      setDataVersion(result.newVersion);
-      setIsDataDirty(false);
-      setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'System' });
+    if (serverStateResponse.version !== dataVersion) {
+      setServerStateOnSave(serverStateResponse);
+      setIsPreSaveModalOpen(true);
     } else {
-      setSyncConflict(true); 
-      setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
+      const currentState = { tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers };
+      const result = await MicrosoftGraphService.saveToCloud(currentState, dataVersion);
+      if (result.success && result.newVersion) {
+        const updatedBase = JSON.parse(JSON.stringify(currentState));
+        setBaseData(updatedBase);
+        setDataVersion(result.newVersion);
+        setIsDataDirty(false);
+        setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'System' });
+      } else {
+        setSyncConflict(true);
+        setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
+      }
     }
   };
 
@@ -924,6 +959,16 @@ const App: React.FC = () => {
       {isDetailsOpen && selectedTask && (<TaskDetailsModal task={selectedTask} onClose={() => setIsDetailsOpen(false)}/>)}
       {isDeleteModalOpen && deleteTarget && (<DeletionModal itemName={deleteTarget.name} onClose={() => { setIsDeleteModalOpen(false); setDeleteTarget(null); }} onConfirm={handleConfirmDeletion}/>)}
       {isReportModalOpen && (<MonthlyReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} tasks={tasksForBoard} filteredUser={filterMember} filters={{dateFilterType, startDateFilter, endDateFilter, projectFilter, statusFilter, leadFilter}}/>)}
+
+      <PreSaveConfirmationModal 
+        isOpen={isPreSaveModalOpen}
+        onConfirm={resolveConflictsAndSave}
+        onCancel={() => {
+          setIsPreSaveModalOpen(false);
+          setServerStateOnSave(null);
+          setLastSync({ status: 'cancelled', timestamp: new Date().toISOString(), user: 'System' });
+        }}
+      />
       
       <ConflictResolutionModal 
         isOpen={detectedConflicts.length > 0}

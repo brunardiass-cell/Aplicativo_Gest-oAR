@@ -51,7 +51,7 @@ export type ViewMode = 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceab
 export interface SyncInfo {
   timestamp: string;
   user: string;
-  status: 'syncing' | 'synced' | 'error' | 'conflict';
+  status: 'syncing' | 'synced' | 'error' | 'conflict' | 'cancelled';
 }
 
 export interface AppNotification {
