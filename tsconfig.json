@@ -24,7 +24,8 @@
     "constants.ts",
     "global.d.ts",
     "components/**/*",
-    "services/**/*"
+    "services/**/*",
+    "utils/**/*"
   ],
   "exclude": ["node_modules", "dist"]
 }

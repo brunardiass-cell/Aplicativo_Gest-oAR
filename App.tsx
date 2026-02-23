@@ -20,6 +20,8 @@ import AccessControl from './components/AccessControl';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
 import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
+import ConflictResolutionModal, { Conflict } from './components/ConflictResolutionModal';
+import { generateDiff, applyDiff, Diff } from './utils/diff';
 
 export type AugmentedMicroActivity = MicroActivity & {
   projectId: string;
@@ -41,6 +43,10 @@ const App: React.FC = () => {
   const [syncConflict, setSyncConflict] = useState(false);
   const [isDataDirty, setIsDataDirty] = useState(false);
   const [showUpdateNotification, setShowUpdateNotification] = useState(false);
+  
+  const [baseData, setBaseData] = useState<any>(null);
+  const [pendingUserChanges, setPendingUserChanges] = useState<Diff[] | null>(null);
+  const [detectedConflicts, setDetectedConflicts] = useState<Conflict[]>([]);
   
   const [view, setView] = useState<ViewMode>('dashboard');
   const [isMsalAuthenticated, setIsMsalAuthenticated] = useState(false);
@@ -154,7 +160,23 @@ const App: React.FC = () => {
         
         setNotifications(cloudData.notifications || []);
         setLogs(cloudData.logs || []);
-        setAppUsers(cloudData.appUsers || DEFAULT_APP_USERS);
+        const fullData = {
+          tasks: cloudData.tasks || [],
+          projects: cloudData.projects || [],
+          teamMembers: cloudData.teamMembers || DEFAULT_TEAM_MEMBERS,
+          activityPlans: migratedPlans,
+          notifications: cloudData.notifications || [],
+          logs: cloudData.logs || [],
+          appUsers: cloudData.appUsers || DEFAULT_APP_USERS,
+        };
+        setTasks(fullData.tasks);
+        setProjects(fullData.projects);
+        setTeamMembers(fullData.teamMembers);
+        setActivityPlans(fullData.activityPlans);
+        setNotifications(fullData.notifications);
+        setLogs(fullData.logs);
+        setAppUsers(fullData.appUsers);
+        setBaseData(JSON.parse(JSON.stringify(fullData)));
         setDataVersion(version);
         setIsDataDirty(false);
       } else {
@@ -176,27 +198,70 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSaveChanges = async () => {
+    if (!isDataDirty || !baseData) return;
+
+    setLastSync(prev => ({ ...(prev || { timestamp: '', user: '' }), status: 'syncing' }));
+
+    const currentState = { tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers };
+    const userDiffs = generateDiff(baseData, currentState);
+
+    if (userDiffs.length === 0) {
+      setIsDataDirty(false);
+      setLastSync(prev => ({ ...(prev || { user: 'System' }), status: 'synced', timestamp: new Date().toISOString() }));
+      return;
+    }
+
+    const serverStateResponse = await MicrosoftGraphService.loadFromCloud();
+    if (!serverStateResponse) {
+      setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
+      return;
+    }
+
+    const { data: serverData, version: serverVersion } = serverStateResponse;
+    const serverDiffs = generateDiff(baseData, serverData);
+
+    const conflicts: Conflict[] = [];
+    const userPatches: Diff[] = [];
+
+    for (const userDiff of userDiffs) {
+      const userPath = userDiff.path.join('.');
+      const serverConflict = serverDiffs.find(sd => sd.path.join('.') === userPath);
+
+      if (serverConflict) {
+        conflicts.push({ path: userPath, userDiff, serverDiff: serverConflict });
+      } else {
+        userPatches.push(userDiff);
+      }
+    }
+
+    if (conflicts.length > 0) {
+      setDetectedConflicts(conflicts);
+      setPendingUserChanges(userDiffs);
+      setLastSync({ status: 'conflict', timestamp: new Date().toISOString(), user: 'System' });
+      return;
+    }
+
+    const mergedData = applyDiff(serverData, userPatches);
+    const result = await MicrosoftGraphService.saveToCloud(mergedData, serverVersion);
+
+    if (result.success && result.newVersion) {
+      const updatedBase = JSON.parse(JSON.stringify(mergedData));
+      setBaseData(updatedBase);
+      setDataVersion(result.newVersion);
+      setIsDataDirty(false);
+      setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'System' });
+    } else {
+      setSyncConflict(true); 
+      setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
+    }
+  };
+
   useEffect(() => {
     if (isInitialLoad.current || syncConflict || !isDataDirty) return;
     if (saveDataTimeout.current) clearTimeout(saveDataTimeout.current);
 
-    saveDataTimeout.current = window.setTimeout(async () => {
-      setLastSync(prev => ({ ...(prev || { timestamp: '', user: '' }), status: 'syncing' }));
-      const dataToSave = { tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers };
-      
-      const result = await MicrosoftGraphService.saveToCloud(dataToSave, dataVersion);
-
-      if (result.conflict) {
-        setSyncConflict(true);
-        setLastSync({ status: 'conflict', timestamp: new Date().toISOString(), user: 'System' });
-      } else if (result.success && result.newVersion) {
-        setDataVersion(result.newVersion);
-        setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'System' });
-        setIsDataDirty(false);
-      } else {
-        setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
-      }
-    }, 2000);
+    saveDataTimeout.current = window.setTimeout(handleSaveChanges, 2000);
 
   }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, dataVersion, syncConflict, isDataDirty]);
 
@@ -859,6 +924,44 @@ const App: React.FC = () => {
       {isDetailsOpen && selectedTask && (<TaskDetailsModal task={selectedTask} onClose={() => setIsDetailsOpen(false)}/>)}
       {isDeleteModalOpen && deleteTarget && (<DeletionModal itemName={deleteTarget.name} onClose={() => { setIsDeleteModalOpen(false); setDeleteTarget(null); }} onConfirm={handleConfirmDeletion}/>)}
       {isReportModalOpen && (<MonthlyReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} tasks={tasksForBoard} filteredUser={filterMember} filters={{dateFilterType, startDateFilter, endDateFilter, projectFilter, statusFilter, leadFilter}}/>)}
+      
+      <ConflictResolutionModal 
+        isOpen={detectedConflicts.length > 0}
+        conflicts={detectedConflicts}
+        onCancel={() => {
+          setDetectedConflicts([]);
+          setPendingUserChanges(null);
+          loadDataFromSharePoint();
+        }}
+        onResolve={async (resolutions) => {
+          const serverStateResponse = await MicrosoftGraphService.loadFromCloud();
+          if (!serverStateResponse) {
+            alert("Falha ao recarregar os dados do servidor. Tente novamente.");
+            return;
+          }
+
+          let mergedData = serverStateResponse.data;
+          const userChangesToApply = pendingUserChanges?.filter(userDiff => {
+            const userPath = userDiff.path.join('.');
+            const resolution = resolutions.find(r => r.path === userPath);
+            if (!resolution) return true; // Não estava em conflito, aplica.
+            return resolution.choice === 'user'; // Estava em conflito, aplica se o usuário escolheu.
+          }) || [];
+
+          mergedData = applyDiff(mergedData, userChangesToApply);
+
+          const result = await MicrosoftGraphService.saveToCloud(mergedData, serverStateResponse.version);
+
+          if (result.success && result.newVersion) {
+            setDetectedConflicts([]);
+            setPendingUserChanges(null);
+            loadDataFromSharePoint(); // Recarrega para ter o estado base mais novo
+          } else {
+            alert("Falha ao salvar as alterações mescladas. Por favor, recarregue e tente novamente.");
+            setSyncConflict(true);
+          }
+        }}
+      />
     </div>
     </>
   );
