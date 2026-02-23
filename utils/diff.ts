@@ -1,38 +1,31 @@
 
-// Lógica de 3-Way Merge e Diff baseada em ID para colaboração em tempo real.
+// Lógica de Diff/Patch aprimorada e com tipagem segura para lidar com arrays de objetos baseados em ID.
+
+export type IdPathSegment = { id: string };
+export type PathSegment = string | number | IdPathSegment;
 
 export interface Diff {
-  path: (string | number)[];
+  path: PathSegment[];
   type: 'UPDATE' | 'CREATE' | 'DELETE';
   value?: any; 
   oldValue?: any;
-  id?: string; // ID do objeto em um array para diffing baseado em ID
+}
+
+// Tipagem para um item genérico com um ID, para satisfazer o compilador TS.
+interface ItemWithId {
+    id: string;
+    [key: string]: any;
 }
 
 function isEqual(a: any, b: any): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-// Mapeia um array de objetos por seu campo 'id'.
-function mapById(arr: any[]): Map<string, any> {
-  const map = new Map<string, any>();
-  if (!Array.isArray(arr)) return map;
-  for (const item of arr) {
-    if (item && typeof item === 'object' && item.id) {
-      map.set(item.id, item);
-    }
-  }
-  return map;
-}
-
-// Gera um diff entre dois estados, tratando arrays de objetos com base em seus IDs.
 export function generateDiff(base: any, current: any): Diff[] {
   const diffs: Diff[] = [];
 
-  function compare(obj1: any, obj2: any, path: (string | number)[] = []) {
-    if (isEqual(obj1, obj2)) {
-      return;
-    }
+  function compare(obj1: any, obj2: any, path: PathSegment[] = []) {
+    if (isEqual(obj1, obj2)) return;
 
     if (typeof obj1 !== 'object' || obj1 === null || typeof obj2 !== 'object' || obj2 === null) {
       diffs.push({ path, type: 'UPDATE', oldValue: obj1, value: obj2 });
@@ -40,38 +33,47 @@ export function generateDiff(base: any, current: any): Diff[] {
     }
 
     if (Array.isArray(obj1) && Array.isArray(obj2)) {
-      const baseMap = mapById(obj1);
-      const currentMap = mapById(obj2);
+      const arr1 = obj1 as ItemWithId[];
+      const arr2 = obj2 as ItemWithId[];
+      const canUseId = arr1.every(item => typeof item === 'object' && item?.id) &&
+                       arr2.every(item => typeof item === 'object' && item?.id);
 
-      // Verifica por itens criados ou atualizados
-      for (const [id, currentItem] of currentMap.entries()) {
-        if (!baseMap.has(id)) {
-          diffs.push({ path: [...path], type: 'CREATE', id, value: currentItem });
-        } else {
-          const baseItem = baseMap.get(id);
-          if (!isEqual(baseItem, currentItem)) {
-            // Em vez de um UPDATE genérico no item, mergulha para encontrar as mudanças específicas.
-            compare(baseItem, currentItem, [...path, { id }]);
+      if (canUseId) {
+        const map1 = new Map(arr1.map(item => [item.id, item]));
+        const map2 = new Map(arr2.map(item => [item.id, item]));
+        const allIds = new Set([...map1.keys(), ...map2.keys()]);
+
+        for (const id of allIds) {
+          const item1 = map1.get(id);
+          const item2 = map2.get(id);
+          const newPath = [...path, { id }];
+
+          if (!item1) {
+            diffs.push({ path: newPath, type: 'CREATE', value: item2 });
+          } else if (!item2) {
+            diffs.push({ path: newPath, type: 'DELETE', oldValue: item1 });
+          } else {
+            compare(item1, item2, newPath);
           }
         }
-      }
-
-      // Verifica por itens deletados
-      for (const [id, baseItem] of baseMap.entries()) {
-        if (!currentMap.has(id)) {
-          diffs.push({ path: [...path], type: 'DELETE', id, oldValue: baseItem });
+      } else {
+        if (obj1.length !== obj2.length) {
+            diffs.push({ path, type: 'UPDATE', oldValue: obj1, value: obj2 });
+        } else {
+            for(let i=0; i<obj1.length; i++) {
+                compare(obj1[i], obj2[i], [...path, i]);
+            }
         }
       }
-    } else {
+    } else { 
       const allKeys = new Set([...Object.keys(obj1), ...Object.keys(obj2)]);
       for (const key of allKeys) {
-        const newPath = [...path, key];
         if (!(key in obj1)) {
-          diffs.push({ path: newPath, type: 'CREATE', value: obj2[key] });
+          diffs.push({ path: [...path, key], type: 'CREATE', value: obj2[key] });
         } else if (!(key in obj2)) {
-          diffs.push({ path: newPath, type: 'DELETE', oldValue: obj1[key] });
+          diffs.push({ path: [...path, key], type: 'DELETE', oldValue: obj1[key] });
         } else {
-          compare(obj1[key], obj2[key], newPath);
+          compare(obj1[key], obj2[key], [...path, key]);
         }
       }
     }
@@ -81,50 +83,65 @@ export function generateDiff(base: any, current: any): Diff[] {
   return diffs;
 }
 
-// Aplica um diff a um estado alvo.
 export function applyDiff(target: any, diffs: Diff[]): any {
   const newTarget = JSON.parse(JSON.stringify(target));
 
   for (const diff of diffs) {
-    let current = newTarget;
-    let parent: any = null;
-    let lastKey: string | number | { id: string } | undefined = undefined;
+    let currentParent: any = null;
+    let current: any = newTarget;
+    let lastSegment: PathSegment | null = null;
 
-    for (const key of diff.path) {
-        parent = current;
-        lastKey = key;
-        if (typeof key === 'object' && key.id) {
-            // Se for um objeto com ID, encontramos o item correspondente no array.
-            current = current.find((item: any) => item.id === key.id);
-        } else {
-            current = current[key as string | number];
-        }
+    for (const segment of diff.path) {
+      currentParent = current;
+      lastSegment = segment;
+      if (typeof segment === 'object' && segment !== null && 'id' in segment) {
+        if (!Array.isArray(current)) throw new Error('Caminho de ID inválido; o alvo não é um array.');
+        current = (current as ItemWithId[]).find(item => item.id === segment.id);
+      } else {
+        current = current[segment as string | number];
+      }
     }
 
-    const finalKey = diff.path[diff.path.length - 1];
+    if (lastSegment === null) continue;
+
+    const finalKey = lastSegment as string | number;
 
     switch (diff.type) {
       case 'CREATE':
-        if (diff.id && Array.isArray(parent)) {
-          parent.push(diff.value);
+        if (typeof lastSegment === 'object' && lastSegment !== null && 'id' in lastSegment) {
+          if (!Array.isArray(currentParent)) throw new Error('Pai de criação de ID inválido.');
+          currentParent.push(diff.value);
         } else {
-          current[finalKey as string | number] = diff.value;
+          currentParent[finalKey] = diff.value;
         }
         break;
       case 'UPDATE':
-        parent[lastKey as string | number] = diff.value;
+        if (currentParent && finalKey) {
+          currentParent[finalKey] = diff.value;
+        }
         break;
       case 'DELETE':
-        if (diff.id && Array.isArray(parent)) {
-          const index = parent.findIndex((item: any) => item.id === diff.id);
-          if (index > -1) {
-            parent.splice(index, 1);
-          }
+        if (typeof lastSegment === 'object' && lastSegment !== null && 'id' in lastSegment) {
+          if (!Array.isArray(currentParent)) throw new Error('Pai de exclusão de ID inválido.');
+          const index = (currentParent as ItemWithId[]).findIndex(item => item.id === lastSegment.id);
+          if (index > -1) currentParent.splice(index, 1);
         } else {
-          delete parent[lastKey as string | number];
+          delete currentParent[finalKey];
         }
         break;
     }
   }
   return newTarget;
 }
+
+export const formatPath = (path: PathSegment[]): string => {
+  return path.map(segment => {
+    if (typeof segment === 'object' && segment !== null && 'id' in segment) {
+      return `[id=${segment.id}]`;
+    }
+    if (typeof segment === 'number') {
+      return `[${segment}]`;
+    }
+    return `.${segment}`;
+  }).join('').replace(/^\./, '');
+};
