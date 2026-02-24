@@ -18,7 +18,7 @@ import MonthlyReportModal from './components/MonthlyReportModal';
 import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
-import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X } from 'lucide-react';
+import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
 import PreSaveConfirmationModal from './components/PreSaveConfirmationModal';
 
@@ -102,6 +102,27 @@ const App: React.FC = () => {
   const saveDataTimeout = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    const handleGlobalClick = async (e: MouseEvent) => {
+      if (!isMsalAuthenticated || !isAuthorized || showUpdateNotification || !dataVersion) return;
+
+      const target = e.target as HTMLElement;
+      if (target.closest('button')) {
+        try {
+          const cloudVersion = await MicrosoftGraphService.getCloudVersion();
+          if (cloudVersion && cloudVersion !== dataVersion) {
+            setShowUpdateNotification(true);
+          }
+        } catch (err) {
+          console.error("Error checking version on click:", err);
+        }
+      }
+    };
+
+    document.addEventListener('click', handleGlobalClick);
+    return () => document.removeEventListener('click', handleGlobalClick);
+  }, [isMsalAuthenticated, isAuthorized, showUpdateNotification, dataVersion]);
 
   useEffect(() => {
     const wsUrl = window.location.origin.replace(/^http/, 'ws') + '/ws-updates';
@@ -857,23 +878,33 @@ const App: React.FC = () => {
   return (
     <>
       {showUpdateNotification && (
-        <div className="fixed bottom-5 right-5 bg-amber-500 text-white p-5 rounded-2xl shadow-2xl z-50 animate-in slide-in-from-bottom border-2 border-white/20 max-w-sm">
-          <div className="flex items-start gap-4">
-            <div className="bg-white/20 p-2 rounded-lg shrink-0">
-              <ShieldAlert size={20} />
+        <div className="fixed bottom-8 right-8 bg-[#FFF9E6] border border-[#FFE58F] p-6 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[100] animate-in slide-in-from-bottom-4 fade-in duration-300 max-w-2xl">
+          <button 
+            onClick={() => setShowUpdateNotification(false)} 
+            className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <X size={20} />
+          </button>
+          
+          <div className="flex items-center gap-6">
+            <div className="bg-[#FFBB33] p-3 rounded-2xl shadow-lg shadow-amber-100 flex items-center justify-center">
+              <AlertTriangle size={32} className="text-white" strokeWidth={2.5} />
             </div>
-            <div className="flex-1">
-              <p className="font-black uppercase tracking-tight text-sm">Atenção: Sistema Atualizado</p>
-              <p className="text-xs mt-1 opacity-90 leading-relaxed">Houve uma alteração no sistema por um outro usuário. É necessário recarregar a página antes de fazer alguma alteração ou inserção.</p>
-              <button 
-                onClick={() => { setShowUpdateNotification(false); loadDataFromSharePoint(); }}
-                className="mt-3 bg-white text-amber-600 px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-amber-50 transition-colors shadow-sm"
-              >
-                Recarregar Sistema Agora
-              </button>
+            
+            <div className="flex-1 pr-4">
+              <p className="font-bold text-slate-900 text-lg leading-tight">
+                Houve uma alteração no sistema por um outro usuário.
+              </p>
+              <p className="text-slate-600 text-sm mt-1 font-medium">
+                É necessário <span className="font-bold text-slate-800">recarregar a página</span> antes de fazer alguma alteração ou inserção.
+              </p>
             </div>
-            <button onClick={() => setShowUpdateNotification(false)} className="text-white/60 hover:text-white transition-colors shrink-0">
-              <X size={18} />
+            
+            <button 
+              onClick={() => { setShowUpdateNotification(false); loadDataFromSharePoint(); }}
+              className="bg-[#00796B] text-white px-6 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#004D40] transition-all shadow-lg shadow-teal-100 active:scale-95 whitespace-nowrap"
+            >
+              Recarregar Página
             </button>
           </div>
         </div>
