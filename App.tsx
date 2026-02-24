@@ -20,8 +20,6 @@ import AccessControl from './components/AccessControl';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
 import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
-import ConflictResolutionModal, { Conflict } from './components/ConflictResolutionModal';
-import { generateDiff, applyDiff, Diff } from './utils/diff';
 import PreSaveConfirmationModal from './components/PreSaveConfirmationModal';
 
 function isEqual(a: any, b: any): boolean {
@@ -50,8 +48,6 @@ const App: React.FC = () => {
   const [showUpdateNotification, setShowUpdateNotification] = useState(false);
   
   const [baseData, setBaseData] = useState<any>(null);
-  const [pendingUserChanges, setPendingUserChanges] = useState<Diff[] | null>(null);
-  const [detectedConflicts, setDetectedConflicts] = useState<Conflict[]>([]);
   const [isPreSaveModalOpen, setIsPreSaveModalOpen] = useState(false);
   const [serverStateOnSave, setServerStateOnSave] = useState<any>(null);
   
@@ -245,66 +241,9 @@ const App: React.FC = () => {
     }
   };
 
-  const resolveConflictsAndSave = async (mergeStrategy: 'merge' | 'overwrite_user' | 'overwrite_server') => {
+  const resolveConflictsAndSave = async () => {
     setIsPreSaveModalOpen(false);
-    if (!baseData || !serverStateOnSave) return;
-
-    const currentState = { tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers };
-    let dataToSave: any;
-    let versionToServer = serverStateOnSave.version;
-
-    if (mergeStrategy === 'overwrite_user') {
-      dataToSave = currentState;
-    } else if (mergeStrategy === 'overwrite_server') {
-      loadDataFromSharePoint();
-      return;
-    } else { // 'merge'
-      const userDiffs = generateDiff(baseData, currentState);
-      const serverDiffs = generateDiff(baseData, serverStateOnSave.data);
-      
-      const conflicts: Conflict[] = [];
-      const nonConflictingUserDiffs: Diff[] = [];
-
-      const serverChangesMap = new Map(serverDiffs.map(d => [JSON.stringify(d.path), d]));
-
-      for (const userDiff of userDiffs) {
-        const pathKey = JSON.stringify(userDiff.path);
-        if (serverChangesMap.has(pathKey)) {
-          const serverDiff = serverChangesMap.get(pathKey)!;
-          if (!isEqual(userDiff.value, serverDiff.value)) { // Simplistic equality check
-            conflicts.push({ path: pathKey, userDiff, serverDiff });
-          }
-        } else {
-          nonConflictingUserDiffs.push(userDiff);
-        }
-      }
-
-      if (conflicts.length > 0) {
-        setDetectedConflicts(conflicts);
-        setPendingUserChanges(userDiffs);
-        setLastSync({ status: 'conflict', timestamp: new Date().toISOString(), user: 'System' });
-        return;
-      }
-      dataToSave = applyDiff(serverStateOnSave.data, nonConflictingUserDiffs);
-    }
-
-    const result = await MicrosoftGraphService.saveToCloud(dataToSave, versionToServer);
-
-    if (result.success && result.newVersion) {
-      const updatedBase = JSON.parse(JSON.stringify(dataToSave));
-      setBaseData(updatedBase);
-      setDataVersion(result.newVersion);
-      setIsDataDirty(false);
-      setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'System' });
-      
-      // Broadcast update via WebSocket
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: selectedProfile?.name }));
-      }
-    } else {
-      setSyncConflict(true);
-      setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
-    }
+    loadDataFromSharePoint();
     setServerStateOnSave(null);
   };
 
@@ -885,15 +824,15 @@ const App: React.FC = () => {
     return (
       <div className="fixed inset-0 bg-slate-900 bg-opacity-80 flex items-center justify-center z-50 animate-in">
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md text-center">
-          <ShieldAlert size={48} className="mx-auto text-amber-500" />
-          <h2 className="mt-4 text-2xl font-black text-slate-800">Conflito de Sincronização</h2>
-          <p className="mt-2 text-slate-600">Outro usuário salvou alterações enquanto você estava trabalhando. Para evitar a perda de dados, suas últimas alterações não foram salvas.</p>
-          <p className="mt-2 font-semibold text-slate-600">Por favor, recarregue os dados para obter a versão mais recente.</p>
+          <ShieldAlert size={48} className="mx-auto text-red-500" />
+          <h2 className="mt-4 text-2xl font-black text-slate-800">Erro ao Salvar</h2>
+          <p className="mt-4 text-slate-600">Não foi possível salvar sua alteração. O sistema foi atualizado por outro usuário.</p>
+          <p className="mt-2 font-bold text-slate-800 text-sm">É necessário recarregar o sistema para continuar.</p>
           <button 
             onClick={() => { setSyncConflict(false); loadDataFromSharePoint(); }}
-            className="mt-6 w-full bg-amber-500 text-white py-3 rounded-lg font-bold hover:bg-amber-600 transition-colors"
+            className="mt-6 w-full bg-brand-primary text-white py-4 rounded-xl font-bold hover:bg-brand-accent transition-all shadow-lg"
           >
-            Recarregar Dados
+            Recarregar Sistema
           </button>
         </div>
       </div>
@@ -903,19 +842,22 @@ const App: React.FC = () => {
   return (
     <>
       {showUpdateNotification && (
-        <div className="fixed bottom-5 right-5 bg-sky-500 text-white p-4 rounded-lg shadow-lg z-50 animate-in slide-in-from-bottom">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="font-bold">Novas atualizações disponíveis!</p>
-              <p className="text-sm">Recarregue os dados para ver as informações mais recentes.</p>
+        <div className="fixed bottom-5 right-5 bg-amber-500 text-white p-5 rounded-2xl shadow-2xl z-50 animate-in slide-in-from-bottom border-2 border-white/20 max-w-sm">
+          <div className="flex items-start gap-4">
+            <div className="bg-white/20 p-2 rounded-lg shrink-0">
+              <ShieldAlert size={20} />
             </div>
-            <button 
-              onClick={() => { setShowUpdateNotification(false); loadDataFromSharePoint(); }}
-              className="bg-white text-sky-600 px-3 py-1 rounded-md font-semibold text-sm hover:bg-sky-100 transition-colors"
-            >
-              Recarregar
-            </button>
-            <button onClick={() => setShowUpdateNotification(false)} className="text-white hover:text-sky-200">
+            <div className="flex-1">
+              <p className="font-black uppercase tracking-tight text-sm">Atenção: Sistema Atualizado</p>
+              <p className="text-xs mt-1 opacity-90 leading-relaxed">Houve uma alteração no sistema por um outro usuário. É necessário recarregar a página antes de fazer alguma alteração ou inserção.</p>
+              <button 
+                onClick={() => { setShowUpdateNotification(false); loadDataFromSharePoint(); }}
+                className="mt-3 bg-white text-amber-600 px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-amber-50 transition-colors shadow-sm"
+              >
+                Recarregar Sistema Agora
+              </button>
+            </div>
+            <button onClick={() => setShowUpdateNotification(false)} className="text-white/60 hover:text-white transition-colors shrink-0">
               <X size={18} />
             </button>
           </div>
@@ -1020,49 +962,6 @@ const App: React.FC = () => {
           setIsPreSaveModalOpen(false);
           setServerStateOnSave(null);
           setLastSync({ status: 'cancelled', timestamp: new Date().toISOString(), user: 'System' });
-        }}
-      />
-      
-      <ConflictResolutionModal 
-        isOpen={detectedConflicts.length > 0}
-        conflicts={detectedConflicts}
-        onCancel={() => {
-          setDetectedConflicts([]);
-          setPendingUserChanges(null);
-          loadDataFromSharePoint();
-        }}
-        onResolve={async (resolutions) => {
-          const serverStateResponse = await MicrosoftGraphService.loadFromCloud();
-          if (!serverStateResponse) {
-            alert("Falha ao recarregar os dados do servidor. Tente novamente.");
-            return;
-          }
-
-          let mergedData = serverStateResponse.data;
-          const userChangesToApply = pendingUserChanges?.filter(userDiff => {
-            const userPath = JSON.stringify(userDiff.path);
-            const resolution = resolutions.find(r => r.path === userPath);
-            if (!resolution) return true; // Não estava em conflito, aplica.
-            return resolution.choice === 'user'; // Estava em conflito, aplica se o usuário escolheu.
-          }) || [];
-
-          mergedData = applyDiff(mergedData, userChangesToApply);
-
-          const result = await MicrosoftGraphService.saveToCloud(mergedData, serverStateResponse.version);
-
-          if (result.success && result.newVersion) {
-            setDetectedConflicts([]);
-            setPendingUserChanges(null);
-            loadDataFromSharePoint(); // Recarrega para ter o estado base mais novo
-            
-            // Broadcast update via WebSocket
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-              wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: selectedProfile?.name }));
-            }
-          } else {
-            alert("Falha ao salvar as alterações mescladas. Por favor, recarregue e tente novamente.");
-            setSyncConflict(true);
-          }
         }}
       />
     </div>
