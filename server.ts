@@ -7,23 +7,23 @@ import http from "http";
 async function startServer() {
   const app = express();
   const server = http.createServer(app);
-  const wss = new WebSocketServer({ server });
+  const wss = new WebSocketServer({ server, path: "/ws-updates" });
 
   const PORT = 3000;
 
   // Track connected clients
   const clients = new Set<WebSocket>();
 
-  wss.on("connection", (ws) => {
+  wss.on("connection", (ws, req) => {
     clients.add(ws);
-    console.log("Client connected. Total clients:", clients.size);
+    console.log(`New connection from ${req.socket.remoteAddress}. Total clients: ${clients.size}`);
 
     ws.on("message", (message) => {
+      console.log(`Received message: ${message}`);
       try {
         const data = JSON.parse(message.toString());
         if (data.type === "DATA_UPDATED") {
-          // Broadcast to all other clients
-          console.log("Data updated by a user. Broadcasting to others...");
+          console.log(`Data updated by user: ${data.user}. Broadcasting to ${clients.size - 1} other clients...`);
           clients.forEach((client) => {
             if (client !== ws && client.readyState === WebSocket.OPEN) {
               client.send(JSON.stringify({ type: "RELOAD_REQUIRED", user: data.user }));
@@ -35,9 +35,13 @@ async function startServer() {
       }
     });
 
-    ws.on("close", () => {
+    ws.on("close", (code, reason) => {
       clients.delete(ws);
-      console.log("Client disconnected. Total clients:", clients.size);
+      console.log(`Connection closed: ${code} ${reason}. Total clients: ${clients.size}`);
+    });
+
+    ws.on("error", (err) => {
+      console.error("WebSocket error:", err);
     });
   });
 

@@ -104,17 +104,23 @@ const App: React.FC = () => {
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
+    const wsUrl = window.location.origin.replace(/^http/, 'ws') + '/ws-updates';
     
     const connectWS = () => {
+      console.log('Connecting to WebSocket:', wsUrl);
       const socket = new WebSocket(wsUrl);
       wsRef.current = socket;
 
+      socket.onopen = () => {
+        console.log('WebSocket connected successfully');
+      };
+
       socket.onmessage = (event) => {
+        console.log('WebSocket message received:', event.data);
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'RELOAD_REQUIRED') {
+            console.log('Reload required notification received');
             setShowUpdateNotification(true);
           }
         } catch (e) {
@@ -122,13 +128,14 @@ const App: React.FC = () => {
         }
       };
 
-      socket.onclose = () => {
-        console.log('WS connection closed. Reconnecting in 5s...');
+      socket.onclose = (event) => {
+        console.log('WebSocket connection closed:', event.code, event.reason);
+        console.log('Reconnecting in 5s...');
         setTimeout(connectWS, 5000);
       };
 
       socket.onerror = (err) => {
-        console.error('WS error:', err);
+        console.error('WebSocket error:', err);
         socket.close();
       };
     };
@@ -249,21 +256,26 @@ const App: React.FC = () => {
 
   const handleSaveChanges = async () => {
     if (!isDataDirty || !baseData) return;
+    console.log('Starting handleSaveChanges...');
     setLastSync(prev => ({ ...(prev || { timestamp: '', user: '' }), status: 'syncing' }));
 
     const serverStateResponse = await MicrosoftGraphService.loadFromCloud();
     if (!serverStateResponse) {
+      console.error('Failed to load server state during save');
       setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
       return;
     }
 
     if (serverStateResponse.version !== dataVersion) {
+      console.warn('Version mismatch detected during save', { server: serverStateResponse.version, local: dataVersion });
       setServerStateOnSave(serverStateResponse);
       setIsPreSaveModalOpen(true);
     } else {
       const currentState = { tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers };
+      console.log('Saving to cloud...');
       const result = await MicrosoftGraphService.saveToCloud(currentState, dataVersion);
       if (result.success && result.newVersion) {
+        console.log('Save successful, broadcasting update...');
         const updatedBase = JSON.parse(JSON.stringify(currentState));
         setBaseData(updatedBase);
         setDataVersion(result.newVersion);
@@ -273,8 +285,11 @@ const App: React.FC = () => {
         // Broadcast update via WebSocket
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: selectedProfile?.name }));
+        } else {
+          console.warn('WebSocket not open, could not broadcast update', wsRef.current?.readyState);
         }
       } else {
+        console.error('Save failed or conflict detected', result);
         setSyncConflict(true);
         setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
       }
