@@ -105,6 +105,46 @@ const App: React.FC = () => {
   const isInitialLoad = useRef(true);
   const saveDataTimeout = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}`;
+    
+    const connectWS = () => {
+      const socket = new WebSocket(wsUrl);
+      wsRef.current = socket;
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'RELOAD_REQUIRED') {
+            setShowUpdateNotification(true);
+          }
+        } catch (e) {
+          console.error('Error parsing WS message:', e);
+        }
+      };
+
+      socket.onclose = () => {
+        console.log('WS connection closed. Reconnecting in 5s...');
+        setTimeout(connectWS, 5000);
+      };
+
+      socket.onerror = (err) => {
+        console.error('WS error:', err);
+        socket.close();
+      };
+    };
+
+    connectWS();
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -256,6 +296,11 @@ const App: React.FC = () => {
       setDataVersion(result.newVersion);
       setIsDataDirty(false);
       setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'System' });
+      
+      // Broadcast update via WebSocket
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: selectedProfile?.name }));
+      }
     } else {
       setSyncConflict(true);
       setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
@@ -285,6 +330,11 @@ const App: React.FC = () => {
         setDataVersion(result.newVersion);
         setIsDataDirty(false);
         setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'System' });
+        
+        // Broadcast update via WebSocket
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: selectedProfile?.name }));
+        }
       } else {
         setSyncConflict(true);
         setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
@@ -300,6 +350,8 @@ const App: React.FC = () => {
 
   }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, dataVersion, syncConflict, isDataDirty]);
 
+  // Polling removed in favor of WebSockets
+  /*
   useEffect(() => {
     const interval = setInterval(async () => {
       if (!isDataDirty && !syncConflict && isMsalAuthenticated && isAuthorized) {
@@ -312,6 +364,7 @@ const App: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [isDataDirty, dataVersion, syncConflict, isMsalAuthenticated, isAuthorized]);
+  */
 
   const currentUserRole = useMemo(() => {
     if (!account || !appUsers.length) return null;
@@ -987,7 +1040,7 @@ const App: React.FC = () => {
 
           let mergedData = serverStateResponse.data;
           const userChangesToApply = pendingUserChanges?.filter(userDiff => {
-            const userPath = userDiff.path.join('.');
+            const userPath = JSON.stringify(userDiff.path);
             const resolution = resolutions.find(r => r.path === userPath);
             if (!resolution) return true; // Não estava em conflito, aplica.
             return resolution.choice === 'user'; // Estava em conflito, aplica se o usuário escolheu.
@@ -1001,6 +1054,11 @@ const App: React.FC = () => {
             setDetectedConflicts([]);
             setPendingUserChanges(null);
             loadDataFromSharePoint(); // Recarrega para ter o estado base mais novo
+            
+            // Broadcast update via WebSocket
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: selectedProfile?.name }));
+            }
           } else {
             alert("Falha ao salvar as alterações mescladas. Por favor, recarregue e tente novamente.");
             setSyncConflict(true);
