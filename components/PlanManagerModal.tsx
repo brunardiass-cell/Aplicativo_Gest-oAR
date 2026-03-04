@@ -112,6 +112,39 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
     setLocalPlans(updatedPlans);
   };
   
+  const handleUpdatePhase = (oldName: string, newName: string) => {
+    if (!selectedPlanId || !newName.trim() || oldName === newName) return;
+    const updatedPlans = localPlans.map(p => {
+      if (p.id === selectedPlanId) {
+        return {
+          ...p,
+          phases: (p.phases || []).map(phase => phase === oldName ? newName.trim() : phase),
+          macroActivities: p.macroActivities.map(macro => 
+            macro.phase === oldName ? { ...macro, phase: newName.trim() } : macro
+          )
+        };
+      }
+      return p;
+    });
+    setLocalPlans(updatedPlans);
+  };
+
+  const handleUpdateMacro = (macroToUpdate: MacroActivityTemplate, newName: string) => {
+    if (!selectedPlanId || !newName.trim() || macroToUpdate.name === newName) return;
+    const updatedPlans = localPlans.map(p => {
+      if (p.id === selectedPlanId) {
+        const updatedMacros = p.macroActivities.map(m => 
+          (m.name === macroToUpdate.name && m.phase === macroToUpdate.phase) 
+            ? { ...m, name: newName.trim() } 
+            : m
+        );
+        return { ...p, macroActivities: updatedMacros };
+      }
+      return p;
+    });
+    setLocalPlans(updatedPlans);
+  };
+
   const handleSaveAndClose = () => {
     onSave(localPlans);
     onClose();
@@ -172,13 +205,24 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
                   {(selectedPlan.phases || []).map(phase => (
                     <div key={phase} className="bg-slate-50/50 border border-slate-100 rounded-2xl">
                       <header className="p-4 flex justify-between items-center bg-slate-100/80">
-                        <h4 className="text-xs font-black uppercase tracking-widest text-slate-600 flex items-center gap-2"><Layers size={14}/> {phase}</h4>
+                        <div className="flex items-center gap-2 flex-1">
+                          <Layers size={14} className="text-slate-400"/>
+                          <input 
+                            value={phase} 
+                            onChange={e => handleUpdatePhase(phase, e.target.value)}
+                            className="bg-transparent border-none text-xs font-black uppercase tracking-widest text-slate-600 focus:ring-0 w-full"
+                          />
+                        </div>
                         <button onClick={() => handleDeletePhase(phase)} className="p-2 text-slate-300 hover:text-red-500 rounded-lg transition"><Trash2 size={14}/></button>
                       </header>
                       <div className="p-4 space-y-3">
                         {selectedPlan.macroActivities.filter(m => m.phase === phase).map((macro, index) => (
                           <div key={index} className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">
-                            <span>{macro.name}</span>
+                            <input 
+                              value={macro.name} 
+                              onChange={e => handleUpdateMacro(macro, e.target.value)}
+                              className="bg-transparent border-none text-xs font-bold text-slate-700 focus:ring-0 flex-1"
+                            />
                             <button onClick={() => handleDeleteMacro(macro)} className="p-1 text-slate-300 hover:text-red-500"><X size={14}/></button>
                           </div>
                         ))}

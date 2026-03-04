@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Task } from '../types';
-import { X, Calendar, User, Tag, ArrowRight, MessageCircle, Clock, History, ExternalLink } from 'lucide-react';
+import { X, Calendar, User, Tag, ArrowRight, MessageCircle, Clock, History, ExternalLink, UserCheck } from 'lucide-react';
 
 interface TaskDetailsModalProps {
   task: Task;
@@ -56,6 +56,24 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
               <p className="text-[10px] font-black text-brand-primary mt-1">{task.progress}% concluído</p>
             </div>
           </div>
+
+          {task.isReport && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
+              <InfoBlock label="Etapa de Revisão" value={task.reportStage || 'N/A'} icon={<History size={14}/>} />
+              {task.reportStage === 'Próximo Revisor (equipe AR)' && task.currentReviewer && (
+                <InfoBlock label="Revisor (Equipe AR)" value={task.currentReviewer} icon={<UserCheck size={14}/>} />
+              )}
+              {task.reportStage === 'Em Elaboração' && task.elaboratorName && (
+                <InfoBlock label="Responsável pela Elaboração" value={task.elaboratorName} icon={<UserCheck size={14}/>} />
+              )}
+              {task.reportStage === 'Revisão Colaboradores' && task.collaboratorReviewerName && (
+                <InfoBlock label="Revisor Colaborador" value={task.collaboratorReviewerName} icon={<UserCheck size={14}/>} />
+              )}
+              {task.reportStage === 'Revisão Comitê Gestor' && task.committeeReviewerName && (
+                <InfoBlock label="Revisor Comitê Gestor" value={task.committeeReviewerName} icon={<UserCheck size={14}/>} />
+              )}
+            </div>
+          )}
           
           {task.fileLocation && (
             <div className="space-y-4">

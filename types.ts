@@ -3,7 +3,7 @@ export type Priority = 'Baixa' | 'Média' | 'Alta' | 'Urgente';
 export type Status = 'Planejada' | 'Em Andamento' | 'Concluída' | 'Não Aplicável' | 'Pausado';
 export type ReportStage = 
   | 'Em Elaboração' 
-  | 'Próximo Revisor' 
+  | 'Próximo Revisor (equipe AR)' 
   | 'Revisão Colaboradores' 
   | 'Revisão Comitê Gestor' 
   | 'Concluído' 
@@ -39,6 +39,9 @@ export interface Task {
   isReport: boolean;
   reportStage?: ReportStage;
   currentReviewer?: string;
+  elaboratorName?: string;
+  collaboratorReviewerName?: string;
+  committeeReviewerName?: string;
   fileLocation?: string; // Link para o arquivo de revisão
   deleted?: boolean;
   deletionReason?: string;

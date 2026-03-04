@@ -515,9 +515,9 @@ const App: React.FC = () => {
 
     if (
       taskToSave.isReport &&
-      taskToSave.reportStage === 'Próximo Revisor' &&
+      taskToSave.reportStage === 'Próximo Revisor (equipe AR)' &&
       taskToSave.currentReviewer &&
-      (!oldTask || oldTask.currentReviewer !== taskToSave.currentReviewer || oldTask.reportStage !== 'Próximo Revisor')
+      (!oldTask || oldTask.currentReviewer !== taskToSave.currentReviewer || oldTask.reportStage !== 'Próximo Revisor (equipe AR)')
     ) {
       const newNotification: AppNotification = {
         id: `notif_${Date.now()}`,

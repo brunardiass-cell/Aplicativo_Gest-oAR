@@ -22,7 +22,7 @@ export const generateInitialTasks = (teamMembers: TeamMember[]): Task[] => {
       nextStep: 'Aguardando resultados do laboratório de controle de qualidade.',
       updates: [],
       isReport: true,
-      reportStage: 'Próximo Revisor',
+      reportStage: 'Próximo Revisor (equipe AR)',
       currentReviewer: leader?.name || 'Graziella',
       fileLocation: '#',
     },

@@ -35,6 +35,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
   });
 
   const [note, setNote] = useState('');
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState('');
 
   useEffect(() => {
     if (initialData) {
@@ -56,6 +58,9 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
         nextStep: '',
         isReport: false,
         reportStage: 'Em Elaboração',
+        elaboratorName: '',
+        collaboratorReviewerName: '',
+        committeeReviewerName: '',
         fileLocation: '',
         updates: []
       });
@@ -84,6 +89,25 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
     };
     setFormData({ ...formData, updates: [...(formData.updates || []), newNote] });
     setNote('');
+  };
+
+  const startEditingNote = (n: TaskNote) => {
+    setEditingNoteId(n.id);
+    setEditingNoteText(n.note);
+  };
+
+  const saveEditedNote = () => {
+    if (!editingNoteId) return;
+    const updatedUpdates = (formData.updates || []).map(u => 
+      u.id === editingNoteId ? { ...u, note: editingNoteText } : u
+    );
+    setFormData({ ...formData, updates: updatedUpdates });
+    setEditingNoteId(null);
+    setEditingNoteText('');
+  };
+
+  const deleteNote = (id: string) => {
+    setFormData({ ...formData, updates: (formData.updates || []).filter(u => u.id !== id) });
   };
 
   const toggleCollaborator = (name: string) => {
@@ -221,16 +245,28 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
                     className="w-full px-6 py-4 bg-white border border-teal-200 rounded-2xl text-sm font-black text-brand-primary outline-none shadow-sm"
                   >
                     <option value="Em Elaboração">Em Elaboração</option>
-                    <option value="Próximo Revisor">Próximo Revisor</option>
+                    <option value="Próximo Revisor (equipe AR)">Próximo Revisor (equipe AR)</option>
                     <option value="Revisão Colaboradores">Em Revisão (Colaboradores)</option>
                     <option value="Revisão Comitê Gestor">Em Revisão (Comitê Gestor)</option>
                     <option value="Concluído">Concluído</option>
                     <option value="Concluído e Assinado">Concluído e Assinado</option>
                   </select>
                 </div>
-                {formData.reportStage === 'Próximo Revisor' && (
+                {formData.reportStage === 'Em Elaboração' && (
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><UserCheck size={14}/> Selecionar Revisor</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><UserCheck size={14}/> Responsável pela Elaboração</label>
+                    <input 
+                      type="text"
+                      value={formData.elaboratorName || ''} 
+                      onChange={e => setFormData({...formData, elaboratorName: e.target.value})}
+                      placeholder="Nome de quem está elaborando..."
+                      className="w-full px-6 py-4 bg-white border border-teal-200 rounded-2xl text-sm font-black text-brand-primary outline-none shadow-sm"
+                    />
+                  </div>
+                )}
+                {formData.reportStage === 'Próximo Revisor (equipe AR)' && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><UserCheck size={14}/> Selecionar Revisor (Equipe AR)</label>
                     <select 
                       value={formData.currentReviewer} 
                       onChange={e => setFormData({...formData, currentReviewer: e.target.value})}
@@ -239,6 +275,30 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
                       <option value="">Selecione um revisor...</option>
                       {teamMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                     </select>
+                  </div>
+                )}
+                {formData.reportStage === 'Revisão Colaboradores' && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><UserCheck size={14}/> Responsável pela Revisão (Colaboradores)</label>
+                    <input 
+                      type="text"
+                      value={formData.collaboratorReviewerName || ''} 
+                      onChange={e => setFormData({...formData, collaboratorReviewerName: e.target.value})}
+                      placeholder="Nome do revisor colaborador..."
+                      className="w-full px-6 py-4 bg-white border border-teal-200 rounded-2xl text-sm font-black text-brand-primary outline-none shadow-sm"
+                    />
+                  </div>
+                )}
+                {formData.reportStage === 'Revisão Comitê Gestor' && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><UserCheck size={14}/> Responsável pela Revisão (Comitê Gestor)</label>
+                    <input 
+                      type="text"
+                      value={formData.committeeReviewerName || ''} 
+                      onChange={e => setFormData({...formData, committeeReviewerName: e.target.value})}
+                      placeholder="Nome do revisor do comitê..."
+                      className="w-full px-6 py-4 bg-white border border-teal-200 rounded-2xl text-sm font-black text-brand-primary outline-none shadow-sm"
+                    />
                   </div>
                 )}
                 <div className="md:col-span-2 space-y-2">
@@ -264,12 +324,33 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
                 </div>
                 <div className="space-y-3 max-h-40 overflow-y-auto pr-4 custom-scrollbar">
                    {formData.updates?.map(u => (
-                     <div key={u.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                     <div key={u.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl group relative">
                         <div className="flex justify-between mb-1">
                            <span className="text-[8px] font-black text-brand-primary uppercase tracking-widest">{u.user}</span>
                            <span className="text-[8px] font-bold text-slate-400">{new Date(u.date).toLocaleDateString()}</span>
                         </div>
-                        <p className="text-xs font-bold text-slate-800">{u.note}</p>
+                        {editingNoteId === u.id ? (
+                          <div className="space-y-2">
+                            <textarea 
+                              value={editingNoteText} 
+                              onChange={e => setEditingNoteText(e.target.value)}
+                              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-brand-primary"
+                              rows={2}
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button type="button" onClick={() => setEditingNoteId(null)} className="text-[8px] font-black uppercase text-slate-400 hover:text-slate-600">Cancelar</button>
+                              <button type="button" onClick={saveEditedNote} className="text-[8px] font-black uppercase text-brand-primary hover:text-brand-accent">Salvar</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-xs font-bold text-slate-800">{u.note}</p>
+                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button type="button" onClick={() => startEditingNote(u)} className="text-slate-400 hover:text-brand-primary"><FileText size={12}/></button>
+                              <button type="button" onClick={() => deleteNote(u.id)} className="text-slate-400 hover:text-red-500"><X size={12}/></button>
+                            </div>
+                          </>
+                        )}
                      </div>
                    ))}
                 </div>

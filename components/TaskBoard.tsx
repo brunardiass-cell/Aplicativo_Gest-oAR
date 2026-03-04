@@ -100,12 +100,12 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
     let text: string = task.reportStage;
     let className = 'bg-amber-50 text-amber-600 border-amber-100'; // Padrão para relatórios
 
-    if (task.reportStage === 'Próximo Revisor') {
+    if (task.reportStage === 'Próximo Revisor (equipe AR)') {
       if (currentUser === task.currentReviewer) {
         text = 'Revisão Solicitada';
         className = 'bg-amber-50 text-amber-600 border-amber-100'; // Âmbar para o revisor
       } else {
-        text = 'Próximo Revisor';
+        text = 'Próximo Revisor (equipe AR)';
         className = 'bg-emerald-50 text-emerald-600 border-emerald-100';
       }
     } else if (task.reportStage.includes('Concluído')) {
@@ -251,7 +251,32 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                        <span className="text-[9px] font-bold text-slate-700 uppercase">{task.projectLead}</span>
                     </div>
                  </div>
-                 {task.isReport && task.reportStage?.includes('Concluído') && task.completionDate && task.status === 'Concluída' ? (<div className="flex flex-col text-right"><span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Concluído em</span><span className="text-[9px] font-black text-emerald-600 uppercase mt-1">{new Date(task.completionDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span></div>) : task.reportStage === 'Próximo Revisor' && task.currentReviewer ? (<div className="flex flex-col text-right"><span className="text-[8px] font-black text-amber-500 uppercase tracking-widest">Revisão com</span><span className="text-[9px] font-black text-amber-600 uppercase mt-1">{task.currentReviewer}</span></div>) : null}
+                 {task.isReport && task.reportStage?.includes('Concluído') && task.completionDate && task.status === 'Concluída' ? (
+                   <div className="flex flex-col text-right">
+                     <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Concluído em</span>
+                     <span className="text-[9px] font-black text-emerald-600 uppercase mt-1">{new Date(task.completionDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                   </div>
+                 ) : task.reportStage === 'Próximo Revisor (equipe AR)' && task.currentReviewer ? (
+                   <div className="flex flex-col text-right">
+                     <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest">Revisão com</span>
+                     <span className="text-[9px] font-black text-amber-600 uppercase mt-1">{task.currentReviewer}</span>
+                   </div>
+                 ) : task.reportStage === 'Em Elaboração' && task.elaboratorName ? (
+                   <div className="flex flex-col text-right">
+                     <span className="text-[8px] font-black text-teal-500 uppercase tracking-widest">Elaboração por</span>
+                     <span className="text-[9px] font-black text-teal-600 uppercase mt-1">{task.elaboratorName}</span>
+                   </div>
+                 ) : task.reportStage === 'Revisão Colaboradores' && task.collaboratorReviewerName ? (
+                   <div className="flex flex-col text-right">
+                     <span className="text-[8px] font-black text-teal-500 uppercase tracking-widest">Revisão por</span>
+                     <span className="text-[9px] font-black text-teal-600 uppercase mt-1">{task.collaboratorReviewerName}</span>
+                   </div>
+                 ) : task.reportStage === 'Revisão Comitê Gestor' && task.committeeReviewerName ? (
+                   <div className="flex flex-col text-right">
+                     <span className="text-[8px] font-black text-teal-500 uppercase tracking-widest">Revisão por</span>
+                     <span className="text-[9px] font-black text-teal-600 uppercase mt-1">{task.committeeReviewerName}</span>
+                   </div>
+                 ) : null}
               </div>
 
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 mt-auto">
