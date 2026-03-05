@@ -168,7 +168,34 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
                 <div className="h-[200px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={microStatusChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} labelLine={false} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                      <Pie 
+                        data={microStatusChartData} 
+                        dataKey="value" 
+                        nameKey="name" 
+                        cx="50%" 
+                        cy="50%" 
+                        outerRadius={55} 
+                        labelLine={true} 
+                        label={({ name, percent, cx, cy, midAngle, outerRadius }) => {
+                          const RADIAN = Math.PI / 180;
+                          const radius = outerRadius + 15;
+                          const lx = cx + radius * Math.cos(-midAngle * RADIAN);
+                          const ly = cy + radius * Math.sin(-midAngle * RADIAN);
+                          
+                          return (
+                            <text 
+                              x={lx} 
+                              y={ly} 
+                              fill="#64748b" 
+                              textAnchor={lx > cx ? 'start' : 'end'} 
+                              dominantBaseline="central"
+                              className="text-[8px] font-black uppercase"
+                            >
+                              {`${name} ${(percent * 100).toFixed(0)}%`}
+                            </text>
+                          );
+                        }}
+                      >
                         {microStatusChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                       </Pie>
                       <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
