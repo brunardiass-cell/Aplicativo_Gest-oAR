@@ -123,22 +123,22 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
   const canEnableReviewFlow = true;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden border border-white flex flex-col">
-        <header className="bg-brand-primary px-10 py-8 flex justify-between items-center shrink-0">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-6xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden border border-white flex flex-col">
+        <header className="bg-brand-primary px-6 sm:px-10 py-6 sm:py-8 flex justify-between items-center shrink-0">
           <div>
-            <h2 className="text-2xl font-black text-white uppercase tracking-tighter">
+            <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tighter">
               {initialData ? 'Editar Atividade' : 'Nova Atividade Setorial'}
             </h2>
-            <p className="text-[10px] font-bold text-teal-300 uppercase tracking-widest mt-1">Garantindo a integridade dos dados regulatórios</p>
+            <p className="text-[8px] sm:text-[10px] font-bold text-teal-300 uppercase tracking-widest mt-1">Garantindo a integridade dos dados regulatórios</p>
           </div>
-          <button onClick={onClose} className="p-3 bg-white/10 rounded-2xl text-white hover:bg-white/20 transition">
+          <button onClick={onClose} className="p-2 sm:p-3 bg-white/10 rounded-2xl text-white hover:bg-white/20 transition">
             <X size={24} />
           </button>
         </header>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 sm:p-10 space-y-8 sm:space-y-10 custom-scrollbar">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
             <div className="space-y-6">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b pb-2"><ClipboardList size={14}/> Dados Básicos</h3>
               <div className="space-y-1">

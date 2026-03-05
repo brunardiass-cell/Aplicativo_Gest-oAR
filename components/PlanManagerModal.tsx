@@ -153,28 +153,28 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-        <header className="p-8 bg-amber-50 border-b border-amber-100 flex items-center gap-4">
-          <div className="p-3 bg-amber-500 rounded-2xl text-white shadow-lg shadow-amber-200">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] shadow-2xl w-full max-w-5xl h-[95vh] sm:h-[85vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+        <header className="p-6 sm:p-8 bg-amber-50 border-b border-amber-100 flex items-center gap-4">
+          <div className="p-2 sm:p-3 bg-amber-500 rounded-2xl text-white shadow-lg shadow-amber-200">
             <ListPlus size={24} />
           </div>
           <div>
-            <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Gerenciar Planos de Atividades</h2>
-            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Crie templates de fases e macroatividades</p>
+            <h2 className="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tighter">Gerenciar Planos</h2>
+            <p className="text-[8px] sm:text-[10px] font-bold text-amber-600 uppercase tracking-widest">Templates de atividades</p>
           </div>
           <button onClick={onClose} className="ml-auto p-2 hover:bg-slate-200 rounded-full transition"><X size={20} /></button>
         </header>
 
-        <div className="flex-1 flex overflow-hidden">
-          <div className="w-1/3 border-r border-slate-100 flex flex-col">
-            <div className="p-6 border-b border-slate-100">
+        <div className="flex-1 flex flex-col sm:flex-row overflow-hidden">
+          <div className="w-full sm:w-1/3 border-b sm:border-b-0 sm:border-r border-slate-100 flex flex-col h-1/3 sm:h-auto">
+            <div className="p-4 sm:p-6 border-b border-slate-100">
               <form onSubmit={handleAddPlan} className="flex gap-2">
-                <input value={newPlanName} onChange={e => setNewPlanName(e.target.value)} placeholder="Nome do novo plano..." className="flex-1 px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold"/>
-                <button type="submit" className="px-4 bg-slate-800 text-white rounded-xl hover:bg-black transition"><FilePlus size={16}/></button>
+                <input value={newPlanName} onChange={e => setNewPlanName(e.target.value)} placeholder="Novo plano..." className="flex-1 px-3 sm:px-4 py-2 sm:py-3 bg-slate-100 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold"/>
+                <button type="submit" className="px-3 sm:px-4 bg-slate-800 text-white rounded-xl hover:bg-black transition"><FilePlus size={16}/></button>
               </form>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-2 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-2 custom-scrollbar">
               {localPlans.map(plan => (
                 <div key={plan.id} className={`flex items-center justify-between rounded-2xl transition group ${selectedPlanId === plan.id ? 'bg-amber-100' : 'hover:bg-slate-50'}`}>
                   <button onClick={() => setSelectedPlanId(plan.id)} className="flex-1 text-left p-4">

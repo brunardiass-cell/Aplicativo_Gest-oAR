@@ -276,8 +276,8 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
 
     return (
     <div className={`p-4 border rounded-2xl transition-all ${isEditing ? 'bg-teal-50/50 border-teal-200 shadow-lg' : 'bg-slate-50/30 border-slate-100'}`}>
-      <div className="grid grid-cols-12 gap-4 items-center">
-        <div className="col-span-4 flex items-center gap-2">
+      <div className="flex flex-col sm:grid sm:grid-cols-12 gap-4 items-start sm:items-center">
+        <div className="w-full sm:col-span-4 flex items-center gap-2">
             {isEditing ? (<>
                 <input value={localName} onChange={e => setLocalName(e.target.value)} autoFocus className="w-full text-xs font-bold text-slate-900 bg-white border border-teal-300 rounded-md px-2 py-1"/>
                 <button onClick={handleSaveName} className="p-1 text-emerald-500 hover:bg-emerald-100 rounded-md"><Save size={14}/></button>
@@ -286,16 +286,16 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
                 <button onClick={() => { setLocalName(micro.name); onSetEditing(micro.id); }} className="p-1 text-slate-400 hover:bg-slate-100 rounded-md"><Edit size={14}/></button>
             </>)}
         </div>
-        <div className="col-span-2">
+        <div className="w-full sm:col-span-2">
           <select value={micro.assignee} onChange={e => onUpdate({ assignee: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600 outline-none">
             {assignees.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
         </div>
-        <div className="col-span-2 relative">
+        <div className="w-full sm:col-span-2 relative">
           <input type="date" value={micro.dueDate} onChange={e => onUpdate({ dueDate: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600 outline-none"/>
           {dueDateStatus && (<div className={`absolute -top-3.5 right-0 text-[8px] font-bold flex items-center gap-1 ${dueDateStatus.color}`}><AlertTriangle size={10} /> {dueDateStatus.text}</div>)}
         </div>
-        <div className="col-span-3">
+        <div className="w-full sm:col-span-3">
           <select value={micro.status} onChange={e => onUpdate({ status: e.target.value as MicroActivityStatus })} className={`w-full bg-transparent text-[10px] font-bold outline-none ${
               micro.status === 'Concluído e aprovado' ? 'text-emerald-600' :
               micro.status === 'Concluído com restrições' ? 'text-amber-600' :
@@ -308,7 +308,7 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
              <option value="Concluído e aprovado">Concluído e aprovado ✅</option>
           </select>
         </div>
-        <div className="col-span-1 flex items-center justify-end gap-1">
+        <div className="w-full sm:col-span-1 flex items-center justify-end gap-1">
            <button onClick={onDelete} className="p-2 text-slate-300 hover:text-red-500 rounded-xl transition"><Trash2 size={14}/></button>
         </div>
       </div>

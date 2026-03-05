@@ -18,7 +18,7 @@ import MonthlyReportModal from './components/MonthlyReportModal';
 import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
-import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X } from 'lucide-react';
+import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
 import PreSaveConfirmationModal from './components/PreSaveConfirmationModal';
 
@@ -50,6 +50,8 @@ const App: React.FC = () => {
   const [baseData, setBaseData] = useState<any>(null);
   const [isPreSaveModalOpen, setIsPreSaveModalOpen] = useState(false);
   const [serverStateOnSave, setServerStateOnSave] = useState<any>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   
   const [view, setView] = useState<ViewMode>('dashboard');
   const [isMsalAuthenticated, setIsMsalAuthenticated] = useState(false);
@@ -141,8 +143,15 @@ const App: React.FC = () => {
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'RELOAD_REQUIRED') {
-            console.log('Reload required notification received');
-            setShowUpdateNotification(true);
+            // Only show reload requirement if the change was in the SAME profile
+            // or if we are in "Team View" (which sees everything)
+            if (data.user === selectedProfile?.name || selectedProfile?.name === 'Visão Geral da Equipe') {
+              console.log('Reload required notification received for SAME profile or Team View');
+              setShowUpdateNotification(true);
+            } else {
+              console.log('Update received for DIFFERENT profile, ignoring reload prompt');
+              // We could silently sync here, but for now we'll let the merge handle it on save
+            }
           }
         } catch (e) {
           console.error('Error parsing WS message:', e);
@@ -163,12 +172,20 @@ const App: React.FC = () => {
 
     connectWS();
 
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
       }
+      window.removeEventListener('resize', handleResize);
     };
   }, []);
+
+  const isMobile = windowWidth <= 600;
+  const isTablet = windowWidth > 600 && windowWidth <= 1024;
+  const isDesktop = windowWidth > 1024;
 
   useEffect(() => {
     const initAuth = async () => {
@@ -289,10 +306,54 @@ const App: React.FC = () => {
 
     if (serverStateResponse.version !== dataVersion) {
       console.warn('Version mismatch detected during save', { server: serverStateResponse.version, local: dataVersion });
+      
+      // If the change on server was by a DIFFERENT user, we can try to merge
+      const serverData = serverStateResponse.data;
+      const lastEditorOnServer = serverData.lastEditor;
+      
+      if (lastEditorOnServer && lastEditorOnServer !== selectedProfile?.name) {
+        console.log('Different user edited. Attempting merge...');
+        // Simple merge: take server state and apply local changes
+        // This is a basic implementation to satisfy "unifying" changes
+        const mergedState = {
+          tasks: mergeArrays(serverData.tasks, tasks, baseData.tasks),
+          projects: mergeArrays(serverData.projects, projects, baseData.projects),
+          teamMembers: mergeArrays(serverData.teamMembers, teamMembers, baseData.teamMembers),
+          activityPlans: mergeArrays(serverData.activityPlans, activityPlans, baseData.activityPlans),
+          notifications: mergeArrays(serverData.notifications, notifications, baseData.notifications),
+          logs: mergeArrays(serverData.logs, logs, baseData.logs),
+          appUsers: mergeArrays(serverData.appUsers, appUsers, baseData.appUsers),
+          lastEditor: selectedProfile?.name
+        };
+
+        const result = await MicrosoftGraphService.saveToCloud(mergedState, serverStateResponse.version);
+        if (result.success && result.newVersion) {
+          const updatedBase = JSON.parse(JSON.stringify(mergedState));
+          setBaseData(updatedBase);
+          setDataVersion(result.newVersion);
+          setIsDataDirty(false);
+          setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'System' });
+          
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: selectedProfile?.name }));
+          }
+          return;
+        }
+      }
+
       setServerStateOnSave(serverStateResponse);
       setIsPreSaveModalOpen(true);
     } else {
-      const currentState = { tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers };
+      const currentState = { 
+        tasks, 
+        projects, 
+        teamMembers, 
+        activityPlans, 
+        notifications, 
+        logs, 
+        appUsers,
+        lastEditor: selectedProfile?.name
+      };
       console.log('Saving to cloud...');
       const result = await MicrosoftGraphService.saveToCloud(currentState, dataVersion);
       if (result.success && result.newVersion) {
@@ -452,6 +513,40 @@ const App: React.FC = () => {
     setSelectedProfile(null);
     setIsPasswordAuthenticated(false);
     setPasswordError(null);
+    setIsSidebarOpen(false);
+  };
+
+  const mergeArrays = (serverArr: any[], localArr: any[], baseArr: any[]) => {
+    if (!serverArr || !localArr || !baseArr) return localArr;
+    
+    // Start with server array
+    const merged = [...serverArr];
+    
+    // Find items changed locally
+    localArr.forEach(lItem => {
+      const bItem = baseArr.find(b => b.id === lItem.id);
+      const sItemIdx = merged.findIndex(s => s.id === lItem.id);
+      
+      if (!bItem) {
+        // New item locally
+        if (sItemIdx === -1) {
+          merged.push(lItem);
+        } else {
+          // Conflict: item with same ID exists on server. Take local for now.
+          merged[sItemIdx] = lItem;
+        }
+      } else if (JSON.stringify(lItem) !== JSON.stringify(bItem)) {
+        // Item changed locally
+        if (sItemIdx !== -1) {
+          merged[sItemIdx] = lItem;
+        } else {
+          // Item was deleted on server but changed locally. Restore it.
+          merged.push(lItem);
+        }
+      }
+    });
+    
+    return merged;
   };
 
   const handleSaveTask = (task: Task) => {
@@ -909,31 +1004,55 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-      <div className="flex h-screen bg-slate-100 font-sans">
-      <Sidebar currentView={view} onViewChange={setView} onGoHome={() => setView('dashboard')} onLogout={handleLogout} onSwitchProfile={handleSwitchProfile} selectedProfile={selectedProfile} hasFullAccess={hasFullAccess} lastSync={lastSync} onSaveBackup={handleSaveLocalBackup} onLoadBackup={() => fileInputRef.current?.click()}/>
+      <div className={`flex h-screen bg-slate-100 font-sans overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
+      <Sidebar 
+        currentView={view} 
+        onViewChange={(v) => { setView(v); setIsSidebarOpen(false); }} 
+        onGoHome={() => { setView('dashboard'); setIsSidebarOpen(false); }} 
+        onLogout={handleLogout} 
+        onSwitchProfile={handleSwitchProfile} 
+        selectedProfile={selectedProfile} 
+        hasFullAccess={hasFullAccess} 
+        lastSync={lastSync} 
+        onSaveBackup={handleSaveLocalBackup} 
+        onLoadBackup={() => fileInputRef.current?.click()}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        isMobile={isMobile || isTablet}
+      />
       <input type="file" ref={fileInputRef} onChange={handleLoadLocalBackup} accept=".json" className="hidden" />
 
-      <main className="flex-1 p-10 overflow-y-auto ml-64">
-        <header className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">
-                {view === 'dashboard' && 'Dashboard'}
-                {view === 'tasks' && 'Painel de Atividades'}
-                {view === 'projects' && 'Gerenciador de Projetos'}
-                {view === 'quality' && 'Controle de Acesso'}
-                {view === 'traceability' && 'Auditoria'}
-              </h1>
-              <p className="text-sm font-bold text-slate-400">{selectedProfile?.name} - {selectedProfile?.role}</p>
-            </div>
+      <main className={`flex-1 overflow-y-auto transition-all duration-300 ${isDesktop ? 'ml-64 p-10' : 'ml-0 p-4 pt-24'}`}>
+        <header className={`flex justify-between items-center mb-8 ${isDesktop ? '' : 'fixed top-0 left-0 right-0 bg-slate-100/80 backdrop-blur-md z-40 p-4 border-b border-slate-200'}`}>
             <div className="flex items-center gap-4">
-                <div className="relative">
-                    <Bell size={24} className="text-slate-400"/>
-                    {pendingReviewCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">{pendingReviewCount}</span>}
+              {!isDesktop && (
+                <button 
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="p-3 bg-white rounded-2xl shadow-sm text-brand-primary hover:bg-slate-50 transition active:scale-95"
+                >
+                  <Menu size={24} />
+                </button>
+              )}
+              <div>
+                <h1 className={`${isMobile ? 'text-lg' : 'text-3xl'} font-black text-slate-800 uppercase tracking-tighter leading-none`}>
+                  {view === 'dashboard' && 'Dashboard'}
+                  {view === 'tasks' && 'Painel de Atividades'}
+                  {view === 'projects' && 'Gerenciador de Projetos'}
+                  {view === 'quality' && 'Controle de Acesso'}
+                  {view === 'traceability' && 'Auditoria'}
+                </h1>
+                <p className="text-[9px] sm:text-sm font-bold text-slate-400 mt-0.5">{selectedProfile?.name}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 sm:gap-4">
+                <div className="relative p-2 bg-white rounded-xl shadow-sm">
+                    <Bell size={isMobile ? 18 : 24} className="text-slate-400"/>
+                    {pendingReviewCount > 0 && <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">{pendingReviewCount}</span>}
                 </div>
                 {view === 'tasks' && (
                   <>
-                    <button onClick={() => setIsReportModalOpen(true)} className="p-3 bg-white border border-slate-200 rounded-full text-slate-500 hover:bg-slate-100 transition"><FileText size={20}/></button>
-                    {canCreate && (<button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-brand-primary text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg hover:bg-brand-accent transition"><PlusCircle size={16}/> Nova Atividade</button>)}
+                    <button onClick={() => setIsReportModalOpen(true)} className="p-2 sm:p-3 bg-white border border-slate-200 rounded-full text-slate-500 hover:bg-slate-100 transition"><FileText size={isMobile ? 18 : 20}/></button>
+                    {canCreate && (<button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-3 sm:px-5 py-2 sm:py-3 bg-brand-primary text-white rounded-xl font-bold text-[10px] sm:text-xs uppercase tracking-wider shadow-lg hover:bg-brand-accent transition"><PlusCircle size={isMobile ? 14 : 16}/> {isMobile ? 'Novo' : 'Nova Atividade'}</button>)}
                   </>
                 )}
             </div>
@@ -941,18 +1060,18 @@ const App: React.FC = () => {
 
         {view === 'dashboard' && (
           <div className="space-y-6">
-            <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-fit">
-              <button onClick={() => setDashboardView('activities')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'activities' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Activity size={14} /> Dashboard de Atividades</button>
-              <button onClick={() => setDashboardView('projects')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'projects' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><FolderKanban size={14} /> Dashboard de Projetos</button>
+            <div className={`bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-full sm:w-fit overflow-x-auto`}>
+              <button onClick={() => setDashboardView('activities')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'activities' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Activity size={14} /> {isMobile ? 'Atividades' : 'Dashboard de Atividades'}</button>
+              <button onClick={() => setDashboardView('projects')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'projects' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><FolderKanban size={14} /> {isMobile ? 'Projetos' : 'Dashboard de Projetos'}</button>
             </div>
             {dashboardView === 'activities' ? (<Dashboard tasks={tasks} projects={activeProjects} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />) : (<ProjectsDashboard projects={activeProjects} tasks={tasks} filteredUser={filterMember} onNavigateToProject={handleNavigateToProject}/>)}
           </div>
         )}
         {view === 'tasks' && (
           <div className="space-y-6">
-            <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-fit">
-              <button onClick={() => setTaskViewTab('sector')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${taskViewTab === 'sector' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><ListTodo size={14} /> Painel Setorial</button>
-              <button onClick={() => setTaskViewTab('projects')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${taskViewTab === 'projects' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><FolderKanban size={14} /> Painel de Projetos</button>
+            <div className={`bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-full sm:w-fit overflow-x-auto`}>
+              <button onClick={() => setTaskViewTab('sector')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${taskViewTab === 'sector' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><ListTodo size={14} /> {isMobile ? 'Setorial' : 'Painel Setorial'}</button>
+              <button onClick={() => setTaskViewTab('projects')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${taskViewTab === 'projects' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><FolderKanban size={14} /> {isMobile ? 'Projetos' : 'Painel de Projetos'}</button>
             </div>
             
             {taskViewTab === 'sector' ? (
@@ -981,9 +1100,9 @@ const App: React.FC = () => {
         )}
         {view === 'projects' && (
           <div className="space-y-6">
-            <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-fit">
-              <button onClick={() => setProjectManagerViewTab('management')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${projectManagerViewTab === 'management' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><GanttChartSquare size={14} /> Gerenciamento</button>
-              <button onClick={() => setProjectManagerViewTab('visual')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${projectManagerViewTab === 'visual' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Workflow size={14} /> Modelo Visual</button>
+            <div className={`bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-full sm:w-fit overflow-x-auto`}>
+              <button onClick={() => setProjectManagerViewTab('management')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${projectManagerViewTab === 'management' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><GanttChartSquare size={14} /> Gerenciamento</button>
+              <button onClick={() => setProjectManagerViewTab('visual')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${projectManagerViewTab === 'visual' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Workflow size={14} /> Modelo Visual</button>
             </div>
             {projectManagerViewTab === 'management' ? (
               <ProjectsManager projects={activeProjects} onUpdateProjects={(p) => { setProjects(p); setDataDirty(); }} activityPlans={activityPlans} onUpdateActivityPlans={(ap) => { setActivityPlans(ap); setDataDirty(); }} onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} teamMembers={teamMembers} currentUserRole={currentUserRole} initialProjectId={initialProjectId} />

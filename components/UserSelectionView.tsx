@@ -41,8 +41,8 @@ const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSe
         <h1 className="text-xl font-black text-slate-800 uppercase tracking-widest">Quem está acessando?</h1>
         <p className="text-sm text-slate-500 mt-1">Selecione seu perfil para continuar</p>
 
-        <div className="mt-12 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+        <div className="mt-12 bg-white p-4 sm:p-8 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
             {teamMembers.map(member => {
               const isLeaderProfile = member.isLeader;
               let isDisabled = false;

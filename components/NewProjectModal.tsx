@@ -85,32 +85,32 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plan
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-        <header className="p-8 bg-teal-50 border-b border-teal-100 flex items-center gap-4">
-          <div className="p-3 bg-brand-primary rounded-2xl text-white shadow-lg shadow-teal-200"><FolderPlus size={24} /></div>
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+        <header className="p-6 sm:p-8 bg-teal-50 border-b border-teal-100 flex items-center gap-4">
+          <div className="p-2 sm:p-3 bg-brand-primary rounded-2xl text-white shadow-lg shadow-teal-200"><FolderPlus size={24} /></div>
           <div>
-            <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Criar Novo Projeto</h2>
-            <p className="text-[10px] font-bold text-teal-600 uppercase tracking-widest">Defina o escopo inicial</p>
+            <h2 className="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tighter">Criar Novo Projeto</h2>
+            <p className="text-[8px] sm:text-[10px] font-bold text-teal-600 uppercase tracking-widest">Defina o escopo inicial</p>
           </div>
           <button onClick={onClose} className="ml-auto p-2 hover:bg-slate-200 rounded-full transition"><X size={20} /></button>
         </header>
         
-        <div className="p-8 space-y-6 flex-1 overflow-y-auto custom-scrollbar">
+        <div className="p-6 sm:p-8 space-y-6 flex-1 overflow-y-auto custom-scrollbar">
           <div>
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Nome do Projeto</label>
-            <input type="text" value={projectName} onChange={e => { setProjectName(e.target.value); setError(''); }} placeholder="Ex: Vacina COVID-19 (Submissão ANVISA)" className="mt-1 w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none focus:ring-2 focus:ring-brand-primary"/>
+            <input type="text" value={projectName} onChange={e => { setProjectName(e.target.value); setError(''); }} placeholder="Ex: Vacina COVID-19" className="mt-1 w-full px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none focus:ring-2 focus:ring-brand-primary"/>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Responsável</label>
-              <select value={responsibleMember} onChange={e => { setResponsibleMember(e.target.value); setError(''); }} className="mt-1 w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none">
+              <select value={responsibleMember} onChange={e => { setResponsibleMember(e.target.value); setError(''); }} className="mt-1 w-full px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none">
                 {teamMembers.map(member => (<option key={member.id} value={member.name}>{member.name}</option>))}
               </select>
             </div>
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Plano Base</label>
-              <select value={selectedPlanId} onChange={e => { setSelectedPlanId(e.target.value); setError(''); }} className="mt-1 w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none">
+              <select value={selectedPlanId} onChange={e => { setSelectedPlanId(e.target.value); setError(''); }} className="mt-1 w-full px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none">
                 {plans.map(plan => (<option key={plan.id} value={plan.id}>{plan.name}</option>))}
               </select>
             </div>

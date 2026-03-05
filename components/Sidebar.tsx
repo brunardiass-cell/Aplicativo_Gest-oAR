@@ -28,6 +28,9 @@ interface SidebarProps {
   lastSync: SyncInfo | null;
   onSaveBackup: () => void;
   onLoadBackup: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
+  isMobile?: boolean;
 }
 
 const getInitials = (name?: string): string => {
@@ -46,7 +49,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   hasFullAccess,
   lastSync,
   onSaveBackup,
-  onLoadBackup
+  onLoadBackup,
+  isOpen,
+  onClose,
+  isMobile
 }) => {
 
   const formatSyncTime = (timestamp: string) => {
@@ -54,8 +60,19 @@ const Sidebar: React.FC<SidebarProps> = ({
     return new Date(timestamp).toLocaleTimeString('pt-BR');
   };
 
+  const sidebarClasses = isMobile 
+    ? `fixed inset-y-0 left-0 w-64 bg-slate-800 text-white z-[100] transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`
+    : `w-64 bg-slate-800 text-white fixed h-full flex flex-col z-50`;
+
   return (
-    <aside className="w-64 bg-slate-800 text-white fixed h-full flex flex-col z-50">
+    <>
+      {isMobile && isOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[90] transition-opacity"
+          onClick={onClose}
+        />
+      )}
+      <aside className={sidebarClasses}>
       <div className="p-6">
         <div className="flex items-center gap-3 mb-12 cursor-pointer group" onClick={onGoHome}>
           <div className="w-10 h-10 bg-brand-primary rounded-full flex items-center justify-center text-white font-black text-sm shadow-lg transition-transform group-hover:scale-105">
@@ -126,7 +143,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             </button>
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 };
 

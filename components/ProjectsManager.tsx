@@ -201,22 +201,22 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
         )}
       </div>
       
-      <div className="grid grid-cols-12 gap-8">
-        <div className="col-span-4 project-list-container">
-          <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="col-span-1 lg:col-span-4 project-list-container">
+          <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-4 sm:p-6 space-y-3 max-h-[300px] lg:max-h-[600px] overflow-y-auto custom-scrollbar">
             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 pb-2">Projetos Ativos</h3>
             {projects.map(p => (
-              <button key={p.id} onClick={() => { setSelectedProject(p); setIsEditingProject(false); }} className={`w-full p-4 rounded-2xl text-left transition ${selectedProject?.id === p.id ? 'bg-brand-primary text-white shadow-lg' : 'hover:bg-slate-50'}`}>
-                <p className="text-sm font-black uppercase tracking-tight truncate">{p.name}</p>
-                <span className="text-[9px] font-bold uppercase tracking-widest opacity-60">{p.status}</span>
+              <button key={p.id} onClick={() => { setSelectedProject(p); setIsEditingProject(false); }} className={`w-full p-3 sm:p-4 rounded-2xl text-left transition ${selectedProject?.id === p.id ? 'bg-brand-primary text-white shadow-lg' : 'hover:bg-slate-50'}`}>
+                <p className="text-xs sm:text-sm font-black uppercase tracking-tight truncate">{p.name}</p>
+                <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest opacity-60">{p.status}</span>
               </button>
             ))}
              {projects.length === 0 && (<div className="text-center py-10"><p className="text-slate-400 text-xs font-bold uppercase tracking-widest italic">Nenhum projeto criado.</p></div>)}
           </div>
         </div>
-        <div className="col-span-8">
+        <div className="col-span-1 lg:col-span-8">
             {selectedProject ? (
-              <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-8 space-y-6 printable-content">
+              <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-4 sm:p-8 space-y-6 printable-content">
                 <div className="border-b border-slate-100 pb-6">
                   {isEditingProject ? (
                     <div className="space-y-4 animate-in fade-in duration-300">

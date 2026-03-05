@@ -10,41 +10,41 @@ interface TaskDetailsModalProps {
 
 const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) => {
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
-      <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
-        <div className="p-8 border-b border-slate-100 relative bg-gradient-to-br from-teal-50/50 to-white">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+        <div className="p-6 sm:p-8 border-b border-slate-100 relative bg-gradient-to-br from-teal-50/50 to-white">
           <button 
             onClick={onClose} 
-            className="absolute top-6 right-6 p-2 hover:bg-slate-200 rounded-full transition"
+            className="absolute top-4 sm:top-6 right-4 sm:right-6 p-2 hover:bg-slate-200 rounded-full transition"
           >
             <X size={20} className="text-slate-400" />
           </button>
           
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            <span className="px-3 py-1 bg-brand-primary text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm">
+          <div className="flex flex-wrap items-center gap-2 mb-3 sm:mb-4">
+            <span className="px-3 py-1 bg-brand-primary text-white rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest shadow-sm">
               {task.project}
             </span>
-            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+            <span className={`px-3 py-1 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border ${
               task.status === 'Concluída' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-amber-100 text-amber-700 border-amber-200'
             }`}>
               {task.status}
             </span>
-            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-slate-200 text-slate-500 bg-white`}>
+            <span className={`px-3 py-1 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border border-slate-200 text-slate-500 bg-white`}>
               Prioridade {task.priority}
             </span>
           </div>
           
-          <h2 className="text-3xl font-black text-slate-900 mb-2 leading-tight tracking-tighter uppercase">
+          <h2 className="text-xl sm:text-3xl font-black text-slate-900 mb-2 leading-tight tracking-tighter uppercase">
             {task.activity}
           </h2>
           
-          <p className="text-slate-500 text-lg leading-relaxed font-medium">
+          <p className="text-slate-500 text-sm sm:text-lg leading-relaxed font-medium">
             {task.description}
           </p>
         </div>
 
-        <div className="p-10 space-y-10 flex-1 overflow-y-auto custom-scrollbar">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div className="p-6 sm:p-10 space-y-8 sm:space-y-10 flex-1 overflow-y-auto custom-scrollbar">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
             <InfoBlock label="Solicitação" value={task.requestDate} icon={<Calendar size={14}/>} />
             <InfoBlock label="Prazo Final" value={task.completionDate} icon={<Clock size={14}/>} highlight />
             <InfoBlock label="Líder" value={task.projectLead} icon={<User size={14}/>} />

@@ -160,40 +160,40 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
 
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex flex-wrap items-end gap-4">
-          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 pr-4 self-center shrink-0">
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 pr-4 self-center shrink-0 w-full sm:w-auto mb-2 sm:mb-0">
               <SlidersHorizontal size={14}/> Filtros
           </h3>
-          <div className="flex-1 min-w-[150px]">
+          <div className="flex-1 min-w-[200px] sm:min-w-[150px]">
               <label className="text-[9px] font-bold text-slate-500">Projeto</label>
               <select value={projectFilter} onChange={(e) => onProjectFilterChange(e.target.value)} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none">
                   {uniqueProjects.map(project => (<option key={project} value={project}>{project}</option>))}
               </select>
           </div>
-          <div className="flex-1 min-w-[150px]">
+          <div className="flex-1 min-w-[200px] sm:min-w-[150px]">
               <label className="text-[9px] font-bold text-slate-500">Status</label>
               <select value={statusFilter} onChange={(e) => onStatusFilterChange(e.target.value as 'Todos' | Status)} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none">
                   <option value="Todos">Todos</option><option value="Planejada">Planejada</option><option value="Em Andamento">Em Andamento</option><option value="Concluída">Concluída</option><option value="Pausado">Pausado</option><option value="Não Aplicável">Não Aplicável</option>
               </select>
           </div>
           {isTeamView && (
-            <div className="flex-1 min-w-[150px]">
+            <div className="flex-1 min-w-[200px] sm:min-w-[150px]">
                 <label className="text-[9px] font-bold text-slate-500">Responsável</label>
                 <select value={leadFilter} onChange={(e) => onLeadFilterChange(e.target.value)} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none">
                     {uniqueLeads.map(lead => (<option key={lead} value={lead}>{lead}</option>))}
                 </select>
             </div>
           )}
-          <div className="flex-1 min-w-[150px]">
+          <div className="flex-1 min-w-[200px] sm:min-w-[150px]">
               <label className="text-[9px] font-bold text-slate-500">Filtrar por Data</label>
               <select value={dateFilterType} onChange={(e) => onDateFilterTypeChange(e.target.value as any)} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none">
                   <option value="all">Não filtrar</option><option value="requestDate">Data de Solicitação</option><option value="completionDate">Data de Entrega</option>
               </select>
           </div>
-          <div className="flex-1 min-w-[120px]">
+          <div className="flex-1 min-w-[140px] sm:min-w-[120px]">
               <label className="text-[9px] font-bold text-slate-500">De</label>
               <input type="date" value={startDateFilter} onChange={(e) => onStartDateFilterChange(e.target.value)} disabled={dateFilterType === 'all'} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none disabled:opacity-50"/>
           </div>
-          <div className="flex-1 min-w-[120px]">
+          <div className="flex-1 min-w-[140px] sm:min-w-[120px]">
               <label className="text-[9px] font-bold text-slate-500">Até</label>
               <input type="date" value={endDateFilter} onChange={(e) => onEndDateFilterChange(e.target.value)} disabled={dateFilterType === 'all'} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none disabled:opacity-50"/>
           </div>
