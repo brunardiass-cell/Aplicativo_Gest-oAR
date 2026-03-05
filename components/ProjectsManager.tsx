@@ -182,20 +182,20 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
   return (
     <div className="space-y-8 project-manager-container">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 project-manager-header">
-        <button onClick={() => setIsNewProjectModalOpen(true)} className="group flex items-center gap-4 p-3.5 bg-white rounded-[1.25rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-teal-200 transition-all text-left">
-          <div className="p-2 bg-brand-primary text-white rounded-xl shadow-md shadow-teal-100 group-hover:scale-105 transition-transform"><FolderPlus size={18} /></div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 project-manager-header">
+        <button onClick={() => setIsNewProjectModalOpen(true)} className="group flex items-center gap-6 p-6 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-teal-200 transition-all text-left">
+          <div className="p-4 bg-brand-primary text-white rounded-2xl shadow-lg shadow-teal-100 group-hover:scale-105 transition-transform"><FolderPlus size={28} /></div>
           <div>
-            <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-tight">Criar Novo Projeto</h3>
-            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Use um plano para gerar um cronograma.</p>
+            <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Criar Novo Projeto</h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Use um plano para gerar um cronograma.</p>
           </div>
         </button>
         {isAdmin && (
-          <button onClick={() => setIsPlanModalOpen(true)} className="group flex items-center gap-4 p-3.5 bg-white rounded-[1.25rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-amber-200 transition-all text-left">
-            <div className="p-2 bg-amber-500 text-white rounded-xl shadow-md shadow-amber-100 group-hover:scale-105 transition-transform"><ListPlus size={18} /></div>
+          <button onClick={() => setIsPlanModalOpen(true)} className="group flex items-center gap-6 p-6 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-amber-200 transition-all text-left">
+            <div className="p-4 bg-amber-500 text-white rounded-2xl shadow-lg shadow-amber-100 group-hover:scale-105 transition-transform"><ListPlus size={28} /></div>
             <div>
-              <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-tight">Gerenciar Planos</h3>
-              <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Crie e edite templates de atividades.</p>
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Gerenciar Planos</h3>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Crie e edite templates de atividades.</p>
             </div>
           </button>
         )}
