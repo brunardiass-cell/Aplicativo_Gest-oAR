@@ -49,9 +49,7 @@ const App: React.FC = () => {
   const [appUsers, setAppUsers] = useState<AppUser[]>([]);
   const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
   const [dataVersion, setDataVersion] = useState<string | null>(null);
-  const [syncConflict, setSyncConflict] = useState(false);
   const [isDataDirty, setIsDataDirty] = useState(false);
-  const [showUpdateNotification, setShowUpdateNotification] = useState(false);
   const [activeUsers, setActiveUsers] = useState<string[]>([]);
   
   const [baseData, setBaseData] = useState<any>(null);
@@ -114,14 +112,15 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleGlobalClick = async (e: MouseEvent) => {
-      if (!isMsalAuthenticated || !isAuthorized || showUpdateNotification || !dataVersion) return;
+      if (!isMsalAuthenticated || !isAuthorized || !dataVersion) return;
 
       const target = e.target as HTMLElement;
       if (target.closest('button')) {
         try {
           const cloudVersion = await MicrosoftGraphService.getCloudVersion();
           if (cloudVersion && cloudVersion !== dataVersion) {
-            setShowUpdateNotification(true);
+            console.log('Remote update detected on click, syncing...');
+            syncDataAutomatically();
           }
         } catch (err) {
           console.error("Error checking version on click:", err);
@@ -131,7 +130,7 @@ const App: React.FC = () => {
 
     document.addEventListener('click', handleGlobalClick);
     return () => document.removeEventListener('click', handleGlobalClick);
-  }, [isMsalAuthenticated, isAuthorized, showUpdateNotification, dataVersion]);
+  }, [isMsalAuthenticated, isAuthorized, dataVersion]);
 
   useEffect(() => {
     const sendJoinMessage = () => {
@@ -169,13 +168,9 @@ const App: React.FC = () => {
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'RELOAD_REQUIRED') {
-            // Only show reload requirement if the change was in the SAME profile
-            // or if we are in "Team View" (which sees everything)
-            if (!showUpdateNotification && (data.user === selectedProfile?.name || selectedProfile?.name === 'Visão Geral da Equipe')) {
-              console.log('Reload required notification received for SAME profile or Team View');
-              setShowUpdateNotification(true);
-            } else {
-              console.log('Update received for DIFFERENT profile or already showing notification, ignoring reload prompt');
+            if (data.user !== selectedProfile?.name) {
+              console.log('Remote update detected from user:', data.user, '. Syncing automatically...');
+              syncDataAutomatically();
             }
           } else if (data.type === 'PRESENCE_UPDATE') {
             setActiveUsers(data.users);
@@ -247,53 +242,113 @@ const App: React.FC = () => {
     }
   };
 
+  const applyData = (cloudData: any, version: string | null) => {
+    const loadedPlans = cloudData.activityPlans || [];
+    const migratedPlans = loadedPlans.map((plan: any) => {
+      if (plan.macroActivities.length > 0 && typeof plan.macroActivities[0] === 'string') {
+        const defaultPhase = (plan.phases && plan.phases.length > 0) ? plan.phases[0] : 'Fase Padrão';
+        return {
+          ...plan,
+          macroActivities: (plan.macroActivities as string[]).map(macroName => ({
+            name: macroName,
+            phase: defaultPhase
+          }))
+        };
+      }
+      return plan;
+    });
+
+    const fullData = {
+      tasks: cloudData.tasks || [],
+      projects: cloudData.projects || [],
+      teamMembers: cloudData.teamMembers || DEFAULT_TEAM_MEMBERS,
+      activityPlans: migratedPlans,
+      notifications: cloudData.notifications || [],
+      logs: cloudData.logs || [],
+      appUsers: cloudData.appUsers || DEFAULT_APP_USERS,
+    };
+
+    setTasks(fullData.tasks);
+    setProjects(fullData.projects);
+    setTeamMembers(fullData.teamMembers);
+    setActivityPlans(fullData.activityPlans);
+    setNotifications(fullData.notifications);
+    setLogs(fullData.logs);
+    setAppUsers(fullData.appUsers);
+    setBaseData(JSON.parse(JSON.stringify(fullData)));
+    setDataVersion(version);
+    setIsDataDirty(false);
+  };
+
+  const syncDataAutomatically = async () => {
+    if (!isMsalAuthenticated || !isAuthorized) return;
+    
+    try {
+      const result = await MicrosoftGraphService.loadFromCloud();
+      if (!result) return;
+      
+      const { data: cloudData, version } = result;
+      if (version === dataVersion) return;
+
+      if (!isDataDirty) {
+        console.log('Auto-sync: No local changes, updating state from cloud.');
+        applyData(cloudData, version);
+      } else {
+        console.log('Auto-sync: Local changes detected, merging cloud data.');
+        const loadedPlans = cloudData.activityPlans || [];
+        const migratedPlans = loadedPlans.map((plan: any) => {
+          if (plan.macroActivities.length > 0 && typeof plan.macroActivities[0] === 'string') {
+            const defaultPhase = (plan.phases && plan.phases.length > 0) ? plan.phases[0] : 'Fase Padrão';
+            return {
+              ...plan,
+              macroActivities: (plan.macroActivities as string[]).map(macroName => ({
+                name: macroName,
+                phase: defaultPhase
+              }))
+            };
+          }
+          return plan;
+        });
+
+        const merged = {
+          tasks: mergeArrays(cloudData.tasks || [], tasks, baseData.tasks),
+          projects: mergeArrays(cloudData.projects || [], projects, baseData.projects),
+          teamMembers: mergeArrays(cloudData.teamMembers || [], teamMembers, baseData.teamMembers),
+          activityPlans: mergeArrays(migratedPlans, activityPlans, baseData.activityPlans),
+          notifications: mergeArrays(cloudData.notifications || [], notifications, baseData.notifications),
+          logs: mergeArrays(cloudData.logs || [], logs, baseData.logs),
+          appUsers: mergeArrays(cloudData.appUsers || [], appUsers, baseData.appUsers),
+        };
+
+        setTasks(merged.tasks);
+        setProjects(merged.projects);
+        setTeamMembers(merged.teamMembers);
+        setActivityPlans(merged.activityPlans);
+        setNotifications(merged.notifications);
+        setLogs(merged.logs);
+        setAppUsers(merged.appUsers);
+        
+        const fullCloudData = {
+          ...cloudData,
+          activityPlans: migratedPlans,
+          teamMembers: cloudData.teamMembers || DEFAULT_TEAM_MEMBERS,
+          appUsers: cloudData.appUsers || DEFAULT_APP_USERS
+        };
+        setBaseData(JSON.parse(JSON.stringify(fullCloudData)));
+        setDataVersion(version);
+      }
+      setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'Auto-Sync' });
+    } catch (err) {
+      console.error('Auto-sync failed:', err);
+    }
+  };
+
   const loadDataFromSharePoint = async () => {
     setIsLoading(true);
     try {
       const result = await MicrosoftGraphService.loadFromCloud();
       if (result) {
-        const { data: cloudData, version } = result;
-        setTasks(cloudData.tasks || []);
-        setProjects(cloudData.projects || []);
-        setTeamMembers(cloudData.teamMembers || DEFAULT_TEAM_MEMBERS);
-        
-        const loadedPlans = cloudData.activityPlans || [];
-        const migratedPlans = loadedPlans.map((plan: any) => {
-            if (plan.macroActivities.length > 0 && typeof plan.macroActivities[0] === 'string') {
-                const defaultPhase = (plan.phases && plan.phases.length > 0) ? plan.phases[0] : 'Fase Padrão';
-                return {
-                    ...plan,
-                    macroActivities: (plan.macroActivities as string[]).map(macroName => ({
-                        name: macroName,
-                        phase: defaultPhase
-                    }))
-                };
-            }
-            return plan;
-        });
-        setActivityPlans(migratedPlans);
-        
-        setNotifications(cloudData.notifications || []);
-        setLogs(cloudData.logs || []);
-        const fullData = {
-          tasks: cloudData.tasks || [],
-          projects: cloudData.projects || [],
-          teamMembers: cloudData.teamMembers || DEFAULT_TEAM_MEMBERS,
-          activityPlans: migratedPlans,
-          notifications: cloudData.notifications || [],
-          logs: cloudData.logs || [],
-          appUsers: cloudData.appUsers || DEFAULT_APP_USERS,
-        };
-        setTasks(fullData.tasks);
-        setProjects(fullData.projects);
-        setTeamMembers(fullData.teamMembers);
-        setActivityPlans(fullData.activityPlans);
-        setNotifications(fullData.notifications);
-        setLogs(fullData.logs);
-        setAppUsers(fullData.appUsers);
-        setBaseData(JSON.parse(JSON.stringify(fullData)));
-        setDataVersion(version);
-        setIsDataDirty(false);
+        applyData(result.data, result.version);
       } else {
         setTeamMembers(DEFAULT_TEAM_MEMBERS);
         setAppUsers(DEFAULT_APP_USERS);
@@ -301,7 +356,6 @@ const App: React.FC = () => {
         setIsDataDirty(false); 
       }
       setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'Cloud' });
-      setSyncConflict(false);
     } catch (error) {
       setAuthError("Falha ao carregar dados do SharePoint.");
       setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'Cloud' });
@@ -398,26 +452,29 @@ const App: React.FC = () => {
         } else {
           console.warn('WebSocket not open, could not broadcast update', wsRef.current?.readyState);
         }
+      } else if (result.conflict) {
+        console.warn('Conflict detected during save. Syncing and retrying...');
+        await syncDataAutomatically();
       } else {
-        console.error('Save failed or conflict detected', result);
+        console.error('Save failed', result);
         setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
       }
     }
   };
 
   useEffect(() => {
-    if (isInitialLoad.current || syncConflict || !isDataDirty) return;
+    if (isInitialLoad.current || !isDataDirty) return;
     if (saveDataTimeout.current) clearTimeout(saveDataTimeout.current);
 
     saveDataTimeout.current = window.setTimeout(handleSaveChanges, 2000);
 
-  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, dataVersion, syncConflict, isDataDirty]);
+  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, dataVersion, isDataDirty]);
 
   // Polling removed in favor of WebSockets
   /*
   useEffect(() => {
     const interval = setInterval(async () => {
-      if (!isDataDirty && !syncConflict && isMsalAuthenticated && isAuthorized) {
+      if (!isDataDirty && isMsalAuthenticated && isAuthorized) {
         const cloudVersion = await MicrosoftGraphService.getCloudVersion();
         if (cloudVersion && cloudVersion !== dataVersion) {
           setShowUpdateNotification(true);
@@ -426,7 +483,7 @@ const App: React.FC = () => {
     }, 60000); // Verifica a cada 60 segundos
 
     return () => clearInterval(interval);
-  }, [isDataDirty, dataVersion, syncConflict, isMsalAuthenticated, isAuthorized]);
+  }, [isDataDirty, dataVersion, isMsalAuthenticated, isAuthorized]);
   */
 
   const currentUserRole = useMemo(() => {
@@ -984,59 +1041,8 @@ const App: React.FC = () => {
     }
   }
 
-  if (syncConflict) {
-    return (
-      <div className="fixed inset-0 bg-slate-900 bg-opacity-80 flex items-center justify-center z-50 animate-in">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md text-center">
-          <ShieldAlert size={48} className="mx-auto text-red-500" />
-          <h2 className="mt-4 text-2xl font-black text-slate-800">Erro ao Salvar</h2>
-          <p className="mt-4 text-slate-600">Não foi possível salvar sua alteração. O sistema foi atualizado por outro usuário.</p>
-          <p className="mt-2 font-bold text-slate-800 text-sm">É necessário recarregar o sistema para continuar.</p>
-          <button 
-            onClick={() => { setSyncConflict(false); loadDataFromSharePoint(); }}
-            className="mt-6 w-full bg-brand-primary text-white py-4 rounded-xl font-bold hover:bg-brand-accent transition-all shadow-lg"
-          >
-            Recarregar Sistema
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <>
-      {showUpdateNotification && (
-        <div className="fixed bottom-8 right-8 bg-[#FFF9E6] border border-[#FFE58F] p-6 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[100] animate-in slide-in-from-bottom-4 fade-in duration-300 max-w-2xl">
-          <button 
-            onClick={() => setShowUpdateNotification(false)} 
-            className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            <X size={20} />
-          </button>
-          
-          <div className="flex items-center gap-6">
-            <div className="bg-[#FFBB33] p-3 rounded-2xl shadow-lg shadow-amber-100 flex items-center justify-center">
-              <AlertTriangle size={32} className="text-white" strokeWidth={2.5} />
-            </div>
-            
-            <div className="flex-1 pr-4">
-              <p className="font-bold text-slate-900 text-lg leading-tight">
-                Houve uma alteração no sistema por um outro usuário.
-              </p>
-              <p className="text-slate-600 text-sm mt-1 font-medium">
-                É necessário <span className="font-bold text-slate-800">recarregar a página</span> antes de fazer alguma alteração ou inserção.
-              </p>
-            </div>
-            
-            <button 
-              onClick={() => { setShowUpdateNotification(false); loadDataFromSharePoint(); }}
-              className="bg-[#00796B] text-white px-6 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#004D40] transition-all shadow-lg shadow-teal-100 active:scale-95 whitespace-nowrap"
-            >
-              Recarregar Página
-            </button>
-          </div>
-        </div>
-      )}
       <div className={`flex h-screen bg-slate-100 font-sans overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
       <Sidebar 
         currentView={view} 
