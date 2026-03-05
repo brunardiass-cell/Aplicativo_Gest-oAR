@@ -1173,7 +1173,7 @@ const App: React.FC = () => {
         {view === 'traceability' && <ActivityLogView logs={logs} onRestoreItem={handleRestoreItem} onClearLog={handleClearLog} onClearAllLogs={handleClearAllLogs} />}
       </main>
       
-      {isModalOpen && (<TaskModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setSelectedTask(null); }} onSave={handleSaveTask} projects={['Geral', ...activeProjects.map(p => p.name)]} initialData={selectedTask} teamMembers={teamMembers} hasFullAccess={hasFullAccess}/>)}
+      {isModalOpen && (<TaskModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setSelectedTask(null); }} onSave={handleSaveTask} projects={['Geral', ...activeProjects.map(p => p.name)]} initialData={selectedTask} teamMembers={teamMembers} hasFullAccess={hasFullAccess} currentProfileName={selectedProfile?.name}/>)}
       {isDetailsOpen && selectedTask && (<TaskDetailsModal task={selectedTask} onClose={() => setIsDetailsOpen(false)}/>)}
       {isDeleteModalOpen && deleteTarget && (<DeletionModal itemName={deleteTarget.name} onClose={() => { setIsDeleteModalOpen(false); setDeleteTarget(null); }} onConfirm={handleConfirmDeletion}/>)}
       {isReportModalOpen && (<MonthlyReportModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} tasks={tasksForBoard} filteredUser={filterMember} filters={{dateFilterType, startDateFilter, endDateFilter, projectFilter, statusFilter, leadFilter}}/>)}

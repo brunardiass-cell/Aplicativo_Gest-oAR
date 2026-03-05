@@ -11,14 +11,15 @@ interface TaskModalProps {
   initialData?: Task | null;
   teamMembers: TeamMember[];
   hasFullAccess: boolean;
+  currentProfileName?: string;
 }
 
-const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects, initialData, teamMembers, hasFullAccess }) => {
+const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects, initialData, teamMembers, hasFullAccess, currentProfileName }) => {
   const [formData, setFormData] = useState<Partial<Task>>({
     activity: '',
     project: projects[0] || 'Geral',
     description: '',
-    projectLead: teamMembers[0].name,
+    projectLead: currentProfileName || teamMembers[0].name,
     collaborators: [],
     priority: 'Média',
     status: 'Planejada',
@@ -37,16 +38,18 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
   const [note, setNote] = useState('');
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
+  const [isCreatingForAnother, setIsCreatingForAnother] = useState(false);
 
   useEffect(() => {
     if (initialData) {
       setFormData(initialData);
+      setIsCreatingForAnother(initialData.projectLead !== currentProfileName);
     } else {
       setFormData({
         activity: '',
         project: projects[0] || 'Geral',
         description: '',
-        projectLead: teamMembers[0].name,
+        projectLead: currentProfileName || teamMembers[0].name,
         collaborators: [],
         priority: 'Média',
         status: 'Planejada',
@@ -64,8 +67,9 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
         fileLocation: '',
         updates: []
       });
+      setIsCreatingForAnother(false);
     }
-  }, [initialData, isOpen, teamMembers, projects]);
+  }, [initialData, isOpen, teamMembers, projects, currentProfileName]);
 
   if (!isOpen) return null;
 
@@ -159,11 +163,38 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
 
             <div className="space-y-6">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b pb-2"><Users size={14}/> Atribuição</h3>
+              
+              {!initialData && (
+                <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <input 
+                    type="checkbox" 
+                    id="creatingForAnother"
+                    checked={isCreatingForAnother} 
+                    onChange={e => {
+                      setIsCreatingForAnother(e.target.checked);
+                      if (!e.target.checked && currentProfileName) {
+                        setFormData({...formData, projectLead: currentProfileName});
+                      }
+                    }} 
+                    className="w-5 h-5 rounded-lg border-slate-300 text-brand-primary focus:ring-brand-primary cursor-pointer"
+                  />
+                  <label htmlFor="creatingForAnother" className="text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer select-none">
+                    estou criando uma atividade para um outro integrante da equipe
+                  </label>
+                </div>
+              )}
+
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Responsável pela Atividade</label>
-                <select value={formData.projectLead} onChange={e => setFormData({...formData, projectLead: e.target.value})} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none">
-                  {teamMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-                </select>
+                {(initialData || isCreatingForAnother) ? (
+                  <select value={formData.projectLead} onChange={e => setFormData({...formData, projectLead: e.target.value})} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none">
+                    {teamMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                  </select>
+                ) : (
+                  <div className="w-full px-5 py-3.5 bg-slate-100 border border-slate-200 rounded-2xl text-sm font-bold text-slate-600">
+                    {formData.projectLead}
+                  </div>
+                )}
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Equipe de Apoio</label>
