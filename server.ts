@@ -11,20 +11,33 @@ async function startServer() {
 
   const PORT = 3000;
 
-  // Track connected clients
-  const clients = new Set<WebSocket>();
+  // Track connected clients and their user names
+  const clients = new Map<WebSocket, string>();
 
   wss.on("connection", (ws, req) => {
-    clients.add(ws);
+    clients.set(ws, "Anonymous");
     console.log(`New connection from ${req.socket.remoteAddress}. Total clients: ${clients.size}`);
+
+    const broadcastPresence = () => {
+      const activeUsers = Array.from(new Set(Array.from(clients.values()).filter(name => name !== "Anonymous")));
+      const message = JSON.stringify({ type: "PRESENCE_UPDATE", users: activeUsers });
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(message);
+        }
+      });
+    };
 
     ws.on("message", (message) => {
       console.log(`Received message: ${message}`);
       try {
         const data = JSON.parse(message.toString());
-        if (data.type === "DATA_UPDATED") {
-          console.log(`Data updated by user: ${data.user}. Broadcasting to ${clients.size - 1} other clients...`);
-          clients.forEach((client) => {
+        if (data.type === "USER_JOINED") {
+          clients.set(ws, data.user);
+          broadcastPresence();
+        } else if (data.type === "DATA_UPDATED") {
+          console.log(`Data updated by user: ${data.user}. Broadcasting to other clients...`);
+          wss.clients.forEach((client) => {
             if (client !== ws && client.readyState === WebSocket.OPEN) {
               client.send(JSON.stringify({ type: "RELOAD_REQUIRED", user: data.user }));
             }
@@ -37,6 +50,7 @@ async function startServer() {
 
     ws.on("close", (code, reason) => {
       clients.delete(ws);
+      broadcastPresence();
       console.log(`Connection closed: ${code} ${reason}. Total clients: ${clients.size}`);
     });
 

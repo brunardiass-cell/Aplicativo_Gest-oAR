@@ -26,6 +26,12 @@ function isEqual(a: any, b: any): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+const getInitials = (name?: string): string => {
+  if (!name) return 'G';
+  const nameParts = name.split(' ');
+  return nameParts[0][0].toUpperCase();
+};
+
 export type AugmentedMicroActivity = MicroActivity & {
   projectId: string;
   projectName: string;
@@ -46,6 +52,7 @@ const App: React.FC = () => {
   const [syncConflict, setSyncConflict] = useState(false);
   const [isDataDirty, setIsDataDirty] = useState(false);
   const [showUpdateNotification, setShowUpdateNotification] = useState(false);
+  const [activeUsers, setActiveUsers] = useState<string[]>([]);
   
   const [baseData, setBaseData] = useState<any>(null);
   const [isPreSaveModalOpen, setIsPreSaveModalOpen] = useState(false);
@@ -136,6 +143,9 @@ const App: React.FC = () => {
 
       socket.onopen = () => {
         console.log('WebSocket connected successfully');
+        if (selectedProfile?.name && selectedProfile.name !== 'Visão Geral da Equipe') {
+          socket.send(JSON.stringify({ type: 'USER_JOINED', user: selectedProfile.name }));
+        }
       };
 
       socket.onmessage = (event) => {
@@ -152,6 +162,8 @@ const App: React.FC = () => {
               console.log('Update received for DIFFERENT profile, ignoring reload prompt');
               // We could silently sync here, but for now we'll let the merge handle it on save
             }
+          } else if (data.type === 'PRESENCE_UPDATE') {
+            setActiveUsers(data.users);
           }
         } catch (e) {
           console.error('Error parsing WS message:', e);
@@ -797,6 +809,12 @@ const App: React.FC = () => {
     setProjectManagerViewTab('visual');
   };
 
+  useEffect(() => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && selectedProfile?.name && selectedProfile.name !== 'Visão Geral da Equipe') {
+      wsRef.current.send(JSON.stringify({ type: 'USER_JOINED', user: selectedProfile.name }));
+    }
+  }, [selectedProfile]);
+
   const pendingReviewCount = useMemo(() => {
     const user = selectedProfile?.name;
     if (!user || user === 'Visão Geral da Equipe') return 0;
@@ -1045,6 +1063,28 @@ const App: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-2 sm:gap-4">
+                {activeUsers.length > 0 && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full shadow-sm border border-slate-100">
+                    <div className="flex items-center -space-x-2">
+                      {activeUsers.slice(0, 3).map((user, idx) => (
+                        <div 
+                          key={user} 
+                          className="w-7 h-7 rounded-full border-2 border-white bg-brand-primary flex items-center justify-center text-[9px] font-black text-white uppercase shadow-sm"
+                          title={user}
+                          style={{ zIndex: activeUsers.length - idx }}
+                        >
+                          {getInitials(user)}
+                        </div>
+                      ))}
+                      {activeUsers.length > 3 && (
+                        <div className="w-7 h-7 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-[9px] font-black text-slate-500 uppercase z-0">
+                          +{activeUsers.length - 3}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Online</span>
+                  </div>
+                )}
                 <div className="relative p-2 bg-white rounded-xl shadow-sm">
                     <Bell size={isMobile ? 18 : 24} className="text-slate-400"/>
                     {pendingReviewCount > 0 && <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">{pendingReviewCount}</span>}
