@@ -182,20 +182,20 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
   return (
     <div className="space-y-8 project-manager-container">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 project-manager-header">
-        <button onClick={() => setIsNewProjectModalOpen(true)} className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-teal-200 transition-all text-left">
-          <div className="p-5 bg-brand-primary text-white rounded-3xl shadow-lg shadow-teal-200 group-hover:scale-110 transition-transform"><FolderPlus size={32} /></div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 project-manager-header">
+        <button onClick={() => setIsNewProjectModalOpen(true)} className="group flex items-center gap-4 p-3.5 bg-white rounded-[1.25rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-teal-200 transition-all text-left">
+          <div className="p-2 bg-brand-primary text-white rounded-xl shadow-md shadow-teal-100 group-hover:scale-105 transition-transform"><FolderPlus size={18} /></div>
           <div>
-            <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Criar Novo Projeto</h3>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Use um plano para gerar um cronograma.</p>
+            <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-tight">Criar Novo Projeto</h3>
+            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Use um plano para gerar um cronograma.</p>
           </div>
         </button>
         {isAdmin && (
-          <button onClick={() => setIsPlanModalOpen(true)} className="group flex items-center gap-6 p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl hover:border-amber-200 transition-all text-left">
-            <div className="p-5 bg-amber-500 text-white rounded-3xl shadow-lg shadow-amber-200 group-hover:scale-110 transition-transform"><ListPlus size={32} /></div>
+          <button onClick={() => setIsPlanModalOpen(true)} className="group flex items-center gap-4 p-3.5 bg-white rounded-[1.25rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-amber-200 transition-all text-left">
+            <div className="p-2 bg-amber-500 text-white rounded-xl shadow-md shadow-amber-100 group-hover:scale-105 transition-transform"><ListPlus size={18} /></div>
             <div>
-              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Gerenciar Planos</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Crie e edite templates de atividades.</p>
+              <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-tight">Gerenciar Planos</h3>
+              <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Crie e edite templates de atividades.</p>
             </div>
           </button>
         )}
@@ -246,7 +246,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                     <div>
                       <div className="flex justify-between items-start">
                           <div>
-                              <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">{selectedProject.name}</h3>
+                              <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">{selectedProject.name}</h3>
                               <div className="flex items-center gap-2 mt-2 text-[10px] font-black uppercase tracking-widest text-slate-500"><User size={14}/> Responsável: <span className="text-slate-800">{selectedProject.responsible || 'Não definido'}</span></div>
                               <div className="flex items-center gap-2 mt-4 no-print">
                                 <select value={selectedProject.status} onChange={(e) => handleStatusChange(selectedProject.id, e.target.value as Project['status'])} className="px-3 py-1 text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 rounded-lg border border-slate-200 appearance-none outline-none">

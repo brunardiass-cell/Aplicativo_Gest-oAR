@@ -134,6 +134,22 @@ const App: React.FC = () => {
   }, [isMsalAuthenticated, isAuthorized, showUpdateNotification, dataVersion]);
 
   useEffect(() => {
+    const sendJoinMessage = () => {
+      if (wsRef.current?.readyState === WebSocket.OPEN && selectedProfile?.name && selectedProfile.name !== 'Visão Geral da Equipe') {
+        console.log('Sending USER_JOINED for:', selectedProfile.name);
+        wsRef.current.send(JSON.stringify({ type: 'USER_JOINED', user: selectedProfile.name }));
+      }
+    };
+
+    // Send immediately when profile changes
+    sendJoinMessage();
+
+    // Also send periodically to ensure presence is maintained
+    const interval = setInterval(sendJoinMessage, 10000);
+    return () => clearInterval(interval);
+  }, [selectedProfile]);
+
+  useEffect(() => {
     const wsUrl = window.location.origin.replace(/^http/, 'ws') + '/ws-updates';
     
     const connectWS = () => {
