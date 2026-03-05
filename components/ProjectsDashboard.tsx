@@ -125,8 +125,8 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
       {/* Lists & Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-7">
-            <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200 h-full">
-                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Status dos Projetos (baseado em Macroatividades)</h3>
+            <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-200 h-full">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Status dos Projetos (baseado em Macroatividades)</h3>
                 <div className="space-y-5 max-h-[600px] overflow-y-auto custom-scrollbar pr-4">
                     {userProjects.length > 0 ? userProjects.map(project => {
                     const progress = calculateProjectProgress(project);
@@ -163,8 +163,8 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
         </div>
         
         <div className="lg:col-span-5 space-y-6">
-            <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
-                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Status das Microatividades</h3>
+            <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-200">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Status das Microatividades</h3>
                 <div className="h-[200px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -177,8 +177,8 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
                 </div>
             </div>
 
-            <div className="bg-red-50 p-6 rounded-[2rem] border border-red-200">
-                <h3 className="text-xs font-black text-red-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <div className="bg-red-50 p-5 rounded-[1.5rem] border border-red-200">
+                <h3 className="text-[10px] font-black text-red-900 uppercase tracking-widest mb-4 flex items-center gap-2">
                     <AlertTriangle size={14}/> Microatividades Vencidas
                 </h3>
                 <div className="space-y-3 max-h-[150px] overflow-y-auto custom-scrollbar pr-2">
@@ -196,8 +196,8 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
                 </div>
             </div>
 
-            <div className="bg-amber-50 p-6 rounded-[2rem] border border-amber-200">
-                <h3 className="text-xs font-black text-amber-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <div className="bg-amber-50 p-5 rounded-[1.5rem] border border-amber-200">
+                <h3 className="text-[10px] font-black text-amber-900 uppercase tracking-widest mb-4 flex items-center gap-2">
                     <Clock size={14}/> Prazos Próximos (Top 5)
                 </h3>
                 <div className="space-y-3 max-h-[150px] overflow-y-auto custom-scrollbar pr-2">
@@ -223,11 +223,11 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
 };
 
 const StatCard = ({ label, value, icon, color }: { label: string, value: string | number, icon: React.ReactNode, color: string }) => (
-  <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4">
-    <div className={`p-3 rounded-2xl ${color} text-white shadow-lg`}>{icon}</div>
+  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+    <div className={`p-2.5 rounded-xl ${color} text-white shadow-md`}>{icon}</div>
     <div>
-      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
-      <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{value}</h3>
+      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+      <h3 className="text-2xl font-black text-slate-900 tracking-tighter">{value}</h3>
     </div>
   </div>
 );

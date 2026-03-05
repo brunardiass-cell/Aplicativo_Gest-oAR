@@ -73,8 +73,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         />
       )}
       <aside className={sidebarClasses}>
-      <div className="p-6">
-        <div className="flex items-center gap-3 mb-12 cursor-pointer group" onClick={onGoHome}>
+      <div className="p-4 sm:p-6">
+        <div className="flex items-center gap-3 mb-8 sm:mb-12 cursor-pointer group" onClick={onGoHome}>
           <div className="w-10 h-10 bg-brand-primary rounded-full flex items-center justify-center text-white font-black text-sm shadow-lg transition-transform group-hover:scale-105">
             {getInitials(selectedProfile?.name)}
           </div>
@@ -97,8 +97,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      <div className="mt-auto p-6 space-y-4">
-        <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-700 space-y-4">
+      <div className="mt-auto p-4 sm:p-6 space-y-3 sm:space-y-4">
+        <div className="p-3 sm:p-4 rounded-xl bg-slate-900/50 border border-slate-700 space-y-3 sm:space-y-4">
             <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <Database size={12}/> Backup Local
             </p>
@@ -108,7 +108,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
         </div>
         
-        <div className={`p-4 rounded-xl border transition-all ${
+        <div className={`p-3 sm:p-4 rounded-xl border transition-all ${
           lastSync?.status === 'error' ? 'bg-red-500/10 border-red-500/20' : 'bg-slate-900/50 border-slate-700'
         }`}>
           <div className="flex items-center justify-between mb-3">
@@ -135,11 +135,11 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-            <button onClick={onSwitchProfile} className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-slate-700 hover:bg-slate-600 transition text-xs font-bold uppercase tracking-wider text-slate-300">
-                <Users size={16} /> Trocar Perfil
+            <button onClick={onSwitchProfile} className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 sm:px-4 sm:py-3 rounded-lg bg-slate-700 hover:bg-slate-600 transition text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-300">
+                <Users size={14} /> Trocar Perfil
             </button>
-            <button onClick={onLogout} title="Sair" className="p-3 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/40 transition">
-                <LogOut size={16} />
+            <button onClick={onLogout} title="Sair" className="p-2.5 sm:p-3 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/40 transition">
+                <LogOut size={14} />
             </button>
         </div>
       </div>

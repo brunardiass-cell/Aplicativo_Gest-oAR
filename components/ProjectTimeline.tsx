@@ -6,7 +6,7 @@ import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save,
 interface ProjectTimelineProps {
   project: Project;
   onUpdateProject: (project: Project) => void;
-  onOpenDeletionModal: (item: { type: 'macro' | 'micro', projectId: string; macroId: string; microId?: string; name: string }) => void;
+  onOpenDeletionModal: (item: { type: 'macro' | 'micro', ids: { projectId: string; macroId: string; microId?: string; }, name: string }) => void;
   teamMembers: TeamMember[];
 }
 
@@ -166,7 +166,7 @@ interface MacroRowProps {
   macro: MacroActivity;
   project: Project;
   onUpdateProject: (p: Project) => void;
-  onOpenDeletionModal: (item: { type: 'macro' | 'micro', projectId: string; macroId: string; microId?: string; name: string }) => void;
+  onOpenDeletionModal: (item: { type: 'macro' | 'micro', ids: { projectId: string; macroId: string; microId?: string; }, name: string }) => void;
   teamMembers: TeamMember[];
   assignees: string[];
   onMicroUpdate: (macroId: string, microId: string, updates: Partial<MicroActivity>) => void;
@@ -220,7 +220,7 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
         <div className="flex items-center gap-4">
             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
                 <button onClick={() => setIsEditing(true)} className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-md"><Edit size={16}/></button>
-                <button onClick={() => onOpenDeletionModal({ type: 'macro', projectId: project.id, macroId: macro.id, name: macro.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"><Trash2 size={16}/></button>
+                <button onClick={() => onOpenDeletionModal({ type: 'macro', ids: { projectId: project.id, macroId: macro.id }, name: macro.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"><Trash2 size={16}/></button>
             </div>
             <div className="flex flex-col items-end">
                 <div className="flex items-center gap-2">
@@ -240,7 +240,7 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
       {isExpanded && (
         <div className="bg-white p-4 border-t border-slate-100 space-y-3">
           {macro.microActivities.map(micro => (
-             <MicroActivityRow key={micro.id} micro={micro} assignees={assignees} onUpdate={(updates) => onMicroUpdate(macro.id, micro.id, updates)} onDelete={() => onOpenDeletionModal({ type: 'micro', projectId: project.id, macroId: macro.id, microId: micro.id, name: micro.name })} isEditing={editingMicro === micro.id} onSetEditing={onSetEditingMicro}/>
+             <MicroActivityRow key={micro.id} micro={micro} assignees={assignees} onUpdate={(updates) => onMicroUpdate(macro.id, micro.id, updates)} onDelete={() => onOpenDeletionModal({ type: 'micro', ids: { projectId: project.id, macroId: macro.id, microId: micro.id }, name: micro.name })} isEditing={editingMicro === micro.id} onSetEditing={onSetEditingMicro}/>
           ))}
           <button onClick={() => onAddMicro(macro.id)} className="w-full mt-2 p-3 bg-slate-50 text-slate-500 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition"><Plus size={14}/> Adicionar Microatividade</button>
         </div>

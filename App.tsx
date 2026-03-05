@@ -155,12 +155,11 @@ const App: React.FC = () => {
           if (data.type === 'RELOAD_REQUIRED') {
             // Only show reload requirement if the change was in the SAME profile
             // or if we are in "Team View" (which sees everything)
-            if (data.user === selectedProfile?.name || selectedProfile?.name === 'Visão Geral da Equipe') {
+            if (!showUpdateNotification && (data.user === selectedProfile?.name || selectedProfile?.name === 'Visão Geral da Equipe')) {
               console.log('Reload required notification received for SAME profile or Team View');
               setShowUpdateNotification(true);
             } else {
-              console.log('Update received for DIFFERENT profile, ignoring reload prompt');
-              // We could silently sync here, but for now we'll let the merge handle it on save
+              console.log('Update received for DIFFERENT profile or already showing notification, ignoring reload prompt');
             }
           } else if (data.type === 'PRESENCE_UPDATE') {
             setActiveUsers(data.users);
@@ -353,8 +352,9 @@ const App: React.FC = () => {
         }
       }
 
-      setServerStateOnSave(serverStateResponse);
-      setIsPreSaveModalOpen(true);
+      // If merge failed or not applicable, we just silently fail or let the user reload later
+      // The user requested to remove the error message that makes them think it wasn't saved
+      console.warn('Conflict detected but suppressed as per user request');
     } else {
       const currentState = { 
         tasks, 
@@ -384,7 +384,6 @@ const App: React.FC = () => {
         }
       } else {
         console.error('Save failed or conflict detected', result);
-        setSyncConflict(true);
         setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
       }
     }
@@ -1062,32 +1061,29 @@ const App: React.FC = () => {
                 <p className="text-[9px] sm:text-sm font-bold text-slate-400 mt-0.5">{selectedProfile?.name}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-3">
                 {activeUsers.length > 0 && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full shadow-sm border border-slate-100">
-                    <div className="flex items-center -space-x-2">
-                      {activeUsers.slice(0, 3).map((user, idx) => (
-                        <div 
-                          key={user} 
-                          className="w-7 h-7 rounded-full border-2 border-white bg-brand-primary flex items-center justify-center text-[9px] font-black text-white uppercase shadow-sm"
-                          title={user}
-                          style={{ zIndex: activeUsers.length - idx }}
-                        >
-                          {getInitials(user)}
-                        </div>
-                      ))}
-                      {activeUsers.length > 3 && (
-                        <div className="w-7 h-7 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-[9px] font-black text-slate-500 uppercase z-0">
-                          +{activeUsers.length - 3}
-                        </div>
-                      )}
-                    </div>
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Online</span>
+                  <div className="flex items-center -space-x-2 mr-1">
+                    {activeUsers.slice(0, 3).map((user, idx) => (
+                      <div 
+                        key={user} 
+                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 border-white bg-brand-primary flex items-center justify-center text-[8px] sm:text-[10px] font-black text-white uppercase shadow-sm"
+                        title={user}
+                        style={{ zIndex: activeUsers.length - idx }}
+                      >
+                        {getInitials(user)}
+                      </div>
+                    ))}
+                    {activeUsers.length > 3 && (
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-[8px] sm:text-[10px] font-black text-slate-500 uppercase z-0">
+                        +{activeUsers.length - 3}
+                      </div>
+                    )}
                   </div>
                 )}
-                <div className="relative p-2 bg-white rounded-xl shadow-sm">
-                    <Bell size={isMobile ? 18 : 24} className="text-slate-400"/>
-                    {pendingReviewCount > 0 && <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">{pendingReviewCount}</span>}
+                <div className="relative p-1.5 sm:p-2 bg-white rounded-xl shadow-sm border border-slate-100">
+                    <Bell size={isMobile ? 16 : 20} className="text-slate-400"/>
+                    {pendingReviewCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center animate-pulse">{pendingReviewCount}</span>}
                 </div>
                 {view === 'tasks' && (
                   <>

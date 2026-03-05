@@ -200,18 +200,18 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
 };
 
 const StatCard = ({ label, value, icon, color }: { label: string, value: string | number, icon: React.ReactNode, color: string }) => (
-  <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4">
-    <div className={`p-3 rounded-2xl ${color} text-white shadow-lg`}>{icon}</div>
+  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+    <div className={`p-2.5 rounded-xl ${color} text-white shadow-md`}>{icon}</div>
     <div>
-      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
-      <h3 className="text-3xl font-black text-slate-900 tracking-tighter">{value}</h3>
+      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+      <h3 className="text-2xl font-black text-slate-900 tracking-tighter">{value}</h3>
     </div>
   </div>
 );
 
 const ChartContainer: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
-    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-8">{title}</h3>
+  <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-200">
+    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">{title}</h3>
     {children}
   </div>
 );
