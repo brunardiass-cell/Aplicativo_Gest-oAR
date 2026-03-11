@@ -44,7 +44,7 @@ const ProjectFlowView: React.FC<ProjectFlowViewProps> = ({ project, onUpdateProj
   }
 
   return (
-    <div className="grid h-[600px] gap-6" style={{ gridTemplateColumns: `repeat(${phases.length}, minmax(250px, 1fr))` }}>
+    <div className="grid h-auto lg:h-[600px] gap-6" style={{ gridTemplateColumns: `repeat(${phases.length}, minmax(250px, 1fr))` }}>
       {phases.map((phase) => (
         <div 
           key={phase}

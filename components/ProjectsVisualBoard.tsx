@@ -52,8 +52,8 @@ const ProjectsVisualBoard: React.FC<ProjectsVisualBoardProps> = ({ projects, onU
   return (
     <div className="space-y-6">
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm visual-board-header flex flex-wrap items-center gap-6">
-        <div className="flex items-center gap-4 flex-1 min-w-[300px]">
-          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 pr-4 self-center shrink-0">
+        <div className="flex items-center gap-4 flex-1 min-w-0 sm:min-w-[300px]">
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 pr-4 self-center shrink-0 hidden sm:flex">
             <SlidersHorizontal size={14} /> Filtro de Projeto
           </h3>
           <div className="flex-1">
@@ -70,28 +70,28 @@ const ProjectsVisualBoard: React.FC<ProjectsVisualBoardProps> = ({ projects, onU
           </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl w-full sm:w-auto justify-center sm:justify-start">
           <button 
             onClick={() => setViewType('phases')} 
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition ${viewType === 'phases' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition ${viewType === 'phases' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <LayoutGrid size={14} /> Fases
           </button>
           <button 
             onClick={() => setViewType('kanban')} 
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition ${viewType === 'kanban' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition ${viewType === 'kanban' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <Kanban size={14} /> Kanban
           </button>
         </div>
 
-        <button onClick={handlePrint} className="p-3 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition" title="Imprimir Modelo Visual">
+        <button onClick={handlePrint} className="p-3 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition hidden sm:block" title="Imprimir Modelo Visual">
           <Printer size={16}/>
         </button>
       </div>
       
       {selectedProject ? (
-        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-8">
+        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-4 sm:p-8 overflow-x-auto">
           {viewType === 'phases' ? (
             <ProjectFlowView project={selectedProject} onUpdateProject={handleUpdateProject} />
           ) : (

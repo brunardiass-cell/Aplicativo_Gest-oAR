@@ -1044,7 +1044,7 @@ const App: React.FC = () => {
 
   return (
     <>
-      <div className={`flex h-screen bg-slate-100 font-sans overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
+      <div className={`flex ${isMobile ? 'min-h-screen' : 'h-screen'} bg-slate-100 font-sans ${isMobile ? '' : 'overflow-hidden'} ${isMobile ? 'flex-col' : ''}`}>
       <Sidebar 
         currentView={view} 
         onViewChange={(v) => { setView(v); setIsSidebarOpen(false); }} 

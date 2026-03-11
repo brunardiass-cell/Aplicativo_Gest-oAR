@@ -124,8 +124,8 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
       </div>
 
       {/* Lists - Now at the top as requested */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-7 bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Atividades Próximas do Prazo (7 dias)</h3>
            <div className="space-y-4">
              {upcomingTasks.length > 0 ? upcomingTasks.map(task => {
@@ -145,7 +145,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
            </div>
         </div>
 
-        <div className="lg:col-span-5 bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
+        <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Alertas e Notificações</h3>
            <div className="space-y-4">
              <AlertItem value={alerts.overdue.length} label="Atividade(s) Vencida(s)" icon={<AlertTriangle size={18}/>} color="text-red-500" onClick={() => handleAlertClick('overdue')}/>
