@@ -90,6 +90,7 @@ const App: React.FC = () => {
   const [taskViewTab, setTaskViewTab] = useState<'sector' | 'projects'>('sector');
   const [projectManagerViewTab, setProjectManagerViewTab] = useState<'management' | 'visual'>('management');
   const [initialProjectId, setInitialProjectId] = useState<string | null>(null);
+  const [targetMicroId, setTargetMicroId] = useState<string | null>(null);
 
   // Filters for Project Tasks (MicroActivities)
   const [projTask_projectFilter, setProjTask_projectFilter] = useState('Todos');
@@ -882,6 +883,13 @@ const App: React.FC = () => {
     setProjectManagerViewTab('visual');
   };
 
+  const handleNavigateToMicroActivity = (projectId: string, microId: string) => {
+    setInitialProjectId(projectId);
+    setTargetMicroId(microId);
+    setView('projects');
+    setProjectManagerViewTab('management');
+  };
+
   useEffect(() => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && selectedProfile?.name && selectedProfile.name !== 'Visão Geral da Equipe') {
       wsRef.current.send(JSON.stringify({ type: 'USER_JOINED', user: selectedProfile.name }));
@@ -1192,9 +1200,26 @@ const App: React.FC = () => {
               <button onClick={() => setProjectManagerViewTab('visual')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${projectManagerViewTab === 'visual' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Workflow size={14} /> Modelo Visual</button>
             </div>
             {projectManagerViewTab === 'management' ? (
-              <ProjectsManager projects={activeProjects} onUpdateProjects={(p) => { setProjects(p); setDataDirty(); }} activityPlans={activityPlans} onUpdateActivityPlans={(ap) => { setActivityPlans(ap); setDataDirty(); }} onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} teamMembers={teamMembers} currentUserRole={currentUserRole} initialProjectId={initialProjectId} />
+              <ProjectsManager 
+                projects={activeProjects} 
+                onUpdateProjects={(p) => { setProjects(p); setDataDirty(); }} 
+                activityPlans={activityPlans} 
+                onUpdateActivityPlans={(ap) => { setActivityPlans(ap); setDataDirty(); }} 
+                onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} 
+                teamMembers={teamMembers} 
+                currentUserRole={currentUserRole} 
+                initialProjectId={initialProjectId} 
+                targetMicroId={targetMicroId}
+                onClearTargetMicroId={() => setTargetMicroId(null)}
+              />
             ) : (
-              <ProjectsVisualBoard projects={activeProjects} onUpdateProjects={setProjects} initialProjectId={initialProjectId} onClearInitialProjectId={() => setInitialProjectId(null)} />
+              <ProjectsVisualBoard 
+                projects={activeProjects} 
+                onUpdateProjects={setProjects} 
+                initialProjectId={initialProjectId} 
+                onClearInitialProjectId={() => setInitialProjectId(null)} 
+                onNavigateToMicroActivity={handleNavigateToMicroActivity}
+              />
             )}
           </div>
         )}

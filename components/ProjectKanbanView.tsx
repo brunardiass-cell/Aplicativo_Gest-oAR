@@ -1,14 +1,16 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Project, MicroActivity, MicroActivityStatus } from '../types';
-import { AlertTriangle, Clock, CheckCircle, ArrowRight } from 'lucide-react';
+import { AlertTriangle, Clock, CheckCircle, ArrowRight, ExternalLink } from 'lucide-react';
 
 interface ProjectKanbanViewProps {
   project: Project;
   onUpdateProject: (project: Project) => void;
+  onNavigateToMicroActivity: (projectId: string, microId: string) => void;
 }
 
-const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdateProject }) => {
+const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdateProject, onNavigateToMicroActivity }) => {
+  const [editingDateId, setEditingDateId] = useState<string | null>(null);
   const columns = [
     { title: 'Planejado', statuses: ['Planejado'] as MicroActivityStatus[] },
     { title: 'Em andamento', statuses: ['Em andamento'] as MicroActivityStatus[] },
@@ -50,6 +52,19 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
     }
   };
 
+  const handleDueDateChange = (macroId: string, microId: string, newDate: string) => {
+    const updatedProject = { ...project };
+    const macro = updatedProject.macroActivities.find(m => m.id === macroId);
+    if (macro) {
+      const micro = macro.microActivities.find(mi => mi.id === microId);
+      if (micro) {
+        micro.dueDate = newDate;
+        onUpdateProject(updatedProject);
+        setEditingDateId(null);
+      }
+    }
+  };
+
   return (
     <div className="flex gap-6 overflow-x-auto pb-6 min-h-[600px] custom-scrollbar">
       {columns.map(column => {
@@ -78,28 +93,57 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
                   </div>
                   
                   <div className="flex items-center justify-between text-[9px] font-bold text-slate-500">
-                    <div className="flex items-center gap-1">
+                    <div 
+                      className="flex items-center gap-1 cursor-pointer hover:text-brand-primary transition"
+                      onDoubleClick={() => setEditingDateId(task.id)}
+                      title="Duplo clique para alterar o prazo"
+                    >
                       <Clock size={12} />
-                      <span>{task.dueDate ? new Date(task.dueDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/D'}</span>
+                      {editingDateId === task.id ? (
+                        <input 
+                          type="date" 
+                          autoFocus
+                          defaultValue={task.dueDate || ''}
+                          onBlur={(e) => handleDueDateChange(task.macroId, task.id, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleDueDateChange(task.macroId, task.id, (e.target as HTMLInputElement).value);
+                            if (e.key === 'Escape') setEditingDateId(null);
+                          }}
+                          className="p-0.5 border border-slate-200 rounded outline-none text-[9px]"
+                        />
+                      ) : (
+                        <span>{task.dueDate ? new Date(task.dueDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/D'}</span>
+                      )}
                     </div>
                     <span>{task.assignee}</span>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                    <select 
-                      value={task.status} 
-                      onChange={(e) => handleStatusChange(task.macroId, task.id, e.target.value as MicroActivityStatus)}
-                      className="text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 rounded-lg px-2 py-1 outline-none"
-                    >
-                      <option value="Planejado">Planejado</option>
-                      <option value="Em andamento">Em andamento</option>
-                      <option value="A repetir / retrabalho">A repetir / retrabalho</option>
-                      <option value="Concluído e aprovado">Concluído e aprovado</option>
-                      <option value="Concluído com restrições">Concluído com restrições</option>
-                    </select>
-                    {task.status === 'Concluído e aprovado' && <CheckCircle size={14} className="text-emerald-500" />}
-                    {task.status === 'Concluído com restrições' && <CheckCircle size={14} className="text-amber-500" />}
-                    {task.status === 'A repetir / retrabalho' && <AlertTriangle size={14} className="text-red-500" />}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-1">
+                      <select 
+                        value={task.status} 
+                        onChange={(e) => handleStatusChange(task.macroId, task.id, e.target.value as MicroActivityStatus)}
+                        className="text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 rounded-lg px-2 py-1 outline-none flex-1"
+                      >
+                        <option value="Planejado">Planejado</option>
+                        <option value="Em andamento">Em andamento</option>
+                        <option value="A repetir / retrabalho">A repetir / retrabalho</option>
+                        <option value="Concluído e aprovado">Concluído e aprovado</option>
+                        <option value="Concluído com restrições">Concluído com restrições</option>
+                      </select>
+                      <button 
+                        onClick={() => onNavigateToMicroActivity(project.id, task.id)}
+                        className="p-1.5 bg-brand-light text-brand-primary rounded-lg hover:bg-brand-primary hover:text-white transition"
+                        title="Ir para microatividade"
+                      >
+                        <ExternalLink size={12} />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {task.status === 'Concluído e aprovado' && <CheckCircle size={14} className="text-emerald-500" />}
+                      {task.status === 'Concluído com restrições' && <CheckCircle size={14} className="text-amber-500" />}
+                      {task.status === 'A repetir / retrabalho' && <AlertTriangle size={14} className="text-red-500" />}
+                    </div>
                   </div>
                 </div>
               ))}

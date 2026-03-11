@@ -10,11 +10,18 @@ interface ProjectsVisualBoardProps {
   onUpdateProjects: (projects: Project[]) => void;
   initialProjectId?: string | null;
   onClearInitialProjectId: () => void;
+  onNavigateToMicroActivity: (projectId: string, microId: string) => void;
 }
 
-const ProjectsVisualBoard: React.FC<ProjectsVisualBoardProps> = ({ projects, onUpdateProjects, initialProjectId, onClearInitialProjectId }) => {
+const ProjectsVisualBoard: React.FC<ProjectsVisualBoardProps> = ({ 
+  projects, 
+  onUpdateProjects, 
+  initialProjectId, 
+  onClearInitialProjectId,
+  onNavigateToMicroActivity
+}) => {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [viewType, setViewType] = useState<'phases' | 'kanban'>('phases');
+  const [viewType, setViewType] = useState<'phases' | 'kanban'>('kanban');
 
   useEffect(() => {
     if (initialProjectId) {
@@ -51,6 +58,17 @@ const ProjectsVisualBoard: React.FC<ProjectsVisualBoardProps> = ({ projects, onU
 
   return (
     <div className="space-y-6">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          @page { size: landscape; margin: 10mm; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .visual-board-header, .sidebar, header { display: none !important; }
+          .bg-white { border: none !important; shadow: none !important; }
+          main { margin: 0 !important; padding: 0 !important; }
+          .overflow-x-auto { overflow: visible !important; }
+          .custom-scrollbar { overflow: visible !important; }
+        }
+      `}} />
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm visual-board-header flex flex-wrap items-center gap-6">
         <div className="flex items-center gap-4 flex-1 min-w-0 sm:min-w-[300px]">
           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 pr-4 self-center shrink-0 hidden sm:flex">
@@ -95,7 +113,11 @@ const ProjectsVisualBoard: React.FC<ProjectsVisualBoardProps> = ({ projects, onU
           {viewType === 'phases' ? (
             <ProjectFlowView project={selectedProject} onUpdateProject={handleUpdateProject} />
           ) : (
-            <ProjectKanbanView project={selectedProject} onUpdateProject={handleUpdateProject} />
+            <ProjectKanbanView 
+              project={selectedProject} 
+              onUpdateProject={handleUpdateProject} 
+              onNavigateToMicroActivity={onNavigateToMicroActivity}
+            />
           )}
         </div>
       ) : (

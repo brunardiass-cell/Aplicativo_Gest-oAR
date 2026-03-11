@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Project, MacroActivity, MicroActivity, MicroActivityStatus, TeamMember } from '../types';
 import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle, Layers, GripVertical } from 'lucide-react';
 import {
@@ -25,12 +25,46 @@ interface ProjectTimelineProps {
   onUpdateProject: (project: Project) => void;
   onOpenDeletionModal: (item: { type: 'macro' | 'micro', ids: { projectId: string; macroId: string; microId?: string; }, name: string }) => void;
   teamMembers: TeamMember[];
+  targetMicroId?: string | null;
+  onClearTargetMicroId?: () => void;
 }
 
-const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProject, onOpenDeletionModal, teamMembers }) => {
+const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ 
+  project, 
+  onUpdateProject, 
+  onOpenDeletionModal, 
+  teamMembers,
+  targetMicroId,
+  onClearTargetMicroId
+}) => {
   const [editingMicro, setEditingMicro] = useState<string | null>(null);
   const [isAddingMacroForPhase, setIsAddingMacroForPhase] = useState<string | null>(null);
   const [newMacroNameInput, setNewMacroNameInput] = useState('');
+  const [expandedMacros, setExpandedMacros] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (targetMicroId) {
+      const macro = project.macroActivities.find(m => 
+        m.microActivities.some(mi => mi.id === targetMicroId)
+      );
+      
+      if (macro) {
+        setExpandedMacros(prev => ({ ...prev, [macro.id]: true }));
+        
+        setTimeout(() => {
+          const element = document.getElementById(`micro-${targetMicroId}`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            element.classList.add('ring-4', 'ring-brand-primary', 'ring-offset-4', 'scale-[1.02]');
+            setTimeout(() => {
+              element.classList.remove('ring-4', 'ring-brand-primary', 'ring-offset-4', 'scale-[1.02]');
+              if (onClearTargetMicroId) onClearTargetMicroId();
+            }, 3000);
+          }
+        }, 500);
+      }
+    }
+  }, [targetMicroId, project.macroActivities, onClearTargetMicroId]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -186,6 +220,8 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
                     onAddMicro={addMicroActivity}
                     editingMicro={editingMicro}
                     onSetEditingMicro={setEditingMicro}
+                    isExpanded={expandedMacros[macro.id]}
+                    onToggleExpand={(expanded) => setExpandedMacros(prev => ({ ...prev, [macro.id]: expanded }))}
                   />
                 ))}
               </SortableContext>
@@ -220,10 +256,15 @@ interface MacroRowProps {
   onAddMicro: (macroId: string) => void;
   editingMicro: string | null;
   onSetEditingMicro: (id: string | null) => void;
+  isExpanded?: boolean;
+  onToggleExpand?: (expanded: boolean) => void;
 }
 
 const MacroRow: React.FC<MacroRowProps> = (props) => {
-  const { macro, project, onUpdateProject, onOpenDeletionModal, assignees, onMicroUpdate, onAddMicro, editingMicro, onSetEditingMicro } = props;
+  const { 
+    macro, project, onUpdateProject, onOpenDeletionModal, assignees, onMicroUpdate, onAddMicro, editingMicro, onSetEditingMicro,
+    isExpanded: controlledIsExpanded, onToggleExpand
+  } = props;
 
   const {
     attributes,
@@ -241,7 +282,10 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpandedInternal, setIsExpandedInternal] = useState(false);
+  const isExpanded = controlledIsExpanded !== undefined ? controlledIsExpanded : isExpandedInternal;
+  const setIsExpanded = onToggleExpand || setIsExpandedInternal;
+  
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(macro.name);
 
@@ -341,7 +385,7 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
     const handleSaveName = () => { onUpdate({ name: localName }); onSetEditing(null); };
 
     return (
-    <div className={`p-4 border rounded-2xl transition-all ${isEditing ? 'bg-teal-50/50 border-teal-200 shadow-lg' : 'bg-slate-50/30 border-slate-100'}`}>
+    <div id={`micro-${micro.id}`} className={`p-4 border rounded-2xl transition-all ${isEditing ? 'bg-teal-50/50 border-teal-200 shadow-lg' : 'bg-slate-50/30 border-slate-100'}`}>
       <div className="flex flex-col sm:grid sm:grid-cols-12 gap-4 items-start sm:items-center">
         <div className="w-full sm:col-span-4 flex items-center gap-2">
             {isEditing ? (<>

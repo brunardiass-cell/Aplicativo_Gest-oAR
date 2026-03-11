@@ -15,6 +15,8 @@ interface ProjectsManagerProps {
   teamMembers: TeamMember[];
   currentUserRole: AppUser['role'] | null;
   initialProjectId?: string | null;
+  targetMicroId?: string | null;
+  onClearTargetMicroId: () => void;
 }
 
 const ProjectsManager: React.FC<ProjectsManagerProps> = ({ 
@@ -25,7 +27,9 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   onOpenDeletionModal,
   teamMembers,
   currentUserRole,
-  initialProjectId
+  initialProjectId,
+  targetMicroId,
+  onClearTargetMicroId
 }) => {
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
@@ -290,7 +294,14 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                     </div>
                   )}
                 </div>
-                <ProjectTimeline project={selectedProject} onUpdateProject={handleUpdateProject} onOpenDeletionModal={(item) => onOpenDeletionModal(item as any)} teamMembers={teamMembers}/>
+                <ProjectTimeline 
+                  project={selectedProject} 
+                  onUpdateProject={handleUpdateProject} 
+                  onOpenDeletionModal={(item) => onOpenDeletionModal(item as any)} 
+                  teamMembers={teamMembers}
+                  targetMicroId={targetMicroId}
+                  onClearTargetMicroId={onClearTargetMicroId}
+                />
               </div>
             ) : (
                 <div className="flex items-center justify-center h-full bg-white rounded-[2rem] border-2 border-dashed border-slate-200 p-10">
