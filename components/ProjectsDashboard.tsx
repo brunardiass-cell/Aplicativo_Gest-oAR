@@ -131,8 +131,6 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
                     {userProjects.length > 0 ? userProjects.map(project => {
                     const progress = calculateProjectProgress(project);
                     const totalMacros = project.macroActivities.length;
-                    // FIX: Property 'status' does not exist on type 'MacroActivity'.
-                    // A macro is considered completed if it has micro-activities and all of them are approved.
                     const completedMacros = project.macroActivities.filter(m => 
                       m.microActivities.length > 0 && 
                       m.microActivities.every(mi => mi.status === 'Concluído e aprovado')
@@ -163,52 +161,11 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
         </div>
         
         <div className="lg:col-span-5 space-y-6">
-            <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-200">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Status das Microatividades</h3>
-                <div className="h-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie 
-                        data={microStatusChartData} 
-                        dataKey="value" 
-                        nameKey="name" 
-                        cx="50%" 
-                        cy="50%" 
-                        outerRadius={55} 
-                        labelLine={true} 
-                        label={({ name, percent, cx, cy, midAngle, outerRadius }) => {
-                          const RADIAN = Math.PI / 180;
-                          const radius = outerRadius + 15;
-                          const lx = cx + radius * Math.cos(-midAngle * RADIAN);
-                          const ly = cy + radius * Math.sin(-midAngle * RADIAN);
-                          
-                          return (
-                            <text 
-                              x={lx} 
-                              y={ly} 
-                              fill="#64748b" 
-                              textAnchor={lx > cx ? 'start' : 'end'} 
-                              dominantBaseline="central"
-                              className="text-[8px] font-black uppercase"
-                            >
-                              {`${name} ${(percent * 100).toFixed(0)}%`}
-                            </text>
-                          );
-                        }}
-                      >
-                        {microStatusChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                      </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-            </div>
-
             <div className="bg-red-50 p-5 rounded-[1.5rem] border border-red-200">
                 <h3 className="text-[10px] font-black text-red-900 uppercase tracking-widest mb-4 flex items-center gap-2">
                     <AlertTriangle size={14}/> Microatividades Vencidas
                 </h3>
-                <div className="space-y-3 max-h-[150px] overflow-y-auto custom-scrollbar pr-2">
+                <div className="space-y-3 max-h-[250px] overflow-y-auto custom-scrollbar pr-2">
                     {overdueMicroActivities.length > 0 ? overdueMicroActivities.map(micro => (
                         <button key={micro.id} onClick={() => onNavigateToProject(micro.projectId)} className="w-full text-left p-3 bg-white border border-red-200 rounded-xl group hover:bg-red-100/50 transition">
                             <div className="flex justify-between items-center">
@@ -227,7 +184,7 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
                 <h3 className="text-[10px] font-black text-amber-900 uppercase tracking-widest mb-4 flex items-center gap-2">
                     <Clock size={14}/> Prazos Próximos (Top 5)
                 </h3>
-                <div className="space-y-3 max-h-[150px] overflow-y-auto custom-scrollbar pr-2">
+                <div className="space-y-3 max-h-[250px] overflow-y-auto custom-scrollbar pr-2">
                     {upcomingMicroActivities.length > 0 ? upcomingMicroActivities.map(micro => (
                         <button key={micro.id} onClick={() => onNavigateToProject(micro.projectId)} className="w-full text-left p-3 bg-white border border-amber-200 rounded-xl group hover:bg-amber-100/50 transition">
                            <div className="flex justify-between items-center">
@@ -242,6 +199,50 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
                         </button>
                     )) : <p className="text-center text-amber-800/60 text-xs py-10 italic">Nenhum prazo próximo.</p>}
                 </div>
+            </div>
+        </div>
+      </div>
+
+      {/* Charts - Bottom */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-200">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Status das Microatividades</h3>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie 
+                    data={microStatusChartData} 
+                    dataKey="value" 
+                    nameKey="name" 
+                    cx="50%" 
+                    cy="50%" 
+                    outerRadius={80} 
+                    labelLine={true} 
+                    label={({ name, percent, cx, cy, midAngle, outerRadius }) => {
+                      const RADIAN = Math.PI / 180;
+                      const radius = outerRadius + 25;
+                      const lx = cx + radius * Math.cos(-midAngle * RADIAN);
+                      const ly = cy + radius * Math.sin(-midAngle * RADIAN);
+                      
+                      return (
+                        <text 
+                          x={lx} 
+                          y={ly} 
+                          fill="#64748b" 
+                          textAnchor={lx > cx ? 'start' : 'end'} 
+                          dominantBaseline="central"
+                          className="text-[10px] font-black uppercase"
+                        >
+                          {`${name} ${(percent * 100).toFixed(0)}%`}
+                        </text>
+                      );
+                    }}
+                  >
+                    {microStatusChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
         </div>
       </div>

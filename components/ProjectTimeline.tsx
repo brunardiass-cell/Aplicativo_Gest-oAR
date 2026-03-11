@@ -1,7 +1,24 @@
 
 import React, { useState, useMemo } from 'react';
 import { Project, MacroActivity, MicroActivity, MicroActivityStatus, TeamMember } from '../types';
-import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle, Layers } from 'lucide-react';
+import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle, Layers, GripVertical } from 'lucide-react';
+import {
+  DndContext, 
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface ProjectTimelineProps {
   project: Project;
@@ -14,6 +31,25 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
   const [editingMicro, setEditingMicro] = useState<string | null>(null);
   const [isAddingMacroForPhase, setIsAddingMacroForPhase] = useState<string | null>(null);
   const [newMacroNameInput, setNewMacroNameInput] = useState('');
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = project.macroActivities.findIndex((m) => m.id === active.id);
+      const newIndex = project.macroActivities.findIndex((m) => m.id === over.id);
+
+      const newMacros = arrayMove(project.macroActivities, oldIndex, newIndex);
+      onUpdateProject({ ...project, macroActivities: newMacros });
+    }
+  };
 
   // FIX: Explicitly type the useMemo hook to ensure correct type inference for projectAssignees.
   const projectAssignees = useMemo<string[]>(() => {
@@ -120,30 +156,40 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
 
   return (
     <div className="space-y-6">
-      {phasesToRender.map(phase => (
-        <div key={phase} className="bg-slate-50/50 border border-slate-100 rounded-3xl overflow-hidden">
-          <header className="p-6 bg-slate-100/80">
-            <h3 className="text-sm font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
-              <Layers size={14}/> {phase}
-            </h3>
-          </header>
-          <div className="p-4 space-y-4">
-            {(macrosByPhase.get(phase) || []).map(macro => (
-              <MacroRow 
-                key={macro.id}
-                macro={macro}
-                project={project}
-                onUpdateProject={onUpdateProject}
-                onOpenDeletionModal={onOpenDeletionModal}
-                teamMembers={teamMembers}
-                assignees={projectAssignees}
-                onMicroUpdate={handleMicroUpdate}
-                onAddMicro={addMicroActivity}
-                editingMicro={editingMicro}
-                onSetEditingMicro={setEditingMicro}
-              />
-            ))}
-            {isAddingMacroForPhase === phase ? (
+      <DndContext 
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        {phasesToRender.map(phase => (
+          <div key={phase} className="bg-slate-50/50 border border-slate-100 rounded-3xl overflow-hidden">
+            <header className="p-6 bg-slate-100/80">
+              <h3 className="text-sm font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
+                <Layers size={14}/> {phase}
+              </h3>
+            </header>
+            <div className="p-4 space-y-4">
+              <SortableContext 
+                items={(macrosByPhase.get(phase) || []).map(m => m.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {(macrosByPhase.get(phase) || []).map(macro => (
+                  <MacroRow 
+                    key={macro.id}
+                    macro={macro}
+                    project={project}
+                    onUpdateProject={onUpdateProject}
+                    onOpenDeletionModal={onOpenDeletionModal}
+                    teamMembers={teamMembers}
+                    assignees={projectAssignees}
+                    onMicroUpdate={handleMicroUpdate}
+                    onAddMicro={addMicroActivity}
+                    editingMicro={editingMicro}
+                    onSetEditingMicro={setEditingMicro}
+                  />
+                ))}
+              </SortableContext>
+              {isAddingMacroForPhase === phase ? (
               <div className="p-4 bg-teal-50/50 border border-teal-200 rounded-3xl flex items-center gap-2 animate-in fade-in duration-300">
                 {/* FIX: Explicitly cast 'phase' to a string to resolve potential 'unknown' type inference issues in event handlers. */}
                 <input type="text" value={newMacroNameInput} onChange={e => setNewMacroNameInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddMacroActivity(String(phase))} placeholder="Nome da nova macroatividade" autoFocus className="flex-1 px-4 py-2 bg-white border border-teal-300 rounded-xl text-sm font-bold text-slate-900"/>
@@ -158,6 +204,7 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ project, onUpdateProj
           </div>
         </div>
       ))}
+      </DndContext>
     </div>
   );
 };
@@ -177,6 +224,22 @@ interface MacroRowProps {
 
 const MacroRow: React.FC<MacroRowProps> = (props) => {
   const { macro, project, onUpdateProject, onOpenDeletionModal, assignees, onMicroUpdate, onAddMicro, editingMicro, onSetEditingMicro } = props;
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: macro.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 'auto',
+    opacity: isDragging ? 0.5 : 1,
+  };
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -203,9 +266,12 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
   };
   
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+    <div ref={setNodeRef} style={style} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
       <div className="w-full p-4 flex justify-between items-center text-left group">
         <div className="flex items-center gap-4 flex-1">
+          <div {...attributes} {...listeners} className="p-2 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing">
+            <GripVertical size={16} />
+          </div>
           <button onClick={() => setIsExpanded(!isExpanded)} className={`w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0 ${macroStatus === 'Concluída' ? 'bg-emerald-500' : 'bg-slate-800'}`}>
             <ChevronDown size={20} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
           </button>

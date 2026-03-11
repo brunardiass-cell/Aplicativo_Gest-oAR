@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Project } from '../types';
 import ProjectFlowView from './ProjectFlowView';
-import { SlidersHorizontal, Workflow, Printer } from 'lucide-react';
+import ProjectKanbanView from './ProjectKanbanView';
+import { SlidersHorizontal, Workflow, Printer, LayoutGrid, Kanban } from 'lucide-react';
 
 interface ProjectsVisualBoardProps {
   projects: Project[];
@@ -13,6 +14,7 @@ interface ProjectsVisualBoardProps {
 
 const ProjectsVisualBoard: React.FC<ProjectsVisualBoardProps> = ({ projects, onUpdateProjects, initialProjectId, onClearInitialProjectId }) => {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [viewType, setViewType] = useState<'phases' | 'kanban'>('phases');
 
   useEffect(() => {
     if (initialProjectId) {
@@ -49,8 +51,8 @@ const ProjectsVisualBoard: React.FC<ProjectsVisualBoardProps> = ({ projects, onU
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm visual-board-header">
-        <div className="flex items-center gap-4">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm visual-board-header flex flex-wrap items-center gap-6">
+        <div className="flex items-center gap-4 flex-1 min-w-[300px]">
           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 pr-4 self-center shrink-0">
             <SlidersHorizontal size={14} /> Filtro de Projeto
           </h3>
@@ -58,7 +60,7 @@ const ProjectsVisualBoard: React.FC<ProjectsVisualBoardProps> = ({ projects, onU
             <select
               value={selectedProjectId || ''}
               onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 outline-none"
+              className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
               disabled={projects.length === 0}
             >
               {projects.map(p => (
@@ -66,15 +68,35 @@ const ProjectsVisualBoard: React.FC<ProjectsVisualBoardProps> = ({ projects, onU
               ))}
             </select>
           </div>
-          <button onClick={handlePrint} className="p-3 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition" title="Imprimir Modelo Visual">
-            <Printer size={16}/>
+        </div>
+
+        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+          <button 
+            onClick={() => setViewType('phases')} 
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition ${viewType === 'phases' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <LayoutGrid size={14} /> Fases
+          </button>
+          <button 
+            onClick={() => setViewType('kanban')} 
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition ${viewType === 'kanban' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <Kanban size={14} /> Kanban
           </button>
         </div>
+
+        <button onClick={handlePrint} className="p-3 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition" title="Imprimir Modelo Visual">
+          <Printer size={16}/>
+        </button>
       </div>
       
       {selectedProject ? (
         <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-8">
-          <ProjectFlowView project={selectedProject} onUpdateProject={handleUpdateProject} />
+          {viewType === 'phases' ? (
+            <ProjectFlowView project={selectedProject} onUpdateProject={handleUpdateProject} />
+          ) : (
+            <ProjectKanbanView project={selectedProject} onUpdateProject={handleUpdateProject} />
+          )}
         </div>
       ) : (
         <div className="flex items-center justify-center h-[600px] bg-white rounded-[2rem] border-2 border-dashed border-slate-200 p-10">

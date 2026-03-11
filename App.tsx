@@ -83,6 +83,7 @@ const App: React.FC = () => {
   const [dateFilterType, setDateFilterType] = useState<'all' | 'requestDate' | 'completionDate'>('all');
   const [startDateFilter, setStartDateFilter] = useState<string>('');
   const [endDateFilter, setEndDateFilter] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
 
   // Tabs
   const [dashboardView, setDashboardView] = useState<'activities' | 'projects'>('activities');
@@ -1133,7 +1134,35 @@ const App: React.FC = () => {
             </div>
             
             {taskViewTab === 'sector' ? (
-              <TaskBoard tasks={tasksForBoard} currentUser={selectedProfile?.name || 'Todos'} onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} onDelete={(task) => {handleOpenDeleteItemModal({ type: 'task', name: task.activity, ids: { taskId: task.id } });}} onAssignReview={() => {}} notifications={notifications.filter(n => !n.read)} onNotificationClick={handleNotificationClick} onClearSingleNotification={handleClearSingleNotification} onClearAllNotifications={handleClearAllReviewNotifications} statusFilter={statusFilter} leadFilter={leadFilter} onStatusFilterChange={setStatusFilter} onLeadFilterChange={setLeadFilter} uniqueLeads={uniqueLeads} projectFilter={projectFilter} onProjectFilterChange={setProjectFilter} uniqueProjects={uniqueProjects} dateFilterType={dateFilterType} onDateFilterTypeChange={setDateFilterType} startDateFilter={startDateFilter} onStartDateFilterChange={setStartDateFilter} endDateFilter={endDateFilter} onEndDateFilterChange={setEndDateFilter} onCompleteCollaboration={handleCompleteCollaboration} />
+              <TaskBoard 
+                tasks={tasksForBoard} 
+                currentUser={selectedProfile?.name || 'Todos'} 
+                onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} 
+                onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} 
+                onDelete={(task) => {handleOpenDeleteItemModal({ type: 'task', name: task.activity, ids: { taskId: task.id } });}} 
+                onAssignReview={() => {}} 
+                notifications={notifications.filter(n => !n.read)} 
+                onNotificationClick={handleNotificationClick} 
+                onClearSingleNotification={handleClearSingleNotification} 
+                onClearAllNotifications={handleClearAllReviewNotifications} 
+                statusFilter={statusFilter} 
+                leadFilter={leadFilter} 
+                onStatusFilterChange={setStatusFilter} 
+                onLeadFilterChange={setLeadFilter} 
+                uniqueLeads={uniqueLeads} 
+                projectFilter={projectFilter} 
+                onProjectFilterChange={setProjectFilter} 
+                uniqueProjects={uniqueProjects} 
+                dateFilterType={dateFilterType} 
+                onDateFilterTypeChange={setDateFilterType} 
+                startDateFilter={startDateFilter} 
+                onStartDateFilterChange={setStartDateFilter} 
+                endDateFilter={endDateFilter} 
+                onEndDateFilterChange={setEndDateFilter} 
+                onCompleteCollaboration={handleCompleteCollaboration}
+                searchTerm={searchTerm}
+                onSearchTermChange={setSearchTerm}
+              />
             ) : (
               <ProjectTaskBoard 
                 microTasks={microTasksForBoard} 

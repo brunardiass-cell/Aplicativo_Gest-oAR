@@ -42,6 +42,8 @@ interface TaskBoardProps {
   endDateFilter: string;
   onEndDateFilterChange: (date: string) => void;
   onCompleteCollaboration: (taskId: string) => void;
+  searchTerm: string;
+  onSearchTermChange: (term: string) => void;
 }
 
 const TaskBoard: React.FC<TaskBoardProps> = ({ 
@@ -69,14 +71,27 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   onStartDateFilterChange,
   endDateFilter,
   onEndDateFilterChange,
-  onCompleteCollaboration
+  onCompleteCollaboration,
+  searchTerm,
+  onSearchTermChange
 }) => {
   const activeTasks = tasks.filter(t => !t.deleted);
   const activeReviews = notifications.filter(n => n.userId === currentUser && !n.read && n.type === 'REVIEW_ASSIGNED');
   const isTeamView = currentUser === 'Visão Geral da Equipe';
 
+  const filteredTasks = useMemo(() => {
+    if (!searchTerm) return activeTasks;
+    const term = searchTerm.toLowerCase();
+    return activeTasks.filter(t => 
+      t.activity.toLowerCase().includes(term) || 
+      t.description.toLowerCase().includes(term) ||
+      t.project.toLowerCase().includes(term) ||
+      t.nextStep?.toLowerCase().includes(term)
+    );
+  }, [activeTasks, searchTerm]);
+
   const sortedTasks = useMemo(() => {
-    return [...activeTasks].sort((a, b) => {
+    return [...filteredTasks].sort((a, b) => {
         const aIsCompleted = a.status === 'Concluída';
         const bIsCompleted = b.status === 'Concluída';
 
@@ -193,9 +208,19 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
               <label className="text-[9px] font-bold text-slate-500">De</label>
               <input type="date" value={startDateFilter} onChange={(e) => onStartDateFilterChange(e.target.value)} disabled={dateFilterType === 'all'} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none disabled:opacity-50"/>
           </div>
-          <div className="flex-1 min-w-[140px] sm:min-w-[120px]">
+          <div className="flex-1 min-w-[200px] sm:min-w-[150px]">
               <label className="text-[9px] font-bold text-slate-500">Até</label>
               <input type="date" value={endDateFilter} onChange={(e) => onEndDateFilterChange(e.target.value)} disabled={dateFilterType === 'all'} className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none disabled:opacity-50"/>
+          </div>
+          <div className="flex-1 min-w-[200px] sm:min-w-[150px]">
+              <label className="text-[9px] font-bold text-slate-500">Busca Livre</label>
+              <input 
+                type="text" 
+                value={searchTerm} 
+                onChange={(e) => onSearchTermChange(e.target.value)} 
+                placeholder="Buscar atividade..." 
+                className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
+              />
           </div>
         </div>
       </div>
@@ -207,6 +232,10 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
           const isCompleted = task.status === 'Concluída';
           const isOverdue = !isCompleted && task.completionDate && new Date(task.completionDate + 'T00:00:00') < today;
           
+          const nextWeek = new Date(today);
+          nextWeek.setDate(today.getDate() + 7);
+          const isDueSoon = !isCompleted && !isOverdue && task.completionDate && new Date(task.completionDate + 'T00:00:00') <= nextWeek;
+
           const isReviewer = task.isReport && task.currentReviewer === currentUser;
           const hasCompletedReview = task.completedCollaborators?.includes(currentUser || '');
 
@@ -220,7 +249,11 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
               {isCompleted && (<div className="absolute top-4 right-4 bg-emerald-500 text-white rounded-full p-1.5 z-10 shadow-lg"><CheckCircle size={16} /></div>)}
               <div className="flex justify-between items-start mb-4">
                 <div className="flex flex-col gap-2">
-                  <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${task.status === 'Concluída' ? 'bg-emerald-100 text-emerald-700' : task.status === 'Pausado' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'}`}>{task.status}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${task.status === 'Concluída' ? 'bg-emerald-100 text-emerald-700' : task.status === 'Pausado' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'}`}>{task.status}</span>
+                    {isOverdue && <AlertTriangle size={14} className="text-red-500" />}
+                    {isDueSoon && <div className="w-3.5 h-3.5 rounded-full bg-amber-400 flex items-center justify-center text-white text-[8px] font-bold">!</div>}
+                  </div>
                   {isReviewer && !hasCompletedReview && ( <span className="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest bg-amber-100 text-amber-700 border border-amber-200 animate-pulse">REVISÃO PENDENTE (VOCÊ)</span> )}
                   {isReviewer && hasCompletedReview && ( <span className="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-700 border border-emerald-200">VOCÊ CONCLUIU SUA COLABORAÇÃO</span> )}
                   {isCollaborator(task) && !isReviewer && (<span className="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-600 border border-indigo-100">Você é Colaborador</span>)}
@@ -281,7 +314,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
 
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 mt-auto">
                  <p className="text-[8px] font-black text-brand-primary uppercase tracking-widest flex items-center gap-1.5 mb-1"><ArrowRight size={10} /> Próximo Passo</p>
-                 <p className="text-[10px] font-bold text-slate-600 leading-tight italic">"{task.nextStep || 'Não definido'}"</p>
+                 <p className="text-[10px] font-black text-slate-800 leading-tight italic">"{task.nextStep || 'Não definido'}"</p>
               </div>
 
               {isReviewer && !hasCompletedReview && (

@@ -123,7 +123,39 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
         <StatCard label="Projetos Acompanhados" value={dashboardStats.projects} icon={<FolderKanban size={20}/>} color="bg-teal-700" />
       </div>
 
-      {/* Charts */}
+      {/* Lists - Now at the top as requested */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-7 bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
+           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Atividades Próximas do Prazo (7 dias)</h3>
+           <div className="space-y-4">
+             {upcomingTasks.length > 0 ? upcomingTasks.map(task => {
+                const daysLeft = Math.ceil((new Date(task.completionDate + 'T00:00:00').getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                return (
+                  <div key={task.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">{task.activity}</p>
+                      <p className="text-[9px] font-bold text-brand-primary uppercase">{task.project}</p>
+                    </div>
+                    <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${daysLeft <= 2 ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
+                       {daysLeft <= 1 ? 'Vence hoje/amanhã' : `Vence em ${daysLeft} dias`}
+                    </div>
+                  </div>
+                )
+             }) : <p className="text-center text-slate-400 text-xs py-10 italic">Nenhuma entrega nos próximos 7 dias.</p>}
+           </div>
+        </div>
+
+        <div className="lg:col-span-5 bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
+           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Alertas e Notificações</h3>
+           <div className="space-y-4">
+             <AlertItem value={alerts.overdue.length} label="Atividade(s) Vencida(s)" icon={<AlertTriangle size={18}/>} color="text-red-500" onClick={() => handleAlertClick('overdue')}/>
+             <AlertItem value={alerts.pendingReviews.length} label="Relatório(s) Pendente(s)" icon={<FileSignature size={18}/>} color="text-amber-500" onClick={() => handleAlertClick('pending')}/>
+             <AlertItem value={alerts.projectsAtRisk.length} label="Projeto(s) em Risco" icon={<Activity size={18}/>} color="text-teal-600" onClick={() => handleAlertClick('risk')}/>
+           </div>
+        </div>
+      </div>
+
+      {/* Charts - Now at the bottom */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <ChartContainer title="Nível de Prioridade das Atividades">
           <ResponsiveContainer width="100%" height={300}>
@@ -176,38 +208,6 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
             </PieChart>
           </ResponsiveContainer>
         </ChartContainer>
-      </div>
-
-      {/* Lists */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-7 bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
-           <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Atividades Próximas do Prazo (7 dias)</h3>
-           <div className="space-y-4">
-             {upcomingTasks.length > 0 ? upcomingTasks.map(task => {
-                const daysLeft = Math.ceil((new Date(task.completionDate + 'T00:00:00').getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-                return (
-                  <div key={task.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-slate-900">{task.activity}</p>
-                      <p className="text-[9px] font-bold text-brand-primary uppercase">{task.project}</p>
-                    </div>
-                    <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${daysLeft <= 2 ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
-                       {daysLeft <= 1 ? 'Vence hoje/amanhã' : `Vence em ${daysLeft} dias`}
-                    </div>
-                  </div>
-                )
-             }) : <p className="text-center text-slate-400 text-xs py-10 italic">Nenhuma entrega nos próximos 7 dias.</p>}
-           </div>
-        </div>
-
-        <div className="lg:col-span-5 bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
-           <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Alertas e Notificações</h3>
-           <div className="space-y-4">
-             <AlertItem value={alerts.overdue.length} label="Atividade(s) Vencida(s)" icon={<AlertTriangle size={18}/>} color="text-red-500" onClick={() => handleAlertClick('overdue')}/>
-             <AlertItem value={alerts.pendingReviews.length} label="Relatório(s) Pendente(s)" icon={<FileSignature size={18}/>} color="text-amber-500" onClick={() => handleAlertClick('pending')}/>
-             <AlertItem value={alerts.projectsAtRisk.length} label="Projeto(s) em Risco" icon={<Activity size={18}/>} color="text-teal-600" onClick={() => handleAlertClick('risk')}/>
-           </div>
-        </div>
       </div>
 
       {isAlertModalOpen && (
