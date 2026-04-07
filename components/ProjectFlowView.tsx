@@ -152,7 +152,11 @@ const MicroDetail: React.FC<{ micro: MicroActivity }> = ({ micro }) => {
     return (
         <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
             <div className="flex items-center gap-2">
-                {prerequisiteAlert && <AlertTriangle size={12} className="text-red-500 animate-pulse" />}
+                {prerequisiteAlert && (
+                    <div className="animate-bounce" title="Pré-requisito pendente!">
+                        <AlertTriangle size={12} className="text-red-500" />
+                    </div>
+                )}
                 <p className="text-xs font-bold text-slate-800">{micro.name}</p>
             </div>
             <div className="mt-2 flex justify-between items-center">

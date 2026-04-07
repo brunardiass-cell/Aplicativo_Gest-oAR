@@ -438,7 +438,7 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
             </>) : (<>
                 <div className="flex items-center gap-2">
                     {prerequisiteAlert && (
-                        <div className="animate-pulse" title="Pré-requisito pendente para iniciar!">
+                        <div className="animate-bounce" title="Pré-requisito pendente para iniciar!">
                             <AlertTriangle size={14} className="text-red-500" />
                         </div>
                     )}

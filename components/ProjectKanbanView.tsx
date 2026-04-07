@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Project, MicroActivity, MicroActivityStatus, Prerequisite, BudgetInfo } from '../types';
-import { AlertTriangle, Clock, CheckCircle, ArrowRight, ExternalLink, ListTodo, DollarSign } from 'lucide-react';
+import { AlertTriangle, Clock, CheckCircle, ArrowRight, ExternalLink, ListTodo, DollarSign, X } from 'lucide-react';
 import { useMemo } from 'react';
 
 interface ProjectKanbanViewProps {
@@ -12,6 +12,8 @@ interface ProjectKanbanViewProps {
 
 const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdateProject, onNavigateToMicroActivity }) => {
   const [editingDateId, setEditingDateId] = useState<string | null>(null);
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [detailType, setDetailType] = useState<'prerequisites' | 'budget' | null>(null);
   const columns = [
     { title: 'Planejado', statuses: ['Planejado'] as MicroActivityStatus[] },
     { title: 'Em andamento', statuses: ['Em andamento'] as MicroActivityStatus[] },
@@ -96,8 +98,8 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
                             return today >= startDate;
                           });
                           return hasAlert ? (
-                            <div title="Pré-requisito pendente!">
-                              <AlertTriangle size={10} className="text-red-500 animate-pulse" />
+                            <div title="Pré-requisito pendente!" className="animate-bounce">
+                              <AlertTriangle size={10} className="text-red-500" />
                             </div>
                           ) : null;
                         })()}
@@ -106,14 +108,22 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
                     </div>
                     <div className="flex items-center gap-1">
                       {task.prerequisites && task.prerequisites.length > 0 && (
-                        <div className="text-teal-500" title="Possui pré-requisitos">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setExpandedTaskId(expandedTaskId === task.id ? null : task.id); setDetailType('prerequisites'); }}
+                          className={`p-1 rounded-md transition ${expandedTaskId === task.id && detailType === 'prerequisites' ? 'bg-teal-100 text-teal-600' : 'text-teal-500 hover:bg-teal-50'}`} 
+                          title="Ver pré-requisitos"
+                        >
                           <ListTodo size={14} />
-                        </div>
+                        </button>
                       )}
                       {task.budget && (
-                        <div className="text-emerald-500" title="Possui orçamento">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setExpandedTaskId(expandedTaskId === task.id ? null : task.id); setDetailType('budget'); }}
+                          className={`p-1 rounded-md transition ${expandedTaskId === task.id && detailType === 'budget' ? 'bg-emerald-100 text-emerald-600' : 'text-emerald-500 hover:bg-emerald-50'}`} 
+                          title="Ver orçamento"
+                        >
                           <DollarSign size={14} />
-                        </div>
+                        </button>
                       )}
                       {task.status === 'Concluído com restrições' && (
                         <div className="bg-amber-100 text-amber-600 p-1 rounded-lg" title="Concluído com restrições">
@@ -122,6 +132,48 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
                       )}
                     </div>
                   </div>
+
+                  {expandedTaskId === task.id && (
+                    <div className="mt-2 p-3 bg-slate-50 rounded-xl border border-slate-200 text-[10px] animate-in slide-in-from-top-1 duration-200">
+                      {detailType === 'prerequisites' && task.prerequisites && (
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center border-b border-slate-200 pb-1 mb-1">
+                            <span className="font-black uppercase text-teal-600 tracking-widest">Pré-requisitos</span>
+                            <button onClick={() => setExpandedTaskId(null)} className="text-slate-400 hover:text-slate-600"><X size={10}/></button>
+                          </div>
+                          {task.prerequisites.map(pre => (
+                            <div key={pre.id} className="flex items-center gap-2">
+                              <div className={`w-2 h-2 rounded-full shrink-0 ${pre.completed ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                              <span className={`flex-1 truncate ${pre.completed ? 'text-slate-400 line-through' : 'text-slate-700 font-medium'}`}>{pre.name}</span>
+                              <span className="text-[8px] font-bold text-slate-400 uppercase shrink-0">{pre.type}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {detailType === 'budget' && task.budget && (
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center border-b border-slate-200 pb-1 mb-1">
+                            <span className="font-black uppercase text-emerald-600 tracking-widest">Orçamento</span>
+                            <button onClick={() => setExpandedTaskId(null)} className="text-slate-400 hover:text-slate-600"><X size={10}/></button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                            <div>
+                              <span className="text-slate-400 uppercase text-[8px] block">Valor</span>
+                              <span className="font-bold text-slate-700">R$ {task.budget.estimatedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 uppercase text-[8px] block">Status</span>
+                              <span className="font-bold text-slate-700 uppercase">{task.budget.status}</span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-slate-400 uppercase text-[8px] block">Fornecedor</span>
+                              <span className="font-bold text-slate-700 truncate block">{task.budget.supplier || 'N/A'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   
                   <div className="flex items-center justify-between text-[9px] font-bold text-slate-500">
                     <div 

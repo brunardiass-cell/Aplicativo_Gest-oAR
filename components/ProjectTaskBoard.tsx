@@ -2,7 +2,8 @@
 import React, { useMemo } from 'react';
 import { MicroActivityStatus } from '../types';
 import { AugmentedMicroActivity } from '../App';
-import { SlidersHorizontal, AlertTriangle, User, Clock, CheckCircle, ArrowRight, Eye } from 'lucide-react';
+import { SlidersHorizontal, AlertTriangle, User, Clock, CheckCircle, ArrowRight, Eye, ListTodo, DollarSign, X } from 'lucide-react';
+import { useState } from 'react';
 
 interface ProjectTaskBoardProps {
   microTasks: AugmentedMicroActivity[];
@@ -41,6 +42,8 @@ const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
   endDateFilter,
   onEndDateFilterChange,
 }) => {
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [detailType, setDetailType] = useState<'prerequisites' | 'budget' | null>(null);
 
   const sortedMicroTasks = useMemo(() => {
     return [...microTasks].sort((a, b) => {
@@ -127,12 +130,91 @@ const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
                     'bg-slate-100 text-slate-500'
                   }`}>{micro.status}</span>
                 </div>
+                <div className="flex items-center gap-1">
+                  {(() => {
+                    if (!micro.prerequisites || micro.prerequisites.length === 0 || !micro.dueDate) return null;
+                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                    const hasAlert = micro.prerequisites.some(pre => {
+                      if (pre.status === 'concluído' || pre.completed) return false;
+                      const dueDate = new Date(micro.dueDate + 'T00:00:00');
+                      const startDate = new Date(dueDate);
+                      startDate.setDate(dueDate.getDate() - pre.leadTimeDays);
+                      return today >= startDate;
+                    });
+                    return hasAlert ? (
+                      <div title="Pré-requisito pendente!" className="animate-bounce">
+                        <AlertTriangle size={14} className="text-red-500" />
+                      </div>
+                    ) : null;
+                  })()}
+                  {micro.prerequisites && micro.prerequisites.length > 0 && (
+                    <button 
+                      onClick={() => { setExpandedTaskId(expandedTaskId === micro.id ? null : micro.id); setDetailType('prerequisites'); }}
+                      className={`p-1.5 rounded-lg transition ${expandedTaskId === micro.id && detailType === 'prerequisites' ? 'bg-teal-100 text-teal-600' : 'text-teal-500 hover:bg-teal-50'}`}
+                      title="Ver pré-requisitos"
+                    >
+                      <ListTodo size={16}/>
+                    </button>
+                  )}
+                  {micro.budget && (
+                    <button 
+                      onClick={() => { setExpandedTaskId(expandedTaskId === micro.id ? null : micro.id); setDetailType('budget'); }}
+                      className={`p-1.5 rounded-lg transition ${expandedTaskId === micro.id && detailType === 'budget' ? 'bg-emerald-100 text-emerald-600' : 'text-emerald-500 hover:bg-emerald-50'}`}
+                      title="Ver orçamento"
+                    >
+                      <DollarSign size={16}/>
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="mb-4">
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{micro.projectName}</p>
                 <h3 className="text-sm font-black text-slate-900 tracking-tight leading-tight uppercase">{micro.name}</h3>
                 <p className="text-[10px] font-medium text-brand-primary mt-1 line-clamp-2">Macro: {micro.macroName}</p>
               </div>
+
+              {expandedTaskId === micro.id && (
+                <div className="mb-4 p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs animate-in slide-in-from-top-2 duration-300">
+                  {detailType === 'prerequisites' && micro.prerequisites && (
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center border-b border-slate-200 pb-2 mb-2">
+                        <span className="font-black uppercase text-teal-600 tracking-widest text-[10px]">Pré-requisitos</span>
+                        <button onClick={() => setExpandedTaskId(null)} className="text-slate-400 hover:text-slate-600"><X size={14}/></button>
+                      </div>
+                      {micro.prerequisites.map(pre => (
+                        <div key={pre.id} className="flex items-center gap-3">
+                          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${pre.completed ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                          <span className={`flex-1 ${pre.completed ? 'text-slate-400 line-through' : 'text-slate-700 font-bold'}`}>{pre.name}</span>
+                          <span className="text-[9px] font-black text-slate-400 uppercase shrink-0">{pre.type}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {detailType === 'budget' && micro.budget && (
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center border-b border-slate-200 pb-2 mb-2">
+                        <span className="font-black uppercase text-emerald-600 tracking-widest text-[10px]">Orçamento</span>
+                        <button onClick={() => setExpandedTaskId(null)} className="text-slate-400 hover:text-slate-600"><X size={14}/></button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <span className="text-slate-400 uppercase text-[9px] font-black block">Valor</span>
+                          <span className="font-bold text-slate-800">R$ {micro.budget.estimatedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 uppercase text-[9px] font-black block">Status</span>
+                          <span className="font-bold text-slate-800 uppercase">{micro.budget.status}</span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-slate-400 uppercase text-[9px] font-black block">Fornecedor</span>
+                          <span className="font-bold text-slate-800">{micro.budget.supplier || 'N/A'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-1 mb-6">
                  <div className="flex justify-between items-end"><span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Avanço</span><span className="text-[10px] font-black text-slate-900">{micro.progress || 0}%</span></div>
                  <div className="w-full h-1 bg-slate-200 rounded-full overflow-hidden"><div className={`h-full transition-all duration-700 ${micro.progress === 100 ? 'bg-emerald-500' : 'bg-brand-primary'}`} style={{width: `${micro.progress || 0}%`}}></div></div>
