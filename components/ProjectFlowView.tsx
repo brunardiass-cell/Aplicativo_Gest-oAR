@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
-import { Project, MacroActivity, MicroActivity } from '../types';
-import { ChevronDown, Clock, Activity, CheckCircle, MessageSquare, Link as LinkIcon, Layers, AlertTriangle } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Project, MacroActivity, MicroActivity, Prerequisite, BudgetInfo } from '../types';
+import { ChevronDown, Clock, Activity, CheckCircle, MessageSquare, Link as LinkIcon, Layers, AlertTriangle, ListTodo, DollarSign, User, Calendar } from 'lucide-react';
 
 interface ProjectFlowViewProps {
   project: Project;
@@ -128,18 +128,83 @@ const MacroCard: React.FC<{ macro: MacroActivity; onDragStart: (e: React.DragEve
 };
 
 const MicroDetail: React.FC<{ micro: MicroActivity }> = ({ micro }) => {
+    const [showPrerequisites, setShowPrerequisites] = useState(false);
+    const [showBudget, setShowBudget] = useState(false);
+
     const colorClass = micro.status === 'Concluído e aprovado' ? 'text-emerald-600'
                      : micro.status === 'Concluído com restrições' ? 'text-amber-600'
                      : micro.status === 'A repetir / retrabalho' ? 'text-red-600'
                      : 'text-slate-500';
 
+    const prerequisiteAlert = useMemo(() => {
+        if (!micro.prerequisites || micro.prerequisites.length === 0 || !micro.dueDate) return false;
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        
+        return micro.prerequisites.some(pre => {
+            if (pre.status === 'concluído' || pre.completed) return false;
+            const dueDate = new Date(micro.dueDate + 'T00:00:00');
+            const startDate = new Date(dueDate);
+            startDate.setDate(dueDate.getDate() - pre.leadTimeDays);
+            return today >= startDate;
+        });
+    }, [micro.dueDate, micro.prerequisites]);
+
     return (
         <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-            <p className="text-xs font-bold text-slate-800">{micro.name}</p>
+            <div className="flex items-center gap-2">
+                {prerequisiteAlert && <AlertTriangle size={12} className="text-red-500 animate-pulse" />}
+                <p className="text-xs font-bold text-slate-800">{micro.name}</p>
+            </div>
             <div className="mt-2 flex justify-between items-center">
                 <span className={`text-[9px] font-black uppercase ${colorClass}`}>{micro.status}</span>
-                <span className="text-[9px] font-bold text-slate-400">{micro.assignee}</span>
+                <div className="flex items-center gap-2">
+                    {micro.prerequisites && micro.prerequisites.length > 0 && (
+                        <button onClick={() => setShowPrerequisites(!showPrerequisites)} className={`p-1 rounded-md ${showPrerequisites ? 'bg-teal-100 text-teal-600' : 'text-slate-400'}`}>
+                            <ListTodo size={12}/>
+                        </button>
+                    )}
+                    {micro.budget && (
+                        <button onClick={() => setShowBudget(!showBudget)} className={`p-1 rounded-md ${showBudget ? 'bg-emerald-100 text-emerald-600' : 'text-slate-400'}`}>
+                            <DollarSign size={12}/>
+                        </button>
+                    )}
+                    <span className="text-[9px] font-bold text-slate-400">{micro.assignee}</span>
+                </div>
             </div>
+
+            {showPrerequisites && micro.prerequisites && (
+                <div className="mt-2 pt-2 border-t border-slate-200 space-y-2">
+                    <h6 className="text-[8px] font-black uppercase text-teal-600 flex items-center gap-1"><ListTodo size={10}/> Pré-requisitos</h6>
+                    {micro.prerequisites.map(pre => (
+                        <div key={pre.id} className="flex items-center gap-2 text-[10px]">
+                            <div className={`w-2 h-2 rounded-full ${pre.completed ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                            <span className={`flex-1 ${pre.completed ? 'text-slate-400 line-through' : 'text-slate-600'}`}>{pre.name}</span>
+                            <span className="text-[8px] font-bold text-slate-400 uppercase">{pre.type}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {showBudget && micro.budget && (
+                <div className="mt-2 pt-2 border-t border-slate-200 space-y-2">
+                    <h6 className="text-[8px] font-black uppercase text-emerald-600 flex items-center gap-1"><DollarSign size={10}/> Orçamento</h6>
+                    <div className="grid grid-cols-2 gap-2 text-[9px]">
+                        <div>
+                            <span className="text-slate-400 uppercase block">Valor</span>
+                            <span className="font-bold text-slate-700">R$ {micro.budget.estimatedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div>
+                            <span className="text-slate-400 uppercase block">Status</span>
+                            <span className="font-bold text-slate-700 uppercase">{micro.budget.status}</span>
+                        </div>
+                        <div className="col-span-2">
+                            <span className="text-slate-400 uppercase block">Fornecedor</span>
+                            <span className="font-bold text-slate-700">{micro.budget.supplier || 'N/A'}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
              {(micro.observations || micro.reportLink) && (
                 <div className="mt-2 pt-2 border-t border-slate-200 space-y-2">
                     {micro.observations && <p className="text-xs text-slate-600 italic flex items-start gap-2"><MessageSquare size={12} className="shrink-0 mt-0.5"/> {micro.observations}</p>}

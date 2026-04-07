@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus } from './types';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, ChatMessage } from './types';
 import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS } from './constants';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
@@ -21,6 +21,15 @@ import { MicrosoftGraphService } from './services/microsoftGraphService';
 import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
 import PreSaveConfirmationModal from './components/PreSaveConfirmationModal';
+
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import firebaseConfig from './firebase-applet-config.json';
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+const storage = getStorage(firebaseApp);
 
 function isEqual(a: any, b: any): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -49,6 +58,9 @@ const App: React.FC = () => {
   const [appUsers, setAppUsers] = useState<AppUser[]>([]);
   const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
   const [dataVersion, setDataVersion] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [parentEmails, setParentEmails] = useState<string[]>([]);
+  const [isSendingSOS, setIsSendingSOS] = useState(false);
   const [isDataDirty, setIsDataDirty] = useState(false);
   const [activeUsers, setActiveUsers] = useState<string[]>([]);
   
@@ -99,6 +111,39 @@ const App: React.FC = () => {
   const [projTask_dateFilterType, setProjTask_dateFilterType] = useState<'all' | 'dueDate'>('all');
   const [projTask_startDateFilter, setProjTask_startDateFilter] = useState('');
   const [projTask_endDateFilter, setProjTask_endDateFilter] = useState('');
+
+  const resizeImage = (file: File, maxWidth: number = 800, quality: number = 0.7): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return reject(new Error('Canvas context not found'));
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Canvas toBlob failed'));
+          }, 'image/jpeg', quality);
+        };
+        img.onerror = reject;
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
 
 
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -502,6 +547,88 @@ const App: React.FC = () => {
     return isPasswordAuthenticated;
   }, [isPasswordAuthenticated, selectedProfile, currentUserRole]);
 
+  useEffect(() => {
+    const q = query(collection(db, 'messages'), orderBy('timestamp', 'desc'), limit(20));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ChatMessage));
+      setMessages(msgs.reverse());
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleFileUpload = async (file: File) => {
+    try {
+      let fileToUpload: Blob | File = file;
+      if (file.type.startsWith('image/')) {
+        fileToUpload = await resizeImage(file, 800, 0.7);
+      }
+      const storageRef = ref(storage, `uploads/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, fileToUpload);
+      const url = await getDownloadURL(storageRef);
+      return url;
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      alert('Erro ao enviar arquivo.');
+    }
+  };
+
+  const handleSOS = async () => {
+    if (!selectedProfile) return;
+    if (!confirm('Deseja enviar um alerta de SOS?')) return;
+
+    setIsSendingSOS(true);
+
+    const getPosition = () => {
+      return new Promise<GeolocationPosition>((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          reject(new Error('Geolocation timeout'));
+        }, 10000);
+
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            clearTimeout(timeoutId);
+            resolve(pos);
+          },
+          (err) => {
+            clearTimeout(timeoutId);
+            reject(err);
+          }
+        );
+      });
+    };
+
+    try {
+      const position = await getPosition();
+      const { latitude, longitude } = position.coords;
+
+      // Use cached parent emails if available
+      const emails = parentEmails.length > 0 
+        ? parentEmails 
+        : teamMembers.filter(m => m.role === 'Responsável').map(m => m.id); // Fallback to team members
+
+      const sosMessage = {
+        text: `SOS! Localização: https://www.google.com/maps?q=${latitude},${longitude}`,
+        senderId: selectedProfile.id,
+        senderName: selectedProfile.name,
+        timestamp: serverTimestamp(),
+      };
+
+      await addDoc(collection(db, 'messages'), sosMessage);
+      
+      // Cache parent emails for next time
+      if (parentEmails.length === 0) {
+        setParentEmails(emails);
+      }
+
+      alert('SOS enviado com sucesso!');
+    } catch (error) {
+      console.error('Error sending SOS:', error);
+      alert('Erro ao enviar SOS. Verifique sua conexão e GPS.');
+    } finally {
+      setIsSendingSOS(false);
+    }
+  };
+
   const handleLogin = async () => {
     setIsLoading(true);
     setAuthError(null);
@@ -658,7 +785,9 @@ const App: React.FC = () => {
             };
 
             if (oldTask.status !== taskToSave.status) {
-                createNote(`Status alterado de "${oldTask.status}" para "${taskToSave.status}".`);
+                const oldStatus = oldTask.status === 'arrumando' ? 'academia' : oldTask.status;
+                const newStatus = taskToSave.status === 'arrumando' ? 'academia' : taskToSave.status;
+                createNote(`Status alterado de "${oldStatus}" para "${newStatus}".`);
             }
             if (oldTask.reportStage !== taskToSave.reportStage) {
                 createNote(`Etapa do fluxo de revisão alterada para "${taskToSave.reportStage}".`);
@@ -1116,6 +1245,14 @@ const App: React.FC = () => {
                     <Bell size={isMobile ? 16 : 20} className="text-slate-400"/>
                     {pendingReviewCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center animate-pulse">{pendingReviewCount}</span>}
                 </div>
+                <button 
+                  onClick={handleSOS} 
+                  disabled={isSendingSOS}
+                  className={`flex items-center gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-xl font-bold text-[10px] sm:text-xs uppercase tracking-wider shadow-lg transition ${isSendingSOS ? 'bg-slate-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'}`}
+                >
+                  <AlertTriangle size={isMobile ? 14 : 16}/> 
+                  {isSendingSOS ? 'Enviando...' : 'SOS'}
+                </button>
                 {view === 'tasks' && (
                   <>
                     <button onClick={() => setIsReportModalOpen(true)} className="p-2 sm:p-3 bg-white border border-slate-200 rounded-full text-slate-500 hover:bg-slate-100 transition"><FileText size={isMobile ? 18 : 20}/></button>

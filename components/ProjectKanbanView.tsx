@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
-import { Project, MicroActivity, MicroActivityStatus } from '../types';
-import { AlertTriangle, Clock, CheckCircle, ArrowRight, ExternalLink } from 'lucide-react';
+import { Project, MicroActivity, MicroActivityStatus, Prerequisite, BudgetInfo } from '../types';
+import { AlertTriangle, Clock, CheckCircle, ArrowRight, ExternalLink, ListTodo, DollarSign } from 'lucide-react';
+import { useMemo } from 'react';
 
 interface ProjectKanbanViewProps {
   project: Project;
@@ -82,14 +83,44 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
                 <div key={task.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow space-y-3">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
-                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{task.macroName}</p>
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{task.macroName}</p>
+                        {(() => {
+                          if (!task.prerequisites || task.prerequisites.length === 0 || !task.dueDate) return null;
+                          const today = new Date(); today.setHours(0, 0, 0, 0);
+                          const hasAlert = task.prerequisites.some(pre => {
+                            if (pre.status === 'concluído' || pre.completed) return false;
+                            const dueDate = new Date(task.dueDate + 'T00:00:00');
+                            const startDate = new Date(dueDate);
+                            startDate.setDate(dueDate.getDate() - pre.leadTimeDays);
+                            return today >= startDate;
+                          });
+                          return hasAlert ? (
+                            <div title="Pré-requisito pendente!">
+                              <AlertTriangle size={10} className="text-red-500 animate-pulse" />
+                            </div>
+                          ) : null;
+                        })()}
+                      </div>
                       <h4 className="text-xs font-bold text-slate-800 leading-tight">{task.name}</h4>
                     </div>
-                    {task.status === 'Concluído com restrições' && (
-                      <div className="bg-amber-100 text-amber-600 p-1 rounded-lg" title="Concluído com restrições">
-                        <AlertTriangle size={14} />
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1">
+                      {task.prerequisites && task.prerequisites.length > 0 && (
+                        <div className="text-teal-500" title="Possui pré-requisitos">
+                          <ListTodo size={14} />
+                        </div>
+                      )}
+                      {task.budget && (
+                        <div className="text-emerald-500" title="Possui orçamento">
+                          <DollarSign size={14} />
+                        </div>
+                      )}
+                      {task.status === 'Concluído com restrições' && (
+                        <div className="bg-amber-100 text-amber-600 p-1 rounded-lg" title="Concluído com restrições">
+                          <AlertTriangle size={14} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                   
                   <div className="flex items-center justify-between text-[9px] font-bold text-slate-500">

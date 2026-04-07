@@ -13,6 +13,27 @@ export type ReportStatus = 'Pendente' | 'Concluído' | 'N/A';
 // Novo tipo para status de microatividades
 export type MicroActivityStatus = 'Planejado' | 'Em andamento' | 'Concluído com restrições' | 'A repetir / retrabalho' | 'Concluído e aprovado';
 
+export type PrerequisiteType = 'orçamento' | 'contratação' | 'logística' | 'recurso';
+export type PrerequisiteStatus = 'não iniciado' | 'em andamento' | 'concluído';
+
+export interface Prerequisite {
+  id: string;
+  name: string;
+  type: PrerequisiteType;
+  status: PrerequisiteStatus;
+  completed: boolean;
+  leadTimeDays: number;
+}
+
+export type BudgetStatus = 'solicitado' | 'recebido' | 'aprovado';
+
+export interface BudgetInfo {
+  estimatedValue: number;
+  supplier: string;
+  budgetDate: string;
+  status: BudgetStatus;
+}
+
 export interface TaskNote {
   id: string;
   date: string;
@@ -126,6 +147,8 @@ export interface MicroActivity {
   reportLink?: string;
   completionDate?: string;
   progress?: number;
+  prerequisites?: Prerequisite[];
+  budget?: BudgetInfo;
 }
 
 export interface MacroActivity {
