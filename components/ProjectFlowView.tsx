@@ -82,6 +82,19 @@ const MacroCard: React.FC<{ macro: MacroActivity; onDragStart: (e: React.DragEve
     const progress = totalMicros > 0 ? Math.round((completedMicros / totalMicros) * 100) : 0;
     const status = progress === 100 ? 'Concluída' : macro.microActivities.some(m => m.status === 'Em andamento') ? 'Em Andamento' : 'Planejada';
 
+    const prerequisiteAlert = useMemo(() => {
+        if (!macro.prerequisites || macro.prerequisites.length === 0 || !macro.dueDate) return false;
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        
+        return macro.prerequisites.some(pre => {
+            if (pre.status === 'concluído' || pre.completed) return false;
+            const dueDate = new Date(macro.dueDate + 'T00:00:00');
+            const startDate = new Date(dueDate);
+            startDate.setDate(dueDate.getDate() - pre.leadTimeDays);
+            return today >= startDate;
+        });
+    }, [macro.dueDate, macro.prerequisites]);
+
     const getStatusIcon = () => {
         if (status === 'Concluída') return <CheckCircle size={14} className="text-emerald-500" />;
         if (status === 'Em Andamento') return <Activity size={14} className="text-teal-500" />;
@@ -95,7 +108,19 @@ const MacroCard: React.FC<{ macro: MacroActivity; onDragStart: (e: React.DragEve
             className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm hover:shadow-md hover:border-teal-100 transition-all cursor-grab"
         >
             <div className="flex justify-between items-start">
-              <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight line-clamp-3 flex-1">{macro.name}</h4>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                    {prerequisiteAlert && (
+                        <div className="animate-bounce" title="Pré-requisito de Macro pendente!">
+                            <AlertTriangle size={12} className="text-red-500" />
+                        </div>
+                    )}
+                    {macro.prerequisites && macro.prerequisites.length > 0 && (
+                        <ListTodo size={12} className="text-teal-500" />
+                    )}
+                </div>
+                <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight line-clamp-3">{macro.name}</h4>
+              </div>
               <button onClick={() => setIsExpanded(!isExpanded)} className="p-1 text-slate-400">
                   <ChevronDown size={18} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
               </button>
@@ -117,6 +142,20 @@ const MacroCard: React.FC<{ macro: MacroActivity; onDragStart: (e: React.DragEve
             </div>
             {isExpanded && (
                 <div className="mt-4 pt-4 border-t border-slate-100 space-y-3 animate-in fade-in duration-300">
+                    {macro.prerequisites && macro.prerequisites.length > 0 && (
+                        <div className="mb-4 space-y-2">
+                            <h5 className="text-[10px] font-black uppercase text-teal-600 flex items-center gap-1"><ListTodo size={12}/> Pré-requisitos da Macro ({macro.prerequisites.length})</h5>
+                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2">
+                                {macro.prerequisites.map(pre => (
+                                    <div key={pre.id} className="flex items-center gap-2 text-[10px]">
+                                        <div className={`w-2 h-2 rounded-full shrink-0 ${pre.completed ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                                        <span className={`flex-1 truncate ${pre.completed ? 'text-slate-400 line-through' : 'text-slate-700 font-bold'}`}>{pre.name}</span>
+                                        <span className="text-[8px] font-black text-slate-400 uppercase shrink-0">{pre.type}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                     <h5 className="text-[10px] font-black uppercase text-slate-400">Microatividades ({totalMicros})</h5>
                     {macro.microActivities.length > 0 ? macro.microActivities.map(micro => (
                         <MicroDetail key={micro.id} micro={micro} />

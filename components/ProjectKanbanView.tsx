@@ -32,7 +32,13 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
   };
 
   const allMicroActivities = project.macroActivities.flatMap(macro => 
-    macro.microActivities.map(micro => ({ ...micro, macroId: macro.id, macroName: macro.name }))
+    macro.microActivities.map(micro => ({ 
+      ...micro, 
+      macroId: macro.id, 
+      macroName: macro.name,
+      macroPrerequisites: macro.prerequisites,
+      macroDueDate: macro.dueDate
+    }))
   );
 
   const handleStatusChange = (macroId: string, microId: string, newStatus: MicroActivityStatus) => {
@@ -86,7 +92,25 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{task.macroName}</p>
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                            {task.macroName}
+                            {(() => {
+                                if (!task.macroPrerequisites || task.macroPrerequisites.length === 0 || !task.macroDueDate) return null;
+                                const today = new Date(); today.setHours(0, 0, 0, 0);
+                                const hasMacroAlert = task.macroPrerequisites.some(pre => {
+                                    if (pre.status === 'concluído' || pre.completed) return false;
+                                    const dueDate = new Date(task.macroDueDate + 'T00:00:00');
+                                    const startDate = new Date(dueDate);
+                                    startDate.setDate(dueDate.getDate() - pre.leadTimeDays);
+                                    return today >= startDate;
+                                });
+                                return hasMacroAlert ? (
+                                    <div title="Macroatividade com pré-requisito pendente!" className="animate-bounce">
+                                        <AlertTriangle size={10} className="text-amber-500" />
+                                    </div>
+                                ) : null;
+                            })()}
+                        </p>
                         {(() => {
                           if (!task.prerequisites || task.prerequisites.length === 0 || !task.dueDate) return null;
                           const today = new Date(); today.setHours(0, 0, 0, 0);

@@ -3,7 +3,7 @@
 // Versão corrigida para sincronização
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus } from './types';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite } from './types';
 import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS } from './constants';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
@@ -39,6 +39,8 @@ export type AugmentedMicroActivity = MicroActivity & {
   projectName: string;
   macroId: string;
   macroName: string;
+  macroPrerequisites?: Prerequisite[];
+  macroDueDate?: string;
 };
 
 const App: React.FC = () => {
@@ -973,6 +975,8 @@ const App: React.FC = () => {
                     projectName: project.name,
                     macroId: macro.id,
                     macroName: macro.name,
+                    macroPrerequisites: macro.prerequisites,
+                    macroDueDate: macro.dueDate,
                 });
             }
         }

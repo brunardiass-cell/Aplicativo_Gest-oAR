@@ -288,11 +288,25 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
   
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(macro.name);
+  const [showPrerequisites, setShowPrerequisites] = useState(false);
 
   const totalMicros = macro.microActivities.length;
   const completedMicros = macro.microActivities.filter(m => m.status === 'Concluído e aprovado' || m.status === 'Concluído com restrições').length;
   const progress = totalMicros > 0 ? (completedMicros / totalMicros) * 100 : 0;
   const restrictedCount = macro.microActivities.filter(m => m.status === 'Concluído com restrições').length;
+
+  const prerequisiteAlert = useMemo(() => {
+    if (!macro.prerequisites || macro.prerequisites.length === 0 || !macro.dueDate) return false;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    
+    return macro.prerequisites.some(pre => {
+        if (pre.status === 'concluído' || pre.completed) return false;
+        const dueDate = new Date(macro.dueDate + 'T00:00:00');
+        const startDate = new Date(dueDate);
+        startDate.setDate(dueDate.getDate() - pre.leadTimeDays);
+        return today >= startDate;
+    });
+  }, [macro.dueDate, macro.prerequisites]);
 
   const getMacroStatus = (): 'Concluída' | 'Em Andamento' | 'Planejada' => {
     if (totalMicros === 0) return 'Planejada';
@@ -307,6 +321,34 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
     const updatedProject = { ...project, macroActivities: project.macroActivities.map(m => m.id === macro.id ? {...m, name: editedName.trim()} : m) };
     onUpdateProject(updatedProject);
     setIsEditing(false);
+  };
+
+  const handleUpdateMacro = (updates: Partial<MacroActivity>) => {
+    const updatedProject = { ...project, macroActivities: project.macroActivities.map(m => m.id === macro.id ? {...m, ...updates} : m) };
+    onUpdateProject(updatedProject);
+  };
+
+  const handleAddPrerequisite = () => {
+    const newPre: Prerequisite = {
+        id: 'pre_' + Math.random().toString(36).substr(2, 9),
+        name: 'Novo Pré-requisito',
+        type: 'recurso',
+        status: 'não iniciado',
+        completed: false,
+        leadTimeDays: 7
+    };
+    handleUpdateMacro({ prerequisites: [...(macro.prerequisites || []), newPre] });
+    setShowPrerequisites(true);
+  };
+
+  const handleUpdatePrerequisite = (preId: string, updates: Partial<Prerequisite>) => {
+    const updatedPres = (macro.prerequisites || []).map(p => p.id === preId ? { ...p, ...updates } : p);
+    handleUpdateMacro({ prerequisites: updatedPres });
+  };
+
+  const handleDeletePrerequisite = (preId: string) => {
+    const updatedPres = (macro.prerequisites || []).filter(p => p.id !== preId);
+    handleUpdateMacro({ prerequisites: updatedPres });
   };
   
   return (
@@ -325,28 +367,129 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
               <button onClick={handleSaveName} className="p-2 text-emerald-500 hover:bg-emerald-100 rounded-md"><Save size={16}/></button>
               <button onClick={() => setIsEditing(false)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-md"><X size={16}/></button>
             </div>
-          ) : ( <h4 className="text-xs font-black text-slate-800 uppercase tracking-tight">{macro.name}</h4> )}
+          ) : ( 
+            <div className="flex items-center gap-2">
+                {prerequisiteAlert && (
+                    <div className="animate-bounce" title="Pré-requisito de Macro pendente!">
+                        <AlertTriangle size={14} className="text-red-500" />
+                    </div>
+                )}
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-tight">{macro.name}</h4> 
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-4">
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
+                <div className="flex flex-col">
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Prazo Macro</label>
+                    <input 
+                        type="date" 
+                        value={macro.dueDate || ''} 
+                        onChange={e => handleUpdateMacro({ dueDate: e.target.value })}
+                        className="text-[10px] font-bold text-slate-600 bg-transparent outline-none"
+                    />
+                </div>
                 <button onClick={() => setIsEditing(true)} className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-md"><Edit size={16}/></button>
                 <button onClick={() => onOpenDeletionModal({ type: 'macro', ids: { projectId: project.id, macroId: macro.id }, name: macro.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"><Trash2 size={16}/></button>
             </div>
-            <div className="flex flex-col items-end">
-                <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-800">{Math.round(progress)}%</span>
-                    <div className="w-16 h-1.5 bg-slate-200 rounded-full"><div className="bg-brand-primary h-1.5 rounded-full" style={{ width: `${progress}%` }}></div></div>
-                    <span className="text-[9px] font-black text-slate-400">{completedMicros}/{totalMicros}</span>
-                </div>
-                {restrictedCount > 0 && (
-                    <div className="flex items-center gap-1 mt-1 text-amber-600">
-                        <AlertTriangle size={12} />
-                        <span className="text-[9px] font-black uppercase">{restrictedCount}/{completedMicros} com restrições</span>
-                    </div>
+            <div className="flex items-center gap-2">
+                {macro.prerequisites && macro.prerequisites.length > 0 && (
+                    <button 
+                        onClick={() => setShowPrerequisites(!showPrerequisites)}
+                        className={`p-2 rounded-xl transition flex items-center gap-1 ${showPrerequisites ? 'bg-teal-100 text-teal-600' : 'text-slate-400 hover:bg-slate-100'}`}
+                        title="Pré-requisitos da Macro"
+                    >
+                        <ListTodo size={14}/>
+                        <span className="text-[9px] font-bold">{macro.prerequisites.length}</span>
+                    </button>
                 )}
+                <div className="flex flex-col items-end">
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-800">{Math.round(progress)}%</span>
+                        <div className="w-16 h-1.5 bg-slate-200 rounded-full"><div className="bg-brand-primary h-1.5 rounded-full" style={{ width: `${progress}%` }}></div></div>
+                        <span className="text-[9px] font-black text-slate-400">{completedMicros}/{totalMicros}</span>
+                    </div>
+                    {restrictedCount > 0 && (
+                        <div className="flex items-center gap-1 mt-1 text-amber-600">
+                            <AlertTriangle size={12} />
+                            <span className="text-[9px] font-black uppercase">{restrictedCount}/{completedMicros} com restrições</span>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
       </div>
+
+      {/* Macro Prerequisites Expansion */}
+      {showPrerequisites && macro.prerequisites && (
+          <div className="mx-4 mb-4 p-4 bg-white border border-teal-100 rounded-2xl animate-in slide-in-from-top-2 duration-300">
+              <div className="flex justify-between items-center mb-4">
+                  <h5 className="text-[10px] font-black uppercase tracking-widest text-teal-600 flex items-center gap-2">
+                      <ListTodo size={14}/> Pré-requisitos da Macroatividade
+                  </h5>
+                  <button onClick={() => setShowPrerequisites(false)} className="text-slate-400 hover:text-slate-600"><X size={14}/></button>
+              </div>
+              <div className="space-y-3">
+                  {macro.prerequisites.map(pre => (
+                      <div key={pre.id} className="flex items-center gap-3 p-2 bg-slate-50 rounded-xl border border-slate-100">
+                          <input 
+                            type="checkbox" 
+                            checked={pre.completed} 
+                            onChange={e => handleUpdatePrerequisite(pre.id, { completed: e.target.checked, status: e.target.checked ? 'concluído' : 'em andamento' })}
+                            className="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                          />
+                          <div className="flex-1 grid grid-cols-12 gap-2 items-center">
+                              <div className="col-span-4">
+                                  <input 
+                                    value={pre.name} 
+                                    onChange={e => handleUpdatePrerequisite(pre.id, { name: e.target.value })}
+                                    className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none"
+                                  />
+                              </div>
+                              <div className="col-span-3">
+                                  <select 
+                                    value={pre.type} 
+                                    onChange={e => handleUpdatePrerequisite(pre.id, { type: e.target.value as PrerequisiteType })}
+                                    className="w-full bg-transparent text-[10px] font-bold text-slate-500 outline-none"
+                                  >
+                                      <option value="orçamento">Orçamento</option>
+                                      <option value="contratação">Contratação</option>
+                                      <option value="logística">Logística</option>
+                                      <option value="recurso">Recurso</option>
+                                  </select>
+                              </div>
+                              <div className="col-span-3">
+                                  <select 
+                                    value={pre.status} 
+                                    onChange={e => handleUpdatePrerequisite(pre.id, { status: e.target.value as PrerequisiteStatus, completed: e.target.value === 'concluído' })}
+                                    className="w-full bg-transparent text-[10px] font-bold text-slate-500 outline-none"
+                                  >
+                                      <option value="não iniciado">Não Iniciado</option>
+                                      <option value="em andamento">Em Andamento</option>
+                                      <option value="concluído">Concluído</option>
+                                  </select>
+                              </div>
+                              <div className="col-span-2 flex items-center gap-1">
+                                  <Clock size={12} className="text-slate-400"/>
+                                  <input 
+                                    type="number" 
+                                    value={pre.leadTimeDays} 
+                                    onChange={e => handleUpdatePrerequisite(pre.id, { leadTimeDays: parseInt(e.target.value) || 0 })}
+                                    className="w-8 bg-transparent text-[10px] font-bold text-slate-500 outline-none"
+                                    title="Dias de antecedência"
+                                  />
+                                  <span className="text-[8px] text-slate-400">d</span>
+                              </div>
+                          </div>
+                          <button onClick={() => handleDeletePrerequisite(pre.id)} className="p-1 text-slate-300 hover:text-red-500"><Trash2 size={12}/></button>
+                      </div>
+                  ))}
+                  <button onClick={handleAddPrerequisite} className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-400 hover:border-teal-300 hover:text-teal-500 transition flex items-center justify-center gap-2">
+                      <Plus size={12}/> Adicionar Pré-requisito à Macro
+                  </button>
+              </div>
+          </div>
+      )}
       {isExpanded && (
         <div className="bg-white p-4 border-t border-slate-100 space-y-3">
           {macro.microActivities.map(micro => (

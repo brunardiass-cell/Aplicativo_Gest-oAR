@@ -156,6 +156,8 @@ export interface MacroActivity {
   name: string;
   phase: string; // Adicionado
   microActivities: MicroActivity[];
+  prerequisites?: Prerequisite[];
+  dueDate?: string;
 }
 
 export interface Project {

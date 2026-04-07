@@ -168,7 +168,25 @@ const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
                 </div>
               </div>
               <div className="mb-4">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{micro.projectName}</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                    {micro.projectName}
+                    {(() => {
+                        if (!micro.macroPrerequisites || micro.macroPrerequisites.length === 0 || !micro.macroDueDate) return null;
+                        const today = new Date(); today.setHours(0, 0, 0, 0);
+                        const hasMacroAlert = micro.macroPrerequisites.some(pre => {
+                            if (pre.status === 'concluído' || pre.completed) return false;
+                            const dueDate = new Date(micro.macroDueDate + 'T00:00:00');
+                            const startDate = new Date(dueDate);
+                            startDate.setDate(dueDate.getDate() - pre.leadTimeDays);
+                            return today >= startDate;
+                        });
+                        return hasMacroAlert ? (
+                            <div title="Macroatividade com pré-requisito pendente!" className="animate-bounce">
+                                <AlertTriangle size={12} className="text-amber-500" />
+                            </div>
+                        ) : null;
+                    })()}
+                </p>
                 <h3 className="text-sm font-black text-slate-900 tracking-tight leading-tight uppercase">{micro.name}</h3>
                 <p className="text-[10px] font-medium text-brand-primary mt-1 line-clamp-2">Macro: {micro.macroName}</p>
               </div>
