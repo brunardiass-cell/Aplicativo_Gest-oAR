@@ -16,6 +16,8 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
   const [newPlanName, setNewPlanName] = useState('');
   const [newPhaseName, setNewPhaseName] = useState('');
   const [newMacroNames, setNewMacroNames] = useState<{ [key: string]: string }>({});
+  const [newChecklistItem, setNewChecklistItem] = useState('');
+  const [activeTab, setActiveTab] = useState<'activities' | 'checklist'>('activities');
 
   useEffect(() => {
     if (isOpen) {
@@ -40,6 +42,7 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
       name: newPlanName.trim(),
       phases: ['Nova Fase'],
       macroActivities: [],
+      regulatoryChecklist: []
     };
     setLocalPlans([...localPlans, newPlan]);
     setSelectedPlanId(newPlan.id);
@@ -145,6 +148,51 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
     setLocalPlans(updatedPlans);
   };
 
+  const handleAddChecklistItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newChecklistItem.trim() || !selectedPlanId) return;
+    const updatedPlans = localPlans.map(p => {
+      if (p.id === selectedPlanId) {
+        const currentChecklist = p.regulatoryChecklist || [];
+        return { 
+          ...p, 
+          regulatoryChecklist: [
+            ...currentChecklist, 
+            { id: 'item_' + Math.random().toString(36).substr(2, 9), item: newChecklistItem.trim(), completed: false }
+          ] 
+        };
+      }
+      return p;
+    });
+    setLocalPlans(updatedPlans);
+    setNewChecklistItem('');
+  };
+
+  const handleDeleteChecklistItem = (itemId: string) => {
+    if (!selectedPlanId) return;
+    const updatedPlans = localPlans.map(p => {
+      if (p.id === selectedPlanId) {
+        return { ...p, regulatoryChecklist: (p.regulatoryChecklist || []).filter(i => i.id !== itemId) };
+      }
+      return p;
+    });
+    setLocalPlans(updatedPlans);
+  };
+
+  const handleUpdateChecklistItem = (itemId: string, newItem: string) => {
+    if (!selectedPlanId || !newItem.trim()) return;
+    const updatedPlans = localPlans.map(p => {
+      if (p.id === selectedPlanId) {
+        return { 
+          ...p, 
+          regulatoryChecklist: (p.regulatoryChecklist || []).map(i => i.id === itemId ? { ...i, item: newItem.trim() } : i) 
+        };
+      }
+      return p;
+    });
+    setLocalPlans(updatedPlans);
+  };
+
   const handleSaveAndClose = () => {
     onSave(localPlans);
     onClose();
@@ -188,57 +236,105 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
           <div className="w-2/3 flex-1 overflow-y-auto custom-scrollbar">
             {selectedPlan ? (
               <div className="p-8 space-y-8">
-                <div>
-                  <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">{selectedPlan.name}</h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Fases e Macroatividades</p>
+                <div className="flex justify-between items-end">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">{selectedPlan.name}</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Configuração do Template</p>
+                  </div>
+                  <div className="flex bg-slate-100 p-1 rounded-xl">
+                    <button 
+                      onClick={() => setActiveTab('activities')}
+                      className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition ${activeTab === 'activities' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      Atividades
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('checklist')}
+                      className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition ${activeTab === 'checklist' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      Checklist Regulatório
+                    </button>
+                  </div>
                 </div>
 
-                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-6 space-y-4">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Gerenciar Fases</label>
-                    <form onSubmit={handleAddPhase} className="flex gap-2">
-                      <input value={newPhaseName} onChange={e => setNewPhaseName(e.target.value)} placeholder="Nome da nova fase..." className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold"/>
-                      <button type="submit" className="px-4 bg-slate-800 text-white rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2"><Plus size={16}/>Add</button>
-                    </form>
-                </div>
-
-                <div className="space-y-6">
-                  {(selectedPlan.phases || []).map(phase => (
-                    <div key={phase} className="bg-slate-50/50 border border-slate-100 rounded-2xl">
-                      <header className="p-4 flex justify-between items-center bg-slate-100/80">
-                        <div className="flex items-center gap-2 flex-1">
-                          <Layers size={14} className="text-slate-400"/>
-                          <input 
-                            value={phase} 
-                            onChange={e => handleUpdatePhase(phase, e.target.value)}
-                            className="bg-transparent border-none text-xs font-black uppercase tracking-widest text-slate-600 focus:ring-0 w-full"
-                          />
-                        </div>
-                        <button onClick={() => handleDeletePhase(phase)} className="p-2 text-slate-300 hover:text-red-500 rounded-lg transition"><Trash2 size={14}/></button>
-                      </header>
-                      <div className="p-4 space-y-3">
-                        {selectedPlan.macroActivities.filter(m => m.phase === phase).map((macro, index) => (
-                          <div key={index} className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">
-                            <input 
-                              value={macro.name} 
-                              onChange={e => handleUpdateMacro(macro, e.target.value)}
-                              className="bg-transparent border-none text-xs font-bold text-slate-700 focus:ring-0 flex-1"
-                            />
-                            <button onClick={() => handleDeleteMacro(macro)} className="p-1 text-slate-300 hover:text-red-500"><X size={14}/></button>
-                          </div>
-                        ))}
-                        <form onSubmit={(e) => handleAddMacro(e, phase)} className="flex gap-2 pt-2">
-                           <input value={newMacroNames[phase] || ''} onChange={e => setNewMacroNames({ ...newMacroNames, [phase]: e.target.value })} placeholder="Nova macroatividade..." className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold"/>
-                           <button type="submit" className="px-3 bg-slate-200 text-slate-600 rounded-lg text-xs font-bold uppercase flex items-center justify-center gap-1 hover:bg-slate-300 transition"><Plus size={14}/>Add</button>
+                {activeTab === 'activities' ? (
+                  <>
+                    <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-6 space-y-4">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Gerenciar Fases</label>
+                        <form onSubmit={handleAddPhase} className="flex gap-2">
+                          <input value={newPhaseName} onChange={e => setNewPhaseName(e.target.value)} placeholder="Nome da nova fase..." className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold"/>
+                          <button type="submit" className="px-4 bg-slate-800 text-white rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2"><Plus size={16}/>Add</button>
                         </form>
-                      </div>
                     </div>
-                  ))}
-                   {(selectedPlan.phases || []).length === 0 && (
-                     <div className="text-center py-10 border-2 border-dashed border-slate-200 rounded-2xl">
-                        <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Adicione uma fase para começar.</p>
-                     </div>
-                   )}
-                </div>
+
+                    <div className="space-y-6">
+                      {(selectedPlan.phases || []).map(phase => (
+                        <div key={phase} className="bg-slate-50/50 border border-slate-100 rounded-2xl">
+                          <header className="p-4 flex justify-between items-center bg-slate-100/80">
+                            <div className="flex items-center gap-2 flex-1">
+                              <Layers size={14} className="text-slate-400"/>
+                              <input 
+                                value={phase} 
+                                onChange={e => handleUpdatePhase(phase, e.target.value)}
+                                className="bg-transparent border-none text-xs font-black uppercase tracking-widest text-slate-600 focus:ring-0 w-full"
+                              />
+                            </div>
+                            <button onClick={() => handleDeletePhase(phase)} className="p-2 text-slate-300 hover:text-red-500 rounded-lg transition"><Trash2 size={14}/></button>
+                          </header>
+                          <div className="p-4 space-y-3">
+                            {selectedPlan.macroActivities.filter(m => m.phase === phase).map((macro, index) => (
+                              <div key={index} className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">
+                                <input 
+                                  value={macro.name} 
+                                  onChange={e => handleUpdateMacro(macro, e.target.value)}
+                                  className="bg-transparent border-none text-xs font-bold text-slate-700 focus:ring-0 flex-1"
+                                />
+                                <button onClick={() => handleDeleteMacro(macro)} className="p-1 text-slate-300 hover:text-red-500"><X size={14}/></button>
+                              </div>
+                            ))}
+                            <form onSubmit={(e) => handleAddMacro(e, phase)} className="flex gap-2 pt-2">
+                               <input value={newMacroNames[phase] || ''} onChange={e => setNewMacroNames({ ...newMacroNames, [phase]: e.target.value })} placeholder="Nova macroatividade..." className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold"/>
+                               <button type="submit" className="px-3 bg-slate-200 text-slate-600 rounded-lg text-xs font-bold uppercase flex items-center justify-center gap-1 hover:bg-slate-300 transition"><Plus size={14}/>Add</button>
+                            </form>
+                          </div>
+                        </div>
+                      ))}
+                       {(selectedPlan.phases || []).length === 0 && (
+                         <div className="text-center py-10 border-2 border-dashed border-slate-200 rounded-2xl">
+                            <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Adicione uma fase para começar.</p>
+                         </div>
+                       )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-6 space-y-4">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Adicionar Item ao Checklist</label>
+                        <form onSubmit={handleAddChecklistItem} className="flex gap-2">
+                          <input value={newChecklistItem} onChange={e => setNewChecklistItem(e.target.value)} placeholder="Descreva o item regulatório..." className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold"/>
+                          <button type="submit" className="px-4 bg-slate-800 text-white rounded-xl text-xs font-bold uppercase flex items-center justify-center gap-2"><Plus size={16}/>Add</button>
+                        </form>
+                    </div>
+
+                    <div className="space-y-3">
+                      {(selectedPlan.regulatoryChecklist || []).map((item) => (
+                        <div key={item.id} className="flex justify-between items-center p-4 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 shadow-sm">
+                          <input 
+                            value={item.item} 
+                            onChange={e => handleUpdateChecklistItem(item.id, e.target.value)}
+                            className="bg-transparent border-none text-sm font-bold text-slate-700 focus:ring-0 flex-1"
+                          />
+                          <button onClick={() => handleDeleteChecklistItem(item.id)} className="p-2 text-slate-300 hover:text-red-500 transition"><Trash2 size={16}/></button>
+                        </div>
+                      ))}
+                      {(selectedPlan.regulatoryChecklist || []).length === 0 && (
+                        <div className="text-center py-10 border-2 border-dashed border-slate-200 rounded-2xl">
+                          <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Nenhum item no checklist regulatório.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="h-full flex items-center justify-center">

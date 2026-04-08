@@ -70,8 +70,22 @@ export interface Task {
   completedCollaborators?: string[]; // Adicionado para rastrear quem finalizou a revisão
 }
 
-export type ViewMode = 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceability';
+export type ViewMode = 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceability' | 'regulatory';
 
+export type RegulatoryStandardStatus = 'Vigente' | 'Em Revisão' | 'Obsoleta';
+
+export interface RegulatoryStandard {
+  id: string;
+  name: string;
+  theme: string;
+  phase: string;
+  relatedActivities: string[]; // Nomes das atividades relacionadas para vínculo automático
+  version: string;
+  status: RegulatoryStandardStatus;
+  summary: string;
+  documentLink: string;
+  notebookLMLink: string;
+}
 export interface SyncInfo {
   timestamp: string;
   user: string;
@@ -130,11 +144,20 @@ export interface MacroActivityTemplate {
   phase: string;
 }
 
+export interface RegulatoryChecklistItem {
+  id: string;
+  item: string;
+  completed: boolean;
+  completedAt?: string;
+  completedBy?: string;
+}
+
 export interface ActivityPlanTemplate {
   id: string;
   name: string;
   phases: string[];
   macroActivities: MacroActivityTemplate[];
+  regulatoryChecklist?: RegulatoryChecklistItem[];
 }
 
 export interface MicroActivity {
@@ -172,6 +195,7 @@ export interface Project {
   deleted?: boolean;
   deletionReason?: string;
   deletionDate?: string;
+  regulatoryChecklist?: RegulatoryChecklistItem[];
 }
 
 export interface TeamMember {

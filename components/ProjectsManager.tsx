@@ -1,10 +1,11 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember, AppUser } from '../types';
-import { FolderPlus, ListPlus, FolderKanban, Workflow, GanttChartSquare, Copy, Edit, User, Save, X, Users, Plus, Trash2, Printer } from 'lucide-react';
+import { Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember, AppUser, RegulatoryStandard } from '../types';
+import { FolderPlus, ListPlus, FolderKanban, Workflow, GanttChartSquare, Copy, Edit, User, Save, X, Users, Plus, Trash2, Printer, ClipboardCheck } from 'lucide-react';
 import PlanManagerModal from './PlanManagerModal';
 import NewProjectModal from './NewProjectModal';
 import ProjectTimeline from './ProjectTimeline';
+import RegulatoryChecklistModal from './RegulatoryChecklistModal';
 
 interface ProjectsManagerProps {
   projects: Project[];
@@ -17,6 +18,9 @@ interface ProjectsManagerProps {
   initialProjectId?: string | null;
   targetMicroId?: string | null;
   onClearTargetMicroId: () => void;
+  regulatoryStandards: RegulatoryStandard[];
+  onOpenRegulatoryModal: (activityName: string) => void;
+  currentUser: TeamMember | null;
 }
 
 const ProjectsManager: React.FC<ProjectsManagerProps> = ({ 
@@ -29,10 +33,14 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   currentUserRole,
   initialProjectId,
   targetMicroId,
-  onClearTargetMicroId
+  onClearTargetMicroId,
+  regulatoryStandards,
+  onOpenRegulatoryModal,
+  currentUser
 }) => {
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [isEditingProject, setIsEditingProject] = useState(false);
   const [editedProjectData, setEditedProjectData] = useState<Partial<Project>>({});
@@ -275,6 +283,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                               </div>
                           </div>
                           <div className="flex items-center gap-2 no-print">
+                            <button onClick={() => setIsChecklistModalOpen(true)} className="p-3 bg-brand-primary/10 text-brand-primary rounded-full hover:bg-brand-primary/20 transition" title="Checklist Regulatório"><ClipboardCheck size={16}/></button>
                             <button onClick={handlePrint} className="p-3 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 transition" title="Maximizar / Imprimir"><Printer size={16}/></button>
                           </div>
                       </div>
@@ -301,6 +310,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                   teamMembers={teamMembers}
                   targetMicroId={targetMicroId}
                   onClearTargetMicroId={onClearTargetMicroId}
+                  regulatoryStandards={regulatoryStandards}
+                  onOpenRegulatoryModal={onOpenRegulatoryModal}
                 />
               </div>
             ) : (
@@ -314,6 +325,15 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
       {isPlanModalOpen && (<PlanManagerModal isOpen={isPlanModalOpen} onClose={() => setIsPlanModalOpen(false)} plans={activityPlans} onSave={onUpdateActivityPlans}/>)}
       {isNewProjectModalOpen && (<NewProjectModal isOpen={isNewProjectModalOpen} onClose={() => setIsNewProjectModalOpen(false)} plans={activityPlans} onAddProject={addProject} teamMembers={teamMembers}/>)}
+      {isChecklistModalOpen && selectedProject && (
+        <RegulatoryChecklistModal 
+          isOpen={isChecklistModalOpen} 
+          onClose={() => setIsChecklistModalOpen(false)} 
+          project={selectedProject} 
+          onUpdateProject={handleUpdateProject}
+          currentUser={currentUser}
+        />
+      )}
     </div>
   );
 };

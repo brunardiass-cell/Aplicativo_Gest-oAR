@@ -75,7 +75,8 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plan
         name: macroTemplate.name,
         phase: projectPhases.includes(macroTemplate.phase) ? macroTemplate.phase : projectPhases[0],
         microActivities: [],
-      }))
+      })),
+      regulatoryChecklist: selectedPlan.regulatoryChecklist ? JSON.parse(JSON.stringify(selectedPlan.regulatoryChecklist)) : []
     };
 
     onAddProject(newProject);

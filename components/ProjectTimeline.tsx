@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Project, MacroActivity, MicroActivity, MicroActivityStatus, TeamMember, Prerequisite, BudgetInfo, PrerequisiteType, PrerequisiteStatus, BudgetStatus } from '../types';
-import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle, Layers, GripVertical, ListTodo, DollarSign, Calendar, User, CheckCircle2, Clock } from 'lucide-react';
+import { Project, MacroActivity, MicroActivity, MicroActivityStatus, TeamMember, Prerequisite, BudgetInfo, PrerequisiteType, PrerequisiteStatus, BudgetStatus, RegulatoryStandard } from '../types';
+import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle, Layers, GripVertical, ListTodo, DollarSign, Calendar, User, CheckCircle2, Clock, ShieldCheck } from 'lucide-react';
 import {
   DndContext, 
   closestCenter,
@@ -27,6 +27,8 @@ interface ProjectTimelineProps {
   teamMembers: TeamMember[];
   targetMicroId?: string | null;
   onClearTargetMicroId?: () => void;
+  regulatoryStandards: RegulatoryStandard[];
+  onOpenRegulatoryModal: (activityName: string) => void;
 }
 
 const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ 
@@ -35,7 +37,9 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({
   onOpenDeletionModal, 
   teamMembers,
   targetMicroId,
-  onClearTargetMicroId
+  onClearTargetMicroId,
+  regulatoryStandards,
+  onOpenRegulatoryModal
 }) => {
   const [editingMicro, setEditingMicro] = useState<string | null>(null);
   const [isAddingMacroForPhase, setIsAddingMacroForPhase] = useState<string | null>(null);
@@ -222,6 +226,8 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({
                     onSetEditingMicro={setEditingMicro}
                     isExpanded={expandedMacros[macro.id]}
                     onToggleExpand={(expanded) => setExpandedMacros(prev => ({ ...prev, [macro.id]: expanded }))}
+                    regulatoryStandards={regulatoryStandards}
+                    onOpenRegulatoryModal={onOpenRegulatoryModal}
                   />
                 ))}
               </SortableContext>
@@ -258,12 +264,14 @@ interface MacroRowProps {
   onSetEditingMicro: (id: string | null) => void;
   isExpanded?: boolean;
   onToggleExpand?: (expanded: boolean) => void;
+  regulatoryStandards: RegulatoryStandard[];
+  onOpenRegulatoryModal: (activityName: string) => void;
 }
 
 const MacroRow: React.FC<MacroRowProps> = (props) => {
   const { 
     macro, project, onUpdateProject, onOpenDeletionModal, assignees, onMicroUpdate, onAddMicro, editingMicro, onSetEditingMicro,
-    isExpanded: controlledIsExpanded, onToggleExpand
+    isExpanded: controlledIsExpanded, onToggleExpand, regulatoryStandards, onOpenRegulatoryModal
   } = props;
 
   const {
@@ -294,6 +302,12 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
   const completedMicros = macro.microActivities.filter(m => m.status === 'Concluído e aprovado' || m.status === 'Concluído com restrições').length;
   const progress = totalMicros > 0 ? (completedMicros / totalMicros) * 100 : 0;
   const restrictedCount = macro.microActivities.filter(m => m.status === 'Concluído com restrições').length;
+
+  const hasRegulatoryStandards = useMemo(() => {
+    return regulatoryStandards.some(s => 
+      s.relatedActivities.some((a: string) => a.toLowerCase() === macro.name.toLowerCase())
+    );
+  }, [macro.name, regulatoryStandards]);
 
   const prerequisiteAlert = useMemo(() => {
     if (!macro.prerequisites || macro.prerequisites.length === 0 || !macro.dueDate) return false;
@@ -376,6 +390,15 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
                     </div>
                 )}
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-tight">{macro.name}</h4> 
+                {hasRegulatoryStandards && (
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onOpenRegulatoryModal(macro.name); }}
+                        className="p-1 text-brand-primary hover:bg-brand-primary/10 rounded-md transition-colors"
+                        title="Normas Regulatórias Aplicáveis"
+                    >
+                        <ShieldCheck size={14} />
+                    </button>
+                )}
             </div>
           )}
         </div>
@@ -495,7 +518,7 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
       {isExpanded && (
         <div className="bg-white p-4 border-t border-slate-100 space-y-3">
           {macro.microActivities.map(micro => (
-             <MicroActivityRow key={micro.id} micro={micro} assignees={assignees} onUpdate={(updates) => onMicroUpdate(macro.id, micro.id, updates)} onDelete={() => onOpenDeletionModal({ type: 'micro', ids: { projectId: project.id, macroId: macro.id, microId: micro.id }, name: micro.name })} isEditing={editingMicro === micro.id} onSetEditing={onSetEditingMicro}/>
+             <MicroActivityRow key={micro.id} micro={micro} assignees={assignees} onUpdate={(updates) => onMicroUpdate(macro.id, micro.id, updates)} onDelete={() => onOpenDeletionModal({ type: 'micro', ids: { projectId: project.id, macroId: macro.id, microId: micro.id }, name: micro.name })} isEditing={editingMicro === micro.id} onSetEditing={onSetEditingMicro} regulatoryStandards={regulatoryStandards} onOpenRegulatoryModal={onOpenRegulatoryModal}/>
           ))}
           <button onClick={() => onAddMicro(macro.id)} className="w-full mt-2 p-3 bg-slate-50 text-slate-500 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition"><Plus size={14}/> Adicionar Microatividade</button>
         </div>
@@ -511,9 +534,11 @@ interface MicroActivityRowProps {
   isEditing: boolean;
   onSetEditing: (id: string | null) => void;
   assignees: string[];
+  regulatoryStandards: RegulatoryStandard[];
+  onOpenRegulatoryModal: (name: string) => void;
 }
 
-const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, onDelete, isEditing, onSetEditing, assignees }) => {
+const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, onDelete, isEditing, onSetEditing, assignees, regulatoryStandards, onOpenRegulatoryModal }) => {
     const [localName, setLocalName] = useState(micro.name);
     const [showPrerequisites, setShowPrerequisites] = useState(false);
     const [showBudget, setShowBudget] = useState(false);
@@ -541,6 +566,12 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
             return today >= startDate;
         });
     }, [micro.dueDate, micro.prerequisites]);
+
+    const hasRegulatoryStandards = useMemo(() => {
+        return regulatoryStandards.some(s => 
+            s.relatedActivities.some((a: string) => a.toLowerCase() === micro.name.toLowerCase())
+        );
+    }, [micro.name, regulatoryStandards]);
 
     const handleSaveName = () => { onUpdate({ name: localName }); onSetEditing(null); };
 
@@ -588,6 +619,15 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
                         </div>
                     )}
                     <span className="text-xs font-bold text-slate-700">{micro.name}</span>
+                    {hasRegulatoryStandards && (
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onOpenRegulatoryModal(micro.name); }}
+                            className="p-1 text-brand-primary hover:bg-brand-primary/10 rounded-md transition-colors"
+                            title="Normas Regulatórias Aplicáveis"
+                        >
+                            <ShieldCheck size={14} />
+                        </button>
+                    )}
                 </div>
                 <button onClick={() => { setLocalName(micro.name); onSetEditing(micro.id); }} className="p-1 text-slate-400 hover:bg-slate-100 rounded-md"><Edit size={14}/></button>
             </>)}

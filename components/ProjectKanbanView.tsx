@@ -1,16 +1,18 @@
 
 import React, { useState } from 'react';
-import { Project, MicroActivity, MicroActivityStatus, Prerequisite, BudgetInfo } from '../types';
-import { AlertTriangle, Clock, CheckCircle, ArrowRight, ExternalLink, ListTodo, DollarSign, X } from 'lucide-react';
+import { Project, MicroActivity, MicroActivityStatus, Prerequisite, BudgetInfo, RegulatoryStandard } from '../types';
+import { AlertTriangle, Clock, CheckCircle, ArrowRight, ExternalLink, ListTodo, DollarSign, X, ShieldCheck } from 'lucide-react';
 import { useMemo } from 'react';
 
 interface ProjectKanbanViewProps {
   project: Project;
   onUpdateProject: (project: Project) => void;
   onNavigateToMicroActivity: (projectId: string, microId: string) => void;
+  regulatoryStandards: RegulatoryStandard[];
+  onOpenRegulatoryModal: (activityName: string) => void;
 }
 
-const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdateProject, onNavigateToMicroActivity }) => {
+const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdateProject, onNavigateToMicroActivity, regulatoryStandards, onOpenRegulatoryModal }) => {
   const [editingDateId, setEditingDateId] = useState<string | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [detailType, setDetailType] = useState<'prerequisites' | 'budget' | null>(null);
@@ -92,25 +94,36 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                            {task.macroName}
-                            {(() => {
-                                if (!task.macroPrerequisites || task.macroPrerequisites.length === 0 || !task.macroDueDate) return null;
-                                const today = new Date(); today.setHours(0, 0, 0, 0);
-                                const hasMacroAlert = task.macroPrerequisites.some(pre => {
-                                    if (pre.status === 'concluído' || pre.completed) return false;
-                                    const dueDate = new Date(task.macroDueDate + 'T00:00:00');
-                                    const startDate = new Date(dueDate);
-                                    startDate.setDate(dueDate.getDate() - pre.leadTimeDays);
-                                    return today >= startDate;
-                                });
-                                return hasMacroAlert ? (
-                                    <div title="Macroatividade com pré-requisito pendente!" className="animate-bounce">
-                                        <AlertTriangle size={10} className="text-amber-500" />
-                                    </div>
-                                ) : null;
-                            })()}
-                        </p>
+                        <div className="flex-1 flex items-center gap-2">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                                {task.macroName}
+                                {(() => {
+                                    if (!task.macroPrerequisites || task.macroPrerequisites.length === 0 || !task.macroDueDate) return null;
+                                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                                    const hasMacroAlert = task.macroPrerequisites.some(pre => {
+                                        if (pre.status === 'concluído' || pre.completed) return false;
+                                        const dueDate = new Date(task.macroDueDate + 'T00:00:00');
+                                        const startDate = new Date(dueDate);
+                                        startDate.setDate(dueDate.getDate() - pre.leadTimeDays);
+                                        return today >= startDate;
+                                    });
+                                    return hasMacroAlert ? (
+                                        <div title="Macroatividade com pré-requisito pendente!" className="animate-bounce">
+                                            <AlertTriangle size={10} className="text-amber-500" />
+                                        </div>
+                                    ) : null;
+                                })()}
+                            </p>
+                            {regulatoryStandards.some(s => s.relatedActivities.some(a => a.toLowerCase() === task.macroName.toLowerCase())) && (
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); onOpenRegulatoryModal(task.macroName); }}
+                                    className="p-1 text-brand-primary hover:bg-brand-primary/10 rounded-md transition-colors"
+                                    title="Normas Regulatórias Aplicáveis à Macro"
+                                >
+                                    <ShieldCheck size={10} />
+                                </button>
+                            )}
+                        </div>
                         {(() => {
                           if (!task.prerequisites || task.prerequisites.length === 0 || !task.dueDate) return null;
                           const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -128,7 +141,18 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
                           ) : null;
                         })()}
                       </div>
-                      <h4 className="text-xs font-bold text-slate-800 leading-tight">{task.name}</h4>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-slate-800 leading-tight flex-1">{task.name}</h4>
+                        {regulatoryStandards.some(s => s.relatedActivities.some(a => a.toLowerCase() === task.name.toLowerCase())) && (
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onOpenRegulatoryModal(task.name); }}
+                                className="p-1 text-brand-primary hover:bg-brand-primary/10 rounded-md transition-colors"
+                                title="Normas Regulatórias Aplicáveis"
+                            >
+                                <ShieldCheck size={12} />
+                            </button>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1">
                       {task.prerequisites && task.prerequisites.length > 0 && (

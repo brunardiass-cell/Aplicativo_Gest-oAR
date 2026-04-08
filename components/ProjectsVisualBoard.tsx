@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Project } from '../types';
+import { Project, RegulatoryStandard } from '../types';
 import ProjectFlowView from './ProjectFlowView';
 import ProjectKanbanView from './ProjectKanbanView';
 import { SlidersHorizontal, Workflow, Printer, LayoutGrid, Kanban } from 'lucide-react';
@@ -11,6 +11,8 @@ interface ProjectsVisualBoardProps {
   initialProjectId?: string | null;
   onClearInitialProjectId: () => void;
   onNavigateToMicroActivity: (projectId: string, microId: string) => void;
+  regulatoryStandards: RegulatoryStandard[];
+  onOpenRegulatoryModal: (activityName: string) => void;
 }
 
 const ProjectsVisualBoard: React.FC<ProjectsVisualBoardProps> = ({ 
@@ -18,7 +20,9 @@ const ProjectsVisualBoard: React.FC<ProjectsVisualBoardProps> = ({
   onUpdateProjects, 
   initialProjectId, 
   onClearInitialProjectId,
-  onNavigateToMicroActivity
+  onNavigateToMicroActivity,
+  regulatoryStandards,
+  onOpenRegulatoryModal
 }) => {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [viewType, setViewType] = useState<'phases' | 'kanban'>('kanban');
@@ -111,12 +115,14 @@ const ProjectsVisualBoard: React.FC<ProjectsVisualBoardProps> = ({
       {selectedProject ? (
         <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-4 sm:p-8 overflow-x-auto">
           {viewType === 'phases' ? (
-            <ProjectFlowView project={selectedProject} onUpdateProject={handleUpdateProject} />
+            <ProjectFlowView project={selectedProject} onUpdateProject={handleUpdateProject} regulatoryStandards={regulatoryStandards} onOpenRegulatoryModal={onOpenRegulatoryModal} />
           ) : (
             <ProjectKanbanView 
               project={selectedProject} 
               onUpdateProject={handleUpdateProject} 
               onNavigateToMicroActivity={onNavigateToMicroActivity}
+              regulatoryStandards={regulatoryStandards}
+              onOpenRegulatoryModal={onOpenRegulatoryModal}
             />
           )}
         </div>

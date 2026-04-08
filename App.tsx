@@ -3,7 +3,7 @@
 // Versão corrigida para sincronização
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite } from './types';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus } from './types';
 import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS } from './constants';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
@@ -19,6 +19,8 @@ import ActivityLogView from './components/ActivityLogView';
 import MonthlyReportModal from './components/MonthlyReportModal';
 import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
+import RegulatoryStandardsManager from './components/RegulatoryStandardsManager';
+import RegulatoryStandardsModal from './components/RegulatoryStandardsModal';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
 import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
@@ -51,6 +53,7 @@ const App: React.FC = () => {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [appUsers, setAppUsers] = useState<AppUser[]>([]);
+  const [regulatoryStandards, setRegulatoryStandards] = useState<RegulatoryStandard[]>([]);
   const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
   const [dataVersion, setDataVersion] = useState<string | null>(null);
   const [isDataDirty, setIsDataDirty] = useState(false);
@@ -61,6 +64,7 @@ const App: React.FC = () => {
   const [serverStateOnSave, setServerStateOnSave] = useState<any>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const isMobile = windowWidth < 1024;
   
   const [view, setView] = useState<ViewMode>('dashboard');
   const [isMsalAuthenticated, setIsMsalAuthenticated] = useState(false);
@@ -95,6 +99,8 @@ const App: React.FC = () => {
   const [projectManagerViewTab, setProjectManagerViewTab] = useState<'management' | 'visual'>('management');
   const [initialProjectId, setInitialProjectId] = useState<string | null>(null);
   const [targetMicroId, setTargetMicroId] = useState<string | null>(null);
+  const [isRegulatoryModalOpen, setIsRegulatoryModalOpen] = useState(false);
+  const [regulatoryModalData, setRegulatoryModalData] = useState<{ name: string; standards: RegulatoryStandard[] }>({ name: '', standards: [] });
 
   // Filters for Project Tasks (MicroActivities)
   const [projTask_projectFilter, setProjTask_projectFilter] = useState('Todos');
@@ -211,7 +217,30 @@ const App: React.FC = () => {
     };
   }, []);
 
-  const isMobile = windowWidth <= 600;
+  const openRegulatoryModal = (activityName: string) => {
+    const matchedStandards = regulatoryStandards.filter(s => 
+      s.relatedActivities.some((a: string) => a.toLowerCase() === activityName.toLowerCase())
+    );
+    setRegulatoryModalData({ name: activityName, standards: matchedStandards });
+    setIsRegulatoryModalOpen(true);
+  };
+
+  const handleAddStandard = (standard: RegulatoryStandard) => {
+    setRegulatoryStandards(prev => [...prev, standard]);
+    setDataDirty();
+  };
+
+  const handleUpdateStandard = (standard: RegulatoryStandard) => {
+    setRegulatoryStandards(prev => prev.map(s => s.id === standard.id ? standard : s));
+    setDataDirty();
+  };
+
+  const handleDeleteStandard = (id: string) => {
+    if (window.confirm('Tem certeza que deseja excluir esta norma?')) {
+      setRegulatoryStandards(prev => prev.filter(s => s.id !== id));
+      setDataDirty();
+    }
+  };
   const isTablet = windowWidth > 600 && windowWidth <= 1024;
   const isDesktop = windowWidth > 1024;
 
@@ -272,6 +301,7 @@ const App: React.FC = () => {
       notifications: cloudData.notifications || [],
       logs: cloudData.logs || [],
       appUsers: cloudData.appUsers || DEFAULT_APP_USERS,
+      regulatoryStandards: cloudData.regulatoryStandards || [],
     };
 
     setTasks(fullData.tasks);
@@ -281,6 +311,7 @@ const App: React.FC = () => {
     setNotifications(fullData.notifications);
     setLogs(fullData.logs);
     setAppUsers(fullData.appUsers);
+    setRegulatoryStandards(fullData.regulatoryStandards);
     setBaseData(JSON.parse(JSON.stringify(fullData)));
     setDataVersion(version);
     setIsDataDirty(false);
@@ -382,7 +413,7 @@ const App: React.FC = () => {
   const handleSaveChanges = async () => {
     if (!isDataDirty || !baseData) return;
     console.log('Starting handleSaveChanges...');
-    setLastSync(prev => ({ ...(prev || { timestamp: '', user: '' }), status: 'syncing' }));
+    setLastSync((prev: SyncInfo | null) => ({ ...(prev || { timestamp: '', user: '' }), status: 'syncing' }));
 
     const serverStateResponse = await MicrosoftGraphService.loadFromCloud();
     if (!serverStateResponse) {
@@ -410,6 +441,7 @@ const App: React.FC = () => {
           notifications: mergeArrays(serverData.notifications, notifications, baseData.notifications),
           logs: mergeArrays(serverData.logs, logs, baseData.logs),
           appUsers: mergeArrays(serverData.appUsers, appUsers, baseData.appUsers),
+          regulatoryStandards: mergeArrays(serverData.regulatoryStandards || [], regulatoryStandards, baseData.regulatoryStandards || []),
           lastEditor: selectedProfile?.name
         };
 
@@ -440,6 +472,7 @@ const App: React.FC = () => {
         notifications, 
         logs, 
         appUsers,
+        regulatoryStandards,
         lastEditor: selectedProfile?.name
       };
       console.log('Saving to cloud...');
@@ -1094,6 +1127,7 @@ const App: React.FC = () => {
                   {view === 'projects' && 'Gerenciador de Projetos'}
                   {view === 'quality' && 'Controle de Acesso'}
                   {view === 'traceability' && 'Auditoria'}
+                  {view === 'regulatory' && 'Normas Regulatórias'}
                 </h1>
                 <p className="text-[9px] sm:text-sm font-bold text-slate-400 mt-0.5">{selectedProfile?.name}</p>
               </div>
@@ -1195,6 +1229,8 @@ const App: React.FC = () => {
                 onStartDateFilterChange={setProjTask_startDateFilter}
                 endDateFilter={projTask_endDateFilter}
                 onEndDateFilterChange={setProjTask_endDateFilter}
+                regulatoryStandards={regulatoryStandards}
+                onOpenRegulatoryModal={openRegulatoryModal}
               />
             )}
           </div>
@@ -1217,6 +1253,9 @@ const App: React.FC = () => {
                 initialProjectId={initialProjectId} 
                 targetMicroId={targetMicroId}
                 onClearTargetMicroId={() => setTargetMicroId(null)}
+                regulatoryStandards={regulatoryStandards}
+                onOpenRegulatoryModal={openRegulatoryModal}
+                currentUser={selectedProfile}
               />
             ) : (
               <ProjectsVisualBoard 
@@ -1225,12 +1264,22 @@ const App: React.FC = () => {
                 initialProjectId={initialProjectId} 
                 onClearInitialProjectId={() => setInitialProjectId(null)} 
                 onNavigateToMicroActivity={handleNavigateToMicroActivity}
+                regulatoryStandards={regulatoryStandards}
+                onOpenRegulatoryModal={openRegulatoryModal}
               />
             )}
           </div>
         )}
         {view === 'quality' && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={(tm) => { setTeamMembers(tm); setDataDirty(); }} appUsers={appUsers} onUpdateAppUsers={(u) => { setAppUsers(u); setDataDirty(); }} />}
         {view === 'traceability' && <ActivityLogView logs={logs} onRestoreItem={handleRestoreItem} onClearLog={handleClearLog} onClearAllLogs={handleClearAllLogs} />}
+        {view === 'regulatory' && (
+          <RegulatoryStandardsManager 
+            standards={regulatoryStandards} 
+            onAddStandard={handleAddStandard} 
+            onUpdateStandard={handleUpdateStandard} 
+            onDeleteStandard={handleDeleteStandard} 
+          />
+        )}
       </main>
       
       {isModalOpen && (<TaskModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setSelectedTask(null); }} onSave={handleSaveTask} projects={['Geral', ...activeProjects.map(p => p.name)]} initialData={selectedTask} teamMembers={teamMembers} hasFullAccess={hasFullAccess} currentProfileName={selectedProfile?.name}/>)}
@@ -1246,6 +1295,13 @@ const App: React.FC = () => {
           setServerStateOnSave(null);
           setLastSync({ status: 'cancelled', timestamp: new Date().toISOString(), user: 'System' });
         }}
+      />
+
+      <RegulatoryStandardsModal 
+        isOpen={isRegulatoryModalOpen}
+        onClose={() => setIsRegulatoryModalOpen(false)}
+        activityName={regulatoryModalData.name}
+        standards={regulatoryModalData.standards}
       />
     </div>
     </>

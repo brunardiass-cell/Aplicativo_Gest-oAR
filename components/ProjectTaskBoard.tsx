@@ -2,8 +2,9 @@
 import React, { useMemo } from 'react';
 import { MicroActivityStatus } from '../types';
 import { AugmentedMicroActivity } from '../App';
-import { SlidersHorizontal, AlertTriangle, User, Clock, CheckCircle, ArrowRight, Eye, ListTodo, DollarSign, X } from 'lucide-react';
+import { SlidersHorizontal, AlertTriangle, User, Clock, CheckCircle, ArrowRight, Eye, ListTodo, DollarSign, X, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
+import { RegulatoryStandard } from '../types';
 
 interface ProjectTaskBoardProps {
   microTasks: AugmentedMicroActivity[];
@@ -22,6 +23,8 @@ interface ProjectTaskBoardProps {
   onStartDateFilterChange: (date: string) => void;
   endDateFilter: string;
   onEndDateFilterChange: (date: string) => void;
+  regulatoryStandards: RegulatoryStandard[];
+  onOpenRegulatoryModal: (activityName: string) => void;
 }
 
 const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
@@ -41,6 +44,8 @@ const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
   onStartDateFilterChange,
   endDateFilter,
   onEndDateFilterChange,
+  regulatoryStandards,
+  onOpenRegulatoryModal
 }) => {
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [detailType, setDetailType] = useState<'prerequisites' | 'budget' | null>(null);
@@ -131,6 +136,15 @@ const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
                   }`}>{micro.status}</span>
                 </div>
                 <div className="flex items-center gap-1">
+                  {regulatoryStandards.some(s => s.relatedActivities.some(a => a.toLowerCase() === micro.name.toLowerCase())) && (
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); onOpenRegulatoryModal(micro.name); }}
+                      className="p-1.5 text-brand-primary hover:bg-brand-primary/10 rounded-lg transition-colors"
+                      title="Normas Regulatórias Aplicáveis"
+                    >
+                      <ShieldCheck size={16} />
+                    </button>
+                  )}
                   {(() => {
                     if (!micro.prerequisites || micro.prerequisites.length === 0 || !micro.dueDate) return null;
                     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -186,6 +200,15 @@ const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
                             </div>
                         ) : null;
                     })()}
+                    {regulatoryStandards.some(s => s.relatedActivities.some(a => a.toLowerCase() === micro.macroName.toLowerCase())) && (
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onOpenRegulatoryModal(micro.macroName); }}
+                            className="p-1 text-brand-primary hover:bg-brand-primary/10 rounded-md transition-colors"
+                            title="Normas Regulatórias Aplicáveis à Macro"
+                        >
+                            <ShieldCheck size={10} />
+                        </button>
+                    )}
                 </p>
                 <h3 className="text-sm font-black text-slate-900 tracking-tight leading-tight uppercase">{micro.name}</h3>
                 <p className="text-[10px] font-medium text-brand-primary mt-1 line-clamp-2">Macro: {micro.macroName}</p>

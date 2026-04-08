@@ -1,14 +1,16 @@
 
 import React, { useState, useMemo } from 'react';
-import { Project, MacroActivity, MicroActivity, Prerequisite, BudgetInfo } from '../types';
-import { ChevronDown, Clock, Activity, CheckCircle, MessageSquare, Link as LinkIcon, Layers, AlertTriangle, ListTodo, DollarSign, User, Calendar } from 'lucide-react';
+import { Project, MacroActivity, MicroActivity, Prerequisite, BudgetInfo, RegulatoryStandard } from '../types';
+import { ChevronDown, Clock, Activity, CheckCircle, MessageSquare, Link as LinkIcon, Layers, AlertTriangle, ListTodo, DollarSign, User, Calendar, ShieldCheck } from 'lucide-react';
 
 interface ProjectFlowViewProps {
   project: Project;
   onUpdateProject: (project: Project) => void;
+  regulatoryStandards: RegulatoryStandard[];
+  onOpenRegulatoryModal: (activityName: string) => void;
 }
 
-const ProjectFlowView: React.FC<ProjectFlowViewProps> = ({ project, onUpdateProject }) => {
+const ProjectFlowView: React.FC<ProjectFlowViewProps> = ({ project, onUpdateProject, regulatoryStandards, onOpenRegulatoryModal }) => {
   const phases = project.phases || [];
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, macroId: string) => {
@@ -64,6 +66,8 @@ const ProjectFlowView: React.FC<ProjectFlowViewProps> = ({ project, onUpdateProj
                 key={macro.id}
                 macro={macro} 
                 onDragStart={(e) => handleDragStart(e, macro.id)}
+                regulatoryStandards={regulatoryStandards}
+                onOpenRegulatoryModal={onOpenRegulatoryModal}
               />
             ))}
           </div>
@@ -73,7 +77,12 @@ const ProjectFlowView: React.FC<ProjectFlowViewProps> = ({ project, onUpdateProj
   );
 };
 
-const MacroCard: React.FC<{ macro: MacroActivity; onDragStart: (e: React.DragEvent<HTMLDivElement>) => void }> = ({ macro, onDragStart }) => {
+const MacroCard: React.FC<{ 
+    macro: MacroActivity; 
+    onDragStart: (e: React.DragEvent<HTMLDivElement>) => void;
+    regulatoryStandards: RegulatoryStandard[];
+    onOpenRegulatoryModal: (name: string) => void;
+}> = ({ macro, onDragStart, regulatoryStandards, onOpenRegulatoryModal }) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
     const totalMicros = macro.microActivities.length;
@@ -94,6 +103,12 @@ const MacroCard: React.FC<{ macro: MacroActivity; onDragStart: (e: React.DragEve
             return today >= startDate;
         });
     }, [macro.dueDate, macro.prerequisites]);
+
+    const hasRegulatoryStandards = useMemo(() => {
+        return regulatoryStandards.some(s => 
+            s.relatedActivities.some(a => a.toLowerCase() === macro.name.toLowerCase())
+        );
+    }, [macro.name, regulatoryStandards]);
 
     const getStatusIcon = () => {
         if (status === 'Concluída') return <CheckCircle size={14} className="text-emerald-500" />;
@@ -117,6 +132,15 @@ const MacroCard: React.FC<{ macro: MacroActivity; onDragStart: (e: React.DragEve
                     )}
                     {macro.prerequisites && macro.prerequisites.length > 0 && (
                         <ListTodo size={12} className="text-teal-500" />
+                    )}
+                    {hasRegulatoryStandards && (
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onOpenRegulatoryModal(macro.name); }}
+                            className="p-1 text-brand-primary hover:bg-brand-primary/10 rounded-md transition-colors"
+                            title="Normas Regulatórias Aplicáveis"
+                        >
+                            <ShieldCheck size={12} />
+                        </button>
                     )}
                 </div>
                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight line-clamp-3">{macro.name}</h4>
@@ -158,7 +182,7 @@ const MacroCard: React.FC<{ macro: MacroActivity; onDragStart: (e: React.DragEve
                     )}
                     <h5 className="text-[10px] font-black uppercase text-slate-400">Microatividades ({totalMicros})</h5>
                     {macro.microActivities.length > 0 ? macro.microActivities.map(micro => (
-                        <MicroDetail key={micro.id} micro={micro} />
+                        <MicroDetail key={micro.id} micro={micro} regulatoryStandards={regulatoryStandards} onOpenRegulatoryModal={onOpenRegulatoryModal} />
                     )) : <p className="text-xs text-slate-400 italic text-center py-2">Nenhuma microatividade.</p>}
                 </div>
             )}
@@ -166,9 +190,15 @@ const MacroCard: React.FC<{ macro: MacroActivity; onDragStart: (e: React.DragEve
     );
 };
 
-const MicroDetail: React.FC<{ micro: MicroActivity }> = ({ micro }) => {
+const MicroDetail: React.FC<{ micro: MicroActivity; regulatoryStandards: RegulatoryStandard[]; onOpenRegulatoryModal: (name: string) => void }> = ({ micro, regulatoryStandards, onOpenRegulatoryModal }) => {
     const [showPrerequisites, setShowPrerequisites] = useState(false);
     const [showBudget, setShowBudget] = useState(false);
+
+    const hasRegulatoryStandards = useMemo(() => {
+        return regulatoryStandards.some(s => 
+            s.relatedActivities.some(a => a.toLowerCase() === micro.name.toLowerCase())
+        );
+    }, [micro.name, regulatoryStandards]);
 
     const colorClass = micro.status === 'Concluído e aprovado' ? 'text-emerald-600'
                      : micro.status === 'Concluído com restrições' ? 'text-amber-600'
@@ -196,7 +226,16 @@ const MicroDetail: React.FC<{ micro: MicroActivity }> = ({ micro }) => {
                         <AlertTriangle size={12} className="text-red-500" />
                     </div>
                 )}
-                <p className="text-xs font-bold text-slate-800">{micro.name}</p>
+                <p className="text-xs font-bold text-slate-800 flex-1">{micro.name}</p>
+                {hasRegulatoryStandards && (
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onOpenRegulatoryModal(micro.name); }}
+                        className="p-1 text-brand-primary hover:bg-brand-primary/10 rounded-md transition-colors"
+                        title="Normas Regulatórias Aplicáveis"
+                    >
+                        <ShieldCheck size={12} />
+                    </button>
+                )}
             </div>
             <div className="mt-2 flex justify-between items-center">
                 <span className={`text-[9px] font-black uppercase ${colorClass}`}>{micro.status}</span>
