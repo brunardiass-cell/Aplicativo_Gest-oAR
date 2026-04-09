@@ -77,6 +77,7 @@ export type RegulatoryStandardStatus = 'Vigente' | 'Em Revisão' | 'Obsoleta';
 export interface RegulatoryStandard {
   id: string;
   name: string;
+  type: string; // Ex: Manual, Guia, RDC, etc.
   theme: string;
   phase: string;
   relatedActivities: string[]; // Nomes das atividades relacionadas para vínculo automático

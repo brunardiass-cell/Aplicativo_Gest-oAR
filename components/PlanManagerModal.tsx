@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ActivityPlanTemplate, MacroActivityTemplate } from '../types';
+import { ActivityPlanTemplate, MacroActivityTemplate, Project } from '../types';
 import { X, ListPlus, Plus, Trash2, Save, Layers, FilePlus, AlertTriangle } from 'lucide-react';
 
 interface PlanManagerModalProps {
@@ -8,9 +8,11 @@ interface PlanManagerModalProps {
   onClose: () => void;
   plans: ActivityPlanTemplate[];
   onSave: (plans: ActivityPlanTemplate[]) => void;
+  projects: Project[];
+  onUpdateProjects: (projects: Project[]) => void;
 }
 
-const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, plans, onSave }) => {
+const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, plans, onSave, projects, onUpdateProjects }) => {
   const [localPlans, setLocalPlans] = useState<ActivityPlanTemplate[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [newPlanName, setNewPlanName] = useState('');
@@ -195,6 +197,46 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
 
   const handleSaveAndClose = () => {
     onSave(localPlans);
+    
+    // Check if any checklist was modified and ask to apply to existing projects
+    const modifiedPlans = localPlans.filter(localPlan => {
+      const originalPlan = plans.find(p => p.id === localPlan.id);
+      if (!originalPlan) return false;
+      return JSON.stringify(localPlan.regulatoryChecklist) !== JSON.stringify(originalPlan.regulatoryChecklist);
+    });
+
+    if (modifiedPlans.length > 0) {
+      const shouldApply = confirm("Você alterou o checklist regulatório de um ou mais planos. Deseja aplicar estas alterações aos projetos já existentes que utilizam estes planos?");
+      
+      if (shouldApply) {
+        const updatedProjects = projects.map(project => {
+          const matchingModifiedPlan = modifiedPlans.find(p => p.id === project.templateId);
+          if (matchingModifiedPlan) {
+            // Update the checklist without overwriting existing progress if possible
+            // But usually, if the template changed, we want to sync the items.
+            // The user said: "não modifique o que já está la, apenas atualize o checklist"
+            // This means we should add new items and maybe remove deleted ones, 
+            // but keep the state of existing items.
+            
+            const currentProjectChecklist = project.regulatoryChecklist || [];
+            const newTemplateChecklist = matchingModifiedPlan.regulatoryChecklist || [];
+            
+            const updatedChecklist = newTemplateChecklist.map(templateItem => {
+              const existingItem = currentProjectChecklist.find(i => i.item === templateItem.item);
+              if (existingItem) {
+                return { ...existingItem }; // Keep existing state (completed, etc)
+              }
+              return { ...templateItem }; // Add new item from template
+            });
+            
+            return { ...project, regulatoryChecklist: updatedChecklist };
+          }
+          return project;
+        });
+        onUpdateProjects(updatedProjects);
+      }
+    }
+
     onClose();
   };
 

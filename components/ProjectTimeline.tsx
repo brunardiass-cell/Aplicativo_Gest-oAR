@@ -309,18 +309,14 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
     );
   }, [macro.name, regulatoryStandards]);
 
-  const prerequisiteAlert = useMemo(() => {
-    if (!macro.prerequisites || macro.prerequisites.length === 0 || !macro.dueDate) return false;
+  const microOverdueAlert = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    
-    return macro.prerequisites.some(pre => {
-        if (pre.status === 'concluído' || pre.completed) return false;
-        const dueDate = new Date(macro.dueDate + 'T00:00:00');
-        const startDate = new Date(dueDate);
-        startDate.setDate(dueDate.getDate() - pre.leadTimeDays);
-        return today >= startDate;
+    return macro.microActivities.some(micro => {
+      if (micro.status === 'Concluído e aprovado' || !micro.dueDate) return false;
+      const dueDate = new Date(micro.dueDate + 'T00:00:00');
+      return today > dueDate;
     });
-  }, [macro.dueDate, macro.prerequisites]);
+  }, [macro.microActivities]);
 
   const getMacroStatus = (): 'Concluída' | 'Em Andamento' | 'Planejada' => {
     if (totalMicros === 0) return 'Planejada';
@@ -384,8 +380,8 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
             </div>
           ) : ( 
             <div className="flex items-center gap-2">
-                {prerequisiteAlert && (
-                    <div className="animate-bounce" title="Pré-requisito de Macro pendente!">
+                {microOverdueAlert && (
+                    <div className="animate-bounce" title="Existem microatividades atrasadas nesta macro!">
                         <AlertTriangle size={14} className="text-red-500" />
                     </div>
                 )}
@@ -404,15 +400,6 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
         </div>
         <div className="flex items-center gap-4">
             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
-                <div className="flex flex-col">
-                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Prazo Macro</label>
-                    <input 
-                        type="date" 
-                        value={macro.dueDate || ''} 
-                        onChange={e => handleUpdateMacro({ dueDate: e.target.value })}
-                        className="text-[10px] font-bold text-slate-600 bg-transparent outline-none"
-                    />
-                </div>
                 <button onClick={handleAddPrerequisite} className="p-2 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-md" title="Adicionar Pré-requisito"><ListTodo size={16}/></button>
                 <button onClick={() => setIsEditing(true)} className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-md"><Edit size={16}/></button>
                 <button onClick={() => onOpenDeletionModal({ type: 'macro', ids: { projectId: project.id, macroId: macro.id }, name: macro.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"><Trash2 size={16}/></button>

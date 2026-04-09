@@ -1278,6 +1278,8 @@ const App: React.FC = () => {
             onAddStandard={handleAddStandard} 
             onUpdateStandard={handleUpdateStandard} 
             onDeleteStandard={handleDeleteStandard} 
+            activityPlans={activityPlans}
+            projects={activeProjects}
           />
         )}
       </main>

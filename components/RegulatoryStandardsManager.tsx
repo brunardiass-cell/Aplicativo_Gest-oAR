@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { RegulatoryStandard, RegulatoryStandardStatus } from '../types';
+import { RegulatoryStandard, RegulatoryStandardStatus, ActivityPlanTemplate, Project } from '../types';
 import { 
   ShieldCheck, 
   Plus, 
@@ -14,7 +14,8 @@ import {
   Save,
   CheckCircle2,
   AlertCircle,
-  Clock
+  Clock,
+  Tag
 } from 'lucide-react';
 
 interface RegulatoryStandardsManagerProps {
@@ -22,13 +23,17 @@ interface RegulatoryStandardsManagerProps {
   onAddStandard: (standard: RegulatoryStandard) => void;
   onUpdateStandard: (standard: RegulatoryStandard) => void;
   onDeleteStandard: (id: string) => void;
+  activityPlans: ActivityPlanTemplate[];
+  projects: Project[];
 }
 
 const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   standards,
   onAddStandard,
   onUpdateStandard,
-  onDeleteStandard
+  onDeleteStandard,
+  activityPlans,
+  projects
 }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -36,6 +41,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   
   const [formData, setFormData] = useState<Omit<RegulatoryStandard, 'id'>>({
     name: '',
+    type: 'Manual',
     theme: '',
     phase: '',
     relatedActivities: [],
@@ -47,14 +53,41 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   });
 
   const [activityInput, setActivityInput] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
-  const handleAddActivity = () => {
-    if (activityInput.trim() && !formData.relatedActivities.includes(activityInput.trim())) {
+  const allSystemActivities = React.useMemo(() => {
+    const names = new Set<string>();
+    
+    // From templates
+    activityPlans.forEach(plan => {
+      plan.macroActivities.forEach(macro => names.add(macro.name));
+    });
+    
+    // From projects
+    projects.forEach(project => {
+      project.macroActivities.forEach(macro => {
+        names.add(macro.name);
+        macro.microActivities.forEach(micro => names.add(micro.name));
+      });
+    });
+    
+    return Array.from(names).sort();
+  }, [activityPlans, projects]);
+
+  const filteredSuggestions = allSystemActivities.filter(name => 
+    name.toLowerCase().includes(activityInput.toLowerCase()) && 
+    !formData.relatedActivities.includes(name)
+  ).slice(0, 5);
+
+  const handleAddActivity = (activityName?: string) => {
+    const finalName = activityName || activityInput.trim();
+    if (finalName && !formData.relatedActivities.includes(finalName)) {
       setFormData({
         ...formData,
-        relatedActivities: [...formData.relatedActivities, activityInput.trim()]
+        relatedActivities: [...formData.relatedActivities, finalName]
       });
       setActivityInput('');
+      setShowSuggestions(false);
     }
   };
 
@@ -68,6 +101,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   const resetForm = () => {
     setFormData({
       name: '',
+      type: 'Manual',
       theme: '',
       phase: '',
       relatedActivities: [],
@@ -95,6 +129,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   const startEdit = (standard: RegulatoryStandard) => {
     setFormData({
       name: standard.name,
+      type: standard.type || 'Manual',
       theme: standard.theme,
       phase: standard.phase,
       relatedActivities: standard.relatedActivities,
@@ -176,6 +211,23 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                   placeholder="Ex: RDC 301/2019"
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tipo da Norma</label>
+                <select 
+                  value={formData.type}
+                  onChange={e => setFormData({...formData, type: e.target.value})}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium appearance-none bg-white"
+                >
+                  <option value="Manual">Manual</option>
+                  <option value="Guia">Guia</option>
+                  <option value="RDC">RDC</option>
+                  <option value="Instrução Normativa">Instrução Normativa</option>
+                  <option value="Portaria">Portaria</option>
+                  <option value="Lei">Lei</option>
+                  <option value="Outro">Outro</option>
+                </select>
               </div>
               
               <div className="space-y-2">
@@ -263,21 +315,43 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
 
               <div className="space-y-2 md:col-span-2">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Atividades Relacionadas (Vínculo Automático)</label>
-                <div className="flex gap-2">
-                  <input 
-                    value={activityInput}
-                    onChange={e => setActivityInput(e.target.value)}
-                    onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), handleAddActivity())}
-                    placeholder="Digite o nome exato da atividade e pressione Enter"
-                    className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-                  />
-                  <button 
-                    type="button"
-                    onClick={handleAddActivity}
-                    className="px-4 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition"
-                  >
-                    Adicionar
-                  </button>
+                <div className="relative">
+                  <div className="flex gap-2">
+                    <input 
+                      value={activityInput}
+                      onChange={e => {
+                        setActivityInput(e.target.value);
+                        setShowSuggestions(true);
+                      }}
+                      onFocus={() => setShowSuggestions(true)}
+                      onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), handleAddActivity())}
+                      placeholder="Digite o nome exato da atividade..."
+                      className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => handleAddActivity()}
+                      className="px-4 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition"
+                    >
+                      Adicionar
+                    </button>
+                  </div>
+
+                  {showSuggestions && activityInput && filteredSuggestions.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                      {filteredSuggestions.map(suggestion => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          onClick={() => handleAddActivity(suggestion)}
+                          className="w-full px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 transition border-b border-slate-50 last:border-0 flex items-center gap-2"
+                        >
+                          <Plus size={14} className="text-slate-400" />
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2 mt-3">
                   {formData.relatedActivities.map(activity => (
@@ -333,6 +407,10 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${getStatusColor(standard.status)}`}>
                         {getStatusIcon(standard.status)}
                         {standard.status}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-500 border border-slate-200">
+                        <Tag size={10} />
+                        {standard.type || 'Manual'}
                       </span>
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Versão {standard.version}</span>
                     </div>

@@ -1,7 +1,7 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Project, RegulatoryChecklistItem, TeamMember } from '../types';
-import { X, CheckCircle2, Circle, Download, Save, ClipboardCheck } from 'lucide-react';
+import { X, CheckCircle2, Circle, Download, Save, ClipboardCheck, Edit2, Trash2, Plus } from 'lucide-react';
 
 interface RegulatoryChecklistModalProps {
   isOpen: boolean;
@@ -18,11 +18,15 @@ const RegulatoryChecklistModal: React.FC<RegulatoryChecklistModalProps> = ({
   onUpdateProject,
   currentUser
 }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [newItemText, setNewItemText] = useState('');
+
   if (!isOpen) return null;
 
   const checklist = project.regulatoryChecklist || [];
 
   const handleToggleItem = (itemId: string) => {
+    if (isEditing) return;
     const updatedChecklist = checklist.map(item => {
       if (item.id === itemId) {
         const isCompleting = !item.completed;
@@ -36,6 +40,29 @@ const RegulatoryChecklistModal: React.FC<RegulatoryChecklistModalProps> = ({
       return item;
     });
     onUpdateProject({ ...project, regulatoryChecklist: updatedChecklist });
+  };
+
+  const handleAddItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newItemText.trim()) return;
+    const newItem: RegulatoryChecklistItem = {
+      id: 'item_' + Math.random().toString(36).substr(2, 9),
+      item: newItemText.trim(),
+      completed: false
+    };
+    onUpdateProject({ ...project, regulatoryChecklist: [...checklist, newItem] });
+    setNewItemText('');
+  };
+
+  const handleRemoveItem = (itemId: string) => {
+    onUpdateProject({ ...project, regulatoryChecklist: checklist.filter(i => i.id !== itemId) });
+  };
+
+  const handleUpdateItemText = (itemId: string, newText: string) => {
+    onUpdateProject({
+      ...project,
+      regulatoryChecklist: checklist.map(i => i.id === itemId ? { ...i, item: newText } : i)
+    });
   };
 
   const handleDownload = () => {
@@ -67,34 +94,79 @@ const RegulatoryChecklistModal: React.FC<RegulatoryChecklistModalProps> = ({
             <h2 className="text-lg sm:text-xl font-black text-white uppercase tracking-tighter">Checklist Regulatório</h2>
             <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest">{project.name}</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition text-white"><X size={20} /></button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setIsEditing(!isEditing)} 
+              className={`p-2 rounded-full transition ${isEditing ? 'bg-white text-brand-primary' : 'hover:bg-white/10 text-white'}`}
+              title={isEditing ? "Voltar para Visualização" : "Editar Checklist Individual"}
+            >
+              <Edit2 size={20} />
+            </button>
+            <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition text-white"><X size={20} /></button>
+          </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-4 custom-scrollbar">
+          {isEditing && (
+            <form onSubmit={handleAddItem} className="flex gap-2 mb-6 animate-in slide-in-from-top-2 duration-200">
+              <input 
+                value={newItemText}
+                onChange={e => setNewItemText(e.target.value)}
+                placeholder="Adicionar novo item ao checklist..."
+                className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-brand-primary/20"
+              />
+              <button type="submit" className="px-4 bg-brand-primary text-white rounded-xl hover:bg-brand-accent transition">
+                <Plus size={20} />
+              </button>
+            </form>
+          )}
+
           {checklist.length > 0 ? (
             checklist.map((item) => (
               <div 
                 key={item.id} 
-                onClick={() => handleToggleItem(item.id)}
-                className={`flex items-start gap-4 p-4 rounded-2xl border transition cursor-pointer group ${
+                onClick={() => !isEditing && handleToggleItem(item.id)}
+                className={`flex items-start gap-4 p-4 rounded-2xl border transition ${!isEditing ? 'cursor-pointer' : ''} group ${
                   item.completed 
                     ? 'bg-emerald-50 border-emerald-100' 
                     : 'bg-white border-slate-100 hover:border-brand-primary/30 hover:bg-slate-50'
                 }`}
               >
-                <div className={`mt-0.5 transition-colors ${item.completed ? 'text-emerald-500' : 'text-slate-300 group-hover:text-brand-primary'}`}>
-                  {item.completed ? <CheckCircle2 size={20} /> : <Circle size={20} />}
-                </div>
+                {!isEditing ? (
+                  <div className={`mt-0.5 transition-colors ${item.completed ? 'text-emerald-500' : 'text-slate-300 group-hover:text-brand-primary'}`}>
+                    {item.completed ? <CheckCircle2 size={20} /> : <Circle size={20} />}
+                  </div>
+                ) : (
+                  <div className="mt-0.5 text-slate-300">
+                    <ClipboardCheck size={20} />
+                  </div>
+                )}
                 <div className="flex-1">
-                  <p className={`text-sm font-bold transition-all ${item.completed ? 'text-emerald-900 line-through opacity-60' : 'text-slate-700'}`}>
-                    {item.item}
-                  </p>
-                  {item.completed && (
+                  {isEditing ? (
+                    <input 
+                      value={item.item}
+                      onChange={e => handleUpdateItemText(item.id, e.target.value)}
+                      className="w-full bg-transparent border-none p-0 text-sm font-bold text-slate-700 focus:ring-0"
+                    />
+                  ) : (
+                    <p className={`text-sm font-bold transition-all ${item.completed ? 'text-emerald-900 line-through opacity-60' : 'text-slate-700'}`}>
+                      {item.item}
+                    </p>
+                  )}
+                  {item.completed && !isEditing && (
                     <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest mt-1">
                       Finalizado por {item.completedBy} em {new Date(item.completedAt!).toLocaleDateString()}
                     </p>
                   )}
                 </div>
+                {isEditing && (
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleRemoveItem(item.id); }}
+                    className="p-1 text-slate-300 hover:text-red-500 transition"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
               </div>
             ))
           ) : (

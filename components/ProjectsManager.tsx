@@ -323,7 +323,16 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
       </div>
 
 
-      {isPlanModalOpen && (<PlanManagerModal isOpen={isPlanModalOpen} onClose={() => setIsPlanModalOpen(false)} plans={activityPlans} onSave={onUpdateActivityPlans}/>)}
+      {isPlanModalOpen && (
+        <PlanManagerModal 
+          isOpen={isPlanModalOpen} 
+          onClose={() => setIsPlanModalOpen(false)} 
+          plans={activityPlans} 
+          onSave={onUpdateActivityPlans}
+          projects={projects}
+          onUpdateProjects={onUpdateProjects}
+        />
+      )}
       {isNewProjectModalOpen && (<NewProjectModal isOpen={isNewProjectModalOpen} onClose={() => setIsNewProjectModalOpen(false)} plans={activityPlans} onAddProject={addProject} teamMembers={teamMembers}/>)}
       {isChecklistModalOpen && selectedProject && (
         <RegulatoryChecklistModal 
