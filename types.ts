@@ -143,6 +143,7 @@ export interface ActivityLog {
 export interface MacroActivityTemplate {
   name: string;
   phase: string;
+  microActivities?: string[];
 }
 
 export interface RegulatoryChecklistItem {

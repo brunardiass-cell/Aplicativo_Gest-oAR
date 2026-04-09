@@ -18,6 +18,7 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
   const [newPlanName, setNewPlanName] = useState('');
   const [newPhaseName, setNewPhaseName] = useState('');
   const [newMacroNames, setNewMacroNames] = useState<{ [key: string]: string }>({});
+  const [newMicroNames, setNewMicroNames] = useState<{ [key: string]: string }>({});
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [activeTab, setActiveTab] = useState<'activities' | 'checklist'>('activities');
 
@@ -143,6 +144,45 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
             ? { ...m, name: newName.trim() } 
             : m
         );
+        return { ...p, macroActivities: updatedMacros };
+      }
+      return p;
+    });
+    setLocalPlans(updatedPlans);
+  };
+
+  const handleAddMicro = (e: React.FormEvent, macro: MacroActivityTemplate) => {
+    e.preventDefault();
+    const microName = newMicroNames[macro.name + macro.phase]?.trim();
+    if (!microName || !selectedPlanId) return;
+
+    const updatedPlans = localPlans.map(p => {
+      if (p.id === selectedPlanId) {
+        const updatedMacros = p.macroActivities.map(m => {
+          if (m.name === macro.name && m.phase === macro.phase) {
+            return { ...m, microActivities: [...(m.microActivities || []), microName] };
+          }
+          return m;
+        });
+        return { ...p, macroActivities: updatedMacros };
+      }
+      return p;
+    });
+    setLocalPlans(updatedPlans);
+    setNewMicroNames({ ...newMicroNames, [macro.name + macro.phase]: '' });
+  };
+
+  const handleDeleteMicro = (macro: MacroActivityTemplate, microIndex: number) => {
+    if (!selectedPlanId) return;
+    const updatedPlans = localPlans.map(p => {
+      if (p.id === selectedPlanId) {
+        const updatedMacros = p.macroActivities.map(m => {
+          if (m.name === macro.name && m.phase === macro.phase) {
+            const updatedMicros = (m.microActivities || []).filter((_, i) => i !== microIndex);
+            return { ...m, microActivities: updatedMicros };
+          }
+          return m;
+        });
         return { ...p, macroActivities: updatedMacros };
       }
       return p;
@@ -325,13 +365,34 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
                           </header>
                           <div className="p-4 space-y-3">
                             {selectedPlan.macroActivities.filter(m => m.phase === phase).map((macro, index) => (
-                              <div key={index} className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">
-                                <input 
-                                  value={macro.name} 
-                                  onChange={e => handleUpdateMacro(macro, e.target.value)}
-                                  className="bg-transparent border-none text-xs font-bold text-slate-700 focus:ring-0 flex-1"
-                                />
-                                <button onClick={() => handleDeleteMacro(macro)} className="p-1 text-slate-300 hover:text-red-500"><X size={14}/></button>
+                              <div key={index} className="space-y-2">
+                                <div className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">
+                                  <input 
+                                    value={macro.name} 
+                                    onChange={e => handleUpdateMacro(macro, e.target.value)}
+                                    className="bg-transparent border-none text-xs font-bold text-slate-700 focus:ring-0 flex-1"
+                                  />
+                                  <button onClick={() => handleDeleteMacro(macro)} className="p-1 text-slate-300 hover:text-red-500"><X size={14}/></button>
+                                </div>
+                                
+                                {/* Microactivities for this macro */}
+                                <div className="ml-6 space-y-2 border-l-2 border-slate-100 pl-4">
+                                  {(macro.microActivities || []).map((micro, mIndex) => (
+                                    <div key={mIndex} className="flex justify-between items-center p-2 bg-slate-50 border border-slate-100 rounded-md text-[10px] font-bold text-slate-600">
+                                      <span>{micro}</span>
+                                      <button onClick={() => handleDeleteMicro(macro, mIndex)} className="text-slate-300 hover:text-red-500"><X size={12}/></button>
+                                    </div>
+                                  ))}
+                                  <form onSubmit={(e) => handleAddMicro(e, macro)} className="flex gap-2">
+                                    <input 
+                                      value={newMicroNames[macro.name + macro.phase] || ''} 
+                                      onChange={e => setNewMicroNames({ ...newMicroNames, [macro.name + macro.phase]: e.target.value })} 
+                                      placeholder="Nova microatividade padrão..." 
+                                      className="flex-1 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[10px] font-bold"
+                                    />
+                                    <button type="submit" className="px-2 bg-slate-100 text-slate-500 rounded-md text-[10px] font-bold uppercase hover:bg-slate-200 transition">Add</button>
+                                  </form>
+                                </div>
                               </div>
                             ))}
                             <form onSubmit={(e) => handleAddMacro(e, phase)} className="flex gap-2 pt-2">

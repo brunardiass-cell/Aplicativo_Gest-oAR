@@ -74,7 +74,15 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plan
         id: 'macro_' + Math.random().toString(36).substr(2, 9),
         name: macroTemplate.name,
         phase: projectPhases.includes(macroTemplate.phase) ? macroTemplate.phase : projectPhases[0],
-        microActivities: [],
+        microActivities: (macroTemplate.microActivities || []).map(microName => ({
+          id: 'micro_' + Math.random().toString(36).substr(2, 9),
+          name: microName,
+          assignee: responsibleMember,
+          dueDate: new Date().toISOString().split('T')[0],
+          status: 'Planejado',
+          observations: '',
+          progress: 0,
+        })),
       })),
       regulatoryChecklist: selectedPlan.regulatoryChecklist ? JSON.parse(JSON.stringify(selectedPlan.regulatoryChecklist)) : []
     };
