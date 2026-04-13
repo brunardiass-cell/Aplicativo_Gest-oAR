@@ -737,10 +737,12 @@ const App: React.FC = () => {
         taskToSave.completionDate = todayStr;
       }
       
+      // Define o progresso como 100% automaticamente ao concluir
+      taskToSave.progress = 100;
+      
       // Garante que o status também seja 'Concluída' se o fluxo de revisão foi finalizado
       if (taskToSave.isReport && (taskToSave.reportStage === 'Concluído' || taskToSave.reportStage === 'Concluído e Assinado')) {
         taskToSave.status = 'Concluída';
-        taskToSave.progress = 100;
       }
     }
 

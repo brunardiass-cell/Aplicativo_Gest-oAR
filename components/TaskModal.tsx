@@ -238,7 +238,18 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Status Atual</label>
-                <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as Status})} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none">
+                <select 
+                  value={formData.status} 
+                  onChange={e => {
+                    const newStatus = e.target.value as Status;
+                    const updates: any = { status: newStatus };
+                    if (newStatus === 'Concluída') {
+                      updates.progress = 100;
+                    }
+                    setFormData({...formData, ...updates});
+                  }} 
+                  className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none"
+                >
                   <option value="Planejada">Planejada</option>
                   <option value="Em Andamento">Em Andamento</option>
                   <option value="Concluída">Concluída</option>
@@ -272,7 +283,15 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><Info size={14}/> Etapa da Revisão</label>
                   <select 
                     value={formData.reportStage} 
-                    onChange={e => setFormData({...formData, reportStage: e.target.value as ReportStage})}
+                    onChange={e => {
+                      const newStage = e.target.value as ReportStage;
+                      const updates: any = { reportStage: newStage };
+                      if (newStage === 'Concluído' || newStage === 'Concluído e Assinado') {
+                        updates.status = 'Concluída';
+                        updates.progress = 100;
+                      }
+                      setFormData({...formData, ...updates});
+                    }}
                     className="w-full px-6 py-4 bg-white border border-teal-200 rounded-2xl text-sm font-black text-brand-primary outline-none shadow-sm"
                   >
                     <option value="Em Elaboração">Em Elaboração</option>
