@@ -721,14 +721,27 @@ const App: React.FC = () => {
         }
     }
     
-    const wasJustCompleted = (taskToSave.status === 'Concluída' && oldTask?.status !== 'Concluída');
+    const wasJustCompleted = (taskToSave.status === 'Concluída' && oldTask?.status !== 'Concluída') || 
+                             (taskToSave.isReport && (taskToSave.reportStage === 'Concluído' || taskToSave.reportStage === 'Concluído e Assinado') && 
+                              (!oldTask?.isReport || (oldTask.reportStage !== 'Concluído' && oldTask.reportStage !== 'Concluído e Assinado')));
 
     if (wasJustCompleted) {
       const today = new Date();
       const year = today.getFullYear();
       const month = String(today.getMonth() + 1).padStart(2, '0');
       const day = String(today.getDate()).padStart(2, '0');
-      taskToSave.completionDate = `${year}-${month}-${day}`;
+      const todayStr = `${year}-${month}-${day}`;
+      
+      // Se o status mudou para concluída e a data de entrega não foi alterada manualmente nesta edição, define como hoje
+      if (taskToSave.completionDate === oldTask?.completionDate || !taskToSave.completionDate) {
+        taskToSave.completionDate = todayStr;
+      }
+      
+      // Garante que o status também seja 'Concluída' se o fluxo de revisão foi finalizado
+      if (taskToSave.isReport && (taskToSave.reportStage === 'Concluído' || taskToSave.reportStage === 'Concluído e Assinado')) {
+        taskToSave.status = 'Concluída';
+        taskToSave.progress = 100;
+      }
     }
 
     if (

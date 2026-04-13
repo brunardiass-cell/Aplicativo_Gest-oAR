@@ -99,6 +99,14 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
             return aIsCompleted ? 1 : -1;
         }
 
+        if (aIsCompleted) {
+            // Both are completed, newest first
+            const dateA = a.completionDate ? new Date(a.completionDate + 'T00:00:00').getTime() : 0;
+            const dateB = b.completionDate ? new Date(b.completionDate + 'T00:00:00').getTime() : 0;
+            return dateB - dateA;
+        }
+
+        // Both are active, earliest deadline first
         const dateA = a.completionDate ? new Date(a.completionDate + 'T00:00:00').getTime() : Number.MAX_SAFE_INTEGER;
         const dateB = b.completionDate ? new Date(b.completionDate + 'T00:00:00').getTime() : Number.MAX_SAFE_INTEGER;
         
@@ -106,7 +114,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
 
         return dateA - dateB;
     });
-  }, [activeTasks]);
+  }, [filteredTasks]);
 
 
   const renderReportStageBadge = (task: Task) => {
@@ -276,41 +284,41 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                  <div className="w-full h-1 bg-slate-200 rounded-full overflow-hidden"><div className={`h-full transition-all duration-700 ${task.progress === 100 ? 'bg-emerald-500' : 'bg-brand-primary'}`} style={{width: `${task.progress}%`}}></div></div>
               </div>
 
-              <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
-                 <div className="flex flex-col">
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Líder</span>
-                    <div className="flex items-center gap-2 mt-1">
-                       <div className="w-5 h-5 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center text-[9px] font-black uppercase">{task.projectLead[0]}</div>
-                       <span className="text-[9px] font-bold text-slate-700 uppercase">{task.projectLead}</span>
-                    </div>
-                 </div>
-                 {task.isReport && task.reportStage?.includes('Concluído') && task.completionDate && task.status === 'Concluída' ? (
-                   <div className="flex flex-col text-right">
-                     <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Concluído em</span>
-                     <span className="text-[9px] font-black text-emerald-600 uppercase mt-1">{new Date(task.completionDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
-                   </div>
-                 ) : task.reportStage === 'Próximo Revisor (equipe AR)' && task.currentReviewer ? (
-                   <div className="flex flex-col text-right">
-                     <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest">Revisão com</span>
-                     <span className="text-[9px] font-black text-amber-600 uppercase mt-1">{task.currentReviewer}</span>
-                   </div>
-                 ) : task.reportStage === 'Em Elaboração' && task.elaboratorName ? (
-                   <div className="flex flex-col text-right">
-                     <span className="text-[8px] font-black text-teal-500 uppercase tracking-widest">Elaboração por</span>
-                     <span className="text-[9px] font-black text-teal-600 uppercase mt-1">{task.elaboratorName}</span>
-                   </div>
-                 ) : task.reportStage === 'Revisão Colaboradores' && task.collaboratorReviewerName ? (
-                   <div className="flex flex-col text-right">
-                     <span className="text-[8px] font-black text-teal-500 uppercase tracking-widest">Revisão por</span>
-                     <span className="text-[9px] font-black text-teal-600 uppercase mt-1">{task.collaboratorReviewerName}</span>
-                   </div>
-                 ) : task.reportStage === 'Revisão Comitê Gestor' && task.committeeReviewerName ? (
-                   <div className="flex flex-col text-right">
-                     <span className="text-[8px] font-black text-teal-500 uppercase tracking-widest">Revisão por</span>
-                     <span className="text-[9px] font-black text-teal-600 uppercase mt-1">{task.committeeReviewerName}</span>
-                   </div>
-                 ) : null}
-              </div>
+                  <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+                     <div className="flex flex-col">
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Líder</span>
+                        <div className="flex items-center gap-2 mt-1">
+                           <div className="w-5 h-5 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center text-[9px] font-black uppercase">{task.projectLead[0]}</div>
+                           <span className="text-[9px] font-bold text-slate-700 uppercase">{task.projectLead}</span>
+                        </div>
+                     </div>
+                     {task.status === 'Concluída' && task.completionDate ? (
+                       <div className="flex flex-col text-right">
+                         <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Concluído em</span>
+                         <span className="text-[9px] font-black text-emerald-600 uppercase mt-1">{new Date(task.completionDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                       </div>
+                     ) : task.isReport && task.reportStage === 'Próximo Revisor (equipe AR)' && task.currentReviewer ? (
+                       <div className="flex flex-col text-right">
+                         <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest">Revisão com</span>
+                         <span className="text-[9px] font-black text-amber-600 uppercase mt-1">{task.currentReviewer}</span>
+                       </div>
+                     ) : task.isReport && task.reportStage === 'Em Elaboração' && task.elaboratorName ? (
+                       <div className="flex flex-col text-right">
+                         <span className="text-[8px] font-black text-teal-500 uppercase tracking-widest">Elaboração por</span>
+                         <span className="text-[9px] font-black text-teal-600 uppercase mt-1">{task.elaboratorName}</span>
+                       </div>
+                     ) : task.isReport && task.reportStage === 'Revisão Colaboradores' && task.collaboratorReviewerName ? (
+                       <div className="flex flex-col text-right">
+                         <span className="text-[8px] font-black text-teal-500 uppercase tracking-widest">Revisão por</span>
+                         <span className="text-[9px] font-black text-teal-600 uppercase mt-1">{task.collaboratorReviewerName}</span>
+                       </div>
+                     ) : task.isReport && task.reportStage === 'Revisão Comitê Gestor' && task.committeeReviewerName ? (
+                       <div className="flex flex-col text-right">
+                         <span className="text-[8px] font-black text-teal-500 uppercase tracking-widest">Revisão por</span>
+                         <span className="text-[9px] font-black text-teal-600 uppercase mt-1">{task.committeeReviewerName}</span>
+                       </div>
+                     ) : null}
+                  </div>
 
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 mt-auto">
                  <p className="text-[8px] font-black text-brand-primary uppercase tracking-widest flex items-center gap-1.5 mb-1"><ArrowRight size={10} /> Próximo Passo</p>
@@ -326,11 +334,14 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
               )}
 
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-500' : 'text-slate-400'}`}>
-                    {isOverdue ? <AlertTriangle size={12} /> : <Clock size={12} />}
-                    <span className="text-[8px] font-bold uppercase">Prazo: {task.completionDate ? new Date(task.completionDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/D'}</span>
-                </div>
-                {task.updates.length > 0 && (<div className="flex items-center gap-1.5 text-brand-primary"><MessageSquare size={12} /><span className="text-[9px] font-black">{task.updates.length}</span></div>)}
+                {!isCompleted && (
+                  <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-500' : 'text-slate-400'}`}>
+                      {isOverdue ? <AlertTriangle size={12} /> : <Clock size={12} />}
+                      <span className="text-[8px] font-bold uppercase">Prazo: {task.completionDate ? new Date(task.completionDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/D'}</span>
+                  </div>
+                )}
+                {isCompleted && <div className="flex-1"></div>}
+                {task.updates.length > 0 && (<div className="flex items-center gap-1.5 text-brand-primary ml-auto"><MessageSquare size={12} /><span className="text-[9px] font-black">{task.updates.length}</span></div>)}
               </div>
             </div>
           )
