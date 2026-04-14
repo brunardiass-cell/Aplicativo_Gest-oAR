@@ -50,7 +50,8 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
         setSelectedPlanId(null);
       }
     }
-  }, [isOpen, plans, selectedPlanId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   const selectedPlan = localPlans.find(p => p.id === selectedPlanId);
 
