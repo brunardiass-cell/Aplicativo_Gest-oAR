@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ActivityPlanTemplate, MacroActivityTemplate, Project } from '../types';
-import { X, ListPlus, Plus, Trash2, Save, Layers, FilePlus, AlertTriangle, GripVertical } from 'lucide-react';
+import { X, ListPlus, Plus, Trash2, Save, Layers, FilePlus, AlertTriangle, GripVertical, Copy } from 'lucide-react';
 import {
   DndContext, 
   closestCenter,
@@ -78,6 +78,18 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
     }
   };
   
+  const handleDuplicatePlan = (planId: string) => {
+    const planToDuplicate = localPlans.find(p => p.id === planId);
+    if (!planToDuplicate) return;
+
+    const duplicatedPlan: ActivityPlanTemplate = JSON.parse(JSON.stringify(planToDuplicate));
+    duplicatedPlan.id = 'custom_' + Math.random().toString(36).substr(2, 9);
+    duplicatedPlan.name = `${duplicatedPlan.name} (Cópia)`;
+    
+    setLocalPlans([...localPlans, duplicatedPlan]);
+    setSelectedPlanId(duplicatedPlan.id);
+  };
+
   const handleAddPhase = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPhaseName.trim() || !selectedPlanId) return;
@@ -428,6 +440,7 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
                       isSelected={selectedPlanId === plan.id} 
                       onSelect={() => setSelectedPlanId(plan.id)} 
                       onDelete={() => handleDeletePlan(plan.id)} 
+                      onDuplicate={() => handleDuplicatePlan(plan.id)}
                     />
                   ))}
                 </SortableContext>
@@ -558,9 +571,10 @@ interface SortablePlanItemProps {
   isSelected: boolean;
   onSelect: () => void;
   onDelete: () => void;
+  onDuplicate: () => void;
 }
 
-const SortablePlanItem: React.FC<SortablePlanItemProps> = ({ plan, isSelected, onSelect, onDelete }) => {
+const SortablePlanItem: React.FC<SortablePlanItemProps> = ({ plan, isSelected, onSelect, onDelete, onDuplicate }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `plan_${plan.id}` });
   const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 'auto', opacity: isDragging ? 0.5 : 1 };
 
@@ -572,7 +586,10 @@ const SortablePlanItem: React.FC<SortablePlanItemProps> = ({ plan, isSelected, o
       <button onClick={onSelect} className="flex-1 text-left py-4 pr-4">
         <p className={`font-black text-sm uppercase tracking-tight ${isSelected ? 'text-amber-900' : 'text-slate-800'}`}>{plan.name}</p>
       </button>
-      <button onClick={onDelete} className="p-3 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"><Trash2 size={16}/></button>
+      <div className="flex items-center opacity-0 group-hover:opacity-100 transition">
+        <button onClick={(e) => { e.stopPropagation(); onDuplicate(); }} className="p-2 text-slate-300 hover:text-amber-600 transition" title="Duplicar Plano"><Copy size={16}/></button>
+        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-2 text-slate-300 hover:text-red-500 transition" title="Excluir Plano"><Trash2 size={16}/></button>
+      </div>
     </div>
   );
 };
