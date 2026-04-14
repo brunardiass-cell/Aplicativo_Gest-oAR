@@ -148,6 +148,14 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
     setLocalPlans(updatedPlans);
   };
   
+  const handleUpdatePlanName = (newName: string) => {
+    if (!selectedPlanId || !newName.trim()) return;
+    const updatedPlans = localPlans.map(p => 
+      p.id === selectedPlanId ? { ...p, name: newName.trim() } : p
+    );
+    setLocalPlans(updatedPlans);
+  };
+
   const handleUpdatePhase = (oldName: string, newName: string) => {
     if (!selectedPlanId || !newName.trim() || oldName === newName) return;
     const updatedPlans = localPlans.map(p => {
@@ -452,7 +460,11 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
                 <div className="p-8 space-y-8">
                   <div className="flex justify-between items-end">
                     <div>
-                      <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">{selectedPlan.name}</h3>
+                      <input 
+                        value={selectedPlan.name} 
+                        onChange={e => handleUpdatePlanName(e.target.value)}
+                        className="text-lg font-black text-slate-800 uppercase tracking-tight bg-transparent border-none focus:ring-0 p-0 w-full"
+                      />
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Configuração do Template</p>
                     </div>
                     <div className="flex bg-slate-100 p-1 rounded-xl">
