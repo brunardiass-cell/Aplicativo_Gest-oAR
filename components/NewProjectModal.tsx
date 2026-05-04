@@ -74,6 +74,8 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plan
         id: 'macro_' + Math.random().toString(36).substr(2, 9),
         name: macroTemplate.name,
         phase: projectPhases.includes(macroTemplate.phase) ? macroTemplate.phase : projectPhases[0],
+        expectedResults: macroTemplate.expectedResults,
+        resultLinks: macroTemplate.resultLinks ? [...macroTemplate.resultLinks] : [],
         microActivities: (macroTemplate.microActivities || []).map(microName => ({
           id: 'micro_' + Math.random().toString(36).substr(2, 9),
           name: microName,

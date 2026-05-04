@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ActivityPlanTemplate, MacroActivityTemplate, Project } from '../types';
-import { X, ListPlus, Plus, Trash2, Save, Layers, FilePlus, AlertTriangle, GripVertical, Copy } from 'lucide-react';
+import { X, ListPlus, Plus, Trash2, Save, Layers, FilePlus, AlertTriangle, GripVertical, Copy, ClipboardCheck } from 'lucide-react';
 import {
   DndContext, 
   closestCenter,
@@ -173,13 +173,13 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
     setLocalPlans(updatedPlans);
   };
 
-  const handleUpdateMacro = (macroToUpdate: MacroActivityTemplate, newName: string) => {
-    if (!selectedPlanId || !newName.trim() || macroToUpdate.name === newName) return;
+  const handleUpdateMacro = (macroToUpdate: MacroActivityTemplate, updates: Partial<MacroActivityTemplate>) => {
+    if (!selectedPlanId) return;
     const updatedPlans = localPlans.map(p => {
       if (p.id === selectedPlanId) {
         const updatedMacros = p.macroActivities.map(m => 
           (m.name === macroToUpdate.name && m.phase === macroToUpdate.phase) 
-            ? { ...m, name: newName.trim() } 
+            ? { ...m, ...updates } 
             : m
         );
         return { ...p, macroActivities: updatedMacros };
@@ -612,7 +612,7 @@ interface SortablePhaseItemProps {
   selectedPlan: ActivityPlanTemplate;
   onUpdatePhase: (old: string, newN: string) => void;
   onDeletePhase: (p: string) => void;
-  onUpdateMacro: (m: MacroActivityTemplate, n: string) => void;
+  onUpdateMacro: (m: MacroActivityTemplate, updates: Partial<MacroActivityTemplate>) => void;
   onDeleteMacro: (m: MacroActivityTemplate) => void;
   onAddMacro: (e: React.FormEvent, p: string) => void;
   onAddMicro: (e: React.FormEvent, m: MacroActivityTemplate) => void;
@@ -677,7 +677,7 @@ const SortablePhaseItem: React.FC<SortablePhaseItemProps> = ({
 
 interface SortableMacroItemProps {
   macro: MacroActivityTemplate;
-  onUpdateMacro: (m: MacroActivityTemplate, n: string) => void;
+  onUpdateMacro: (m: MacroActivityTemplate, updates: Partial<MacroActivityTemplate>) => void;
   onDeleteMacro: (m: MacroActivityTemplate) => void;
   onAddMicro: (e: React.FormEvent, m: MacroActivityTemplate) => void;
   onDeleteMicro: (m: MacroActivityTemplate, i: number) => void;
@@ -692,21 +692,76 @@ const SortableMacroItem: React.FC<SortableMacroItemProps> = ({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `macro_${macroKey}` });
   const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 'auto', opacity: isDragging ? 0.5 : 1 };
 
+  const [newLink, setNewLink] = useState('');
+
+  const handleAddLink = () => {
+    if (!newLink.trim()) return;
+    const currentLinks = macro.resultLinks || [];
+    onUpdateMacro(macro, { resultLinks: [...currentLinks, newLink.trim()] });
+    setNewLink('');
+  };
+
+  const handleRemoveLink = (linkIndex: number) => {
+    const currentLinks = macro.resultLinks || [];
+    onUpdateMacro(macro, { resultLinks: currentLinks.filter((_, i) => i !== linkIndex) });
+  };
+
   return (
-    <div ref={setNodeRef} style={style} className="space-y-2">
-      <div className="flex justify-between items-center p-3 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700">
-        <div {...attributes} {...listeners} className="p-1 mr-2 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing">
-          <GripVertical size={12} />
+    <div ref={setNodeRef} style={style} className="space-y-3 bg-white p-4 border border-slate-200 rounded-2xl shadow-sm">
+      <div className="flex justify-between items-center gap-2">
+        <div {...attributes} {...listeners} className="p-1 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing">
+          <GripVertical size={14} />
         </div>
         <input 
           value={macro.name} 
-          onChange={e => onUpdateMacro(macro, e.target.value)}
-          className="bg-transparent border-none text-xs font-bold text-slate-700 focus:ring-0 flex-1"
+          onChange={e => onUpdateMacro(macro, { name: e.target.value })}
+          className="bg-transparent border-none text-xs font-black uppercase tracking-tight text-slate-800 focus:ring-0 flex-1 p-0"
         />
-        <button onClick={() => onDeleteMacro(macro)} className="p-1 text-slate-300 hover:text-red-500"><X size={14}/></button>
+        <button onClick={() => onDeleteMacro(macro)} className="p-1 text-slate-300 hover:text-red-500 rounded-lg transition"><Trash2 size={16}/></button>
+      </div>
+
+      <div className="space-y-4 pt-2 border-t border-slate-50">
+        <div className="space-y-2">
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <ClipboardCheck size={12}/> Resultado Esperado (Checklist)
+          </label>
+          <textarea 
+            value={macro.expectedResults || ''} 
+            onChange={e => onUpdateMacro(macro, { expectedResults: e.target.value })}
+            placeholder="Descreva o que se espera ao final desta macroatividade..."
+            className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-amber-200 transition min-h-[60px]"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <FilePlus size={12}/> Links dos Resultados (Opcional)
+          </label>
+          <div className="flex gap-2">
+            <input 
+              value={newLink} 
+              onChange={e => setNewLink(e.target.value)}
+              placeholder="Ex: Link do SharePoint, relatório..."
+              className="flex-1 px-3 py-2 bg-slate-50 border border-slate-100 rounded-lg text-[10px] font-bold"
+              onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), handleAddLink())}
+            />
+            <button type="button" onClick={handleAddLink} className="px-3 bg-slate-100 text-slate-500 rounded-lg text-[10px] font-bold hover:bg-slate-200 transition">Add</button>
+          </div>
+          {macro.resultLinks && macro.resultLinks.length > 0 && (
+            <div className="space-y-1 mt-2">
+              {macro.resultLinks.map((link, idx) => (
+                <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-amber-50/50 rounded-lg border border-amber-100/50">
+                  <span className="text-[9px] font-bold text-amber-700 truncate flex-1">{link}</span>
+                  <button type="button" onClick={() => handleRemoveLink(idx)} className="text-amber-400 hover:text-red-500"><X size={12}/></button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       
-      <div className="ml-6 space-y-2 border-l-2 border-slate-100 pl-4">
+      <div className="ml-4 space-y-2 border-l-2 border-slate-100 pl-4 mt-4">
+        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Microatividades Padrão</label>
         <SortableContext 
           items={(macro.microActivities || []).map(micro => `micro_${macroKey}|${micro}`)}
           strategy={verticalListSortingStrategy}
@@ -720,14 +775,14 @@ const SortableMacroItem: React.FC<SortableMacroItemProps> = ({
             />
           ))}
         </SortableContext>
-        <form onSubmit={(e) => onAddMicro(e, macro)} className="flex gap-2">
+        <form onSubmit={(e) => onAddMicro(e, macro)} className="flex gap-2 pt-2">
           <input 
             value={newMicroNames[macro.name + macro.phase] || ''} 
             onChange={e => setNewMicroNames({ ...newMicroNames, [macro.name + macro.phase]: e.target.value })} 
-            placeholder="Nova microatividade padrão..." 
-            className="flex-1 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[10px] font-bold"
+            placeholder="Nova microatividade..." 
+            className="flex-1 px-3 py-2 bg-white border border-slate-100 rounded-lg text-[10px] font-bold"
           />
-          <button type="submit" className="px-2 bg-slate-100 text-slate-500 rounded-md text-[10px] font-bold uppercase hover:bg-slate-200 transition">Add</button>
+          <button type="submit" className="px-3 bg-slate-50 text-slate-500 rounded-lg text-[10px] font-bold uppercase hover:bg-slate-100 transition">Add</button>
         </form>
       </div>
     </div>

@@ -146,6 +146,8 @@ export interface MacroActivityTemplate {
   name: string;
   phase: string;
   microActivities?: string[];
+  expectedResults?: string;
+  resultLinks?: string[];
 }
 
 export interface RegulatoryChecklistItem {
@@ -185,6 +187,10 @@ export interface MacroActivity {
   microActivities: MicroActivity[];
   prerequisites?: Prerequisite[];
   dueDate?: string;
+  expectedResults?: string;
+  resultLinks?: string[];
+  resultsFulfilled?: boolean;
+  completionExplanation?: string;
 }
 
 export interface Project {

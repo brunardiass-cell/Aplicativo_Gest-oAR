@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Project, MacroActivity, MicroActivity, MicroActivityStatus, TeamMember, Prerequisite, BudgetInfo, PrerequisiteType, PrerequisiteStatus, BudgetStatus, RegulatoryStandard } from '../types';
-import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle, Layers, GripVertical, ListTodo, DollarSign, Calendar, User, CheckCircle2, Clock, ShieldCheck } from 'lucide-react';
+import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle, Layers, GripVertical, ListTodo, DollarSign, Calendar, User, CheckCircle2, Clock, ShieldCheck, ClipboardCheck } from 'lucide-react';
 import {
   DndContext, 
   closestCenter,
@@ -410,8 +410,12 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
   const [editedName, setEditedName] = useState(macro.name);
   const [showPrerequisites, setShowPrerequisites] = useState(false);
 
+  const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
+
   const totalMicros = macro.microActivities.length;
   const completedMicros = macro.microActivities.filter(m => m.status === 'Concluído e aprovado' || m.status === 'Concluído com restrições').length;
+  
+  const allMicrosDone = totalMicros > 0 && completedMicros === totalMicros;
   const progress = totalMicros > 0 ? (completedMicros / totalMicros) * 100 : 0;
   const restrictedCount = macro.microActivities.filter(m => m.status === 'Concluído com restrições').length;
 
@@ -430,9 +434,17 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
     });
   }, [macro.microActivities]);
 
-  const getMacroStatus = (): 'Concluída' | 'Em Andamento' | 'Planejada' => {
+  const getMacroStatus = (): 'Concluída' | 'Em Andamento' | 'Planejada' | 'Pendente Resultados' => {
     if (totalMicros === 0) return 'Planejada';
-    if (completedMicros === totalMicros) return 'Concluída';
+    
+    // Macro is only truly concluded if all micros are done AND (results fulfilled OR explanation provided)
+    if (allMicrosDone) {
+      if (macro.resultsFulfilled || (macro.completionExplanation && macro.completionExplanation.trim() !== '')) {
+        return 'Concluída';
+      }
+      return 'Pendente Resultados';
+    }
+    
     if (macro.microActivities.some(m => m.status === 'Em andamento')) return 'Em Andamento';
     return 'Planejada';
   };
@@ -480,7 +492,7 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
           <div {...attributes} {...listeners} className="p-2 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing">
             <GripVertical size={16} />
           </div>
-          <button onClick={() => setIsExpanded(!isExpanded)} className={`w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0 ${macroStatus === 'Concluída' ? 'bg-emerald-500' : 'bg-slate-800'}`}>
+          <button onClick={() => setIsExpanded(!isExpanded)} className={`w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0 ${macroStatus === 'Concluída' ? 'bg-emerald-500' : macroStatus === 'Pendente Resultados' ? 'bg-amber-500' : 'bg-slate-800'}`}>
             <ChevronDown size={20} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
           </button>
           {isEditing ? (
@@ -491,13 +503,22 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
               <button onClick={handleAddPrerequisite} className="p-2 text-teal-600 hover:bg-teal-50 rounded-md" title="Adicionar Pré-requisito"><ListTodo size={16}/></button>
             </div>
           ) : ( 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsResultsModalOpen(true)}>
                 {microOverdueAlert && (
                     <div className="animate-bounce" title="Existem microatividades atrasadas nesta macro!">
                         <AlertTriangle size={14} className="text-red-500" />
                     </div>
                 )}
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-tight">{macro.name}</h4> 
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-tight group-hover:text-brand-primary transition-colors">{macro.name}</h4> 
+                {macro.resultsFulfilled ? (
+                  <span title="Resultados Cumpridos">
+                    <CheckCircle2 size={14} className="text-emerald-500" />
+                  </span>
+                ) : macro.completionExplanation ? (
+                  <span title="Possui justificativa de não conclusão de resultados">
+                    <MessageSquare size={14} className="text-amber-500" />
+                  </span>
+                ) : null}
                 {hasRegulatoryStandards && (
                     <button 
                         onClick={(e) => { e.stopPropagation(); onOpenRegulatoryModal(macro.name); }}
@@ -614,6 +635,15 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
               </div>
           </div>
       )}
+      {isResultsModalOpen && (
+        <MacroActivityResultsModal 
+          isOpen={isResultsModalOpen}
+          onClose={() => setIsResultsModalOpen(false)}
+          macro={macro}
+          onUpdate={handleUpdateMacro}
+          allMicrosDone={allMicrosDone}
+        />
+      )}
       {isExpanded && (
         <div className="bg-white p-4 border-t border-slate-100 space-y-3">
           <SortableContext 
@@ -627,6 +657,149 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
           <button onClick={() => onAddMicro(macro.id)} className="w-full mt-2 p-3 bg-slate-50 text-slate-500 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition"><Plus size={14}/> Adicionar Microatividade</button>
         </div>
       )}
+    </div>
+  );
+};
+
+interface MacroActivityResultsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  macro: MacroActivity;
+  onUpdate: (updates: Partial<MacroActivity>) => void;
+  allMicrosDone: boolean;
+}
+
+const MacroActivityResultsModal: React.FC<MacroActivityResultsModalProps> = ({ 
+  isOpen, onClose, macro, onUpdate, allMicrosDone 
+}) => {
+  const [explanation, setExplanation] = useState(macro.completionExplanation || '');
+  const [fulfilled, setFulfilled] = useState(macro.resultsFulfilled || false);
+  const [newLink, setNewLink] = useState('');
+
+  if (!isOpen) return null;
+
+  const handleSave = () => {
+    // If setting as concluded without results fulfilled, check if explanation is provided
+    if (allMicrosDone && !fulfilled && explanation.trim() === '') {
+      alert('Uma explicação é obrigatória para considerar a macroatividade concluída sem o cumprimento de todos os resultados esperados.');
+      return;
+    }
+
+    onUpdate({
+      resultsFulfilled: fulfilled,
+      completionExplanation: fulfilled ? '' : explanation,
+      resultLinks: macro.resultLinks // preservation
+    });
+    onClose();
+  };
+
+  const handleAddLink = () => {
+    if (!newLink.trim()) return;
+    const currentLinks = macro.resultLinks || [];
+    onUpdate({ resultLinks: [...currentLinks, newLink.trim()] });
+    setNewLink('');
+  };
+
+  const handleRemoveLink = (idx: number) => {
+    const currentLinks = macro.resultLinks || [];
+    onUpdate({ resultLinks: currentLinks.filter((_, i) => i !== idx) });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+        <header className="p-6 bg-amber-50 border-b border-amber-100 flex items-center gap-4">
+          <div className="p-3 bg-amber-500 rounded-2xl text-white shadow-lg shadow-amber-200">
+            <ClipboardCheck size={24} />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-slate-900 uppercase tracking-tighter">Resultados Esperados</h2>
+            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">{macro.name}</p>
+          </div>
+          <button onClick={onClose} className="ml-auto p-2 hover:bg-slate-200 rounded-full transition"><X size={20} /></button>
+        </header>
+
+        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+          <div className="space-y-3">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+               <ListTodo size={14}/> Checklist de Resultados
+             </label>
+             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
+                <p className="text-xs font-bold text-slate-600 leading-relaxed italic">
+                  "{macro.expectedResults || 'Nenhum resultado definido no plano.'}"
+                </p>
+                <div className="pt-2 border-t border-slate-200">
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <input 
+                      type="checkbox" 
+                      checked={fulfilled} 
+                      onChange={e => setFulfilled(e.target.checked)}
+                      className="w-5 h-5 rounded-lg border-slate-300 text-emerald-500 focus:ring-emerald-500 transition"
+                    />
+                    <span className="text-sm font-black text-slate-800 uppercase tracking-tight group-hover:text-emerald-600 transition">Confirmo que os resultados foram cumpridos</span>
+                  </label>
+                </div>
+             </div>
+          </div>
+
+          <div className="space-y-3">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+               <LinkIcon size={14}/> Links dos Resultados
+             </label>
+             <div className="flex gap-2">
+                <input 
+                  value={newLink} 
+                  onChange={e => setNewLink(e.target.value)}
+                  placeholder="Adicionar novo link..."
+                  className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500/20"
+                />
+                <button 
+                  onClick={handleAddLink}
+                  className="px-4 py-2 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase hover:bg-black transition"
+                >
+                  Add
+                </button>
+             </div>
+             {macro.resultLinks && macro.resultLinks.length > 0 && (
+               <div className="space-y-2 mt-2">
+                  {macro.resultLinks.map((link, idx) => (
+                    <div key={idx} className="flex items-center gap-2 p-2 bg-white border border-slate-100 rounded-xl">
+                      <LinkIcon size={12} className="text-slate-400 shrink-0" />
+                      <a href={link.startsWith('http') ? link : `https://${link}`} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-amber-600 truncate flex-1 hover:underline">{link}</a>
+                      <button onClick={() => handleRemoveLink(idx)} className="text-slate-300 hover:text-red-500 p-1"><X size={14}/></button>
+                    </div>
+                  ))}
+               </div>
+             )}
+          </div>
+
+          {!fulfilled && (allMicrosDone || macro.completionExplanation) && (
+            <div className="space-y-3 animate-in slide-in-from-top-2 duration-300">
+               <label className="text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center gap-2">
+                 <AlertTriangle size={14}/> Explicação para Não Cumprimento
+               </label>
+               <textarea 
+                  value={explanation}
+                  onChange={e => setExplanation(e.target.value)}
+                  placeholder="Por que os resultados esperados não foram totalmente alcançados?"
+                  className="w-full p-4 bg-red-50/30 border border-red-100 rounded-2xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-red-500/20 min-h-[100px]"
+               />
+               {!allMicrosDone && (
+                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider italic">
+                   Nota: A macro será considerada concluída somente após a finalização de todas as microatividades e o preenchimento da justificativa.
+                 </p>
+               )}
+            </div>
+          )}
+        </div>
+
+        <footer className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+          <button onClick={onClose} className="flex-1 py-3 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:bg-slate-200 rounded-xl transition">Cancelar</button>
+          <button onClick={handleSave} className="flex-1 py-3 bg-amber-500 text-white rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-amber-100 hover:bg-amber-600 transition">
+            Salvar Registro
+          </button>
+        </footer>
+      </div>
     </div>
   );
 };
