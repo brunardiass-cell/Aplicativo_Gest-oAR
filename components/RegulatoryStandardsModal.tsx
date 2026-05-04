@@ -29,9 +29,11 @@ const RegulatoryStandardsModal: React.FC<RegulatoryStandardsModalProps> = ({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Vigente': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      case 'Em Revisão': return 'bg-amber-100 text-amber-700 border-amber-200';
-      case 'Obsoleta': return 'bg-slate-100 text-slate-700 border-slate-200';
+      case 'vigente': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      case 'vigente com alteração': return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'Alterador': return 'bg-purple-100 text-purple-700 border-purple-200';
+      case 'À Entrar em Vigor': return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'obsoleto': return 'bg-slate-100 text-slate-700 border-slate-200';
       default: return 'bg-slate-100 text-slate-700';
     }
   };
@@ -67,21 +69,35 @@ const RegulatoryStandardsModal: React.FC<RegulatoryStandardsModalProps> = ({
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${getStatusColor(standard.status)}`}>
-                        {standard.status === 'Vigente' && <CheckCircle2 size={10} />}
-                        {standard.status === 'Em Revisão' && <Clock size={10} />}
-                        {standard.status === 'Obsoleta' && <AlertCircle size={10} />}
                         {standard.status}
                       </span>
                       <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Versão {standard.version}</span>
                     </div>
                     <h3 className="text-base font-black text-slate-800 uppercase tracking-tight">{standard.name}</h3>
                     <p className="text-brand-primary text-[10px] font-bold uppercase tracking-wider">{standard.theme}</p>
+                    
+                    {standard.appliesTo && (
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Se aplica a:</span>
+                        <span className="text-[10px] font-bold text-slate-700">{standard.appliesTo}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <p className="text-slate-600 text-xs font-medium leading-relaxed">
                   {standard.summary}
                 </p>
+
+                {standard.keywords && standard.keywords.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {standard.keywords.map(kw => (
+                      <span key={kw} className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold uppercase tracking-tight">
+                        #{kw}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 <div className="flex gap-4 pt-2">
                   {standard.documentLink && (

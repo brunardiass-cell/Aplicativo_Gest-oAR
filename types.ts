@@ -72,7 +72,7 @@ export interface Task {
 
 export type ViewMode = 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceability' | 'regulatory';
 
-export type RegulatoryStandardStatus = 'Vigente' | 'Em Revisão' | 'Obsoleta';
+export type RegulatoryStandardStatus = 'vigente' | 'vigente com alteração' | 'Alterador' | 'À Entrar em Vigor' | 'obsoleto';
 
 export interface RegulatoryStandard {
   id: string;
@@ -86,6 +86,8 @@ export interface RegulatoryStandard {
   summary: string;
   documentLink: string;
   notebookLMLink: string;
+  keywords?: string[]; // Palavras-chave para busca
+  appliesTo?: string; // Se aplica a...
 }
 export interface SyncInfo {
   timestamp: string;

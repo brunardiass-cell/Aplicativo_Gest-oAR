@@ -46,13 +46,16 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     phase: '',
     relatedActivities: [],
     version: '1.0',
-    status: 'Vigente',
+    status: 'vigente',
     summary: '',
     documentLink: '',
-    notebookLMLink: ''
+    notebookLMLink: '',
+    keywords: [],
+    appliesTo: ''
   });
 
   const [activityInput, setActivityInput] = useState('');
+  const [keywordInput, setKeywordInput] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   const allSystemActivities = React.useMemo(() => {
@@ -98,6 +101,24 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     });
   };
 
+  const handleAddKeyword = () => {
+    const keyword = keywordInput.trim();
+    if (keyword && !formData.keywords?.includes(keyword)) {
+      setFormData({
+        ...formData,
+        keywords: [...(formData.keywords || []), keyword]
+      });
+      setKeywordInput('');
+    }
+  };
+
+  const removeKeyword = (keyword: string) => {
+    setFormData({
+      ...formData,
+      keywords: (formData.keywords || []).filter(k => k !== keyword)
+    });
+  };
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -106,12 +127,15 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       phase: '',
       relatedActivities: [],
       version: '1.0',
-      status: 'Vigente',
+      status: 'vigente',
       summary: '',
       documentLink: '',
-      notebookLMLink: ''
+      notebookLMLink: '',
+      keywords: [],
+      appliesTo: ''
     });
     setActivityInput('');
+    setKeywordInput('');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -137,7 +161,9 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       status: standard.status,
       summary: standard.summary,
       documentLink: standard.documentLink,
-      notebookLMLink: standard.notebookLMLink
+      notebookLMLink: standard.notebookLMLink,
+      keywords: standard.keywords || [],
+      appliesTo: standard.appliesTo || ''
     });
     setEditingId(standard.id);
     setIsAdding(true);
@@ -146,23 +172,29 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   const filteredStandards = standards.filter(s => 
     s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.theme.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.summary.toLowerCase().includes(searchTerm.toLowerCase())
+    s.summary.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.keywords && s.keywords.some(k => k.toLowerCase().includes(searchTerm.toLowerCase()))) ||
+    (s.appliesTo && s.appliesTo.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const getStatusColor = (status: RegulatoryStandardStatus) => {
     switch (status) {
-      case 'Vigente': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      case 'Em Revisão': return 'bg-amber-100 text-amber-700 border-amber-200';
-      case 'Obsoleta': return 'bg-slate-100 text-slate-700 border-slate-200';
+      case 'vigente': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      case 'vigente com alteração': return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'Alterador': return 'bg-purple-100 text-purple-700 border-purple-200';
+      case 'À Entrar em Vigor': return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'obsoleto': return 'bg-slate-100 text-slate-700 border-slate-200';
       default: return 'bg-slate-100 text-slate-700';
     }
   };
 
   const getStatusIcon = (status: RegulatoryStandardStatus) => {
     switch (status) {
-      case 'Vigente': return <CheckCircle2 size={12} />;
-      case 'Em Revisão': return <Clock size={12} />;
-      case 'Obsoleta': return <AlertCircle size={12} />;
+      case 'vigente': return <CheckCircle2 size={12} />;
+      case 'vigente com alteração': return <Edit2 size={12} />;
+      case 'Alterador': return <Plus size={12} />;
+      case 'À Entrar em Vigor': return <Clock size={12} />;
+      case 'obsoleto': return <AlertCircle size={12} />;
     }
   };
 
@@ -268,9 +300,11 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                     onChange={e => setFormData({...formData, status: e.target.value as RegulatoryStandardStatus})}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium appearance-none bg-white"
                   >
-                    <option value="Vigente">Vigente</option>
-                    <option value="Em Revisão">Em Revisão</option>
-                    <option value="Obsoleta">Obsoleta</option>
+                    <option value="vigente">Vigente</option>
+                    <option value="vigente com alteração">Vigente com alteração</option>
+                    <option value="Alterador">Alterador</option>
+                    <option value="À Entrar em Vigor">À Entrar em Vigor</option>
+                    <option value="obsoleto">Obsoleto</option>
                   </select>
                 </div>
               </div>
@@ -285,6 +319,46 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                   placeholder="Breve descrição do conteúdo e aplicabilidade da norma..."
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium resize-none"
                 />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Se aplica a...</label>
+                <input 
+                  value={formData.appliesTo}
+                  onChange={e => setFormData({...formData, appliesTo: e.target.value})}
+                  placeholder="Ex: Laboratórios, Equipe de Qualidade, Processo de Fabricação X"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Palavras Chaves (Facilitar Busca)</label>
+                <div className="flex gap-2">
+                  <input 
+                    value={keywordInput}
+                    onChange={e => setKeywordInput(e.target.value)}
+                    onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), handleAddKeyword())}
+                    placeholder="Digite uma palavra chave..."
+                    className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
+                  />
+                  <button 
+                    type="button"
+                    onClick={handleAddKeyword}
+                    className="px-4 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition"
+                  >
+                    Adicionar
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {(formData.keywords || []).map(keyword => (
+                    <span key={keyword} className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold uppercase tracking-tight border border-slate-200">
+                      {keyword}
+                      <button type="button" onClick={() => removeKeyword(keyword)} className="hover:text-red-500 transition">
+                        <X size={14} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -416,6 +490,23 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                     </div>
                     <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight leading-tight">{standard.name}</h3>
                     <p className="text-brand-primary text-xs font-bold uppercase tracking-wider">{standard.theme}</p>
+                    
+                    {standard.appliesTo && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Se aplica a:</span>
+                        <span className="text-xs font-bold text-slate-700">{standard.appliesTo}</span>
+                      </div>
+                    )}
+
+                    {standard.keywords && standard.keywords.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {standard.keywords.map(kw => (
+                          <span key={kw} className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold uppercase tracking-tight">
+                            #{kw}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
