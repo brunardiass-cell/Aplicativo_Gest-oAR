@@ -12,6 +12,7 @@ import {
   Trash2, 
   X, 
   Save,
+  Eye,
   CheckCircle2,
   AlertCircle,
   Clock,
@@ -37,7 +38,9 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
 }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedType, setSelectedType] = useState<string>('todos');
   
   const [formData, setFormData] = useState<Omit<RegulatoryStandard, 'id'>>({
     name: '',
@@ -169,13 +172,46 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     setIsAdding(true);
   };
 
-  const filteredStandards = standards.filter(s => 
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.theme.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.summary.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (s.keywords && s.keywords.some(k => k.toLowerCase().includes(searchTerm.toLowerCase()))) ||
-    (s.appliesTo && s.appliesTo.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredStandards = React.useMemo(() => {
+    let result = standards.filter(s => {
+      const matchesSearch = 
+        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.theme.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.summary.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (s.keywords && s.keywords.some(k => k.toLowerCase().includes(searchTerm.toLowerCase()))) ||
+        (s.appliesTo && s.appliesTo.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      const matchesType = selectedType === 'todos' || s.type === selectedType;
+      
+      return matchesSearch && matchesType;
+    });
+
+    // Custom sorting: ICH first, then RDC, then others
+    // Then alphabetical/numerical within groups
+    return result.sort((a, b) => {
+      const getPriority = (type: string) => {
+        if (type === 'ICH') return 1;
+        if (type === 'RDC') return 2;
+        return 3;
+      };
+
+      const priorityA = getPriority(a.type);
+      const priorityB = getPriority(b.type);
+
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+
+      // Within same priority or type group, sort by name
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [standards, searchTerm, selectedType]);
+
+  const uniqueTypes = React.useMemo(() => {
+    const types = new Set<string>();
+    standards.forEach(s => { if (s.type) types.add(s.type); });
+    return Array.from(types).sort();
+  }, [standards]);
 
   const getStatusColor = (status: RegulatoryStandardStatus) => {
     switch (status) {
@@ -253,6 +289,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium appearance-none bg-white"
                 >
                   <option value="Manual">Manual</option>
+                  <option value="ICH">ICH</option>
                   <option value="Guia">Guia</option>
                   <option value="RDC">RDC</option>
                   <option value="Instrução Normativa">Instrução Normativa</option>
@@ -462,66 +499,98 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-            <input 
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Buscar por nome, tema ou resumo..."
-              className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 shadow-sm focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-            />
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+              <input 
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Buscar por nome, tema, resumo ou palavras chaves..."
+                className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 shadow-sm focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
+              />
+            </div>
+            
+            <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-2xl border border-slate-200 shadow-sm">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Filtrar por:</span>
+              <select 
+                value={selectedType}
+                onChange={e => setSelectedType(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-600 outline-none cursor-pointer"
+              >
+                <option value="todos">Todos os Tipos</option>
+                {uniqueTypes.map(type => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {filteredStandards.map(standard => (
-              <div key={standard.id} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-all group">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${getStatusColor(standard.status)}`}>
-                        {getStatusIcon(standard.status)}
-                        {standard.status}
-                      </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-500 border border-slate-200">
-                        <Tag size={10} />
-                        {standard.type || 'Manual'}
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Versão {standard.version}</span>
+            {filteredStandards.map(standard => {
+              const isExpanded = expandedId === standard.id;
+              return (
+                <div key={standard.id} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-all group">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${getStatusColor(standard.status)}`}>
+                          {getStatusIcon(standard.status)}
+                          {standard.status}
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-500 border border-slate-200">
+                          <Tag size={10} />
+                          {standard.type || 'Manual'}
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Versão {standard.version}</span>
+                      </div>
+                      <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight leading-tight">{standard.name}</h3>
+                      <p className="text-brand-primary text-xs font-bold uppercase tracking-wider">{standard.theme}</p>
+                      
+                      {isExpanded && (
+                        <div className="mt-4 pt-4 border-t border-slate-100 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                          {standard.appliesTo && (
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Se aplica a:</span>
+                              <span className="text-xs font-bold text-slate-700 leading-relaxed">{standard.appliesTo}</span>
+                            </div>
+                          )}
+
+                          {standard.keywords && standard.keywords.length > 0 && (
+                            <div className="flex flex-col gap-2">
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Palavras Chaves:</span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {standard.keywords.map(kw => (
+                                  <span key={kw} className="px-2 py-1 bg-slate-100 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-tight border border-slate-200">
+                                    #{kw}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight leading-tight">{standard.name}</h3>
-                    <p className="text-brand-primary text-xs font-bold uppercase tracking-wider">{standard.theme}</p>
                     
-                    {standard.appliesTo && (
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Se aplica a:</span>
-                        <span className="text-xs font-bold text-slate-700">{standard.appliesTo}</span>
-                      </div>
-                    )}
-
-                    {standard.keywords && standard.keywords.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {standard.keywords.map(kw => (
-                          <span key={kw} className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold uppercase tracking-tight">
-                            #{kw}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <div className="flex gap-1 ml-4 shadow-sm rounded-lg border border-slate-100 p-1 bg-slate-50/50">
+                      <button 
+                        onClick={() => setExpandedId(isExpanded ? null : standard.id)} 
+                        className={`p-2 rounded-lg transition-all ${isExpanded ? 'bg-brand-primary text-white shadow-md' : 'text-slate-400 hover:bg-white hover:text-brand-primary'}`}
+                        title={isExpanded ? "Recolher informações" : "Ver informações completas"}
+                      >
+                        <Eye size={18} />
+                      </button>
+                      <button onClick={() => startEdit(standard)} className="p-2 text-slate-400 hover:bg-white hover:text-brand-primary rounded-lg transition" title="Editar">
+                        <Edit2 size={16} />
+                      </button>
+                      <button onClick={() => onDeleteStandard(standard.id)} className="p-2 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition" title="Excluir">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
-                  
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => startEdit(standard)} className="p-2 text-slate-400 hover:bg-slate-100 hover:text-brand-primary rounded-lg transition" title="Editar">
-                      <Edit2 size={16} />
-                    </button>
-                    <button onClick={() => onDeleteStandard(standard.id)} className="p-2 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition" title="Excluir">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
 
-                <p className="text-slate-600 text-sm line-clamp-3 mb-6 font-medium leading-relaxed">
-                  {standard.summary}
-                </p>
+                  <p className={`text-slate-600 text-sm mb-6 font-medium leading-relaxed ${isExpanded ? '' : 'line-clamp-3'}`}>
+                    {standard.summary}
+                  </p>
 
                 <div className="flex flex-wrap gap-4 items-center justify-between pt-4 border-t border-slate-50">
                   <div className="flex gap-3">
@@ -555,7 +624,8 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
             
             {filteredStandards.length === 0 && (
               <div className="col-span-full py-20 text-center space-y-4 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">

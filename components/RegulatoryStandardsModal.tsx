@@ -38,6 +38,25 @@ const RegulatoryStandardsModal: React.FC<RegulatoryStandardsModalProps> = ({
     }
   };
 
+  const sortedStandards = React.useMemo(() => {
+    return [...standards].sort((a, b) => {
+      const getPriority = (type: string) => {
+        if (type === 'ICH') return 1;
+        if (type === 'RDC') return 2;
+        return 3;
+      };
+
+      const priorityA = getPriority(a.type);
+      const priorityB = getPriority(b.type);
+
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [standards]);
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
       <div 
@@ -62,8 +81,8 @@ const RegulatoryStandardsModal: React.FC<RegulatoryStandardsModalProps> = ({
         </div>
 
         <div className="p-6 overflow-y-auto space-y-6 custom-scrollbar">
-          {standards.length > 0 ? (
-            standards.map(standard => (
+          {sortedStandards.length > 0 ? (
+            sortedStandards.map(standard => (
               <div key={standard.id} className="p-5 rounded-2xl border border-slate-100 bg-slate-50/30 space-y-4">
                 <div className="flex justify-between items-start">
                   <div className="space-y-1">
