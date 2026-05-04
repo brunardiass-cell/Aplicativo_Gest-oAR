@@ -98,13 +98,13 @@ const RegulatoryStandardsModal: React.FC<RegulatoryStandardsModalProps> = ({
                     {standard.appliesTo && (
                       <div className="mt-1 flex items-center gap-2">
                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Se aplica a:</span>
-                        <span className="text-[10px] font-bold text-slate-700">{standard.appliesTo}</span>
+                        <span className="text-[10px] font-bold text-slate-700 text-justify leading-relaxed">{standard.appliesTo}</span>
                       </div>
                     )}
                   </div>
                 </div>
 
-                <p className="text-slate-600 text-xs font-medium leading-relaxed">
+                <p className="text-slate-600 text-xs font-medium leading-relaxed text-justify">
                   {standard.summary}
                 </p>
 

@@ -722,12 +722,15 @@ const MacroActivityResultsModal: React.FC<MacroActivityResultsModalProps> = ({
         <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
           <div className="space-y-3">
              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-               <ListTodo size={14}/> Checklist de Resultados
+               <ListTodo size={14}/> Resultado Esperado
              </label>
              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
-                <p className="text-xs font-bold text-slate-600 leading-relaxed italic">
-                  "{macro.expectedResults || 'Nenhum resultado definido no plano.'}"
-                </p>
+                <textarea 
+                  value={macro.expectedResults || ''}
+                  onChange={e => onUpdate({ expectedResults: e.target.value })}
+                  placeholder="Defina o resultado esperado..."
+                  className="w-full bg-transparent text-xs font-bold text-slate-600 leading-relaxed italic border-none focus:ring-0 p-0 min-h-[60px] resize-none"
+                />
                 <div className="pt-2 border-t border-slate-200">
                   <label className="flex items-center gap-3 cursor-pointer group">
                     <input 

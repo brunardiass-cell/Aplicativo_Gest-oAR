@@ -276,38 +276,49 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
   const handleSaveAndClose = () => {
     onSave(localPlans);
     
-    // Check if any checklist was modified and ask to apply to existing projects
+    // Check if any checklist or macro expected results were modified
     const modifiedPlans = localPlans.filter(localPlan => {
       const originalPlan = plans.find(p => p.id === localPlan.id);
       if (!originalPlan) return false;
-      return JSON.stringify(localPlan.regulatoryChecklist) !== JSON.stringify(originalPlan.regulatoryChecklist);
+      
+      const checklistChanged = JSON.stringify(localPlan.regulatoryChecklist) !== JSON.stringify(originalPlan.regulatoryChecklist);
+      const macrosChanged = localPlan.macroActivities.some(lm => {
+        const om = originalPlan.macroActivities.find(m => m.name === lm.name && m.phase === lm.phase);
+        return om && lm.expectedResults !== om.expectedResults;
+      });
+
+      return checklistChanged || macrosChanged;
     });
 
     if (modifiedPlans.length > 0) {
-      const shouldApply = confirm("Você alterou o checklist regulatório de um ou mais planos. Deseja aplicar estas alterações aos projetos já existentes que utilizam estes planos?");
+      const shouldApply = confirm("Você alterou o checklist regulatório ou os resultados esperados de um ou mais planos. Deseja aplicar estas alterações aos projetos já existentes que utilizam estes planos?");
       
       if (shouldApply) {
         const updatedProjects = projects.map(project => {
           const matchingModifiedPlan = modifiedPlans.find(p => p.id === project.templateId);
           if (matchingModifiedPlan) {
-            // Update the checklist without overwriting existing progress if possible
-            // But usually, if the template changed, we want to sync the items.
-            // The user said: "não modifique o que já está la, apenas atualize o checklist"
-            // This means we should add new items and maybe remove deleted ones, 
-            // but keep the state of existing items.
-            
+            // Update the checklist
             const currentProjectChecklist = project.regulatoryChecklist || [];
             const newTemplateChecklist = matchingModifiedPlan.regulatoryChecklist || [];
             
             const updatedChecklist = newTemplateChecklist.map(templateItem => {
               const existingItem = currentProjectChecklist.find(i => i.item === templateItem.item);
               if (existingItem) {
-                return { ...existingItem }; // Keep existing state (completed, etc)
+                return { ...existingItem };
               }
-              return { ...templateItem }; // Add new item from template
+              return { ...templateItem };
+            });
+
+            // Update Macro Activities Expected Results
+            const updatedMacros = project.macroActivities.map(pm => {
+              const tm = matchingModifiedPlan.macroActivities.find(m => m.name === pm.name && m.phase === pm.phase);
+              if (tm) {
+                return { ...pm, expectedResults: tm.expectedResults };
+              }
+              return pm;
             });
             
-            return { ...project, regulatoryChecklist: updatedChecklist };
+            return { ...project, regulatoryChecklist: updatedChecklist, macroActivities: updatedMacros };
           }
           return project;
         });
@@ -692,20 +703,6 @@ const SortableMacroItem: React.FC<SortableMacroItemProps> = ({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `macro_${macroKey}` });
   const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 'auto', opacity: isDragging ? 0.5 : 1 };
 
-  const [newLink, setNewLink] = useState('');
-
-  const handleAddLink = () => {
-    if (!newLink.trim()) return;
-    const currentLinks = macro.resultLinks || [];
-    onUpdateMacro(macro, { resultLinks: [...currentLinks, newLink.trim()] });
-    setNewLink('');
-  };
-
-  const handleRemoveLink = (linkIndex: number) => {
-    const currentLinks = macro.resultLinks || [];
-    onUpdateMacro(macro, { resultLinks: currentLinks.filter((_, i) => i !== linkIndex) });
-  };
-
   return (
     <div ref={setNodeRef} style={style} className="space-y-3 bg-white p-4 border border-slate-200 rounded-2xl shadow-sm">
       <div className="flex justify-between items-center gap-2">
@@ -723,7 +720,7 @@ const SortableMacroItem: React.FC<SortableMacroItemProps> = ({
       <div className="space-y-4 pt-2 border-t border-slate-50">
         <div className="space-y-2">
           <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            <ClipboardCheck size={12}/> Resultado Esperado (Checklist)
+            <ClipboardCheck size={12}/> Resultado Esperado
           </label>
           <textarea 
             value={macro.expectedResults || ''} 
@@ -731,32 +728,6 @@ const SortableMacroItem: React.FC<SortableMacroItemProps> = ({
             placeholder="Descreva o que se espera ao final desta macroatividade..."
             className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-amber-200 transition min-h-[60px]"
           />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            <FilePlus size={12}/> Links dos Resultados (Opcional)
-          </label>
-          <div className="flex gap-2">
-            <input 
-              value={newLink} 
-              onChange={e => setNewLink(e.target.value)}
-              placeholder="Ex: Link do SharePoint, relatório..."
-              className="flex-1 px-3 py-2 bg-slate-50 border border-slate-100 rounded-lg text-[10px] font-bold"
-              onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), handleAddLink())}
-            />
-            <button type="button" onClick={handleAddLink} className="px-3 bg-slate-100 text-slate-500 rounded-lg text-[10px] font-bold hover:bg-slate-200 transition">Add</button>
-          </div>
-          {macro.resultLinks && macro.resultLinks.length > 0 && (
-            <div className="space-y-1 mt-2">
-              {macro.resultLinks.map((link, idx) => (
-                <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-amber-50/50 rounded-lg border border-amber-100/50">
-                  <span className="text-[9px] font-bold text-amber-700 truncate flex-1">{link}</span>
-                  <button type="button" onClick={() => handleRemoveLink(idx)} className="text-amber-400 hover:text-red-500"><X size={12}/></button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
       

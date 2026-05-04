@@ -551,7 +551,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                           {standard.appliesTo && (
                             <div className="flex flex-col gap-1">
                               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Se aplica a:</span>
-                              <span className="text-xs font-bold text-slate-700 leading-relaxed">{standard.appliesTo}</span>
+                              <span className="text-xs font-bold text-slate-700 leading-relaxed text-justify">{standard.appliesTo}</span>
                             </div>
                           )}
 
@@ -588,7 +588,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                     </div>
                   </div>
 
-                  <p className={`text-slate-600 text-sm mb-6 font-medium leading-relaxed ${isExpanded ? '' : 'line-clamp-3'}`}>
+                  <p className={`text-slate-600 text-sm mb-6 font-medium leading-relaxed text-justify ${isExpanded ? '' : 'line-clamp-3'}`}>
                     {standard.summary}
                   </p>
 
