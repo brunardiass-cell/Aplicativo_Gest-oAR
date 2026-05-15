@@ -932,7 +932,7 @@ const App: React.FC = () => {
   const handleNavigateToProject = (projectId: string) => {
     setInitialProjectId(projectId);
     setView('projects');
-    setProjectManagerViewTab('visual');
+    setProjectManagerViewTab('management');
   };
 
   const handleNavigateToMicroActivity = (projectId: string, microId: string) => {
@@ -1252,10 +1252,7 @@ const App: React.FC = () => {
         )}
         {view === 'projects' && (
           <div className="space-y-6">
-            <div className={`bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-full sm:w-fit overflow-x-auto`}>
-              <button onClick={() => setProjectManagerViewTab('management')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${projectManagerViewTab === 'management' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><GanttChartSquare size={14} /> Gerenciamento</button>
-              <button onClick={() => setProjectManagerViewTab('visual')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${projectManagerViewTab === 'visual' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Workflow size={14} /> Modelo Visual</button>
-            </div>
+
             {projectManagerViewTab === 'management' ? (
               <ProjectsManager 
                 projects={activeProjects} 
