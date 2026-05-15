@@ -202,6 +202,7 @@ export interface Project {
   phases: string[]; // Adicionado
   macroActivities: MacroActivity[];
   team?: string[];
+  sharedWith?: string[]; // IDs of users or names
   deleted?: boolean;
   deletionReason?: string;
   deletionDate?: string;

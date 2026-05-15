@@ -29,6 +29,8 @@ interface ProjectTimelineProps {
   onClearTargetMicroId?: () => void;
   regulatoryStandards: RegulatoryStandard[];
   onOpenRegulatoryModal: (activityName: string) => void;
+  currentUser: TeamMember | null;
+  isAdmin: boolean;
 }
 
 const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ 
@@ -39,9 +41,18 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({
   targetMicroId,
   onClearTargetMicroId,
   regulatoryStandards,
-  onOpenRegulatoryModal
+  onOpenRegulatoryModal,
+  currentUser,
+  isAdmin
 }) => {
   const [editingMicro, setEditingMicro] = useState<string | null>(null);
+
+  const canEditProject = isAdmin || project.responsible === currentUser?.name;
+
+  const canEditMicro = (micro: MicroActivity) => {
+    if (isAdmin || project.responsible === currentUser?.name) return true;
+    return micro.assignee === currentUser?.name;
+  };
   const [isAddingMacroForPhase, setIsAddingMacroForPhase] = useState<string | null>(null);
   const [newMacroNameInput, setNewMacroNameInput] = useState('');
   const [expandedMacros, setExpandedMacros] = useState<Record<string, boolean>>({});
@@ -260,6 +271,8 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({
               newMacroNameInput={newMacroNameInput}
               setNewMacroNameInput={setNewMacroNameInput}
               handleAddMacroActivity={handleAddMacroActivity}
+              canEditProject={canEditProject}
+              canEditMicro={canEditMicro}
             />
           ))}
         </SortableContext>
@@ -289,13 +302,15 @@ interface PhaseSectionProps {
   newMacroNameInput: string;
   setNewMacroNameInput: (val: string) => void;
   handleAddMacroActivity: (phase: string) => void;
+  canEditProject: boolean;
+  canEditMicro: (micro: MicroActivity) => boolean;
 }
 
 const PhaseSection: React.FC<PhaseSectionProps> = ({
   phase, macros, project, onUpdateProject, onOpenDeletionModal, teamMembers, projectAssignees,
   handleMicroUpdate, addMicroActivity, editingMicro, setEditingMicro, expandedMacros, setExpandedMacros,
   regulatoryStandards, onOpenRegulatoryModal, isAddingMacroForPhase, setIsAddingMacroForPhase,
-  newMacroNameInput, setNewMacroNameInput, handleAddMacroActivity
+  newMacroNameInput, setNewMacroNameInput, handleAddMacroActivity, canEditProject, canEditMicro
 }) => {
   const {
     attributes,
@@ -345,6 +360,8 @@ const PhaseSection: React.FC<PhaseSectionProps> = ({
               onToggleExpand={(expanded) => setExpandedMacros(prev => ({ ...prev, [macro.id]: expanded }))}
               regulatoryStandards={regulatoryStandards}
               onOpenRegulatoryModal={onOpenRegulatoryModal}
+              canEditProject={canEditProject}
+              canEditMicro={canEditMicro}
             />
           ))}
         </SortableContext>
@@ -378,12 +395,15 @@ interface MacroRowProps {
   onToggleExpand?: (expanded: boolean) => void;
   regulatoryStandards: RegulatoryStandard[];
   onOpenRegulatoryModal: (activityName: string) => void;
+  canEditProject: boolean;
+  canEditMicro: (micro: MicroActivity) => boolean;
 }
 
 const MacroRow: React.FC<MacroRowProps> = (props) => {
   const { 
     macro, project, onUpdateProject, onOpenDeletionModal, assignees, onMicroUpdate, onAddMicro, editingMicro, onSetEditingMicro,
-    isExpanded: controlledIsExpanded, onToggleExpand, regulatoryStandards, onOpenRegulatoryModal
+    isExpanded: controlledIsExpanded, onToggleExpand, regulatoryStandards, onOpenRegulatoryModal,
+    canEditProject, canEditMicro
   } = props;
 
   const {
@@ -532,11 +552,13 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
           )}
         </div>
         <div className="flex items-center gap-4">
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
-                <button onClick={handleAddPrerequisite} className="p-2 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-md" title="Adicionar Pré-requisito"><ListTodo size={16}/></button>
-                <button onClick={() => setIsEditing(true)} className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-md"><Edit size={16}/></button>
-                <button onClick={() => onOpenDeletionModal({ type: 'macro', ids: { projectId: project.id, macroId: macro.id }, name: macro.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"><Trash2 size={16}/></button>
-            </div>
+            {canEditProject && (
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
+                    <button onClick={handleAddPrerequisite} className="p-2 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-md" title="Adicionar Pré-requisito"><ListTodo size={16}/></button>
+                    <button onClick={() => setIsEditing(true)} className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-md"><Edit size={16}/></button>
+                    <button onClick={() => onOpenDeletionModal({ type: 'macro', ids: { projectId: project.id, macroId: macro.id }, name: macro.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"><Trash2 size={16}/></button>
+                </div>
+            )}
             <div className="flex items-center gap-2">
                 {macro.prerequisites && macro.prerequisites.length > 0 && (
                     <button 
@@ -651,10 +673,12 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
             strategy={verticalListSortingStrategy}
           >
             {macro.microActivities.map(micro => (
-              <MicroActivityRow key={micro.id} micro={micro} assignees={assignees} onUpdate={(updates) => onMicroUpdate(macro.id, micro.id, updates)} onDelete={() => onOpenDeletionModal({ type: 'micro', ids: { projectId: project.id, macroId: macro.id, microId: micro.id }, name: micro.name })} isEditing={editingMicro === micro.id} onSetEditing={onSetEditingMicro} regulatoryStandards={regulatoryStandards} onOpenRegulatoryModal={onOpenRegulatoryModal}/>
+              <MicroActivityRow key={micro.id} micro={micro} assignees={assignees} onUpdate={(updates) => onMicroUpdate(macro.id, micro.id, updates)} onDelete={() => onOpenDeletionModal({ type: 'micro', ids: { projectId: project.id, macroId: macro.id, microId: micro.id }, name: micro.name })} isEditing={editingMicro === micro.id} onSetEditing={onSetEditingMicro} regulatoryStandards={regulatoryStandards} onOpenRegulatoryModal={onOpenRegulatoryModal} canEdit={canEditMicro(micro)}/>
             ))}
           </SortableContext>
-          <button onClick={() => onAddMicro(macro.id)} className="w-full mt-2 p-3 bg-slate-50 text-slate-500 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition"><Plus size={14}/> Adicionar Microatividade</button>
+          {canEditProject && (
+              <button onClick={() => onAddMicro(macro.id)} className="w-full mt-2 p-3 bg-slate-50 text-slate-500 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition"><Plus size={14}/> Adicionar Microatividade</button>
+          )}
         </div>
       )}
     </div>
@@ -816,9 +840,10 @@ interface MicroActivityRowProps {
   assignees: string[];
   regulatoryStandards: RegulatoryStandard[];
   onOpenRegulatoryModal: (name: string) => void;
+  canEdit: boolean;
 }
 
-const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, onDelete, isEditing, onSetEditing, assignees, regulatoryStandards, onOpenRegulatoryModal }) => {
+const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, onDelete, isEditing, onSetEditing, assignees, regulatoryStandards, onOpenRegulatoryModal, canEdit }) => {
     const {
       attributes,
       listeners,
@@ -928,20 +953,20 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
                         </button>
                     )}
                 </div>
-                <button onClick={() => { setLocalName(micro.name); onSetEditing(micro.id); }} className="p-1 text-slate-400 hover:bg-slate-100 rounded-md"><Edit size={14}/></button>
+                {canEdit && <button onClick={() => { setLocalName(micro.name); onSetEditing(micro.id); }} className="p-1 text-slate-400 hover:bg-slate-100 rounded-md"><Edit size={14}/></button>}
             </>)}
         </div>
         <div className="w-full sm:col-span-2">
-          <select value={micro.assignee} onChange={e => onUpdate({ assignee: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600 outline-none">
+          <select disabled={!canEdit} value={micro.assignee} onChange={e => onUpdate({ assignee: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600 outline-none">
             {assignees.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
         </div>
         <div className="w-full sm:col-span-2 relative">
-          <input type="date" value={micro.dueDate} onChange={e => onUpdate({ dueDate: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600 outline-none"/>
+          <input disabled={!canEdit} type="date" value={micro.dueDate} onChange={e => onUpdate({ dueDate: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600 outline-none"/>
           {dueDateStatus && (<div className={`absolute -top-3.5 right-0 text-[8px] font-bold flex items-center gap-1 ${dueDateStatus.color}`}><AlertTriangle size={10} /> {dueDateStatus.text}</div>)}
         </div>
         <div className="w-full sm:col-span-2">
-          <select value={micro.status} onChange={e => onUpdate({ status: e.target.value as MicroActivityStatus })} className={`w-full bg-transparent text-[10px] font-bold outline-none ${
+          <select disabled={!canEdit} value={micro.status} onChange={e => onUpdate({ status: e.target.value as MicroActivityStatus })} className={`w-full bg-transparent text-[10px] font-bold outline-none ${
               micro.status === 'Concluído e aprovado' ? 'text-emerald-600' :
               micro.status === 'Concluído com restrições' ? 'text-amber-600' :
               micro.status === 'A repetir / retrabalho' ? 'text-red-600' : 'text-slate-600'
@@ -973,7 +998,7 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
                    <DollarSign size={14}/>
                </button>
            )}
-           <button onClick={onDelete} className="p-2 text-slate-300 hover:text-red-500 rounded-xl transition"><Trash2 size={14}/></button>
+           {canEdit && <button onClick={onDelete} className="p-2 text-slate-300 hover:text-red-500 rounded-xl transition"><Trash2 size={14}/></button>}
         </div>
       </div>
 
