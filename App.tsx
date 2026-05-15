@@ -24,7 +24,6 @@ import RegulatoryStandardsModal from './components/RegulatoryStandardsModal';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
 import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
-import ProjectHub from './components/ProjectHub';
 import PreSaveConfirmationModal from './components/PreSaveConfirmationModal';
 
 function isEqual(a: any, b: any): boolean {
@@ -67,9 +66,7 @@ const App: React.FC = () => {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const isMobile = windowWidth < 1024;
   
-  const [view, setView] = useState<ViewMode>('projects');
-  const [projectFlowStep, setProjectFlowStep] = useState<'landing' | 'selection' | 'details'>('landing');
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [view, setView] = useState<ViewMode>('dashboard');
   const [isMsalAuthenticated, setIsMsalAuthenticated] = useState(false);
   const [account, setAccount] = useState<AccountInfo | null>(null);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
@@ -1112,12 +1109,8 @@ const App: React.FC = () => {
       <div className={`flex ${isMobile ? 'min-h-screen' : 'h-screen'} bg-slate-100 font-sans ${isMobile ? '' : 'overflow-hidden'} ${isMobile ? 'flex-col' : ''}`}>
       <Sidebar 
         currentView={view} 
-        onViewChange={(v) => { 
-          setView(v); 
-          setIsSidebarOpen(false); 
-          if (v === 'projects') setProjectFlowStep('landing');
-        }} 
-        onGoHome={() => { setView('projects'); setProjectFlowStep('landing'); setIsSidebarOpen(false); }} 
+        onViewChange={(v) => { setView(v); setIsSidebarOpen(false); }} 
+        onGoHome={() => { setView('dashboard'); setIsSidebarOpen(false); }} 
         onLogout={handleLogout} 
         onSwitchProfile={handleSwitchProfile} 
         selectedProfile={selectedProfile} 
@@ -1144,14 +1137,9 @@ const App: React.FC = () => {
               )}
               <div>
                 <h1 className={`${isMobile ? 'text-lg' : 'text-3xl'} font-black text-slate-800 uppercase tracking-tighter leading-none`}>
+                  {view === 'dashboard' && 'Dashboard'}
                   {view === 'tasks' && 'Painel de Atividades'}
-                  {view === 'projects' && (
-                    <>
-                      {projectFlowStep === 'landing' && 'Gerenciador de Projetos'}
-                      {projectFlowStep === 'selection' && 'Selecionar Projeto'}
-                      {projectFlowStep === 'details' && (projects.find(p => p.id === selectedProjectId)?.name || 'Detalhes do Projeto')}
-                    </>
-                  )}
+                  {view === 'projects' && 'Gerenciador de Projetos'}
                   {view === 'quality' && 'Controle de Acesso'}
                   {view === 'traceability' && 'Auditoria'}
                   {view === 'regulatory' && 'Normas Regulatórias'}
@@ -1192,6 +1180,15 @@ const App: React.FC = () => {
             </div>
         </header>
 
+        {view === 'dashboard' && (
+          <div className="space-y-6">
+            <div className={`bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-full sm:w-fit overflow-x-auto`}>
+              <button onClick={() => setDashboardView('activities')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'activities' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Activity size={14} /> {isMobile ? 'Atividades' : 'Dashboard de Atividades'}</button>
+              <button onClick={() => setDashboardView('projects')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'projects' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><FolderKanban size={14} /> {isMobile ? 'Projetos' : 'Dashboard de Projetos'}</button>
+            </div>
+            {dashboardView === 'activities' ? (<Dashboard tasks={tasks} projects={activeProjects} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />) : (<ProjectsDashboard projects={activeProjects} tasks={tasks} filteredUser={filterMember} onNavigateToProject={handleNavigateToProject}/>)}
+          </div>
+        )}
         {view === 'tasks' && (
           <div className="space-y-6">
             <div className={`bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-full sm:w-fit overflow-x-auto`}>
@@ -1254,24 +1251,39 @@ const App: React.FC = () => {
           </div>
         )}
         {view === 'projects' && (
-          <ProjectHub 
-            projects={activeProjects} 
-            onUpdateProjects={(p) => { setProjects(p); setDataDirty(); }} 
-            activityPlans={activityPlans} 
-            onUpdateActivityPlans={(ap) => { setActivityPlans(ap); setDataDirty(); }} 
-            onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} 
-            teamMembers={teamMembers} 
-            appUsers={appUsers}
-            currentUserRole={currentUserRole} 
-            tasks={tasks}
-            regulatoryStandards={regulatoryStandards}
-            onOpenRegulatoryModal={openRegulatoryModal}
-            currentUser={selectedProfile}
-            step={projectFlowStep}
-            onStepChange={setProjectFlowStep}
-            selectedProjectId={selectedProjectId}
-            onSelectProject={setSelectedProjectId}
-          />
+          <div className="space-y-6">
+            <div className={`bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-full sm:w-fit overflow-x-auto`}>
+              <button onClick={() => setProjectManagerViewTab('management')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${projectManagerViewTab === 'management' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><GanttChartSquare size={14} /> Gerenciamento</button>
+              <button onClick={() => setProjectManagerViewTab('visual')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${projectManagerViewTab === 'visual' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Workflow size={14} /> Modelo Visual</button>
+            </div>
+            {projectManagerViewTab === 'management' ? (
+              <ProjectsManager 
+                projects={activeProjects} 
+                onUpdateProjects={(p) => { setProjects(p); setDataDirty(); }} 
+                activityPlans={activityPlans} 
+                onUpdateActivityPlans={(ap) => { setActivityPlans(ap); setDataDirty(); }} 
+                onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} 
+                teamMembers={teamMembers} 
+                currentUserRole={currentUserRole} 
+                initialProjectId={initialProjectId} 
+                targetMicroId={targetMicroId}
+                onClearTargetMicroId={() => setTargetMicroId(null)}
+                regulatoryStandards={regulatoryStandards}
+                onOpenRegulatoryModal={openRegulatoryModal}
+                currentUser={selectedProfile}
+              />
+            ) : (
+              <ProjectsVisualBoard 
+                projects={activeProjects} 
+                onUpdateProjects={setProjects} 
+                initialProjectId={initialProjectId} 
+                onClearInitialProjectId={() => setInitialProjectId(null)} 
+                onNavigateToMicroActivity={handleNavigateToMicroActivity}
+                regulatoryStandards={regulatoryStandards}
+                onOpenRegulatoryModal={openRegulatoryModal}
+              />
+            )}
+          </div>
         )}
         {view === 'quality' && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={(tm) => { setTeamMembers(tm); setDataDirty(); }} appUsers={appUsers} onUpdateAppUsers={(u) => { setAppUsers(u); setDataDirty(); }} />}
         {view === 'traceability' && <ActivityLogView logs={logs} onRestoreItem={handleRestoreItem} onClearLog={handleClearLog} onClearAllLogs={handleClearAllLogs} />}
