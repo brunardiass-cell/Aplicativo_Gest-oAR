@@ -170,6 +170,7 @@ export interface MicroActivity {
   id: string;
   name: string;
   assignee: string;
+  startDate?: string;
   dueDate: string;
   status: MicroActivityStatus; // Alterado de Status
   observations: string;

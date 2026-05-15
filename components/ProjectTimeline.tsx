@@ -170,6 +170,7 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({
       id: 'micro_' + Math.random().toString(36).substr(2, 9),
       name: 'Nova Microatividade',
       assignee: projectAssignees[0] || '',
+      startDate: new Date().toISOString().split('T')[0],
       dueDate: new Date().toISOString().split('T')[0],
       status: 'Planejado',
       observations: '',
@@ -942,6 +943,11 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
           </select>
         </div>
         <div className="w-full sm:col-span-2 relative">
+          <label className="text-[8px] font-black text-slate-400 uppercase block mb-1">Início</label>
+          <input type="date" value={micro.startDate || micro.dueDate} onChange={e => onUpdate({ startDate: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600 outline-none"/>
+        </div>
+        <div className="w-full sm:col-span-2 relative">
+          <label className="text-[8px] font-black text-slate-400 uppercase block mb-1">Término</label>
           <input type="date" value={micro.dueDate} onChange={e => onUpdate({ dueDate: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600 outline-none"/>
           {dueDateStatus && (<div className={`absolute -top-3.5 right-0 text-[8px] font-bold flex items-center gap-1 ${dueDateStatus.color}`}><AlertTriangle size={10} /> {dueDateStatus.text}</div>)}
         </div>

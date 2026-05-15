@@ -18,6 +18,7 @@ import ProjectTimeline from './ProjectTimeline';
 import ProjectKanbanView from './ProjectKanbanView';
 import ProjectFlowView from './ProjectFlowView';
 import RegulatoryChecklistModal from './RegulatoryChecklistModal';
+import ProjectGanttView from './ProjectGanttView';
 
 interface ProjectsManagerProps {
   projects: Project[];
@@ -51,7 +52,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   currentUser
 }) => {
   const [viewMode, setViewMode] = useState<'initial' | 'selection' | 'dashboard'>('initial');
-  const [projectDetailView, setProjectDetailView] = useState<'dashboard' | 'timeline' | 'kanban' | 'phases'>('dashboard');
+  const [projectDetailView, setProjectDetailView] = useState<'dashboard' | 'timeline' | 'kanban' | 'phases' | 'gantt'>('dashboard');
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
@@ -450,8 +451,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
   return (
     <div className="space-y-8 project-manager-container animate-in fade-in duration-500">
-      <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-2">
+      <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col gap-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-50 pb-6">
           <div className="flex items-center gap-3">
             <button onClick={() => setViewMode('selection')} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition">
               <X size={18} />
@@ -460,35 +461,40 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
               <Activity size={10} /> Dashboard do Projeto
             </div>
           </div>
+          <div className="flex gap-1.5 bg-slate-50 p-1 rounded-2xl border border-slate-100 shadow-sm">
+             <button onClick={() => setProjectDetailView('dashboard')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'dashboard' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
+               <LayoutDashboard size={12} /> Dashboard
+             </button>
+             <button onClick={() => setProjectDetailView('gantt')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'gantt' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
+               <GanttChartSquare size={12} /> Gantt
+             </button>
+             <button onClick={() => setProjectDetailView('timeline')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'timeline' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
+               <Clock size={12} /> Timeline
+             </button>
+             <button onClick={() => setProjectDetailView('kanban')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'kanban' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
+               <Kanban size={12} /> Kanban
+             </button>
+             <button onClick={() => setProjectDetailView('phases')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'phases' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
+               <LayoutGrid size={12} /> Fases
+             </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-0.5">
             <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">{selectedProject?.name}</h1>
             <p className="text-slate-400 font-bold uppercase text-[9px] tracking-widest leading-tight">Responsável: {selectedProject?.responsible || 'Não definido'}</p>
           </div>
-        </div>
 
-        <div className="flex flex-col items-center gap-1 min-w-[200px]">
-          <div className="w-full flex justify-between items-end">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Progresso Total</span>
-            <span className="text-2xl font-black text-slate-900 tracking-tighter">{Math.round(projectStats?.progress || 0)}%</span>
+          <div className="flex flex-col items-center gap-1 min-w-[200px]">
+            <div className="w-full flex justify-between items-end">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Progresso Total</span>
+              <span className="text-2xl font-black text-slate-900 tracking-tighter">{Math.round(projectStats?.progress || 0)}%</span>
+            </div>
+            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner p-0.5">
+              <div className="h-full bg-brand-primary rounded-full shadow-lg transition-all duration-1000" style={{ width: `${projectStats?.progress}%` }}></div>
+            </div>
           </div>
-          <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner p-0.5">
-            <div className="h-full bg-brand-primary rounded-full shadow-lg transition-all duration-1000" style={{ width: `${projectStats?.progress}%` }}></div>
-          </div>
-        </div>
-
-        <div className="flex gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
-           <button onClick={() => setProjectDetailView('dashboard')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'dashboard' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
-             <LayoutDashboard size={12} /> Dashboard
-           </button>
-           <button onClick={() => setProjectDetailView('timeline')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'timeline' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
-             <GanttChartSquare size={12} /> Timeline
-           </button>
-           <button onClick={() => setProjectDetailView('kanban')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'kanban' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
-             <Kanban size={12} /> Kanban
-           </button>
-           <button onClick={() => setProjectDetailView('phases')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'phases' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
-             <LayoutGrid size={12} /> Fases
-           </button>
         </div>
       </div>
 
@@ -596,7 +602,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-slate-50 pb-6 gap-4">
                <div className="flex items-center gap-4">
                  <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
-                   {projectDetailView === 'timeline' && <><GanttChartSquare size={20} className="text-brand-primary"/> Linha do Tempo</>}
+                   {projectDetailView === 'gantt' && <><GanttChartSquare size={20} className="text-brand-primary"/> Visualização Gantt</>}
+                   {projectDetailView === 'timeline' && <><Clock size={20} className="text-brand-primary"/> Linha do Tempo</>}
                    {projectDetailView === 'kanban' && <><Kanban size={20} className="text-brand-primary"/> Kanban do Projeto</>}
                    {projectDetailView === 'phases' && <><LayoutGrid size={20} className="text-brand-primary"/> Fluxo de Fases</>}
                  </h2>
@@ -609,6 +616,13 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                </div>
              </div>
 
+             {projectDetailView === 'gantt' && selectedProject && (
+               <ProjectGanttView 
+                 project={selectedProject} 
+                 onUpdateProject={handleUpdateProject} 
+                 teamMembers={teamMembers}
+               />
+             )}
              {projectDetailView === 'timeline' && selectedProject && (
                <ProjectTimeline 
                  project={selectedProject} 
