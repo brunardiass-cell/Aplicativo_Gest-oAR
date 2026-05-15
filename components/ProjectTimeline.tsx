@@ -720,17 +720,22 @@ const MacroActivityResultsModal: React.FC<MacroActivityResultsModalProps> = ({
         </header>
 
         <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-          <div className="space-y-3">
-             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-               <ListTodo size={14}/> Resultado Esperado
-             </label>
+          <div className="space-y-4">
+             <div className="flex items-center justify-between">
+               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                 <ListTodo size={14}/> Resultado Esperado / Comprovação
+               </label>
+               <span className="text-[9px] font-bold text-slate-400 uppercase italic">Cadastrado no plano e preenchido no projeto</span>
+             </div>
+             
              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
                 <textarea 
                   value={macro.expectedResults || ''}
                   onChange={e => onUpdate({ expectedResults: e.target.value })}
-                  placeholder="Defina o resultado esperado..."
-                  className="w-full bg-transparent text-xs font-bold text-slate-600 leading-relaxed italic border-none focus:ring-0 p-0 min-h-[60px] resize-none"
+                  placeholder="Descreva o resultado alcançado ou detalhes da comprovação..."
+                  className="w-full bg-transparent text-xs font-bold text-slate-600 leading-relaxed italic border-none focus:ring-0 p-0 min-h-[80px] resize-none text-justify"
                 />
+                
                 <div className="pt-2 border-t border-slate-200">
                   <label className="flex items-center gap-3 cursor-pointer group">
                     <input 
@@ -739,7 +744,7 @@ const MacroActivityResultsModal: React.FC<MacroActivityResultsModalProps> = ({
                       onChange={e => setFulfilled(e.target.checked)}
                       className="w-5 h-5 rounded-lg border-slate-300 text-emerald-500 focus:ring-emerald-500 transition"
                     />
-                    <span className="text-sm font-black text-slate-800 uppercase tracking-tight group-hover:text-emerald-600 transition">Confirmo que os resultados foram cumpridos</span>
+                    <span className="text-sm font-black text-slate-800 uppercase tracking-tight group-hover:text-emerald-600 transition">Confirmo o cumprimento integral deste resultado</span>
                   </label>
                 </div>
              </div>

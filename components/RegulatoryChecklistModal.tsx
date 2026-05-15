@@ -149,7 +149,7 @@ const RegulatoryChecklistModal: React.FC<RegulatoryChecklistModalProps> = ({
                       className="w-full bg-transparent border-none p-0 text-sm font-bold text-slate-700 focus:ring-0"
                     />
                   ) : (
-                    <p className={`text-sm font-bold transition-all ${item.completed ? 'text-emerald-900 line-through opacity-60' : 'text-slate-700'}`}>
+                    <p className={`text-sm font-bold transition-all text-justify ${item.completed ? 'text-emerald-900 line-through opacity-60' : 'text-slate-700'}`}>
                       {item.item}
                     </p>
                   )}
