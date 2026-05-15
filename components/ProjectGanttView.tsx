@@ -19,6 +19,7 @@ const HEADER_HEIGHT = 60;
 
 const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdateProject, teamMembers }) => {
   const [viewScale, setViewScale] = useState<'days' | 'weeks' | 'months'>('months');
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [showBaseline, setShowBaseline] = useState(false);
   const [expandedMacros, setExpandedMacros] = useState<Record<string, boolean>>(() => {
@@ -29,64 +30,91 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
 
   const timelineRef = useRef<HTMLDivElement>(null);
 
-  // Get date range for the project
-  const dateRange = useMemo(() => {
-    let minDate = new Date();
-    let maxDate = new Date();
+  // Get date range for the current view based on scale
+  const viewRange = useMemo(() => {
+    const start = new Date(currentDate);
+    const end = new Date(currentDate);
     
-    let hasDates = false;
-    project.macroActivities.forEach(macro => {
-      macro.microActivities.forEach(micro => {
-        const start = new Date(micro.startDate || micro.dueDate);
-        const end = new Date(micro.dueDate);
-        
-        if (!hasDates) {
-          minDate = new Date(start);
-          maxDate = new Date(end);
-          hasDates = true;
-        } else {
-          if (start < minDate) minDate = new Date(start);
-          if (end > maxDate) maxDate = new Date(end);
-        }
-      });
-    });
-
-    // Padding
-    minDate.setMonth(minDate.getMonth() - 1);
-    maxDate.setMonth(maxDate.setMonth(maxDate.getMonth() + 4));
+    if (viewScale === 'months') {
+      start.setMonth(start.getMonth() - 2);
+      start.setDate(1);
+      end.setMonth(end.getMonth() + 10);
+      end.setDate(1);
+    } else if (viewScale === 'weeks') {
+      start.setDate(start.getDate() - start.getDay() - 14); // 2 weeks back
+      end.setDate(start.getDate() + 70); // ~10 weeks forward
+    } else {
+      start.setDate(start.getDate() - 10); // 10 days back
+      end.setDate(start.getDate() + 30); // 30 days forward
+    }
     
-    // Normalize to first of month
-    minDate.setDate(1);
-    maxDate.setDate(1);
+    return { start, end };
+  }, [currentDate, viewScale]);
 
-    return { start: minDate, end: maxDate };
-  }, [project]);
-
-  const months = useMemo(() => {
+  const columns = useMemo(() => {
     const list = [];
-    const current = new Date(dateRange.start);
-    while (current <= dateRange.end) {
-      list.push(new Date(current));
-      current.setMonth(current.getMonth() + 1);
+    const current = new Date(viewRange.start);
+    
+    if (viewScale === 'months') {
+      while (current <= viewRange.end) {
+        list.push(new Date(current));
+        current.setMonth(current.getMonth() + 1);
+      }
+    } else if (viewScale === 'weeks') {
+      while (current <= viewRange.end) {
+        list.push(new Date(current));
+        current.setDate(current.getDate() + 7);
+      }
+    } else {
+      while (current <= viewRange.end) {
+        list.push(new Date(current));
+        current.setDate(current.getDate() + 1);
+      }
     }
     return list;
-  }, [dateRange]);
+  }, [viewRange, viewScale]);
+
+  const columnWidth = viewScale === 'days' ? 60 : viewScale === 'weeks' ? 100 : 120;
 
   const getPosition = (dateStr: string) => {
     const date = new Date(dateStr);
-    const startOfProject = dateRange.start;
+    const startOfView = viewRange.start;
     
-    const diffMonths = (date.getFullYear() - startOfProject.getFullYear()) * 12 + (date.getMonth() - startOfProject.getMonth());
-    const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-    const dayProgress = (date.getDate() - 1) / daysInMonth;
-    
-    return (diffMonths + dayProgress) * COLUMN_WIDTH;
+    if (viewScale === 'months') {
+      const diffMonths = (date.getFullYear() - startOfView.getFullYear()) * 12 + (date.getMonth() - startOfView.getMonth());
+      const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+      const dayProgress = (date.getDate() - 1) / daysInMonth;
+      return (diffMonths + dayProgress) * columnWidth;
+    } else if (viewScale === 'weeks') {
+      const diffDays = (date.getTime() - startOfView.getTime()) / (1000 * 60 * 60 * 24);
+      return (diffDays / 7) * columnWidth;
+    } else {
+      const diffDays = (date.getTime() - startOfView.getTime()) / (1000 * 60 * 60 * 24);
+      return diffDays * columnWidth;
+    }
   };
 
   const getWidth = (startDateStr: string, dueDateStr: string) => {
     const start = getPosition(startDateStr);
     const end = getPosition(dueDateStr);
-    return Math.max(end - start, 10); // Minimum width
+    return Math.max(end - start, 8);
+  };
+
+  const navigate = (direction: 'prev' | 'next' | 'today') => {
+    if (direction === 'today') {
+      setCurrentDate(new Date());
+      return;
+    }
+    
+    const newDate = new Date(currentDate);
+    if (viewScale === 'months') {
+      newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
+    } else if (viewScale === 'weeks') {
+      newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7));
+    } else {
+      newDate.setDate(newDate.getDate() + (direction === 'next' ? 1 : -1));
+    }
+    setCurrentDate(newDate);
   };
 
   const selectedActivity = useMemo(() => {
@@ -106,32 +134,61 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
   return (
     <div className="flex flex-col h-[700px] bg-white rounded-3xl border border-slate-200 overflow-hidden font-sans">
       {/* Gantt Header */}
-      <div className="border-b border-slate-100 p-4 flex flex-wrap items-center justify-between gap-4 bg-slate-50/50">
-        <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-slate-200">
-          {(['days', 'weeks', 'months'] as const).map(scale => (
-            <button
-              key={scale}
-              onClick={() => setViewScale(scale)}
-              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewScale === scale ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+      <div className="border-b border-slate-100 p-4 flex flex-wrap items-center justify-between gap-4 bg-white">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100">
+            {(['days', 'weeks', 'months'] as const).map(scale => (
+              <button
+                key={scale}
+                onClick={() => setViewScale(scale)}
+                className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${viewScale === scale ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                {scale === 'days' ? 'Dias' : scale === 'weeks' ? 'Semanas' : 'Meses'}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => navigate('today')}
+              className="px-4 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition"
             >
-              {scale === 'days' ? 'Dias' : scale === 'weeks' ? 'Semanas' : 'Meses'}
+              Hoje
             </button>
-          ))}
+            <div className="flex items-center gap-1">
+              <button onClick={() => navigate('prev')} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition">
+                <ChevronLeft size={16} />
+              </button>
+              <button onClick={() => navigate('next')} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 transition">
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="h-8 w-px bg-slate-200" />
-          <button className="p-2 text-slate-400 hover:bg-white hover:text-slate-600 rounded-lg border border-transparent hover:border-slate-200 transition">
-            <Filter size={18} />
-          </button>
-          
+        <div className="flex-1 flex justify-center">
+          <div className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+            {viewRange.start.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })} 
+            <span className="text-slate-300">-</span>
+            {viewRange.end.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Linha de base</span>
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Linha de base</span>
             <button 
               onClick={() => setShowBaseline(!showBaseline)}
-              className={`w-10 h-5 rounded-full transition-colors relative ${showBaseline ? 'bg-emerald-500' : 'bg-slate-300'}`}
+              className={`w-9 h-5 rounded-full transition-colors relative ${showBaseline ? 'bg-emerald-500' : 'bg-slate-200'}`}
             >
-              <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${showBaseline ? 'left-6' : 'left-1'}`} />
+              <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm ${showBaseline ? 'left-5' : 'left-1'}`} />
+            </button>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtros</span>
+            <button className="p-1.5 text-slate-400 hover:bg-slate-50 rounded-lg transition">
+              <Filter size={16} />
             </button>
           </div>
         </div>
@@ -139,16 +196,16 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
 
       <div className="flex flex-1 overflow-hidden relative">
         {/* Left Side: Activity List */}
-        <div className="w-[350px] border-r border-slate-100 flex flex-col bg-white shrink-0 z-20 shadow-xl shadow-slate-900/5">
-          <div className="h-[60px] border-b border-slate-100 flex items-center px-6">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Macroatividade / Responsável</span>
+        <div className="w-[350px] border-r border-slate-100 flex flex-col bg-white shrink-0 z-20">
+          <div className="h-[50px] border-b border-slate-100 flex items-center px-6 justify-between bg-slate-50/30">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Macroatividade</span>
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Responsável</span>
           </div>
           <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
             {project.macroActivities.map((macro, macroIdx) => (
               <React.Fragment key={macro.id}>
-                {/* Macro Row */}
                 <div 
-                  className={`h-[48px] flex items-center px-4 gap-2 hover:bg-slate-50 cursor-pointer transition-colors group ${selectedActivityId === macro.id ? 'bg-slate-50' : ''}`}
+                  className={`h-[48px] flex items-center px-4 gap-2 hover:bg-slate-50 cursor-pointer transition-colors group border-b border-slate-50 ${selectedActivityId === macro.id ? 'bg-slate-50' : ''}`}
                   onClick={() => setSelectedActivityId(macro.id)}
                 >
                   <button 
@@ -157,22 +214,21 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
                   >
                     {expandedMacros[macro.id] ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
                   </button>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-black text-slate-900 uppercase truncate tracking-tight">{macroIdx + 1}. {macro.name}</p>
-                    <p className="text-[9px] font-bold text-slate-400 truncate">{project.responsible}</p>
+                  <div className="flex-1 flex justify-between items-center min-w-0">
+                    <p className="text-[10px] font-black text-slate-900 uppercase truncate tracking-tight">{macroIdx + 1}. {macro.name}</p>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase whitespace-nowrap ml-2">{project.responsible}</p>
                   </div>
                 </div>
                 
-                {/* Micro Rows */}
                 {expandedMacros[macro.id] && macro.microActivities.map((micro, microIdx) => (
                   <div 
                     key={micro.id}
-                    className={`h-[48px] flex items-center pl-10 pr-4 gap-2 hover:bg-slate-50 cursor-pointer transition-colors group ${selectedActivityId === micro.id ? 'bg-slate-50 border-r-2 border-brand-primary' : ''}`}
+                    className={`h-[48px] flex items-center pl-10 pr-4 gap-2 hover:bg-slate-50 cursor-pointer transition-colors group border-b border-slate-50 ${selectedActivityId === micro.id ? 'bg-slate-50 border-r-2 border-brand-primary' : ''}`}
                     onClick={() => setSelectedActivityId(micro.id)}
                   >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-bold text-slate-600 truncate">{macroIdx + 1}.{microIdx + 1} {micro.name}</p>
-                      <p className="text-[9px] text-slate-400 truncate font-medium">{micro.assignee}</p>
+                    <div className="flex-1 flex justify-between items-center min-w-0">
+                      <p className="text-[10px] font-bold text-slate-500 truncate">{macroIdx + 1}.{microIdx + 1} {micro.name}</p>
+                      <p className="text-[9px] text-slate-400 truncate font-bold uppercase ml-2">{micro.assignee}</p>
                     </div>
                   </div>
                 ))}
@@ -184,37 +240,42 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
         {/* Right Side: Chart */}
         <div className="flex-1 overflow-auto custom-scrollbar relative" ref={timelineRef}>
           {/* Chart Header */}
-          <div className="sticky top-0 h-[60px] bg-white border-b border-slate-100 flex z-10">
-            {months.map((month, i) => (
+          <div className="sticky top-0 h-[50px] bg-white border-b border-slate-100 flex z-10">
+            {columns.map((date, i) => (
               <div 
                 key={i} 
-                className="flex-shrink-0 border-r border-slate-100 px-4 py-2 flex flex-col justify-end"
-                style={{ width: COLUMN_WIDTH }}
+                className="flex-shrink-0 border-r border-slate-100 px-3 py-2 flex flex-col justify-end items-center bg-slate-50/30"
+                style={{ width: columnWidth }}
               >
-                <span className="text-[10px] font-black text-slate-900 uppercase tracking-tighter">
-                  {month.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')} {month.getFullYear()}
+                <span className="text-[9px] font-black text-slate-900 uppercase tracking-tighter">
+                  {viewScale === 'months' 
+                    ? date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase() + ' ' + date.getFullYear()
+                    : viewScale === 'weeks'
+                    ? 'W' + Math.ceil(date.getDate() / 7) + ' ' + date.toLocaleDateString('pt-BR', { month: 'short' }).toUpperCase()
+                    : date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).toUpperCase()}
                 </span>
               </div>
             ))}
           </div>
 
           {/* Grid Rows & Bars */}
-          <div className="relative" style={{ width: months.length * COLUMN_WIDTH }}>
+          <div className="relative" style={{ width: columns.length * columnWidth }}>
             {/* Grid Lines */}
             <div className="absolute inset-0 flex pointer-events-none">
-              {months.map((_, i) => (
-                <div key={i} className="flex-shrink-0 border-r border-slate-50" style={{ width: COLUMN_WIDTH }} />
+              {columns.map((_, i) => (
+                <div key={i} className="flex-shrink-0 border-r border-slate-50" style={{ width: columnWidth }} />
               ))}
             </div>
 
             {/* Current Day Marker */}
             <div 
-              className="absolute top-0 bottom-0 w-px bg-emerald-500 z-10 flex flex-col items-center"
+              className="absolute top-0 bottom-0 w-px bg-emerald-500/50 z-10 flex flex-col items-center"
               style={{ left: getPosition(new Date().toISOString()) }}
             >
-              <div className="mt-[-8px] px-2 py-0.5 bg-emerald-600 text-white text-[8px] font-black rounded-full whitespace-nowrap shadow-lg">
+              <div className="mt-2 px-2 py-0.5 bg-emerald-600 text-white text-[8px] font-black rounded-full whitespace-nowrap shadow-sm">
                 HOJE - {new Date().toLocaleDateString('pt-BR')}
               </div>
+              <div className="h-full w-px border-l border-dashed border-emerald-500" />
             </div>
 
             {/* Bars */}
@@ -222,7 +283,6 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
               {project.macroActivities.map((macro) => {
                 const results = [];
                 
-                // Macro bar (summary)
                 const macroStart = macro.microActivities.length > 0 
                   ? macro.microActivities.reduce((min, mi) => {
                       const d = new Date(mi.startDate || mi.dueDate);
@@ -236,45 +296,59 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
                     }, new Date(macro.microActivities[0].dueDate))
                   : new Date();
 
-                results.push(
-                  <div key={macro.id} className="h-[48px] relative border-b border-slate-50 group hover:bg-slate-50/50 transition-colors">
-                    <div 
-                      className="absolute top-4 h-5 bg-slate-200 rounded-full overflow-hidden shadow-inner flex items-center"
-                      style={{ 
-                        left: getPosition(macroStart.toISOString()), 
-                        width: getWidth(macroStart.toISOString(), macroEnd.toISOString()) 
-                      }}
-                    >
+                const isMacroVisible = getPosition(macroEnd.toISOString()) > 0 && getPosition(macroStart.toISOString()) < columns.length * columnWidth;
+
+                if (isMacroVisible) {
+                  results.push(
+                    <div key={macro.id} className="h-[48px] relative border-b border-slate-50 group hover:bg-slate-50/20 transition-colors">
                       <div 
-                        className="h-full bg-slate-800 transition-all duration-1000"
-                        style={{ width: `${project.status === 'Concluído' ? 100 : (macro.microActivities.filter(m => m.status === 'Concluído e aprovado').length / Math.max(1, macro.microActivities.length)) * 100}%` }}
-                      />
+                        className="absolute top-4 h-4 bg-slate-100 rounded-full overflow-hidden flex items-center border border-slate-200"
+                        style={{ 
+                          left: getPosition(macroStart.toISOString()), 
+                          width: getWidth(macroStart.toISOString(), macroEnd.toISOString()) 
+                        }}
+                      >
+                        <div 
+                          className="h-full bg-emerald-600/80 transition-all duration-1000"
+                          style={{ width: `${(macro.microActivities.filter(m => m.status === 'Concluído e aprovado').length / Math.max(1, macro.microActivities.length)) * 100}%` }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                );
+                  );
+                } else {
+                  results.push(<div key={macro.id} className="h-[48px] border-b border-slate-50" />);
+                }
 
                 if (expandedMacros[macro.id]) {
                   macro.microActivities.forEach(micro => {
                     const microStart = micro.startDate || micro.dueDate;
                     const microEnd = micro.dueDate;
                     
+                    const isVisible = getPosition(microEnd) > 0 && getPosition(microStart) < columns.length * columnWidth;
+
                     results.push(
-                      <div key={micro.id} className="h-[48px] relative border-b border-slate-50 group hover:bg-slate-50/50 transition-colors">
-                        <div 
-                          className={`absolute top-4 h-3.5 rounded-full shadow-md flex items-center transition-all ${
-                            micro.status === 'Concluído e aprovado' ? 'bg-emerald-500 shadow-emerald-200' :
-                            micro.status === 'Em andamento' ? 'bg-brand-primary shadow-indigo-200' :
-                            'bg-slate-300'
-                          }`}
-                          style={{ 
-                            left: getPosition(microStart), 
-                            width: getWidth(microStart, microEnd) 
-                          }}
-                        >
-                          <div className="absolute -right-12 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-400 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
-                            {new Date(microEnd).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                      <div key={micro.id} className="h-[48px] relative border-b border-slate-50 group hover:bg-slate-50/20 transition-colors">
+                        {isVisible && (
+                          <div 
+                            className={`absolute top-4.5 h-2.5 rounded-full shadow-sm flex items-center transition-all ${
+                              micro.status === 'Concluído e aprovado' ? 'bg-emerald-500' :
+                              (new Date(micro.dueDate) < new Date()) ? 'bg-rose-500 animate-pulse' :
+                              micro.status === 'Em andamento' ? 'bg-brand-primary' :
+                              'bg-slate-200'
+                            }`}
+                            style={{ 
+                              left: getPosition(microStart), 
+                              width: getWidth(microStart, microEnd) 
+                            }}
+                          >
+                            {micro.progress && micro.progress > 0 && micro.progress < 100 && (
+                              <div className="h-full bg-black/10 rounded-full" style={{ width: `${micro.progress}%` }} />
+                            )}
+                            <div className="absolute -right-16 top-1/2 -translate-y-1/2 text-[8px] font-bold text-slate-400 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+                              {new Date(microEnd).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     );
                   });
