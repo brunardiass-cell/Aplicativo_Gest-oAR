@@ -51,7 +51,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   currentUser
 }) => {
   const [viewMode, setViewMode] = useState<'initial' | 'selection' | 'dashboard'>('initial');
-  const [projectDetailView, setProjectDetailView] = useState<'timeline' | 'kanban' | 'phases'>('timeline');
+  const [projectDetailView, setProjectDetailView] = useState<'dashboard' | 'timeline' | 'kanban' | 'phases'>('dashboard');
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
@@ -171,6 +171,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     onUpdateProjects(updatedProjects);
     setSelectedProject(project);
     setViewMode('dashboard');
+    setProjectDetailView('dashboard');
   };
 
   const handleUpdateProject = (updatedProject: Project) => {
@@ -250,10 +251,19 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     addProject(newProject);
   };
 
-  const filteredProjects = projects.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (p.responsible && p.responsible.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredProjects = useMemo(() => {
+    return projects
+      .filter(p => 
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (p.responsible && p.responsible.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
+      .sort((a, b) => {
+        // Ativos first
+        if (a.status === 'Ativo' && b.status !== 'Ativo') return -1;
+        if (a.status !== 'Ativo' && b.status === 'Ativo') return 1;
+        return 0;
+      });
+  }, [projects, searchTerm]);
 
   const getHealthColor = (score: number) => {
     if (score > 80) return 'text-emerald-500';
@@ -286,7 +296,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                 <LayoutDashboard size={32} />
               </div>
               <div className="space-y-2">
-                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight leading-tight">Selecionar Projeto para Acompanhar</h3>
+                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight leading-tight">Acompanhar projeto</h3>
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Visualize progresso e métricas.</p>
               </div>
             </button>
@@ -338,7 +348,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
             <button onClick={() => setViewMode('initial')} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition">
               <X size={20} />
             </button>
-            <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Selecionar Projeto</h2>
+            <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Acompanhar projeto</h2>
           </div>
           
           <div className="relative flex-1 max-w-md">
@@ -379,6 +389,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                 onClick={() => {
                   setSelectedProject(project);
                   setViewMode('dashboard');
+                  setProjectDetailView('dashboard');
                 }}
                 className="group p-6 bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-brand-primary/30 transition-all text-left space-y-6"
               >
@@ -439,194 +450,199 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
   return (
     <div className="space-y-8 project-manager-container animate-in fade-in duration-500">
-      <div className="flex flex-col xl:flex-row gap-8">
-        <div className="flex-1 space-y-8">
-          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-8">
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <button onClick={() => setViewMode('selection')} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition">
-                  <X size={20} />
-                </button>
-                <div className="flex items-center gap-2 px-3 py-1 bg-brand-primary/10 text-brand-primary rounded-full text-[9px] font-black uppercase tracking-widest">
-                  <Activity size={12} /> Dashboard do Projeto
-                </div>
-              </div>
-              <div className="space-y-1">
-                <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter leading-none">{selectedProject?.name}</h1>
-                <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">Responsável: {selectedProject?.responsible || 'Não definido'}</p>
-              </div>
+      <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setViewMode('selection')} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition">
+              <X size={18} />
+            </button>
+            <div className="flex items-center gap-2 px-2.5 py-0.5 bg-brand-primary/10 text-brand-primary rounded-full text-[8px] font-black uppercase tracking-widest">
+              <Activity size={10} /> Dashboard do Projeto
+            </div>
+          </div>
+          <div className="space-y-0.5">
+            <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">{selectedProject?.name}</h1>
+            <p className="text-slate-400 font-bold uppercase text-[9px] tracking-widest leading-tight">Responsável: {selectedProject?.responsible || 'Não definido'}</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center gap-1 min-w-[200px]">
+          <div className="w-full flex justify-between items-end">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Progresso Total</span>
+            <span className="text-2xl font-black text-slate-900 tracking-tighter">{Math.round(projectStats?.progress || 0)}%</span>
+          </div>
+          <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner p-0.5">
+            <div className="h-full bg-brand-primary rounded-full shadow-lg transition-all duration-1000" style={{ width: `${projectStats?.progress}%` }}></div>
+          </div>
+        </div>
+
+        <div className="flex gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+           <button onClick={() => setProjectDetailView('dashboard')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'dashboard' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
+             <LayoutDashboard size={12} /> Dashboard
+           </button>
+           <button onClick={() => setProjectDetailView('timeline')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'timeline' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
+             <GanttChartSquare size={12} /> Timeline
+           </button>
+           <button onClick={() => setProjectDetailView('kanban')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'kanban' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
+             <Kanban size={12} /> Kanban
+           </button>
+           <button onClick={() => setProjectDetailView('phases')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'phases' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
+             <LayoutGrid size={12} /> Fases
+           </button>
+        </div>
+      </div>
+
+      {projectDetailView === 'dashboard' ? (
+        <div className="flex flex-col xl:flex-row gap-8">
+          <div className="flex-1 space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <MetricCard label="Em Andamento" value={projectStats?.ongoingMicros || 0} icon={<Clock className="text-blue-500" />} subtitle="Atividades ativas" />
+              <MetricCard label="Concluídas" value={projectStats?.completedMicros || 0} icon={<CheckCircle className="text-emerald-500" />} subtitle="Total entregue" />
+              <MetricCard label="Em Atraso" value={projectStats?.lateMicros || 0} icon={<AlertTriangle className="text-red-500" />} subtitle="Requer atenção" color={projectStats?.lateMicros && projectStats.lateMicros > 0 ? 'border-red-200 bg-red-50/30' : ''} />
+              <MetricCard label="Saúde" value={`${projectStats?.health}%`} icon={<TrendingUp className={getHealthColor(projectStats?.health || 0)} />} subtitle="Índice de conformidade" />
             </div>
 
-            <div className="flex flex-col items-center gap-4 min-w-[200px]">
-              <div className="w-full flex justify-between items-end mb-2">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Progresso Total</span>
-                <span className="text-3xl font-black text-slate-900 tracking-tighter">{Math.round(projectStats?.progress || 0)}%</span>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
+                 <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                      <Users2 size={16} /> Carga da Equipe
+                    </h3>
+                 </div>
+                 <div className="h-[250px]">
+                   <ResponsiveContainer width="100%" height="100%">
+                     <BarChart data={projectStats?.teamLoadData} layout="vertical">
+                       <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
+                       <XAxis type="number" hide />
+                       <YAxis dataKey="name" type="category" fontSize={9} fontWeight="black" width={80} axisLine={false} tickLine={false} />
+                       <Tooltip cursor={{fill: '#f8fafc'}} />
+                       <Bar dataKey="count" radius={[0, 8, 8, 0]} barSize={25}>
+                         {projectStats?.teamLoadData.map((_, i) => <Cell key={i} fill={['#6366f1', '#06b6d4', '#2dd4bf', '#fbbf24'][i % 4]} />)}
+                       </Bar>
+                     </BarChart>
+                   </ResponsiveContainer>
+                 </div>
               </div>
-              <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden shadow-inner p-0.5">
-                <div className="h-full bg-brand-primary rounded-full shadow-lg transition-all duration-1000" style={{ width: `${projectStats?.progress}%` }}></div>
-              </div>
-            </div>
 
-            <div className="flex gap-2 bg-slate-50 p-2 rounded-2xl border border-slate-100">
-               <button onClick={() => setProjectDetailView('timeline')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'timeline' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
-                 <GanttChartSquare size={14} /> Timeline
-               </button>
-               <button onClick={() => setProjectDetailView('kanban')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'kanban' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
-                 <Kanban size={14} /> Kanban
-               </button>
-               <button onClick={() => setProjectDetailView('phases')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'phases' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
-                 <LayoutGrid size={14} /> Fases
-               </button>
+              <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
+                 <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                      <PieChart size={16} /> Distribuição por Fase
+                    </h3>
+                 </div>
+                 <div className="h-[250px]">
+                   <ResponsiveContainer width="100%" height="100%">
+                     <RePieChart>
+                       <Pie
+                         data={projectStats?.phaseDistData}
+                         cx="50%"
+                         cy="50%"
+                         innerRadius={60}
+                         outerRadius={80}
+                         paddingAngle={5}
+                         dataKey="value"
+                       >
+                         {projectStats?.phaseDistData.map((_, i) => <Cell key={i} fill={['#6366f1', '#06b6d4', '#2dd4bf', '#fbbf24', '#f472b6'][i % 5]} />)}
+                       </Pie>
+                       <Tooltip />
+                     </RePieChart>
+                   </ResponsiveContainer>
+                 </div>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <MetricCard label="Em Andamento" value={projectStats?.ongoingMicros || 0} icon={<Clock className="text-blue-500" />} subtitle="Atividades ativas" />
-            <MetricCard label="Concluídas" value={projectStats?.completedMicros || 0} icon={<CheckCircle className="text-emerald-500" />} subtitle="Total entregue" />
-            <MetricCard label="Em Atraso" value={projectStats?.lateMicros || 0} icon={<AlertTriangle className="text-red-500" />} subtitle="Requer atenção" color={projectStats?.lateMicros && projectStats.lateMicros > 0 ? 'border-red-200 bg-red-50/30' : ''} />
-            <MetricCard label="Saúde" value={`${projectStats?.health}%`} icon={<TrendingUp className={getHealthColor(projectStats?.health || 0)} />} subtitle="Índice de conformidade" />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
-               <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <Users2 size={16} /> Carga da Equipe
-                  </h3>
+          <div className="w-full xl:w-[350px] space-y-8">
+            <div className="bg-slate-900 text-white p-6 rounded-[2.5rem] shadow-2xl space-y-6">
+               <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                 <Presentation size={14} /> Próximo Marco
                </div>
-               <div className="h-[250px]">
-                 <ResponsiveContainer width="100%" height="100%">
-                   <BarChart data={projectStats?.teamLoadData} layout="vertical">
-                     <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
-                     <XAxis type="number" hide />
-                     <YAxis dataKey="name" type="category" fontSize={9} fontWeight="black" width={80} axisLine={false} tickLine={false} />
-                     <Tooltip cursor={{fill: '#f8fafc'}} />
-                     <Bar dataKey="count" radius={[0, 8, 8, 0]} barSize={25}>
-                       {projectStats?.teamLoadData.map((_, i) => <Cell key={i} fill={['#6366f1', '#06b6d4', '#2dd4bf', '#fbbf24'][i % 4]} />)}
-                     </Bar>
-                   </BarChart>
-                 </ResponsiveContainer>
-               </div>
+               {projectStats?.nextMilestone ? (
+                 <div className="space-y-4">
+                    <h4 className="text-xl font-black uppercase tracking-tighter leading-tight">{(projectStats.nextMilestone as any).name}</h4>
+                    <div className="flex items-center justify-between py-3 border-t border-white/10">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prazo</span>
+                      <span className="text-xs font-bold text-amber-400">{new Date((projectStats.nextMilestone as any).dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                    </div>
+                 </div>
+               ) : (
+                 <p className="text-xs text-slate-500 font-bold italic">Nenhum marco pendente.</p>
+               )}
             </div>
 
-            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
-               <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <PieChart size={16} /> Distribuição por Fase
-                  </h3>
+            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
+               <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-red-500">
+                 <AlertTriangle size={14} /> Alertas Críticos
                </div>
-               <div className="h-[250px]">
-                 <ResponsiveContainer width="100%" height="100%">
-                   <RePieChart>
-                     <Pie
-                       data={projectStats?.phaseDistData}
-                       cx="50%"
-                       cy="50%"
-                       innerRadius={60}
-                       outerRadius={80}
-                       paddingAngle={5}
-                       dataKey="value"
-                     >
-                       {projectStats?.phaseDistData.map((_, i) => <Cell key={i} fill={['#6366f1', '#06b6d4', '#2dd4bf', '#fbbf24', '#f472b6'][i % 5]} />)}
-                     </Pie>
-                     <Tooltip />
-                   </RePieChart>
-                 </ResponsiveContainer>
+               <div className="space-y-4">
+                  {projectStats?.alerts && projectStats.alerts.length > 0 ? projectStats.alerts.map((alert: any) => (
+                    <div key={alert.id} className="p-4 bg-red-50/50 rounded-2xl border border-red-100 space-y-1">
+                      <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-tight line-clamp-1">{alert.name}</h5>
+                      <div className="flex justify-between items-center text-[9px] font-bold">
+                         <span className="text-slate-500">{alert.macroName}</span>
+                         <span className="text-red-600">+{alert.daysLate} dias</span>
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="py-10 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sem alertas críticos</div>
+                  )}
                </div>
             </div>
           </div>
         </div>
-
-        <div className="w-full xl:w-[350px] space-y-8">
-          <div className="bg-slate-900 text-white p-6 rounded-[2.5rem] shadow-2xl space-y-6">
-             <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-slate-400">
-               <Presentation size={14} /> Próximo Marco
-             </div>
-             {projectStats?.nextMilestone ? (
-               <div className="space-y-4">
-                  <h4 className="text-xl font-black uppercase tracking-tighter leading-tight">{(projectStats.nextMilestone as any).name}</h4>
-                  <div className="flex items-center justify-between py-3 border-t border-white/10">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prazo</span>
-                    <span className="text-xs font-bold text-amber-400">{new Date((projectStats.nextMilestone as any).dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
-                  </div>
+      ) : (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-4 sm:p-8">
+             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-slate-50 pb-6 gap-4">
+               <div className="flex items-center gap-4">
+                 <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
+                   {projectDetailView === 'timeline' && <><GanttChartSquare size={20} className="text-brand-primary"/> Linha do Tempo</>}
+                   {projectDetailView === 'kanban' && <><Kanban size={20} className="text-brand-primary"/> Kanban do Projeto</>}
+                   {projectDetailView === 'phases' && <><LayoutGrid size={20} className="text-brand-primary"/> Fluxo de Fases</>}
+                 </h2>
                </div>
-             ) : (
-               <p className="text-xs text-slate-500 font-bold italic">Nenhum marco pendente.</p>
+               <div className="flex gap-2 no-print">
+                 <button onClick={() => setIsChecklistModalOpen(true)} className="p-3 bg-brand-primary/10 text-brand-primary rounded-xl hover:bg-brand-primary/20 transition" title="Checklist Regulatório"><ClipboardCheck size={16}/></button>
+                 <button onClick={handleStartEdit} className="p-3 bg-slate-50 text-slate-500 rounded-xl hover:bg-slate-100 transition"><Edit size={16}/></button>
+                 <button onClick={handlePrint} className="p-3 bg-slate-50 text-slate-500 rounded-xl hover:bg-slate-100 transition"><Printer size={16}/></button>
+                 <button onClick={() => onOpenDeletionModal({ type: 'project', ids: { projectId: selectedProject!.id }, name: selectedProject!.name })} className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition"><Trash2 size={16}/></button>
+               </div>
+             </div>
+
+             {projectDetailView === 'timeline' && selectedProject && (
+               <ProjectTimeline 
+                 project={selectedProject} 
+                 onUpdateProject={handleUpdateProject} 
+                 onOpenDeletionModal={(item) => onOpenDeletionModal(item as any)} 
+                 teamMembers={teamMembers}
+                 targetMicroId={targetMicroId}
+                 onClearTargetMicroId={onClearTargetMicroId}
+                 regulatoryStandards={regulatoryStandards}
+                 onOpenRegulatoryModal={onOpenRegulatoryModal}
+               />
+             )}
+             {projectDetailView === 'kanban' && selectedProject && (
+               <ProjectKanbanView 
+                 project={selectedProject} 
+                 onUpdateProject={handleUpdateProject} 
+                 onNavigateToMicroActivity={(pid, mid) => {
+                   setProjectDetailView('timeline');
+                 }}
+                 regulatoryStandards={regulatoryStandards}
+                 onOpenRegulatoryModal={onOpenRegulatoryModal}
+               />
+             )}
+             {projectDetailView === 'phases' && selectedProject && (
+               <ProjectFlowView 
+                 project={selectedProject} 
+                 onUpdateProject={handleUpdateProject} 
+                 regulatoryStandards={regulatoryStandards} 
+                 onOpenRegulatoryModal={onOpenRegulatoryModal} 
+               />
              )}
           </div>
-
-          <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
-             <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-red-500">
-               <AlertTriangle size={14} /> Alertas Críticos
-             </div>
-             <div className="space-y-4">
-                {projectStats?.alerts && projectStats.alerts.length > 0 ? projectStats.alerts.map((alert: any) => (
-                  <div key={alert.id} className="p-4 bg-red-50/50 rounded-2xl border border-red-100 space-y-1">
-                    <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-tight line-clamp-1">{alert.name}</h5>
-                    <div className="flex justify-between items-center text-[9px] font-bold">
-                       <span className="text-slate-500">{alert.macroName}</span>
-                       <span className="text-red-600">+{alert.daysLate} dias</span>
-                    </div>
-                  </div>
-                )) : (
-                  <div className="py-10 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sem alertas críticos</div>
-                )}
-             </div>
-          </div>
         </div>
-      </div>
-
-      <div className="space-y-6 printable-content">
-        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-4 sm:p-8">
-           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-slate-50 pb-6 gap-4">
-             <div className="flex items-center gap-4">
-               <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
-                 {projectDetailView === 'timeline' && <><GanttChartSquare size={20} className="text-brand-primary"/> Linha do Tempo</>}
-                 {projectDetailView === 'kanban' && <><Kanban size={20} className="text-brand-primary"/> Kanban do Projeto</>}
-                 {projectDetailView === 'phases' && <><LayoutGrid size={20} className="text-brand-primary"/> Fluxo de Fases</>}
-               </h2>
-             </div>
-             <div className="flex gap-2 no-print">
-               <button onClick={() => setIsChecklistModalOpen(true)} className="p-3 bg-brand-primary/10 text-brand-primary rounded-xl hover:bg-brand-primary/20 transition" title="Checklist Regulatório"><ClipboardCheck size={16}/></button>
-               <button onClick={handleStartEdit} className="p-3 bg-slate-50 text-slate-500 rounded-xl hover:bg-slate-100 transition"><Edit size={16}/></button>
-               <button onClick={handlePrint} className="p-3 bg-slate-50 text-slate-500 rounded-xl hover:bg-slate-100 transition"><Printer size={16}/></button>
-               <button onClick={() => onOpenDeletionModal({ type: 'project', ids: { projectId: selectedProject!.id }, name: selectedProject!.name })} className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition"><Trash2 size={16}/></button>
-             </div>
-           </div>
-
-           {projectDetailView === 'timeline' && selectedProject && (
-             <ProjectTimeline 
-               project={selectedProject} 
-               onUpdateProject={handleUpdateProject} 
-               onOpenDeletionModal={(item) => onOpenDeletionModal(item as any)} 
-               teamMembers={teamMembers}
-               targetMicroId={targetMicroId}
-               onClearTargetMicroId={onClearTargetMicroId}
-               regulatoryStandards={regulatoryStandards}
-               onOpenRegulatoryModal={onOpenRegulatoryModal}
-             />
-           )}
-           {projectDetailView === 'kanban' && selectedProject && (
-             <ProjectKanbanView 
-               project={selectedProject} 
-               onUpdateProject={handleUpdateProject} 
-               onNavigateToMicroActivity={(pid, mid) => {
-                 setProjectDetailView('timeline');
-               }}
-               regulatoryStandards={regulatoryStandards}
-               onOpenRegulatoryModal={onOpenRegulatoryModal}
-             />
-           )}
-           {projectDetailView === 'phases' && selectedProject && (
-             <ProjectFlowView 
-               project={selectedProject} 
-               onUpdateProject={handleUpdateProject} 
-               regulatoryStandards={regulatoryStandards} 
-               onOpenRegulatoryModal={onOpenRegulatoryModal} 
-             />
-           )}
-        </div>
-      </div>
+      )}
 
       {isPlanModalOpen && (
         <PlanManagerModal 
