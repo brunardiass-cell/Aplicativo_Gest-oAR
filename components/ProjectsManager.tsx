@@ -19,6 +19,7 @@ import ProjectKanbanView from './ProjectKanbanView';
 import ProjectFlowView from './ProjectFlowView';
 import RegulatoryChecklistModal from './RegulatoryChecklistModal';
 import ProjectGanttView from './ProjectGanttView';
+import ProjectActivityMap from './ProjectActivityMap';
 
 interface ProjectsManagerProps {
   projects: Project[];
@@ -104,13 +105,14 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     const teamLoad: Record<string, number> = {};
     const phaseDist: Record<string, number> = {};
     const alerts: any[] = [];
-    let nextMilestone: MicroActivity | null = null;
+    const allMicros: any[] = [];
     
     selectedProject.macroActivities.forEach(macro => {
       phaseDist[macro.phase] = (phaseDist[macro.phase] || 0) + 1;
       
       macro.microActivities.forEach(micro => {
         totalMicros++;
+        allMicros.push({ ...micro, macroName: macro.name, phase: macro.phase });
         
         // Team load
         if (micro.assignee) {
@@ -135,15 +137,61 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
             daysLate: Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
           });
         }
-
-        // Next milestone (incomplete with earliest due date)
-        if (micro.status !== 'Concluído e aprovado' && dueDate) {
-          if (!nextMilestone || (micro.dueDate && nextMilestone.dueDate && micro.dueDate < nextMilestone.dueDate)) {
-            nextMilestone = micro;
-          }
-        }
       });
     });
+
+    const findStatus = (names: string[]) => {
+      let isStarted = false;
+      let isCompleted = false;
+      let targetMicro: any = null;
+      
+      selectedProject.macroActivities.forEach(macro => {
+        macro.microActivities.forEach(micro => {
+          if (names.some(name => micro.name.toLowerCase().includes(name.toLowerCase()))) {
+            if (micro.status !== 'Planejado') isStarted = true;
+            if (micro.status === 'Concluído e aprovado') isCompleted = true;
+            targetMicro = micro;
+          }
+        });
+      });
+      return { isStarted, isCompleted, micro: targetMicro };
+    };
+
+    const bpl = findStatus(['ensaio de segurança BPL', 'ensaio de seguranca BPL']);
+    const ddcm = findStatus(['submissão do DDCM', 'submissao do DDCM', 'DDCM']);
+    const fase1 = findStatus(['Ensaio Clínico Fase I', 'avaliação do desfecho primário', 'fase 1', 'fase I']);
+    const fase3 = findStatus(['Ensaio Clínico Fase III', 'Fase IIII', 'fase 3', 'fase III']); 
+    const registro = findStatus(['Registro']);
+
+    let milestoneName = "A definir";
+    let milestoneDate = "";
+
+    if (!bpl.isStarted) {
+      milestoneName = "Ensaio de segurança BPL";
+      milestoneDate = bpl.micro?.dueDate || "";
+    } else if (!ddcm.isStarted) {
+      milestoneName = "Submissão do DDCM";
+      milestoneDate = ddcm.micro?.dueDate || "";
+    } else if (!fase1.isCompleted) {
+      milestoneName = "Ensaio Clínico Fase I";
+      milestoneDate = fase1.micro?.dueDate || "";
+    } else if (!fase3.isCompleted) {
+      milestoneName = "Ensaio Clínico Fase III";
+      milestoneDate = fase3.micro?.dueDate || "";
+    } else if (!registro.isCompleted) {
+      milestoneName = "Registro";
+      milestoneDate = registro.micro?.dueDate || "";
+    } else {
+      milestoneName = "Projeto Concluído";
+    }
+
+    const recentActivities = allMicros
+      .sort((a, b) => {
+        const da = a.completionDate || a.dueDate;
+        const db = b.completionDate || b.dueDate;
+        return new Date(db + 'T00:00:00').getTime() - new Date(da + 'T00:00:00').getTime();
+      })
+      .slice(0, 4);
 
     const progress = totalMicros > 0 ? (completedMicros / totalMicros) * 100 : 0;
     
@@ -163,9 +211,13 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
       teamLoadData,
       phaseDistData,
       alerts: alerts.sort((a, b) => b.daysLate - a.daysLate).slice(0, 5),
-      nextMilestone
+      milestoneName,
+      milestoneDate,
+      recentActivities
     };
   }, [selectedProject]);
+
+  const [isActivityMapOpen, setIsActivityMapOpen] = useState(false);
 
   const addProject = (project: Project) => {
     const updatedProjects = [...projects, project];
@@ -291,7 +343,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
             <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.4em]">Selecione uma opção para começar</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <button onClick={() => setViewMode('selection')} className="group p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-brand-primary/30 transition-all flex flex-col items-center gap-6 active:scale-95">
               <div className="p-5 bg-brand-primary text-white rounded-3xl shadow-xl shadow-brand-primary/20 group-hover:scale-110 transition-transform">
                 <LayoutDashboard size={32} />
@@ -312,6 +364,16 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
               </div>
             </button>
 
+            <button onClick={() => setIsActivityMapOpen(true)} className="group p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-indigo-400/30 transition-all flex flex-col items-center gap-6 active:scale-95">
+              <div className="p-5 bg-indigo-500 text-white rounded-3xl shadow-xl shadow-indigo-500/20 group-hover:scale-110 transition-transform">
+                <Workflow size={32} />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight leading-tight">Mapa de Atividades</h3>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Infográfico de implementação.</p>
+              </div>
+            </button>
+
             {isAdmin && (
               <button onClick={() => setIsPlanModalOpen(true)} className="group p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-amber-400/30 transition-all flex flex-col items-center gap-6 active:scale-95">
                 <div className="p-5 bg-amber-500 text-white rounded-3xl shadow-xl shadow-amber-500/20 group-hover:scale-110 transition-transform">
@@ -327,6 +389,12 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
         </div>
 
         {isNewProjectModalOpen && (<NewProjectModal isOpen={isNewProjectModalOpen} onClose={() => setIsNewProjectModalOpen(false)} plans={activityPlans} onAddProject={addProject} teamMembers={teamMembers}/>)}
+        {isActivityMapOpen && (
+          <ProjectActivityMap 
+            templates={activityPlans} 
+            onClose={() => setIsActivityMapOpen(false)} 
+          />
+        )}
         {isPlanModalOpen && (
           <PlanManagerModal 
             isOpen={isPlanModalOpen} 
@@ -505,100 +573,214 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
       </div>
 
       {projectDetailView === 'dashboard' ? (
-        <div className="flex flex-col xl:flex-row gap-8">
-          <div className="flex-1 space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <MetricCard label="Em Andamento" value={projectStats?.ongoingMicros || 0} icon={<Clock className="text-blue-500" />} subtitle="Atividades ativas" />
-              <MetricCard label="Concluídas" value={projectStats?.completedMicros || 0} icon={<CheckCircle className="text-emerald-500" />} subtitle="Total entregue" />
-              <MetricCard label="Em Atraso" value={projectStats?.lateMicros || 0} icon={<AlertTriangle className="text-red-500" />} subtitle="Requer atenção" color={projectStats?.lateMicros && projectStats.lateMicros > 0 ? 'border-red-200 bg-red-50/30' : ''} />
-              <MetricCard label="Saúde" value={`${projectStats?.health}%`} icon={<TrendingUp className={getHealthColor(projectStats?.health || 0)} />} subtitle="Índice de conformidade" />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
-                 <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <Users2 size={16} /> Carga da Equipe
-                    </h3>
-                 </div>
-                 <div className="h-[250px]">
-                   <ResponsiveContainer width="100%" height="100%">
-                     <BarChart data={projectStats?.teamLoadData} layout="vertical">
-                       <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
-                       <XAxis type="number" hide />
-                       <YAxis dataKey="name" type="category" fontSize={9} fontWeight="black" width={80} axisLine={false} tickLine={false} />
-                       <Tooltip cursor={{fill: '#f8fafc'}} />
-                       <Bar dataKey="count" radius={[0, 8, 8, 0]} barSize={25}>
-                         {projectStats?.teamLoadData.map((_, i) => <Cell key={i} fill={['#6366f1', '#06b6d4', '#2dd4bf', '#fbbf24'][i % 4]} />)}
-                       </Bar>
-                     </BarChart>
-                   </ResponsiveContainer>
-                 </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
-                 <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <PieChart size={16} /> Distribuição por Fase
-                    </h3>
-                 </div>
-                 <div className="h-[250px]">
-                   <ResponsiveContainer width="100%" height="100%">
-                     <RePieChart>
-                       <Pie
-                         data={projectStats?.phaseDistData}
-                         cx="50%"
-                         cy="50%"
-                         innerRadius={60}
-                         outerRadius={80}
-                         paddingAngle={5}
-                         dataKey="value"
-                       >
-                         {projectStats?.phaseDistData.map((_, i) => <Cell key={i} fill={['#6366f1', '#06b6d4', '#2dd4bf', '#fbbf24', '#f472b6'][i % 5]} />)}
-                       </Pie>
-                       <Tooltip />
-                     </RePieChart>
-                   </ResponsiveContainer>
-                 </div>
-              </div>
-            </div>
+        <div className="space-y-8">
+          {/* Metrics Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <MetricCard label="Em Andamento" value={projectStats?.ongoingMicros || 0} icon={<Clock className="text-blue-500" />} subtitle="Atividades ativas" />
+            <MetricCard label="Concluídas" value={projectStats?.completedMicros || 0} icon={<CheckCircle className="text-emerald-500" />} subtitle="Total entregue" />
+            <MetricCard label="Em Atraso" value={projectStats?.lateMicros || 0} icon={<AlertTriangle className="text-red-500" />} subtitle="Requer atenção" color={projectStats?.lateMicros && projectStats.lateMicros > 0 ? 'border-red-200 bg-red-50/30' : ''} />
+            <MetricCard label="Saúde" value={`${projectStats?.health}%`} icon={<TrendingUp className={getHealthColor(projectStats?.health || 0)} />} subtitle="Índice de conformidade" />
           </div>
 
-          <div className="w-full xl:w-[350px] space-y-8">
-            <div className="bg-slate-900 text-white p-6 rounded-[2.5rem] shadow-2xl space-y-6">
-               <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-slate-400">
-                 <Presentation size={14} /> Próximo Marco
-               </div>
-               {projectStats?.nextMilestone ? (
-                 <div className="space-y-4">
-                    <h4 className="text-xl font-black uppercase tracking-tighter leading-tight">{(projectStats.nextMilestone as any).name}</h4>
-                    <div className="flex items-center justify-between py-3 border-t border-white/10">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prazo</span>
-                      <span className="text-xs font-bold text-amber-400">{new Date((projectStats.nextMilestone as any).dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-8">
+              {/* Team Load */}
+              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-8">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2">
+                    <Users2 size={16} /> Carga da Equipe
+                  </h3>
+                </div>
+                <div className="h-[280px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={projectStats?.teamLoadData} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
+                      <XAxis type="number" hide />
+                      <YAxis dataKey="name" type="category" fontSize={9} fontWeight="black" width={100} axisLine={false} tickLine={false} />
+                      <Tooltip cursor={{fill: '#f8fafc'}} />
+                      <Bar dataKey="count" radius={[0, 8, 8, 0]} barSize={25}>
+                        {projectStats?.teamLoadData.map((_, i) => <Cell key={i} fill={['#6366f1', '#06b6d4', '#2dd4bf', '#fbbf24'][i % 4]} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Distribution by Phase */}
+              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-8">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2">
+                    <PieChart size={16} /> Distribuição por Fase
+                  </h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                  <div className="h-[250px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RePieChart>
+                        <Pie
+                          data={projectStats?.phaseDistData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={70}
+                          outerRadius={95}
+                          paddingAngle={8}
+                          dataKey="value"
+                        >
+                          {projectStats?.phaseDistData.map((_, i) => <Cell key={i} fill={['#06b6d4', '#6366f1', '#2dd4bf', '#fbbf24', '#818cf8'][i % 5]} />)}
+                        </Pie>
+                        <Tooltip />
+                      </RePieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="space-y-4">
+                    {projectStats?.phaseDistData.map((phase, i) => (
+                      <div key={phase.name} className="flex items-center justify-between">
+                         <div className="flex items-center gap-3">
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ['#06b6d4', '#6366f1', '#2dd4bf', '#fbbf24', '#818cf8'][i % 5] }} />
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{phase.name}</span>
+                         </div>
+                         <div className="flex items-center gap-4">
+                            <span className="text-xs font-black text-slate-900">{Math.round((phase.value / (projectStats?.totalMicros || 1)) * 100)}%</span>
+                            <span className="text-[10px] font-bold text-slate-400">({phase.value})</span>
+                         </div>
+                      </div>
+                    ))}
+                    <div className="pt-6 border-t border-slate-50 flex justify-between items-center text-slate-900">
+                       <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Total</span>
+                       <span className="text-xs font-black uppercase tracking-widest">{projectStats?.totalMicros} Atividades</span>
                     </div>
-                 </div>
-               ) : (
-                 <p className="text-xs text-slate-500 font-bold italic">Nenhum marco pendente.</p>
-               )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Activities */}
+              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-8">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2">
+                    <Clock size={16} /> Atividades Recentes
+                  </h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="text-left border-b border-slate-50">
+                        <th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Atividade</th>
+                        <th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Fase</th>
+                        <th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Responsável</th>
+                        <th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Prazo</th>
+                        <th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {projectStats?.recentActivities.map((activity: any) => (
+                        <tr key={activity.id} className="group">
+                          <td className="py-5">
+                            <div className="flex items-center gap-3">
+                               <div className={`p-2 rounded-xl ${activity.status === 'Concluído e aprovado' ? 'bg-emerald-50 text-emerald-500' : 'bg-blue-50 text-blue-500'}`}>
+                                 {activity.status === 'Concluído e aprovado' ? <CheckCircle size={14}/> : <Clock size={14}/>}
+                               </div>
+                               <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight group-hover:text-brand-primary transition-colors">{activity.name}</span>
+                            </div>
+                          </td>
+                          <td className="py-5 text-center text-[10px] font-bold text-slate-500">{activity.phase}</td>
+                          <td className="py-5 text-center text-[10px] font-black text-slate-700 uppercase tracking-tighter">{activity.assignee}</td>
+                          <td className="py-5 text-center text-[10px] font-bold text-slate-500">{new Date(activity.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                          <td className="py-5 text-right">
+                             <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${activity.status === 'Concluído e aprovado' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
+                               {activity.status.split(' ')[0]}
+                             </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
 
-            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
-               <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-red-500">
-                 <AlertTriangle size={14} /> Alertas Críticos
-               </div>
-               <div className="space-y-4">
+            <div className="space-y-8">
+              {/* Next Milestone */}
+              <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-2xl space-y-8">
+                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                  <Presentation size={14} /> Próximo Marco
+                </div>
+                <div className="space-y-6">
+                  <h4 className="text-3xl font-black uppercase tracking-tighter leading-none">{projectStats?.milestoneName}</h4>
+                  <div className="flex items-center justify-between py-6 border-y border-white/10">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prazo</span>
+                    <span className="text-lg font-black text-amber-400 tracking-tighter">
+                      {projectStats?.milestoneDate ? new Date(projectStats.milestoneDate + 'T00:00:00').toLocaleDateString('pt-BR') : '--/--/----'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Critical Alerts */}
+              <div className="bg-white p-8 rounded-[2.5rem] border border-red-100 shadow-sm space-y-8">
+                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-red-500">
+                  <AlertTriangle size={16} /> Alertas Críticos
+                </div>
+                <div className="space-y-4">
                   {projectStats?.alerts && projectStats.alerts.length > 0 ? projectStats.alerts.map((alert: any) => (
-                    <div key={alert.id} className="p-4 bg-red-50/50 rounded-2xl border border-red-100 space-y-1">
-                      <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-tight line-clamp-1">{alert.name}</h5>
-                      <div className="flex justify-between items-center text-[9px] font-bold">
-                         <span className="text-slate-500">{alert.macroName}</span>
-                         <span className="text-red-600">+{alert.daysLate} dias</span>
-                      </div>
+                    <div key={alert.id} className="p-6 bg-red-50/30 rounded-3xl border border-red-50 group hover:border-red-200 transition-all space-y-2">
+                       <h5 className="text-[11px] font-black text-slate-900 uppercase tracking-tight group-hover:text-red-600 transition-colors">{alert.name}</h5>
+                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{alert.macroName}</p>
+                       <div className="pt-2 flex justify-end">
+                          <span className="text-[11px] font-black text-red-600">+{alert.daysLate} dias</span>
+                       </div>
                     </div>
                   )) : (
-                    <div className="py-10 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sem alertas críticos</div>
+                    <div className="py-12 text-center flex flex-col items-center gap-4">
+                       <div className="p-4 bg-emerald-50 text-emerald-500 rounded-full"><CheckCircle size={32}/></div>
+                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sem alertas críticos no momento</p>
+                    </div>
                   )}
-               </div>
+                </div>
+              </div>
+
+              {/* Project Summary */}
+              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-8">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2">
+                   <Activity size={16}/> Resumo do Projeto
+                </h3>
+                <div className="relative flex flex-col items-center justify-center py-4">
+                   <div className="w-56 h-56 relative flex items-center justify-center">
+                      <svg className="w-full h-full transform -rotate-90">
+                         <circle cx="112" cy="112" r="90" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-slate-50" />
+                         <circle 
+                            cx="112" cy="112" r="90" 
+                            stroke="currentColor" strokeWidth="12" fill="transparent" 
+                            strokeDasharray={2 * Math.PI * 90}
+                            strokeDashoffset={2 * Math.PI * 90 * (1 - (projectStats?.progress || 0) / 100)}
+                            strokeLinecap="round"
+                            className="text-brand-primary transition-all duration-1000" 
+                         />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                         <span className="text-5xl font-black text-slate-900 tracking-tighter">{Math.round(projectStats?.progress || 0)}%</span>
+                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Progresso</span>
+                      </div>
+                   </div>
+                </div>
+                <div className="space-y-4 pt-4 border-t border-slate-50">
+                   <div className="flex justify-between items-center text-[10px] font-bold">
+                      <span className="text-slate-400 uppercase tracking-widest">Total de atividades</span>
+                      <span className="text-slate-900 font-black">{projectStats?.totalMicros}</span>
+                   </div>
+                   <div className="flex justify-between items-center text-[10px] font-bold">
+                      <span className="text-slate-400 uppercase tracking-widest">Concluídas</span>
+                      <span className="text-emerald-500 font-black">{projectStats?.completedMicros}</span>
+                   </div>
+                   <div className="flex justify-between items-center text-[10px] font-bold">
+                      <span className="text-slate-400 uppercase tracking-widest">Em andamento</span>
+                      <span className="text-blue-500 font-black">{projectStats?.ongoingMicros}</span>
+                   </div>
+                   <div className="flex justify-between items-center text-[10px] font-bold">
+                      <span className="text-slate-400 uppercase tracking-widest">Em atraso</span>
+                      <span className="text-red-500 font-black">{projectStats?.lateMicros}</span>
+                   </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
