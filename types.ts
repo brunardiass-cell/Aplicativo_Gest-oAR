@@ -148,6 +148,8 @@ export interface MacroActivityTemplate {
   microActivities?: string[];
   expectedResults?: string;
   resultLinks?: string[];
+  hasDeliverable?: boolean;
+  deliverableType?: string;
 }
 
 export interface RegulatoryChecklistItem {
@@ -201,6 +203,9 @@ export interface MacroActivity {
   resultLinks?: string[];
   resultsFulfilled?: boolean;
   completionExplanation?: string;
+  hasDeliverable?: boolean;
+  deliverableType?: string;
+  isDeliverableRegistered?: boolean;
 }
 
 export interface Project {

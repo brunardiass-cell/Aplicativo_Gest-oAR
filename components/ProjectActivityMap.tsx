@@ -4,7 +4,7 @@ import {
   Microscope, ShieldCheck, Truck, Factory, Search,
   ChevronRight, Workflow, HelpCircle, FileText,
   BadgeAlert, MessageSquare, DollarSign, Users,
-  CheckCircle2, Info, Printer, ChevronDown
+  CheckCircle2, Info, Printer, ChevronDown, AlertTriangle
 } from 'lucide-react';
 import { ActivityPlanTemplate, Project, MicroActivityStatus } from '../types';
 
@@ -31,19 +31,42 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
     return <ClipboardCheck size={22} />;
   };
 
-  const getStatusVisuals = (status: MicroActivityStatus | undefined) => {
+  const getMacroStatus = (macro: any) => {
+    const microActivities = macro.microActivities;
+    if (!microActivities || microActivities.length === 0) return 'Planejado';
+    
+    const statuses = microActivities.map((m: any) => m.status);
+    
+    if (statuses.some((s: string) => s === 'Em andamento')) return 'Em andamento';
+    if (statuses.some((s: string) => s === 'A repetir / retrabalho')) return 'A repetir / retrabalho';
+    
+    const allDone = statuses.every((s: string) => s === 'Concluído e aprovado' || s === 'Concluído com restrições');
+    
+    if (allDone) {
+      const hasRestrictions = statuses.some((s: string) => s === 'Concluído com restrições');
+      const deliverableMissing = macro.hasDeliverable && !macro.isDeliverableRegistered;
+      
+      if (hasRestrictions || deliverableMissing) return 'Concluído com restrições';
+      return 'Concluído e aprovado';
+    }
+    
+    if (statuses.every((s: string) => s === 'Planejado')) return 'Planejado';
+    return 'Em andamento';
+  };
+
+  const getStatusVisuals = (status: string | undefined) => {
     switch (status) {
       case 'Concluído e aprovado':
-        return { icon: <div className="w-4 h-4 bg-emerald-500 rounded flex items-center justify-center text-white text-[8px]"><CheckCircle2 size={10} /></div>, borderColor: 'border-emerald-500', bgColor: 'bg-emerald-50' };
+        return { icon: <div className="w-5 h-5 bg-emerald-500 rounded flex items-center justify-center text-white text-[10px]"><CheckCircle2 size={12} /></div>, borderColor: 'border-emerald-500', bgColor: 'bg-emerald-50' };
       case 'Em andamento':
-        return { icon: <Activity size={14} className="text-blue-500" />, borderColor: 'border-blue-500', bgColor: 'bg-blue-50' };
+        return { icon: <Activity size={16} className="text-blue-500" />, borderColor: 'border-blue-500', bgColor: 'bg-blue-50' };
       case 'Concluído com restrições':
-        return { icon: <BadgeAlert size={14} className="text-cyan-500" />, borderColor: 'border-cyan-500', bgColor: 'bg-cyan-50' };
+        return { icon: <BadgeAlert size={16} className="text-cyan-500" />, borderColor: 'border-cyan-500', bgColor: 'bg-cyan-50' };
       case 'A repetir / retrabalho':
-        return { icon: <div className="w-4 h-4 rounded-full border-2 border-amber-500 flex items-center justify-center text-amber-500"><ChevronDown size={10} /></div>, borderColor: 'border-amber-500', bgColor: 'bg-amber-50' };
+        return { icon: <div className="w-5 h-5 rounded-full border-2 border-amber-500 flex items-center justify-center text-amber-500"><ChevronDown size={12} /></div>, borderColor: 'border-amber-500', bgColor: 'bg-amber-50' };
       case 'Planejado':
       default:
-        return { icon: <div className="w-4 h-4 rounded-full border-2 border-slate-300" />, borderColor: 'border-slate-200', bgColor: 'bg-white' };
+        return { icon: <div className="w-5 h-5 rounded-full border-2 border-slate-300" />, borderColor: 'border-slate-200', bgColor: 'bg-white' };
     }
   };
 
@@ -199,42 +222,46 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
                   <div className="p-8 space-y-6 flex-1 bg-white">
                     {templateMacros.map((macro, mIdx) => {
                       const projectMacro = selectedProject?.macroActivities.find(m => m.name === macro.name && m.phase === phase);
+                      const status = projectMacro ? getMacroStatus(projectMacro) : 'Planejado';
+                      const { icon, borderColor, bgColor } = getStatusVisuals(status);
+                      const deliverableMissing = projectMacro?.hasDeliverable && !projectMacro?.isDeliverableRegistered && status === 'Concluído com restrições';
                       
                       return (
                         <div key={mIdx} className="space-y-4">
-                            <div className="flex items-start gap-4 group/item">
-                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[8px] font-black mt-1 shrink-0 ${styleParts[0]} ${styleParts[2]}`}>
-                                {pIdx + 1}.{mIdx + 1}
-                                </div>
-                                <p className="text-[11px] font-bold text-slate-800 leading-tight">
-                                    {macro.name}
-                                </p>
-                            </div>
-                            
-                            {projectMacro && (
-                                <div className="ml-10 space-y-3">
-                                    {projectMacro.microActivities.map((micro) => {
-                                        const { icon } = getStatusVisuals(micro.status);
-                                        return (
-                                            <div key={micro.id} className="flex items-center gap-3">
-                                                <div className="mt-0.5">{icon}</div>
-                                                <span className="text-[10px] font-medium text-slate-500 leading-tight">{micro.name}</span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-
-                            {!selectedProject && macro.microActivities && (
-                                <div className="ml-10 space-y-3">
-                                    {macro.microActivities.map((micro, idx) => (
-                                        <div key={idx} className="flex items-center gap-3">
-                                            <div className="w-3.5 h-3.5 rounded-full border border-slate-200 mt-1" />
-                                            <span className="text-[10px] font-medium text-slate-300 leading-tight">{micro}</span>
+                            <div className={`p-4 rounded-2xl border-2 transition-all group/item shadow-sm ${borderColor} ${bgColor} flex flex-col gap-3 relative`}>
+                                <div className="flex items-start gap-4">
+                                    <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center text-[10px] font-black mt-0.5 shrink-0 bg-white ${borderColor} ${styleParts[2]}`}>
+                                        {pIdx + 1}.{mIdx + 1}
+                                    </div>
+                                    <div className="flex-1 space-y-1">
+                                        <p className="text-[12px] font-black text-slate-800 leading-tight uppercase tracking-tight">
+                                            {macro.name}
+                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            {icon}
+                                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{status}</span>
                                         </div>
-                                    ))}
+                                    </div>
                                 </div>
-                            )}
+
+                                {deliverableMissing && (
+                                    <div className="ml-12 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg animate-in slide-in-from-top-1">
+                                        <p className="text-[9px] font-bold text-amber-700 leading-tight">
+                                            <AlertTriangle size={10} className="inline mr-1" />
+                                            Entregável ({projectMacro.deliverableType || 'não especificado'}) pendente de registro.
+                                        </p>
+                                    </div>
+                                )}
+
+                                {projectMacro?.hasDeliverable && projectMacro?.isDeliverableRegistered && (
+                                    <div className="ml-12 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2">
+                                        <CheckCircle2 size={10} className="text-emerald-500" />
+                                        <p className="text-[9px] font-black text-emerald-700 uppercase tracking-widest">
+                                            {projectMacro.deliverableType || 'ENTREGÁVEL'} REGISTRADO
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                       );
                     })}
@@ -270,19 +297,15 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-50 pb-4">Legenda de Status</h4>
                 <div className="grid grid-cols-1 gap-4">
                   {[
-                    { label: 'Concluído', icon: <CheckCircle2 size={16} className="text-emerald-500" /> },
-                    { label: 'Concluído e aprovado', icon: <div className="w-4 h-4 bg-emerald-500 rounded flex items-center justify-center text-white text-[8px]"><CheckCircle2 size={10} /></div> },
-                    { label: 'Em andamento', icon: <Activity size={16} className="text-blue-500" /> },
-                    { label: 'Em análise', icon: <div className="w-4 h-4 rounded-full border-2 border-amber-500" /> },
-                    { label: 'Planejado', icon: <div className="w-4 h-4 rounded-full border-2 border-slate-300" /> },
-                    { label: 'Atrasado', icon: <BadgeAlert size={16} className="text-red-500" /> },
-                    { label: 'Bloqueado', icon: <div className="w-4 h-4 rounded-full bg-violet-500 flex items-center justify-center text-white text-[8px] rotate-45"><ArrowRight size={10} /></div> },
-                    { label: 'A repetir / retrabalho', icon: <div className="w-4 h-4 rounded-full border-2 border-amber-500 flex items-center justify-center text-amber-500"><ChevronDown size={10} /></div> },
-                    { label: 'Concluído com restrições', icon: <BadgeAlert size={16} className="text-cyan-500" /> },
+                    { label: 'Planejado', icon: <div className="w-5 h-5 rounded-full border-2 border-slate-300" /> },
+                    { label: 'Em andamento', icon: <Activity size={18} className="text-blue-500" /> },
+                    { label: 'Concluído com restrição', icon: <BadgeAlert size={18} className="text-cyan-500" /> },
+                    { label: 'A repetir', icon: <div className="w-5 h-5 rounded-full border-2 border-amber-500 flex items-center justify-center text-amber-500"><ChevronDown size={12} /></div> },
+                    { label: 'Concluído e aprovado', icon: <div className="w-5 h-5 bg-emerald-500 rounded flex items-center justify-center text-white text-[10px]"><CheckCircle2 size={12} /></div> },
                   ].map(item => (
                     <div key={item.label} className="flex items-center gap-3 group">
                       <div className="group-hover:scale-110 transition-transform">{item.icon}</div>
-                      <span className="text-[10px] font-bold text-slate-500 tracking-tight group-hover:text-slate-800 transition-colors">{item.label}</span>
+                      <span className="text-[10px] font-bold text-slate-500 tracking-tight group-hover:text-slate-800 transition-colors uppercase tracking-widest">{item.label}</span>
                     </div>
                   ))}
                 </div>

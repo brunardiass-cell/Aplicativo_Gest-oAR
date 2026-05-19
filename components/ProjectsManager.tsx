@@ -338,52 +338,52 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
   if (viewMode === 'initial') {
     return (
-      <div className="flex flex-col items-center justify-center py-12 px-6">
-        <div className="max-w-4xl w-full text-center space-y-12 animate-in fade-in zoom-in-95 duration-700">
-          <div className="space-y-4">
-            <h1 className="text-4xl font-black text-slate-900 uppercase tracking-tighter">Gerenciador de Projetos</h1>
-            <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.4em]">Selecione uma opção para começar</p>
+      <div className="flex flex-col items-center justify-center py-6 px-6">
+        <div className="max-w-4xl w-full text-center space-y-8 animate-in fade-in zoom-in-95 duration-700">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">Gerenciador de Projetos</h1>
+            <p className="text-slate-400 font-bold uppercase text-[9px] tracking-[0.4em]">Selecione uma opção para começar</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-            <button onClick={() => setViewMode('selection')} className="group p-10 bg-white rounded-[3rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-brand-primary/30 transition-all flex flex-col items-center gap-8 active:scale-95">
-              <div className="p-8 bg-brand-primary text-white rounded-[2rem] shadow-2xl shadow-brand-primary/20 group-hover:scale-110 transition-transform">
-                <LayoutDashboard size={48} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-5xl mx-auto">
+            <button onClick={() => setViewMode('selection')} className="group p-6 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-brand-primary/30 transition-all flex flex-col items-center gap-6 active:scale-95">
+              <div className="p-6 bg-brand-primary text-white rounded-[1.5rem] shadow-2xl shadow-brand-primary/20 group-hover:scale-110 transition-transform">
+                <LayoutDashboard size={36} />
               </div>
-              <div className="space-y-3">
-                <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-tight">Acompanhar projeto</h3>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Visualize progresso e métricas detalhadas.</p>
-              </div>
-            </button>
-
-            <button onClick={() => setIsNewProjectModalOpen(true)} className="group p-10 bg-white rounded-[3rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-teal-400/30 transition-all flex flex-col items-center gap-8 active:scale-95">
-              <div className="p-8 bg-teal-500 text-white rounded-[2rem] shadow-2xl shadow-teal-500/20 group-hover:scale-110 transition-transform">
-                <FolderPlus size={48} />
-              </div>
-              <div className="space-y-3">
-                <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-tight">Criar Novo Projeto</h3>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Inicie um novo cronograma completo.</p>
+              <div className="space-y-2">
+                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight leading-tight">Acompanhar projeto</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">Visualize progresso e métricas detalhadas.</p>
               </div>
             </button>
 
-            <button onClick={() => setIsActivityMapOpen(true)} className="group p-10 bg-white rounded-[3rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-indigo-400/30 transition-all flex flex-col items-center gap-8 active:scale-95">
-              <div className="p-8 bg-indigo-500 text-white rounded-[2rem] shadow-2xl shadow-indigo-500/20 group-hover:scale-110 transition-transform">
-                <Workflow size={48} />
+            <button onClick={() => setIsNewProjectModalOpen(true)} className="group p-6 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-teal-400/30 transition-all flex flex-col items-center gap-6 active:scale-95">
+              <div className="p-6 bg-teal-500 text-white rounded-[1.5rem] shadow-2xl shadow-teal-500/20 group-hover:scale-110 transition-transform">
+                <FolderPlus size={36} />
               </div>
-              <div className="space-y-3">
-                <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-tight">Mapa de Atividades</h3>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Infográfico de implementação estratégica.</p>
+              <div className="space-y-2">
+                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight leading-tight">Criar Novo Projeto</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">Inicie um novo cronograma completo.</p>
+              </div>
+            </button>
+
+            <button onClick={() => setIsActivityMapOpen(true)} className="group p-6 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-indigo-400/30 transition-all flex flex-col items-center gap-6 active:scale-95">
+              <div className="p-6 bg-indigo-500 text-white rounded-[1.5rem] shadow-2xl shadow-indigo-500/20 group-hover:scale-110 transition-transform">
+                <Workflow size={36} />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight leading-tight">Mapa de Atividades</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">Infográfico de implementação estratégica.</p>
               </div>
             </button>
 
             {isAdmin && (
-              <button onClick={() => setIsPlanModalOpen(true)} className="group p-10 bg-white rounded-[3rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-amber-400/30 transition-all flex flex-col items-center gap-8 active:scale-95">
-                <div className="p-8 bg-amber-500 text-white rounded-[2rem] shadow-2xl shadow-amber-500/20 group-hover:scale-110 transition-transform">
-                  <ListPlus size={48} />
+              <button onClick={() => setIsPlanModalOpen(true)} className="group p-6 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-amber-400/30 transition-all flex flex-col items-center gap-6 active:scale-95">
+                <div className="p-6 bg-amber-500 text-white rounded-[1.5rem] shadow-2xl shadow-amber-500/20 group-hover:scale-110 transition-transform">
+                  <ListPlus size={36} />
                 </div>
-                <div className="space-y-3">
-                  <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-tight">Gerenciar Planos</h3>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Edite templates e padrões de projetos.</p>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight leading-tight">Gerenciar Planos</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">Edite templates e padrões de projetos.</p>
                 </div>
               </button>
             )}

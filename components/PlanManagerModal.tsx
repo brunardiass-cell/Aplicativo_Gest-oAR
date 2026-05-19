@@ -831,17 +831,42 @@ const SortableMacroItem: React.FC<SortableMacroItemProps> = ({
         <button onClick={() => onDeleteMacro(macro)} className="p-1 text-slate-300 hover:text-red-500 rounded-lg transition"><Trash2 size={16}/></button>
       </div>
 
-      <div className="space-y-4 pt-2 border-t border-slate-50">
-        <div className="space-y-2">
-          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            <ClipboardCheck size={12}/> Resultado Esperado
-          </label>
-          <textarea 
-            value={macro.expectedResults || ''} 
-            onChange={e => onUpdateMacro(macro, { expectedResults: e.target.value })}
-            placeholder="Descreva o que se espera ao final desta macroatividade..."
-            className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-amber-200 transition min-h-[60px]"
-          />
+      <div className="space-y-4 pt-4 border-t border-slate-50">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <ClipboardCheck size={14}/> Entregáveis
+            </label>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={macro.hasDeliverable || false} 
+                  onChange={e => onUpdateMacro(macro, { hasDeliverable: e.target.checked })}
+                  className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500"
+                />
+                <span className="text-[9px] font-black text-slate-500 uppercase">Tem Entregável?</span>
+              </label>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <textarea 
+              value={macro.expectedResults || ''} 
+              onChange={e => onUpdateMacro(macro, { expectedResults: e.target.value })}
+              placeholder="Descreva os entregáveis desta macroatividade..."
+              className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold text-slate-700 outline-none focus:border-amber-200 transition min-h-[60px]"
+            />
+            {macro.hasDeliverable && (
+              <div className="animate-in slide-in-from-top-1 duration-200">
+                <input 
+                  placeholder="Tipo de entregável (ex: Relatório, Protótipo, Certificado)" 
+                  value={macro.deliverableType || ''}
+                  onChange={e => onUpdateMacro(macro, { deliverableType: e.target.value })}
+                  className="w-full px-3 py-2 bg-amber-50/50 border border-amber-100 rounded-lg text-[10px] font-bold text-amber-900 outline-none focus:border-amber-300"
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
       

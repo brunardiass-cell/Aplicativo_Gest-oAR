@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Project, MacroActivity, MicroActivity, MicroActivityStatus, TeamMember, Prerequisite, BudgetInfo, PrerequisiteType, PrerequisiteStatus, BudgetStatus, RegulatoryStandard } from '../types';
-import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle, Layers, GripVertical, ListTodo, DollarSign, Calendar, User, CheckCircle2, Clock, ShieldCheck, ClipboardCheck } from 'lucide-react';
+import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle, Layers, GripVertical, ListTodo, DollarSign, Calendar, User, CheckCircle2, Clock, ShieldCheck, ClipboardCheck, Activity, BadgeAlert } from 'lucide-react';
 import {
   DndContext, 
   closestCenter,
@@ -435,21 +435,46 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
     });
   }, [macro.microActivities]);
 
-  const getMacroStatus = (): 'Concluída' | 'Em Andamento' | 'Planejada' | 'Pendente Resultados' => {
-    if (totalMicros === 0) return 'Planejada';
+  const getMacroStatus = (): string => {
+    if (totalMicros === 0) return 'Planejado';
     
-    // Macro is only truly concluded if all micros are done AND (results fulfilled OR explanation provided)
-    if (allMicrosDone) {
-      if (macro.resultsFulfilled || (macro.completionExplanation && macro.completionExplanation.trim() !== '')) {
-        return 'Concluída';
-      }
-      return 'Pendente Resultados';
+    const statuses = macro.microActivities.map(m => m.status);
+    
+    if (statuses.some(s => s === 'Em andamento')) return 'Em andamento';
+    if (statuses.some(s => s === 'A repetir / retrabalho')) return 'A repetir / retrabalho';
+    
+    const allDone = statuses.every(s => s === 'Concluído e aprovado' || s === 'Concluído com restrições');
+    
+    if (allDone) {
+      const hasRestrictions = statuses.some(s => s === 'Concluído com restrições');
+      const deliverableMissing = macro.hasDeliverable && !macro.isDeliverableRegistered;
+      
+      if (hasRestrictions || deliverableMissing) return 'Concluído com restrições';
+      return 'Concluído e aprovado';
     }
     
-    if (macro.microActivities.some(m => m.status === 'Em andamento')) return 'Em Andamento';
-    return 'Planejada';
+    if (statuses.every(s => s === 'Planejado')) return 'Planejado';
+    return 'Em andamento';
   };
   const macroStatus = getMacroStatus();
+
+  const getMacroStatusIcon = () => {
+    switch (macroStatus) {
+      case 'Concluído e aprovado':
+        return <div className="w-5 h-5 bg-emerald-500 rounded flex items-center justify-center text-white"><CheckCircle2 size={12} /></div>;
+      case 'Em andamento':
+        return <Activity size={18} className="text-blue-500" />;
+      case 'Concluído com restrições':
+        return <BadgeAlert size={18} className="text-cyan-500" />;
+      case 'A repetir / retrabalho':
+        return <div className="w-5 h-5 rounded-full border-2 border-amber-500 flex items-center justify-center text-amber-500"><ChevronDown size={12} /></div>;
+      case 'Planejado':
+      default:
+        return <div className="w-5 h-5 rounded-full border-2 border-slate-300" />;
+    }
+  };
+
+  const deliverableMissing = macro.hasDeliverable && !macro.isDeliverableRegistered && macroStatus === 'Concluído com restrições';
 
   const handleSaveName = () => {
     if (!editedName.trim()) return;
@@ -493,44 +518,55 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
           <div {...attributes} {...listeners} className="p-2 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing">
             <GripVertical size={16} />
           </div>
-          <button onClick={() => setIsExpanded(!isExpanded)} className={`w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0 ${macroStatus === 'Concluída' ? 'bg-emerald-500' : macroStatus === 'Pendente Resultados' ? 'bg-amber-500' : 'bg-slate-800'}`}>
+          <button onClick={() => setIsExpanded(!isExpanded)} className={`w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0 bg-slate-800`}>
             <ChevronDown size={20} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
           </button>
-          {isEditing ? (
-            <div className="flex-1 flex gap-2 items-center">
-              <input value={editedName} onChange={e => setEditedName(e.target.value)} autoFocus className="w-full text-xs font-black text-slate-800 uppercase tracking-tight bg-white border border-teal-300 rounded-md px-3 py-2"/>
-              <button onClick={handleSaveName} className="p-2 text-emerald-500 hover:bg-emerald-100 rounded-md"><Save size={16}/></button>
-              <button onClick={() => setIsEditing(false)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-md"><X size={16}/></button>
-              <button onClick={handleAddPrerequisite} className="p-2 text-teal-600 hover:bg-teal-50 rounded-md" title="Adicionar Pré-requisito"><ListTodo size={16}/></button>
-            </div>
-          ) : ( 
-            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsResultsModalOpen(true)}>
-                {microOverdueAlert && (
-                    <div className="animate-bounce" title="Existem microatividades atrasadas nesta macro!">
-                        <AlertTriangle size={14} className="text-red-500" />
-                    </div>
+          <div className="flex items-center gap-3">
+            {getMacroStatusIcon()}
+            {isEditing ? (
+              <div className="flex-1 flex gap-2 items-center">
+                <input value={editedName} onChange={e => setEditedName(e.target.value)} autoFocus className="w-full text-xs font-black text-slate-800 uppercase tracking-tight bg-white border border-teal-300 rounded-md px-3 py-2"/>
+                <button onClick={handleSaveName} className="p-2 text-emerald-500 hover:bg-emerald-100 rounded-md"><Save size={16}/></button>
+                <button onClick={() => setIsEditing(false)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-md"><X size={16}/></button>
+                <button onClick={handleAddPrerequisite} className="p-2 text-teal-600 hover:bg-teal-50 rounded-md" title="Adicionar Pré-requisito"><ListTodo size={16}/></button>
+              </div>
+            ) : ( 
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsResultsModalOpen(true)}>
+                    {microOverdueAlert && (
+                        <div className="animate-bounce" title="Existem microatividades atrasadas nesta macro!">
+                            <AlertTriangle size={14} className="text-red-500" />
+                        </div>
+                    )}
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-tight group-hover:text-brand-primary transition-colors">{macro.name}</h4> 
+                    {macro.resultsFulfilled ? (
+                      <span title="Resultados Cumpridos">
+                        <CheckCircle2 size={14} className="text-emerald-500" />
+                      </span>
+                    ) : macro.completionExplanation ? (
+                      <span title="Possui justificativa de não conclusão de resultados">
+                        <MessageSquare size={14} className="text-amber-500" />
+                      </span>
+                    ) : null}
+                    {hasRegulatoryStandards && (
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onOpenRegulatoryModal(macro.name); }}
+                            className="p-1 text-brand-primary hover:bg-brand-primary/10 rounded-md transition-colors"
+                            title="Normas Regulatórias Aplicáveis"
+                        >
+                            <ShieldCheck size={14} />
+                        </button>
+                    )}
+                </div>
+                {deliverableMissing && (
+                  <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600 uppercase tracking-tighter">
+                    <AlertTriangle size={10} />
+                    Entregável ({macro.deliverableType || 'não especificado'}) pende registro
+                  </div>
                 )}
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-tight group-hover:text-brand-primary transition-colors">{macro.name}</h4> 
-                {macro.resultsFulfilled ? (
-                  <span title="Resultados Cumpridos">
-                    <CheckCircle2 size={14} className="text-emerald-500" />
-                  </span>
-                ) : macro.completionExplanation ? (
-                  <span title="Possui justificativa de não conclusão de resultados">
-                    <MessageSquare size={14} className="text-amber-500" />
-                  </span>
-                ) : null}
-                {hasRegulatoryStandards && (
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onOpenRegulatoryModal(macro.name); }}
-                        className="p-1 text-brand-primary hover:bg-brand-primary/10 rounded-md transition-colors"
-                        title="Normas Regulatórias Aplicáveis"
-                    >
-                        <ShieldCheck size={14} />
-                    </button>
-                )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-4">
             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
@@ -714,7 +750,7 @@ const MacroActivityResultsModal: React.FC<MacroActivityResultsModalProps> = ({
             <ClipboardCheck size={24} />
           </div>
           <div>
-            <h2 className="text-lg font-black text-slate-900 uppercase tracking-tighter">Resultados Esperados</h2>
+            <h2 className="text-lg font-black text-slate-900 uppercase tracking-tighter">Gestão de Entregáveis</h2>
             <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">{macro.name}</p>
           </div>
           <button onClick={onClose} className="ml-auto p-2 hover:bg-slate-200 rounded-full transition"><X size={20} /></button>
@@ -724,20 +760,20 @@ const MacroActivityResultsModal: React.FC<MacroActivityResultsModalProps> = ({
           <div className="space-y-4">
              <div className="flex items-center justify-between">
                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                 <ListTodo size={14}/> Resultado Esperado / Comprovação
+                 <ListTodo size={14}/> Descrição do Entregável / Comprovação
                </label>
-               <span className="text-[9px] font-bold text-slate-400 uppercase italic">Cadastrado no plano e preenchido no projeto</span>
+               <span className="text-[9px] font-bold text-slate-400 uppercase italic">Conforme definido no plano</span>
              </div>
              
              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
                 <textarea 
                   value={macro.expectedResults || ''}
                   onChange={e => onUpdate({ expectedResults: e.target.value })}
-                  placeholder="Descreva o resultado alcançado ou detalhes da comprovação..."
+                  placeholder="Descreva o entregável alcançado ou detalhes da comprovação..."
                   className="w-full bg-transparent text-xs font-bold text-slate-600 leading-relaxed italic border-none focus:ring-0 p-0 min-h-[80px] resize-none text-justify"
                 />
                 
-                <div className="pt-2 border-t border-slate-200">
+                <div className="pt-2 border-t border-slate-200 flex flex-col gap-3">
                   <label className="flex items-center gap-3 cursor-pointer group">
                     <input 
                       type="checkbox" 
@@ -747,13 +783,28 @@ const MacroActivityResultsModal: React.FC<MacroActivityResultsModalProps> = ({
                     />
                     <span className="text-sm font-black text-slate-800 uppercase tracking-tight group-hover:text-emerald-600 transition">Confirmo o cumprimento integral deste resultado</span>
                   </label>
+
+                  {macro.hasDeliverable && (
+                    <label className="flex items-center gap-3 cursor-pointer group p-3 bg-amber-50 rounded-xl border border-amber-100">
+                      <input 
+                        type="checkbox" 
+                        checked={macro.isDeliverableRegistered || false} 
+                        onChange={e => onUpdate({ isDeliverableRegistered: e.target.checked })}
+                        className="w-5 h-5 rounded-lg border-amber-300 text-amber-500 focus:ring-amber-500 transition"
+                      />
+                      <div className="flex-1">
+                        <span className="text-xs font-black text-amber-900 uppercase tracking-tight block">Entregável Registrado?</span>
+                        <span className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">Tipo: {macro.deliverableType || 'Não especificado'}</span>
+                      </div>
+                    </label>
+                  )}
                 </div>
              </div>
           </div>
 
           <div className="space-y-3">
              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-               <LinkIcon size={14}/> Links dos Resultados
+               <LinkIcon size={14}/> Links / Comprovantes (Obrigatório para registro de entregável)
              </label>
              <div className="flex gap-2">
                 <input 

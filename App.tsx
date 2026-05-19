@@ -1135,17 +1135,18 @@ const App: React.FC = () => {
                   <Menu size={24} />
                 </button>
               )}
-              <div>
-                <h1 className={`${isMobile ? 'text-lg' : 'text-3xl'} font-black text-slate-800 uppercase tracking-tighter leading-none`}>
-                  {view === 'dashboard' && 'Dashboard'}
-                  {view === 'tasks' && 'Painel de Atividades'}
-                  {view === 'projects' && 'Gerenciador de Projetos'}
-                  {view === 'quality' && 'Controle de Acesso'}
-                  {view === 'traceability' && 'Auditoria'}
-                  {view === 'regulatory' && 'Normas Regulatórias'}
-                </h1>
-                <p className="text-[9px] sm:text-sm font-bold text-slate-400 mt-0.5">{selectedProfile?.name}</p>
-              </div>
+              {view !== 'projects' && (
+                <div>
+                  <h1 className={`${isMobile ? 'text-lg' : 'text-3xl'} font-black text-slate-800 uppercase tracking-tighter leading-none`}>
+                    {view === 'dashboard' && 'Dashboard'}
+                    {view === 'tasks' && 'Painel de Atividades'}
+                    {view === 'quality' && 'Controle de Acesso'}
+                    {view === 'traceability' && 'Auditoria'}
+                    {view === 'regulatory' && 'Normas Regulatórias'}
+                  </h1>
+                  <p className="text-[9px] sm:text-sm font-bold text-slate-400 mt-0.5">{selectedProfile?.name}</p>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2 sm:gap-3">
                 {activeUsers.length > 0 && (
