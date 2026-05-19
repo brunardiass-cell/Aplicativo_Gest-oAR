@@ -418,20 +418,25 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <button onClick={() => setViewMode('initial')} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition">
-              <X size={20} />
+              <ArrowLeft size={20} />
             </button>
             <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Acompanhar projeto</h2>
           </div>
           
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Buscar por nome ou responsável..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold shadow-sm focus:ring-2 focus:ring-brand-primary/20 transition outline-none"
-            />
+          <div className="flex items-center gap-4 flex-1 max-w-2xl">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input 
+                type="text" 
+                placeholder="Buscar por nome ou responsável..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold shadow-sm focus:ring-2 focus:ring-brand-primary/20 transition outline-none"
+              />
+            </div>
+            <button onClick={() => setIsActivityMapOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-indigo-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 transition shadow-lg shadow-indigo-200">
+                <Workflow size={16} /> Mapa
+            </button>
           </div>
         </div>
 
@@ -515,6 +520,14 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           <div className="py-20 text-center">
             <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">Nenhum projeto encontrado.</p>
           </div>
+        )}
+
+        {isActivityMapOpen && (
+          <ProjectActivityMap 
+            templates={activityPlans} 
+            projects={projects}
+            onClose={() => setIsActivityMapOpen(false)} 
+          />
         )}
       </div>
     );
@@ -750,6 +763,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                  </h2>
                </div>
                <div className="flex gap-2 no-print">
+                 <button onClick={() => setIsActivityMapOpen(true)} className="p-3 bg-indigo-50 text-indigo-500 rounded-xl hover:bg-indigo-100 transition" title="Mapa de Atividades"><Workflow size={16}/></button>
                  <button onClick={() => setIsChecklistModalOpen(true)} className="p-3 bg-brand-primary/10 text-brand-primary rounded-xl hover:bg-brand-primary/20 transition" title="Checklist Regulatório"><ClipboardCheck size={16}/></button>
                  <button onClick={handlePrint} className="p-3 bg-slate-50 text-slate-500 rounded-xl hover:bg-slate-100 transition"><Printer size={16}/></button>
                </div>
@@ -898,6 +912,14 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {isActivityMapOpen && (
+        <ProjectActivityMap 
+          templates={activityPlans} 
+          projects={projects}
+          onClose={() => setIsActivityMapOpen(false)} 
+        />
       )}
     </div>
   );

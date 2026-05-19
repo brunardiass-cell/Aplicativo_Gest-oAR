@@ -244,7 +244,7 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">CONCLUSÃO</p>
                     <div className="flex items-center gap-4">
                         <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden shadow-inner">
-                            <div className={`h-full transition-all duration-1000 ${styleParts[1].split(' ')[1].replace('bg-', 'bg-opacity-100 bg-') || 'bg-brand-primary'}`} style={{ width: `${projectPhaseProgress}%` }}></div>
+                            <div className={`h-full transition-all duration-1000 ${styleParts[2].replace('text-', 'bg-') || 'bg-brand-primary'}`} style={{ width: `${projectPhaseProgress}%` }}></div>
                         </div>
                         <span className="text-[10px] font-black text-slate-900">{projectPhaseProgress}% concluído</span>
                     </div>
