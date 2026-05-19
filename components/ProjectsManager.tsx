@@ -465,11 +465,11 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
              <button onClick={() => setProjectDetailView('dashboard')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'dashboard' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
                <LayoutDashboard size={12} /> Dashboard
              </button>
+             <button onClick={() => setProjectDetailView('timeline')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'timeline' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
+               <Clock size={12} /> Plano de Trabalho
+             </button>
              <button onClick={() => setProjectDetailView('gantt')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'gantt' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
                <GanttChartSquare size={12} /> Gantt
-             </button>
-             <button onClick={() => setProjectDetailView('timeline')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'timeline' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
-               <Clock size={12} /> Timeline
              </button>
              <button onClick={() => setProjectDetailView('kanban')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'kanban' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
                <Kanban size={12} /> Kanban
@@ -480,11 +480,17 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-0.5">
-            <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">{selectedProject?.name}</h1>
-            <p className="text-slate-400 font-bold uppercase text-[9px] tracking-widest leading-tight">Responsável: {selectedProject?.responsible || 'Não definido'}</p>
-          </div>
+          <div className="flex items-center justify-between gap-6">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">{selectedProject?.name}</h1>
+                <div className="flex gap-1 no-print">
+                   <button onClick={handleStartEdit} className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-brand-primary/5 rounded-lg transition" title="Editar Projeto"><Edit size={14}/></button>
+                   <button onClick={() => onOpenDeletionModal({ type: 'project', ids: { projectId: selectedProject!.id }, name: selectedProject!.name })} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Excluir Projeto"><Trash2 size={14}/></button>
+                </div>
+              </div>
+              <p className="text-slate-400 font-bold uppercase text-[9px] tracking-widest leading-tight">Responsável: {selectedProject?.responsible || 'Não definido'}</p>
+            </div>
 
           <div className="flex flex-col items-center gap-1 min-w-[200px]">
             <div className="w-full flex justify-between items-end">
@@ -602,17 +608,15 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-slate-50 pb-6 gap-4">
                <div className="flex items-center gap-4">
                  <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
+                   {projectDetailView === 'timeline' && <><Clock size={20} className="text-brand-primary"/> Plano de Trabalho</>}
                    {projectDetailView === 'gantt' && <><GanttChartSquare size={20} className="text-brand-primary"/> Visualização Gantt</>}
-                   {projectDetailView === 'timeline' && <><Clock size={20} className="text-brand-primary"/> Linha do Tempo</>}
                    {projectDetailView === 'kanban' && <><Kanban size={20} className="text-brand-primary"/> Kanban do Projeto</>}
                    {projectDetailView === 'phases' && <><LayoutGrid size={20} className="text-brand-primary"/> Fluxo de Fases</>}
                  </h2>
                </div>
                <div className="flex gap-2 no-print">
                  <button onClick={() => setIsChecklistModalOpen(true)} className="p-3 bg-brand-primary/10 text-brand-primary rounded-xl hover:bg-brand-primary/20 transition" title="Checklist Regulatório"><ClipboardCheck size={16}/></button>
-                 <button onClick={handleStartEdit} className="p-3 bg-slate-50 text-slate-500 rounded-xl hover:bg-slate-100 transition"><Edit size={16}/></button>
                  <button onClick={handlePrint} className="p-3 bg-slate-50 text-slate-500 rounded-xl hover:bg-slate-100 transition"><Printer size={16}/></button>
-                 <button onClick={() => onOpenDeletionModal({ type: 'project', ids: { projectId: selectedProject!.id }, name: selectedProject!.name })} className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition"><Trash2 size={16}/></button>
                </div>
              </div>
 
@@ -677,6 +681,88 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           onUpdateProject={handleUpdateProject}
           currentUser={currentUser}
         />
+      )}
+
+      {isEditingProject && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-8 space-y-8">
+              <div className="flex justify-between items-center">
+                <div className="space-y-1">
+                  <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Editar Projeto</h2>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Atualize as informações básicas do projeto</p>
+                </div>
+                <button onClick={handleCancelEdit} className="p-2 hover:bg-slate-100 rounded-xl transition text-slate-400"><X size={20} /></button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome do Projeto</label>
+                  <input 
+                    type="text" 
+                    value={editedProjectData.name || ''} 
+                    onChange={e => setEditedProjectData({...editedProjectData, name: e.target.value})}
+                    className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-brand-primary/20 outline-none transition"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Responsável Principal</label>
+                  <select 
+                    value={editedProjectData.responsible || ''} 
+                    onChange={e => setEditedProjectData({...editedProjectData, responsible: e.target.value})}
+                    className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-brand-primary/20 outline-none transition"
+                  >
+                    <option value="">Selecione o responsável</option>
+                    {teamMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                  </select>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Equipe do Projeto</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Nome do integrante..."
+                      value={newTeamMemberName}
+                      onChange={e => setNewTeamMemberName(e.target.value)}
+                      className="flex-1 px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none"
+                    />
+                    <button 
+                      onClick={handleAddMemberToEdit}
+                      className="px-6 py-3 bg-brand-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-primary/90 transition shadow-lg shadow-brand-primary/20"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {editedProjectData.team?.map(member => (
+                      <div key={member} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-xl border border-slate-200 group">
+                        <span className="text-[10px] font-bold text-slate-600">{member}</span>
+                        <button onClick={() => handleRemoveMemberFromEdit(member)} className="text-slate-400 hover:text-red-500 transition"><X size={12} /></button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button 
+                  onClick={handleCancelEdit}
+                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleSaveEdit}
+                  className="flex-1 py-4 bg-brand-primary text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-brand-primary/90 shadow-xl shadow-brand-primary/20 transition"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
