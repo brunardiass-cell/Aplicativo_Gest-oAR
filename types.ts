@@ -158,12 +158,21 @@ export interface RegulatoryChecklistItem {
   completedBy?: string;
 }
 
+export interface TransversalActivity {
+  id: string;
+  iconName: string;
+  label: string;
+  desc: string;
+}
+
 export interface ActivityPlanTemplate {
   id: string;
   name: string;
   phases: string[];
   macroActivities: MacroActivityTemplate[];
   regulatoryChecklist?: RegulatoryChecklistItem[];
+  objective?: string;
+  transversalActivities?: TransversalActivity[];
 }
 
 export interface MicroActivity {
@@ -207,6 +216,9 @@ export interface Project {
   deletionReason?: string;
   deletionDate?: string;
   regulatoryChecklist?: RegulatoryChecklistItem[];
+  objective?: string;
+  transversalActivities?: TransversalActivity[];
+  description?: string;
 }
 
 export interface TeamMember {

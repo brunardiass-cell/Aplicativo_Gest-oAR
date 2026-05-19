@@ -2,11 +2,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember, AppUser, RegulatoryStandard, MicroActivityStatus } from '../types';
 import { 
-  FolderPlus, ListPlus, FolderKanban, Workflow, GanttChartSquare, 
-  Copy, Edit, User, Save, X, Users, Plus, Trash2, Printer, 
-  ClipboardCheck, Search, ChevronRight, LayoutDashboard, BarChart3, 
-  Clock, CheckCircle, AlertTriangle, TrendingUp, Presentation, 
-  Kanban, LayoutGrid, Activity, PieChart, Users2
+  X, ChevronDown, ListPlus, FolderPlus, Search, 
+  Settings, Save, Plus, ChevronRight, LayoutDashboard, 
+  PieChart, Activity, Clock, CheckCircle, AlertTriangle, 
+  Users2, Presentation, ArrowLeft, Edit, Trash2, LayoutGrid,
+  ShieldAlert, CheckCircle2, Workflow, DollarSign, User,
+  FolderKanban, GanttChartSquare, Kanban, ClipboardCheck,
+  Printer, BarChart3, TrendingUp, Layers
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -392,6 +394,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
         {isActivityMapOpen && (
           <ProjectActivityMap 
             templates={activityPlans} 
+            projects={projects}
             onClose={() => setIsActivityMapOpen(false)} 
           />
         )}
@@ -590,32 +593,32 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
       </div>
 
       {projectDetailView === 'dashboard' ? (
-        <div className="space-y-8">
-          {/* Metrics Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <MetricCard label="Em Andamento" value={projectStats?.ongoingMicros || 0} icon={<Clock className="text-blue-500" />} subtitle="Atividades ativas" />
-            <MetricCard label="Concluídas" value={projectStats?.completedMicros || 0} icon={<CheckCircle className="text-emerald-500" />} subtitle="Total entregue" />
-            <MetricCard label="Em Atraso" value={projectStats?.lateMicros || 0} icon={<AlertTriangle className="text-red-500" />} subtitle="Requer atenção" color={projectStats?.lateMicros && projectStats.lateMicros > 0 ? 'border-red-200 bg-red-50/30' : ''} />
-            <MetricCard label="Saúde" value={`${projectStats?.health}%`} icon={<TrendingUp className={getHealthColor(projectStats?.health || 0)} />} subtitle="Índice de conformidade" />
+        <div className="space-y-8 animate-in fade-in duration-700">
+           {/* Metrics Row */}
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <MetricCard label="Tarefas Ativas" value={projectStats?.ongoingMicros || 0} icon={<Clock className="text-blue-500" />} subtitle="Atividades em progresso" />
+            <MetricCard label="Total Entregue" value={projectStats?.completedMicros || 0} icon={<CheckCircle className="text-emerald-500" />} subtitle="Atividades concluídas" />
+            <MetricCard label="Atenção" value={projectStats?.lateMicros || 0} icon={<AlertTriangle className="text-red-500" />} subtitle="Atividades em atraso" color={projectStats?.lateMicros && projectStats.lateMicros > 0 ? 'border-red-200 bg-red-50/30' : ''} />
+            <MetricCard label="Saúde" value={`${projectStats?.health}%`} icon={<Activity className={getHealthColor(projectStats?.health || 0)} />} subtitle="Estabilidade do projeto" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
               {/* Team Load */}
-              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-8">
+              <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-8">
                 <div className="flex items-center justify-between">
                   <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2">
-                    <Users2 size={16} /> Carga da Equipe
+                    <Users2 size={16} /> CARGA DA EQUIPE
                   </h3>
                 </div>
-                <div className="h-[280px]">
+                <div className="h-[320px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={projectStats?.teamLoadData} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
                       <XAxis type="number" hide />
                       <YAxis dataKey="name" type="category" fontSize={9} fontWeight="black" width={100} axisLine={false} tickLine={false} />
                       <Tooltip cursor={{fill: '#f8fafc'}} />
-                      <Bar dataKey="count" radius={[0, 8, 8, 0]} barSize={25}>
+                      <Bar dataKey="count" radius={[0, 8, 8, 0]} barSize={30}>
                         {projectStats?.teamLoadData.map((_, i) => <Cell key={i} fill={['#6366f1', '#06b6d4', '#2dd4bf', '#fbbf24'][i % 4]} />)}
                       </Bar>
                     </BarChart>
@@ -623,89 +626,45 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                 </div>
               </div>
 
-              {/* Distribution by Phase */}
-              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-8">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2">
-                    <PieChart size={16} /> Distribuição por Fase
-                  </h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-                  <div className="h-[250px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RePieChart>
-                        <Pie
-                          data={projectStats?.phaseDistData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={70}
-                          outerRadius={95}
-                          paddingAngle={8}
-                          dataKey="value"
-                        >
-                          {projectStats?.phaseDistData.map((_, i) => <Cell key={i} fill={['#06b6d4', '#6366f1', '#2dd4bf', '#fbbf24', '#818cf8'][i % 5]} />)}
-                        </Pie>
-                        <Tooltip />
-                      </RePieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="space-y-4">
-                    {projectStats?.phaseDistData.map((phase, i) => (
-                      <div key={phase.name} className="flex items-center justify-between">
-                         <div className="flex items-center gap-3">
-                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ['#06b6d4', '#6366f1', '#2dd4bf', '#fbbf24', '#818cf8'][i % 5] }} />
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{phase.name}</span>
-                         </div>
-                         <div className="flex items-center gap-4">
-                            <span className="text-xs font-black text-slate-900">{Math.round((phase.value / (projectStats?.totalMicros || 1)) * 100)}%</span>
-                            <span className="text-[10px] font-bold text-slate-400">({phase.value})</span>
-                         </div>
-                      </div>
-                    ))}
-                    <div className="pt-6 border-t border-slate-50 flex justify-between items-center text-slate-900">
-                       <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Total</span>
-                       <span className="text-xs font-black uppercase tracking-widest">{projectStats?.totalMicros} Atividades</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {/* Recent Activities */}
-              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-8">
+              <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-8">
                 <div className="flex items-center justify-between">
                   <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2">
-                    <Clock size={16} /> Atividades Recentes
+                    <Clock size={16} /> ATIVIDADES RECENTES
                   </h3>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="text-left border-b border-slate-50">
+                      <tr className="text-left border-b border-slate-100 pb-4">
                         <th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Atividade</th>
                         <th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Fase</th>
                         <th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Responsável</th>
-                        <th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Prazo</th>
                         <th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {projectStats?.recentActivities.map((activity: any) => (
                         <tr key={activity.id} className="group">
-                          <td className="py-5">
+                          <td className="py-6">
                             <div className="flex items-center gap-3">
-                               <div className={`p-2 rounded-xl ${activity.status === 'Concluído e aprovado' ? 'bg-emerald-50 text-emerald-500' : 'bg-blue-50 text-blue-500'}`}>
+                               <div className={`p-2.5 rounded-xl ${activity.status === 'Concluído e aprovado' ? 'bg-emerald-50 text-emerald-500' : 'bg-blue-50 text-blue-500'}`}>
                                  {activity.status === 'Concluído e aprovado' ? <CheckCircle size={14}/> : <Clock size={14}/>}
                                </div>
-                               <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight group-hover:text-brand-primary transition-colors">{activity.name}</span>
+                               <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">{activity.name}</span>
                             </div>
                           </td>
-                          <td className="py-5 text-center text-[10px] font-bold text-slate-500">{activity.phase}</td>
-                          <td className="py-5 text-center text-[10px] font-black text-slate-700 uppercase tracking-tighter">{activity.assignee}</td>
-                          <td className="py-5 text-center text-[10px] font-bold text-slate-500">{new Date(activity.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                          <td className="py-5 text-right">
-                             <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${activity.status === 'Concluído e aprovado' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
-                               {activity.status.split(' ')[0]}
-                             </span>
+                          <td className="py-6 text-center text-[10px] font-bold text-slate-500">{activity.phase}</td>
+                          <td className="py-6 text-center text-[10px] font-black text-slate-700 uppercase tracking-tighter">{activity.assignee}</td>
+                          <td className="py-6 text-right">
+                             <div className="flex items-center justify-end">
+                                <span className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                                    activity.status === 'Concluído e aprovado' ? 'bg-emerald-50 text-emerald-600' : 
+                                    activity.status === 'Em andamento' ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-600'
+                                }`}>
+                                {activity.status}
+                                </span>
+                             </div>
                           </td>
                         </tr>
                       ))}
@@ -716,91 +675,68 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
             </div>
 
             <div className="space-y-8">
-              {/* Next Milestone */}
-              <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-2xl space-y-8">
-                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                  <Presentation size={14} /> Próximo Marco
-                </div>
+              {/* Resumo do Projeto Editable */}
+              <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-8 relative group">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2">
+                   <Activity size={16}/> RESUMO DO PROJETO
+                </h3>
+                
                 <div className="space-y-6">
-                  <h4 className="text-3xl font-black uppercase tracking-tighter leading-none">{projectStats?.milestoneName}</h4>
-                  <div className="flex items-center justify-between py-6 border-y border-white/10">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prazo</span>
-                    <span className="text-lg font-black text-amber-400 tracking-tighter">
-                      {projectStats?.milestoneDate ? new Date(projectStats.milestoneDate + 'T00:00:00').toLocaleDateString('pt-BR') : '--/--/----'}
-                    </span>
-                  </div>
+                    <textarea 
+                        value={selectedProject?.description || ''}
+                        onChange={(e) => selectedProject && handleUpdateProject({ ...selectedProject, description: e.target.value })}
+                        placeholder="Clique para adicionar um resumo do projeto..."
+                        className="w-full bg-slate-50 p-6 rounded-[2rem] text-sm font-bold text-slate-700 leading-relaxed min-h-[160px] border border-transparent focus:border-brand-primary/20 focus:bg-white transition-all outline-none"
+                    />
+
+                    <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white space-y-6">
+                        <div className="flex justify-between items-end">
+                            <div className="space-y-1">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">PROGRESSO TOTAL</span>
+                                <h4 className="text-4xl font-black tracking-tighter">{Math.round(projectStats?.progress || 0)}%</h4>
+                            </div>
+                            <div className="text-right space-y-0.5">
+                                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">{projectStats?.completedMicros} Concluídas</p>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">{projectStats?.totalMicros} Atividades</p>
+                            </div>
+                        </div>
+                        <div className="h-2.5 bg-white/10 rounded-full overflow-hidden shadow-inner">
+                            <div className="h-full bg-brand-primary transition-all duration-1000" style={{ width: `${projectStats?.progress}%` }} />
+                        </div>
+                    </div>
                 </div>
               </div>
 
               {/* Critical Alerts */}
-              <div className="bg-white p-8 rounded-[2.5rem] border border-red-100 shadow-sm space-y-8">
-                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-red-500">
-                  <AlertTriangle size={16} /> Alertas Críticos
+              <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-8">
+                <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
+                  <AlertTriangle size={16} className="text-red-500" /> ALERTAS CRÍTICOS
                 </div>
                 <div className="space-y-4">
-                  {projectStats?.alerts && projectStats.alerts.length > 0 ? projectStats.alerts.map((alert: any) => (
-                    <div key={alert.id} className="p-6 bg-red-50/30 rounded-3xl border border-red-50 group hover:border-red-200 transition-all space-y-2">
-                       <h5 className="text-[11px] font-black text-slate-900 uppercase tracking-tight group-hover:text-red-600 transition-colors">{alert.name}</h5>
-                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{alert.macroName}</p>
-                       <div className="pt-2 flex justify-end">
-                          <span className="text-[11px] font-black text-red-600">+{alert.daysLate} dias</span>
+                    {projectStats?.alerts && projectStats.alerts.length > 0 ? projectStats.alerts.map((alert: any) => (
+                    <div key={alert.id} className="p-6 bg-red-50/50 rounded-[2rem] border border-red-100 flex items-start gap-4">
+                       <div className="p-2 bg-white rounded-xl text-red-500 shadow-sm">
+                          {ShieldAlert ? <ShieldAlert size={16} /> : <AlertTriangle size={16} />}
+                       </div>
+                       <div className="space-y-1">
+                          <h5 className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{alert.name}</h5>
+                          <p className="text-[10px] font-bold text-red-600 uppercase tracking-tighter">+{alert.daysLate} dias de atraso</p>
                        </div>
                     </div>
                   )) : (
                     <div className="py-12 text-center flex flex-col items-center gap-4">
-                       <div className="p-4 bg-emerald-50 text-emerald-500 rounded-full"><CheckCircle size={32}/></div>
-                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sem alertas críticos no momento</p>
+                       <div className="p-5 bg-emerald-50 text-emerald-500 rounded-full shadow-sm">
+                        {CheckCircle2 ? <CheckCircle2 size={32}/> : <CheckCircle size={32} />}
+                       </div>
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">Operação estável.<br/>Nenhum alerta crítico detectado.</p>
                     </div>
                   )}
-                </div>
-              </div>
-
-              {/* Project Summary */}
-              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-8">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2">
-                   <Activity size={16}/> Resumo do Projeto
-                </h3>
-                <div className="relative flex flex-col items-center justify-center py-4">
-                   <div className="w-56 h-56 relative flex items-center justify-center">
-                      <svg className="w-full h-full transform -rotate-90">
-                         <circle cx="112" cy="112" r="90" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-slate-50" />
-                         <circle 
-                            cx="112" cy="112" r="90" 
-                            stroke="currentColor" strokeWidth="12" fill="transparent" 
-                            strokeDasharray={2 * Math.PI * 90}
-                            strokeDashoffset={2 * Math.PI * 90 * (1 - (projectStats?.progress || 0) / 100)}
-                            strokeLinecap="round"
-                            className="text-brand-primary transition-all duration-1000" 
-                         />
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                         <span className="text-5xl font-black text-slate-900 tracking-tighter">{Math.round(projectStats?.progress || 0)}%</span>
-                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Progresso</span>
-                      </div>
-                   </div>
-                </div>
-                <div className="space-y-4 pt-4 border-t border-slate-50">
-                   <div className="flex justify-between items-center text-[10px] font-bold">
-                      <span className="text-slate-400 uppercase tracking-widest">Total de atividades</span>
-                      <span className="text-slate-900 font-black">{projectStats?.totalMicros}</span>
-                   </div>
-                   <div className="flex justify-between items-center text-[10px] font-bold">
-                      <span className="text-slate-400 uppercase tracking-widest">Concluídas</span>
-                      <span className="text-emerald-500 font-black">{projectStats?.completedMicros}</span>
-                   </div>
-                   <div className="flex justify-between items-center text-[10px] font-bold">
-                      <span className="text-slate-400 uppercase tracking-widest">Em andamento</span>
-                      <span className="text-blue-500 font-black">{projectStats?.ongoingMicros}</span>
-                   </div>
-                   <div className="flex justify-between items-center text-[10px] font-bold">
-                      <span className="text-slate-400 uppercase tracking-widest">Em atraso</span>
-                      <span className="text-red-500 font-black">{projectStats?.lateMicros}</span>
-                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
+
       ) : (
         <div className="space-y-6 animate-in fade-in duration-500">
           <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-4 sm:p-8">

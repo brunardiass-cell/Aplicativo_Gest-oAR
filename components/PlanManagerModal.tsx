@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ActivityPlanTemplate, MacroActivityTemplate, Project } from '../types';
-import { X, ListPlus, Plus, Trash2, Save, Layers, FilePlus, AlertTriangle, GripVertical, Copy, ClipboardCheck } from 'lucide-react';
+import { X, ListPlus, Plus, Trash2, Save, Layers, FilePlus, AlertTriangle, GripVertical, Copy, ClipboardCheck, Workflow } from 'lucide-react';
 import {
   DndContext, 
   closestCenter,
@@ -37,7 +37,8 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
   const [newMacroNames, setNewMacroNames] = useState<{ [key: string]: string }>({});
   const [newMicroNames, setNewMicroNames] = useState<{ [key: string]: string }>({});
   const [newChecklistItem, setNewChecklistItem] = useState('');
-  const [activeTab, setActiveTab] = useState<'activities' | 'checklist'>('activities');
+  const [activeTab, setActiveTab] = useState<'activities' | 'checklist' | 'general'>('general');
+  const [newTransversal, setNewTransversal] = useState({ label: '', desc: '', iconName: 'ShieldCheck' });
 
   useEffect(() => {
     if (isOpen) {
@@ -282,12 +283,14 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
       if (!originalPlan) return false;
       
       const checklistChanged = JSON.stringify(localPlan.regulatoryChecklist) !== JSON.stringify(originalPlan.regulatoryChecklist);
+      const objectiveChanged = localPlan.objective !== originalPlan.objective;
+      const transversalChanged = JSON.stringify(localPlan.transversalActivities) !== JSON.stringify(originalPlan.transversalActivities);
       const macrosChanged = localPlan.macroActivities.some(lm => {
         const om = originalPlan.macroActivities.find(m => m.name === lm.name && m.phase === lm.phase);
         return om && lm.expectedResults !== om.expectedResults;
       });
 
-      return checklistChanged || macrosChanged;
+      return checklistChanged || objectiveChanged || transversalChanged || macrosChanged;
     });
 
     if (modifiedPlans.length > 0) {
@@ -318,7 +321,13 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
               return pm;
             });
             
-            return { ...project, regulatoryChecklist: updatedChecklist, macroActivities: updatedMacros };
+            return { 
+              ...project, 
+              regulatoryChecklist: updatedChecklist, 
+              macroActivities: updatedMacros,
+              objective: matchingModifiedPlan.objective,
+              transversalActivities: matchingModifiedPlan.transversalActivities
+            };
           }
           return project;
         });
@@ -480,6 +489,12 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
                     </div>
                     <div className="flex bg-slate-100 p-1 rounded-xl">
                       <button 
+                        onClick={() => setActiveTab('general')}
+                        className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition ${activeTab === 'general' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        Geral
+                      </button>
+                      <button 
                         onClick={() => setActiveTab('activities')}
                         className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition ${activeTab === 'activities' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                       >
@@ -493,6 +508,105 @@ const PlanManagerModal: React.FC<PlanManagerModalProps> = ({ isOpen, onClose, pl
                       </button>
                     </div>
                   </div>
+
+                  {activeTab === 'general' && (
+                    <div className="space-y-8 animate-in fade-in duration-300">
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Objetivo do Plano</label>
+                        <textarea 
+                          value={selectedPlan.objective || ''} 
+                          onChange={e => {
+                            const updatedPlans = localPlans.map(p => p.id === selectedPlanId ? { ...p, objective: e.target.value } : p);
+                            setLocalPlans(updatedPlans);
+                          }}
+                          placeholder="Descreva o objetivo geral deste plano de trabalho..."
+                          className="w-full p-6 bg-slate-50 border border-slate-200 rounded-[2rem] text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-brand-primary/20 transition min-h-[120px]"
+                        />
+                      </div>
+
+                      <div className="space-y-6">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Atividades Transversais</label>
+                        </div>
+                        
+                        <div className="bg-slate-50 border border-slate-200 rounded-[2rem] p-6 space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input 
+                              placeholder="Nome da atividade (Ex: GESTÃO DE RISCOS)" 
+                              value={newTransversal.label}
+                              onChange={e => setNewTransversal({ ...newTransversal, label: e.target.value })}
+                              className="px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold"
+                            />
+                            <select 
+                              value={newTransversal.iconName}
+                              onChange={e => setNewTransversal({ ...newTransversal, iconName: e.target.value })}
+                              className="px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold"
+                            >
+                              <option value="ShieldCheck">Escudo (Qualidade)</option>
+                              <option value="BadgeAlert">Alerta (Risco)</option>
+                              <option value="FileText">Documento</option>
+                              <option value="MessageSquare">Comunicação</option>
+                              <option value="DollarSign">Financeiro</option>
+                              <option value="Users">Pessoas</option>
+                              <option value="Settings">Engrenagem</option>
+                              <option value="ClipboardCheck">Checklist</option>
+                            </select>
+                          </div>
+                          <textarea 
+                            placeholder="Descrição curta da atividade..." 
+                            value={newTransversal.desc}
+                            onChange={e => setNewTransversal({ ...newTransversal, desc: e.target.value })}
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold min-h-[80px]"
+                          />
+                          <button 
+                            onClick={() => {
+                              if (!newTransversal.label) return;
+                              const updatedPlans = localPlans.map(p => {
+                                if (p.id === selectedPlanId) {
+                                  const current = p.transversalActivities || [];
+                                  return { ...p, transversalActivities: [...current, { ...newTransversal, id: 'trans_' + Math.random().toString(36).substr(2, 9) }] };
+                                }
+                                return p;
+                              });
+                              setLocalPlans(updatedPlans);
+                              setNewTransversal({ label: '', desc: '', iconName: 'ShieldCheck' });
+                            }}
+                            className="w-full py-3 bg-slate-800 text-white rounded-xl text-xs font-bold uppercase hover:bg-black transition"
+                          >
+                            Adicionar Atividade Transversal
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {(selectedPlan.transversalActivities || []).map((act, idx) => (
+                            <div key={act.id} className="p-5 bg-white border border-slate-200 rounded-3xl flex items-start gap-4 group shadow-sm">
+                              <div className="p-3 bg-slate-50 text-slate-400 rounded-xl">
+                                <Workflow size={20} />
+                              </div>
+                              <div className="flex-1 space-y-1">
+                                <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-tight">{act.label}</h5>
+                                <p className="text-[10px] font-medium text-slate-400 leading-tight">{act.desc}</p>
+                              </div>
+                              <button 
+                                onClick={() => {
+                                  const updatedPlans = localPlans.map(p => {
+                                    if (p.id === selectedPlanId) {
+                                      return { ...p, transversalActivities: p.transversalActivities?.filter((_, i) => i !== idx) };
+                                    }
+                                    return p;
+                                  });
+                                  setLocalPlans(updatedPlans);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 p-2 text-slate-300 hover:text-red-500 transition"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {activeTab === 'activities' ? (
                     <>
