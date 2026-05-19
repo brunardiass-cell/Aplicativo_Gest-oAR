@@ -343,45 +343,45 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
             <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.4em]">Selecione uma opção para começar</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <button onClick={() => setViewMode('selection')} className="group p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-brand-primary/30 transition-all flex flex-col items-center gap-6 active:scale-95">
-              <div className="p-5 bg-brand-primary text-white rounded-3xl shadow-xl shadow-brand-primary/20 group-hover:scale-110 transition-transform">
-                <LayoutDashboard size={32} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+            <button onClick={() => setViewMode('selection')} className="group p-10 bg-white rounded-[3rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-brand-primary/30 transition-all flex flex-col items-center gap-8 active:scale-95">
+              <div className="p-8 bg-brand-primary text-white rounded-[2rem] shadow-2xl shadow-brand-primary/20 group-hover:scale-110 transition-transform">
+                <LayoutDashboard size={48} />
               </div>
-              <div className="space-y-2">
-                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight leading-tight">Acompanhar projeto</h3>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Visualize progresso e métricas.</p>
-              </div>
-            </button>
-
-            <button onClick={() => setIsNewProjectModalOpen(true)} className="group p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-teal-400/30 transition-all flex flex-col items-center gap-6 active:scale-95">
-              <div className="p-5 bg-teal-500 text-white rounded-3xl shadow-xl shadow-teal-500/20 group-hover:scale-110 transition-transform">
-                <FolderPlus size={32} />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight leading-tight">Criar Novo Projeto</h3>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Inicie um novo cronograma.</p>
+              <div className="space-y-3">
+                <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-tight">Acompanhar projeto</h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Visualize progresso e métricas detalhadas.</p>
               </div>
             </button>
 
-            <button onClick={() => setIsActivityMapOpen(true)} className="group p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-indigo-400/30 transition-all flex flex-col items-center gap-6 active:scale-95">
-              <div className="p-5 bg-indigo-500 text-white rounded-3xl shadow-xl shadow-indigo-500/20 group-hover:scale-110 transition-transform">
-                <Workflow size={32} />
+            <button onClick={() => setIsNewProjectModalOpen(true)} className="group p-10 bg-white rounded-[3rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-teal-400/30 transition-all flex flex-col items-center gap-8 active:scale-95">
+              <div className="p-8 bg-teal-500 text-white rounded-[2rem] shadow-2xl shadow-teal-500/20 group-hover:scale-110 transition-transform">
+                <FolderPlus size={48} />
               </div>
-              <div className="space-y-2">
-                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight leading-tight">Mapa de Atividades</h3>
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Infográfico de implementação.</p>
+              <div className="space-y-3">
+                <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-tight">Criar Novo Projeto</h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Inicie um novo cronograma completo.</p>
+              </div>
+            </button>
+
+            <button onClick={() => setIsActivityMapOpen(true)} className="group p-10 bg-white rounded-[3rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-indigo-400/30 transition-all flex flex-col items-center gap-8 active:scale-95">
+              <div className="p-8 bg-indigo-500 text-white rounded-[2rem] shadow-2xl shadow-indigo-500/20 group-hover:scale-110 transition-transform">
+                <Workflow size={48} />
+              </div>
+              <div className="space-y-3">
+                <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-tight">Mapa de Atividades</h3>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Infográfico de implementação estratégica.</p>
               </div>
             </button>
 
             {isAdmin && (
-              <button onClick={() => setIsPlanModalOpen(true)} className="group p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-amber-400/30 transition-all flex flex-col items-center gap-6 active:scale-95">
-                <div className="p-5 bg-amber-500 text-white rounded-3xl shadow-xl shadow-amber-500/20 group-hover:scale-110 transition-transform">
-                  <ListPlus size={32} />
+              <button onClick={() => setIsPlanModalOpen(true)} className="group p-10 bg-white rounded-[3rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-amber-400/30 transition-all flex flex-col items-center gap-8 active:scale-95">
+                <div className="p-8 bg-amber-500 text-white rounded-[2rem] shadow-2xl shadow-amber-500/20 group-hover:scale-110 transition-transform">
+                  <ListPlus size={48} />
                 </div>
-                <div className="space-y-2">
-                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight leading-tight">Gerenciar Planos</h3>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Edite templates de projetos.</p>
+                <div className="space-y-3">
+                  <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-tight">Gerenciar Planos</h3>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Edite templates e padrões de projetos.</p>
                 </div>
               </button>
             )}
@@ -548,8 +548,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           </div>
         </div>
 
-          <div className="flex items-center justify-between gap-6">
-            <div className="space-y-0.5">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+            <div className="flex-1 space-y-1">
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">{selectedProject?.name}</h1>
                 <div className="flex gap-1 no-print">
@@ -558,6 +558,23 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                 </div>
               </div>
               <p className="text-slate-400 font-bold uppercase text-[9px] tracking-widest leading-tight">Responsável: {selectedProject?.responsible || 'Não definido'}</p>
+            </div>
+
+            {/* Next Milestone Highlight */}
+            <div className="bg-slate-900 text-white px-6 py-4 rounded-2xl flex items-center gap-4 shadow-xl border border-white/5 no-print">
+                <div className="p-2 bg-white/10 rounded-xl text-amber-400">
+                    <Presentation size={20} />
+                </div>
+                <div className="space-y-0.5 min-w-[140px]">
+                    <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Próximo Marco</p>
+                    <p className="text-[11px] font-black uppercase tracking-tight leading-tight truncate max-w-[180px]">{projectStats?.milestoneName}</p>
+                </div>
+                <div className="pl-4 border-l border-white/10">
+                    <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Prazo</p>
+                    <p className="text-sm font-black text-amber-400 tracking-tighter">
+                        {projectStats?.milestoneDate ? new Date(projectStats.milestoneDate + 'T00:00:00').toLocaleDateString('pt-BR') : '--/--/----'}
+                    </p>
+                </div>
             </div>
 
           <div className="flex flex-col items-center gap-1 min-w-[200px]">
