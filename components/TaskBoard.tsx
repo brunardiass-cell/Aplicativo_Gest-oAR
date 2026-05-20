@@ -16,18 +16,40 @@ import {
   UserCheck
 } from 'lucide-react';
 
-const getTwoSentences = (text: string): string => {
-  if (!text) return '';
-  const sentenceRegex = /[^.!?]+[.!?]+(?:\s+|$)/g;
-  const sentences = text.match(sentenceRegex);
-  
-  if (sentences && sentences.length > 2) {
-    return sentences.slice(0, 2).join('').trim() + ' ...';
+const getTaskStatusVisuals = (status: Status) => {
+  switch (status) {
+    case 'Concluída':
+      return {
+        accentBar: 'bg-emerald-500',
+        borderColor: 'border-emerald-250 hover:border-emerald-350',
+        badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-100'
+      };
+    case 'Em Andamento':
+      return {
+        accentBar: 'bg-blue-500',
+        borderColor: 'border-blue-250 hover:border-blue-350',
+        badgeClass: 'bg-blue-50 text-blue-700 border-blue-100'
+      };
+    case 'Pausado':
+      return {
+        accentBar: 'bg-red-500',
+        borderColor: 'border-red-250 hover:border-red-350',
+        badgeClass: 'bg-red-50 text-red-700 border-red-100'
+      };
+    case 'Planejada':
+      return {
+        accentBar: 'bg-amber-500',
+        borderColor: 'border-amber-250 hover:border-amber-350',
+        badgeClass: 'bg-amber-50 text-amber-700 border-amber-100'
+      };
+    case 'Não Aplicável':
+    default:
+      return {
+        accentBar: 'bg-slate-350',
+        borderColor: 'border-slate-200 hover:border-slate-300',
+        badgeClass: 'bg-slate-50 text-slate-500 border-slate-100'
+      };
   }
-  if (!sentences && text.length > 120) {
-    return text.substring(0, 117).trim() + ' ...';
-  }
-  return text;
 };
 
 interface TaskBoardProps {
@@ -261,18 +283,29 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
           const isReviewer = task.isReport && task.currentReviewer === currentUser;
           const hasCompletedReview = task.completedCollaborators?.includes(currentUser || '');
 
-          let cardClasses = 'rounded-3xl border p-5 shadow-sm transition-all group flex flex-col h-[440px] relative overflow-hidden';
-          if (isCompleted) cardClasses += ' bg-slate-50 opacity-75 border-slate-200';
-          else if (isOverdue) cardClasses += ' bg-white border-red-400 ring-2 ring-red-200';
-          else cardClasses += ' bg-white border-slate-200 hover:shadow-xl hover:border-teal-100';
+          const visuals = getTaskStatusVisuals(task.status);
+
+          let cardClasses = 'rounded-3xl border p-6 pl-8 shadow-sm transition-all duration-300 group flex flex-col h-full relative overflow-hidden bg-white';
+          if (isCompleted) cardClasses = 'rounded-3xl border p-6 pl-8 shadow-sm transition-all duration-300 group flex flex-col h-full relative overflow-hidden bg-slate-50 opacity-80 border-slate-200';
+          else if (isOverdue) cardClasses = 'rounded-3xl border p-6 pl-8 shadow-sm transition-all duration-300 group flex flex-col h-full relative overflow-hidden bg-white border-red-350 ring-2 ring-red-100';
+          else cardClasses = `rounded-3xl border p-6 pl-8 shadow-sm hover:shadow-lg transition-all duration-300 group flex flex-col h-full relative overflow-hidden bg-white ${visuals.borderColor}`;
 
           return (
             <div key={task.id} className={cardClasses}>
-              {isCompleted && (<div className="absolute top-4 right-4 bg-emerald-500 text-white rounded-full p-1.5 z-10 shadow-lg"><CheckCircle size={16} /></div>)}
-              <div className="flex justify-between items-start mb-3 shrink-0">
+              {/* Left Color-coded Status Accent Bar */}
+              <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${visuals.accentBar}`} />
+
+              {isCompleted && (
+                <div className="absolute top-4 right-4 bg-emerald-500 text-white rounded-full p-1.5 z-10 shadow-lg">
+                  <CheckCircle size={16} />
+                </div>
+              )}
+              <div className="flex justify-between items-start mb-4">
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
-                    <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${task.status === 'Concluída' ? 'bg-emerald-100 text-emerald-700' : task.status === 'Pausado' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'}`}>{task.status}</span>
+                    <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${visuals.badgeClass}`}>
+                      {task.status}
+                    </span>
                     {isOverdue && <AlertTriangle size={14} className="text-red-500" />}
                     {isDueSoon && <div className="w-3.5 h-3.5 rounded-full bg-amber-400 flex items-center justify-center text-white text-[8px] font-bold">!</div>}
                   </div>
@@ -287,18 +320,18 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                 </div>
               </div>
 
-              <div className="mb-3 shrink-0">
+              <div className="mb-4">
                 <p className="text-[9px] font-black text-brand-primary uppercase tracking-widest mb-1">{task.project}</p>
-                <h3 className="text-base font-black text-slate-900 tracking-tight leading-tight uppercase line-clamp-2" title={task.activity}>{task.activity}</h3>
-                <p className="text-[10px] font-medium text-slate-500 mt-1 line-clamp-2">{getTwoSentences(task.description)}</p>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight leading-tight uppercase" title={task.activity}>{task.activity}</h3>
+                <p className="text-[10px] font-medium text-slate-500 mt-1.5 leading-relaxed whitespace-pre-wrap">{task.description}</p>
               </div>
 
-              <div className="space-y-1 mb-4 shrink-0">
+              <div className="space-y-1 mb-5">
                  <div className="flex justify-between items-end"><span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Avanço</span><span className="text-[10px] font-black text-slate-900">{task.progress}%</span></div>
                  <div className="w-full h-1 bg-slate-200 rounded-full overflow-hidden"><div className={`h-full transition-all duration-700 ${task.progress === 100 ? 'bg-emerald-500' : 'bg-brand-primary'}`} style={{width: `${task.progress}%`}}></div></div>
               </div>
 
-              <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100 shrink-0">
+              <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
                  <div className="flex flex-col">
                     <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Líder</span>
                     <div className="flex items-center gap-2 mt-1">
@@ -334,20 +367,20 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                  ) : null}
               </div>
 
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex-1 flex flex-col justify-center min-h-[50px] mb-2 overflow-hidden">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 mt-auto mb-4">
                  <p className="text-[8px] font-black text-brand-primary uppercase tracking-widest flex items-center gap-1.5 mb-1"><ArrowRight size={10} /> Próximo Passo</p>
-                 <p className="text-[10px] font-black text-slate-800 leading-tight italic line-clamp-2">"{task.nextStep || 'Não definido'}"</p>
+                 <p className="text-[10px] font-black text-slate-800 leading-tight italic">"{task.nextStep || 'Não definido'}"</p>
               </div>
 
               {isReviewer && !hasCompletedReview && (
-                <div className="mt-2 pt-2 border-t border-slate-100 shrink-0">
+                <div className="mb-4 pt-4 border-t border-slate-100">
                     <button onClick={() => onCompleteCollaboration(task.id)} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-500 text-white rounded-xl font-bold text-[9px] uppercase tracking-widest hover:bg-emerald-600 transition shadow-lg shadow-emerald-100">
                         <UserCheck size={14}/> Finalizar Revisão
                     </button>
                 </div>
               )}
 
-              <div className="mt-auto pt-2 border-t border-slate-100 flex items-center justify-between shrink-0">
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                 {!isCompleted && (
                   <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-500' : 'text-slate-400'}`}>
                       {isOverdue ? <AlertTriangle size={12} /> : <Clock size={12} />}
