@@ -54,12 +54,16 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     documentLink: '',
     notebookLMLink: '',
     keywords: [],
-    appliesTo: ''
+    appliesTo: '',
+    linkedStandards: [],
+    keyNotes: ''
   });
 
   const [activityInput, setActivityInput] = useState('');
   const [keywordInput, setKeywordInput] = useState('');
+  const [linkedStandardInput, setLinkedStandardInput] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showStandardSuggestions, setShowStandardSuggestions] = useState(false);
 
   const allSystemActivities = React.useMemo(() => {
     const names = new Set<string>();
@@ -122,6 +126,25 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     });
   };
 
+  const handleAddLinkedStandard = (name?: string) => {
+    const finalName = name || linkedStandardInput.trim();
+    if (finalName && !(formData.linkedStandards || []).includes(finalName)) {
+      setFormData({
+        ...formData,
+        linkedStandards: [...(formData.linkedStandards || []), finalName]
+      });
+      setLinkedStandardInput('');
+      setShowStandardSuggestions(false);
+    }
+  };
+
+  const removeLinkedStandard = (name: string) => {
+    setFormData({
+      ...formData,
+      linkedStandards: (formData.linkedStandards || []).filter(n => n !== name)
+    });
+  };
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -135,10 +158,13 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       documentLink: '',
       notebookLMLink: '',
       keywords: [],
-      appliesTo: ''
+      appliesTo: '',
+      linkedStandards: [],
+      keyNotes: ''
     });
     setActivityInput('');
     setKeywordInput('');
+    setLinkedStandardInput('');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -166,7 +192,9 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       documentLink: standard.documentLink,
       notebookLMLink: standard.notebookLMLink,
       keywords: standard.keywords || [],
-      appliesTo: standard.appliesTo || ''
+      appliesTo: standard.appliesTo || '',
+      linkedStandards: standard.linkedStandards || [],
+      keyNotes: standard.keyNotes || ''
     });
     setEditingId(standard.id);
     setIsAdding(true);
@@ -369,6 +397,80 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
               </div>
 
               <div className="space-y-2 md:col-span-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Principais Notas sobre a Norma</label>
+                <textarea 
+                  value={formData.keyNotes || ''}
+                  onChange={e => setFormData({...formData, keyNotes: e.target.value})}
+                  rows={3}
+                  placeholder="Insira as principais notas, observações importantes ou orientações específicas sobre esta norma..."
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium resize-none"
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Normas e Guias Vinculados</label>
+                <div className="relative">
+                  <div className="flex gap-2">
+                    <input 
+                      value={linkedStandardInput}
+                      onChange={e => {
+                        setLinkedStandardInput(e.target.value);
+                        setShowStandardSuggestions(true);
+                      }}
+                      onFocus={() => setShowStandardSuggestions(true)}
+                      onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), handleAddLinkedStandard())}
+                      placeholder="Busque ou digite o nome de outras normas ou guias vinculados..."
+                      className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => handleAddLinkedStandard()}
+                      className="px-4 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition"
+                    >
+                      Adicionar
+                    </button>
+                  </div>
+
+                  {showStandardSuggestions && linkedStandardInput && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 max-h-48 overflow-y-auto">
+                      {standards
+                        .filter(s => s.id !== editingId)
+                        .filter(s => s.name.toLowerCase().includes(linkedStandardInput.toLowerCase()))
+                        .filter(s => !(formData.linkedStandards || []).includes(s.name))
+                        .slice(0, 5)
+                        .map(suggestion => (
+                          <button
+                            key={suggestion.id}
+                            type="button"
+                            onClick={() => handleAddLinkedStandard(suggestion.name)}
+                            className="w-full px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 transition border-b border-slate-50 last:border-0 flex items-center justify-between"
+                          >
+                            <span className="flex items-center gap-2">
+                              <Plus size={14} className="text-slate-400" />
+                              {suggestion.name}
+                            </span>
+                            <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500 font-bold uppercase">{suggestion.type}</span>
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {(formData.linkedStandards || []).map(linked => (
+                    <span key={linked} className="inline-flex items-center gap-2 px-3 py-1.5 bg-teal-50 text-teal-700 rounded-lg text-xs font-bold uppercase tracking-tight border border-teal-200">
+                      {linked}
+                      <button type="button" onClick={() => removeLinkedStandard(linked)} className="hover:text-red-500 transition">
+                        <X size={14} />
+                      </button>
+                    </span>
+                  ))}
+                  {(!formData.linkedStandards || formData.linkedStandards.length === 0) && (
+                    <p className="text-[10px] text-slate-400 italic">Nenhuma outra norma ou guia vinculada.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Palavras Chaves (Facilitar Busca)</label>
                 <div className="flex gap-2">
                   <input 
@@ -552,6 +654,28 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                             <div className="flex flex-col gap-1">
                               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Se aplica a:</span>
                               <span className="text-xs font-bold text-slate-700 leading-relaxed text-justify">{standard.appliesTo}</span>
+                            </div>
+                          )}
+
+                          {standard.keyNotes && (
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Principais Notas:</span>
+                              <div className="text-xs font-medium text-slate-700 leading-relaxed text-justify bg-amber-50/50 border border-amber-100 p-3 rounded-xl whitespace-pre-line">
+                                {standard.keyNotes}
+                              </div>
+                            </div>
+                          )}
+
+                          {standard.linkedStandards && standard.linkedStandards.length > 0 && (
+                            <div className="flex flex-col gap-2">
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Normas e Guias Vinculados:</span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {standard.linkedStandards.map(linked => (
+                                  <span key={linked} className="px-2.5 py-1 bg-teal-50 text-teal-700 rounded-lg text-[9.5px] font-black uppercase tracking-tight border border-teal-200">
+                                    {linked}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                           )}
 

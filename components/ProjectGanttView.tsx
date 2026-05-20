@@ -371,43 +371,17 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
                 const isMacroVisible = getPosition(macroEnd.toISOString()) > 0 && getPosition(macroStart.toISOString()) < columns.length * columnWidth;
 
                 if (isMacroVisible) {
-                  // Macro status progress ratio
-                  const completedRatio = macro.microActivities.length > 0
-                    ? macro.microActivities.filter(m => m.status === 'Concluído e aprovado').length / macro.microActivities.length
-                    : 0;
-                  const progressPercentage = Math.round(completedRatio * 100);
-
                   results.push(
-                    <div key={macro.id} className="h-[48px] relative border-b border-slate-50 group hover:bg-slate-50/20 transition-colors">
-                      {/* Macro Planned Bar (Cinza) */}
+                    <div key={macro.id} className="h-[48px] relative border-b border-slate-50 group hover:bg-slate-50/20 bg-slate-50/5 transition-colors">
+                      {/* Macro Bar Empty and Grey */}
                       <div 
-                        className="absolute top-2 h-2.5 bg-slate-300 border border-slate-400/20 rounded shadow-xs"
+                        className="absolute top-[18px] h-3 bg-slate-200 border border-slate-350 rounded-sm"
                         style={{ 
                           left: getPosition(macroStart.toISOString()), 
                           width: getWidth(macroStart.toISOString(), macroEnd.toISOString()) 
                         }}
+                        title={`${macro.name} (Macroatividade)`}
                       />
-                      {/* Macro Real Bar (Verde) */}
-                      <div 
-                        className="absolute top-5 h-3 bg-emerald-500/20 border border-emerald-500/30 rounded overflow-hidden"
-                        style={{ 
-                          left: getPosition(macroStart.toISOString()), 
-                          width: getWidth(macroStart.toISOString(), macroEnd.toISOString()) 
-                        }}
-                      >
-                        <div 
-                          className="h-full bg-emerald-600/80 transition-all duration-1000"
-                          style={{ width: `${progressPercentage}%` }}
-                        />
-                      </div>
-                      
-                      {/* Macro Progress Badge */}
-                      <div 
-                        className="absolute top-[14px] px-1 py-0.5 rounded text-[8px] font-black bg-emerald-600 text-white shadow-xs"
-                        style={{ left: getPosition(macroStart.toISOString()) + getWidth(macroStart.toISOString(), macroEnd.toISOString()) + 8 }}
-                      >
-                        {progressPercentage}%
-                      </div>
                     </div>
                   );
                 } else {

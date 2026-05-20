@@ -91,6 +91,8 @@ export interface RegulatoryStandard {
   notebookLMLink: string;
   keywords?: string[]; // Palavras-chave para busca
   appliesTo?: string; // Se aplica a...
+  linkedStandards?: string[]; // Outras normas e guias vinculadas
+  keyNotes?: string; // Principais notas sobre a norma
 }
 export interface SyncInfo {
   timestamp: string;

@@ -118,6 +118,26 @@ const RegulatoryStandardsModal: React.FC<RegulatoryStandardsModalProps> = ({
                   </div>
                 )}
 
+                {standard.keyNotes && (
+                  <div className="flex flex-col gap-1 bg-amber-50/50 border border-amber-100 p-3 rounded-xl mt-2 text-[11px]">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Principais Notas:</span>
+                    <span className="text-slate-700 font-medium whitespace-pre-line leading-relaxed text-justify">{standard.keyNotes}</span>
+                  </div>
+                )}
+
+                {standard.linkedStandards && standard.linkedStandards.length > 0 && (
+                  <div className="flex flex-col gap-1.5 mt-2">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Normas e Guias Vinculados:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {standard.linkedStandards.map(linked => (
+                        <span key={linked} className="px-2 py-0.5 bg-teal-50 border border-teal-200 text-teal-700 rounded text-[9px] font-black uppercase">
+                          {linked}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-4 pt-2">
                   {standard.documentLink && (
                     <a 
