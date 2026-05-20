@@ -28,7 +28,28 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
     return initial;
   });
 
+  const listRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+
+  const handleListScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = timelineRef.current;
+    if (target && target.scrollTop !== e.currentTarget.scrollTop) {
+      target.scrollTop = e.currentTarget.scrollTop;
+    }
+  };
+
+  const handleTimelineScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = listRef.current;
+    if (target && target.scrollTop !== e.currentTarget.scrollTop) {
+      target.scrollTop = e.currentTarget.scrollTop;
+    }
+  };
+
+  const isValidDate = (dateStr: any): boolean => {
+    if (!dateStr || typeof dateStr !== 'string') return false;
+    const d = new Date(dateStr);
+    return d instanceof Date && !isNaN(d.getTime());
+  };
 
   // Get date range for the current view based on scale
   const viewRange = useMemo(() => {
@@ -241,15 +262,19 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
       <div className="flex flex-1 overflow-hidden relative">
         {/* Left Side: Activity List */}
         <div className="w-[350px] border-r border-slate-100 flex flex-col bg-white shrink-0 z-20">
-          <div className="h-[50px] border-b border-slate-100 flex items-center px-6 justify-between bg-slate-50/30">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Macroatividade</span>
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Responsável</span>
+          <div className="h-[50px] border-b border-slate-100 flex items-center px-6 bg-slate-50/30">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Macro / Microatividade</span>
           </div>
-          <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+          <div 
+            ref={listRef}
+            onScroll={handleListScroll}
+            className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-none"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
             {project.macroActivities.map((macro, macroIdx) => (
               <React.Fragment key={macro.id}>
                 <div 
-                  className={`h-[48px] flex items-center px-4 gap-2 hover:bg-slate-50 cursor-pointer transition-colors group border-b border-slate-50 ${selectedActivityId === macro.id ? 'bg-slate-50' : ''}`}
+                  className={`h-[48px] flex items-center px-4 gap-2 bg-slate-100/60 hover:bg-slate-200/50 cursor-pointer transition-colors group border-b border-slate-100 ${selectedActivityId === macro.id ? 'bg-slate-200/60' : ''}`}
                   onClick={() => setSelectedActivityId(macro.id)}
                 >
                   <button 
@@ -258,14 +283,13 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
                   >
                     {expandedMacros[macro.id] ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
                   </button>
-                  <div className="flex-1 flex justify-between items-center min-w-0">
+                  <div className="flex-1 flex items-center min-w-0">
                     <p className="text-[10px] font-black text-slate-900 uppercase truncate tracking-tight">{macroIdx + 1}. {macro.name}</p>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase whitespace-nowrap ml-2">{project.responsible}</p>
                   </div>
                 </div>
                 
                 {expandedMacros[macro.id] && macro.microActivities.map((micro, microIdx) => {
-                  let badgeColors = "bg-orange-100 text-orange-800 border border-orange-300";
+                  let badgeColors = "bg-orange-100 text-orange-850 border border-orange-300";
                   let statusLabel = "Planejado";
                   let isRestricted = false;
 
@@ -308,7 +332,11 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
         </div>
 
         {/* Right Side: Chart */}
-        <div className="flex-1 overflow-auto custom-scrollbar relative" ref={timelineRef}>
+        <div 
+          ref={timelineRef}
+          onScroll={handleTimelineScroll}
+          className="flex-1 overflow-auto custom-scrollbar relative"
+        >
           {/* Chart Header */}
           <div className="sticky top-0 h-[50px] bg-white border-b border-slate-100 flex z-10">
             {columns.map((date, i) => (
@@ -322,7 +350,7 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
                     ? date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase() + ' ' + date.getFullYear()
                     : viewScale === 'weeks'
                     ? 'W' + Math.ceil(date.getDate() / 7) + ' ' + date.toLocaleDateString('pt-BR', { month: 'short' }).toUpperCase()
-                    : date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).toUpperCase()}
+                    : date.getFullYear().toString()}
                 </span>
               </div>
             ))}
@@ -355,38 +383,11 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
               {project.macroActivities.map((macro) => {
                 const results = [];
                 
-                const macroStart = macro.microActivities.length > 0 
-                  ? macro.microActivities.reduce((min, mi) => {
-                      const d = new Date(mi.startDate || mi.dueDate);
-                      return d < min ? d : min;
-                    }, new Date(macro.microActivities[0].startDate || macro.microActivities[0].dueDate))
-                  : new Date();
-                const macroEnd = macro.microActivities.length > 0
-                  ? macro.microActivities.reduce((max, mi) => {
-                      const d = new Date(mi.dueDate);
-                      return d > max ? d : max;
-                    }, new Date(macro.microActivities[0].dueDate))
-                  : new Date();
-
-                const isMacroVisible = getPosition(macroEnd.toISOString()) > 0 && getPosition(macroStart.toISOString()) < columns.length * columnWidth;
-
-                if (isMacroVisible) {
-                  results.push(
-                    <div key={macro.id} className="h-[48px] relative border-b border-slate-50 group hover:bg-slate-50/20 bg-slate-50/5 transition-colors">
-                      {/* Macro Bar Empty and Grey */}
-                      <div 
-                        className="absolute top-[18px] h-3 bg-slate-200 border border-slate-350 rounded-sm"
-                        style={{ 
-                          left: getPosition(macroStart.toISOString()), 
-                          width: getWidth(macroStart.toISOString(), macroEnd.toISOString()) 
-                        }}
-                        title={`${macro.name} (Macroatividade)`}
-                      />
-                    </div>
-                  );
-                } else {
-                  results.push(<div key={macro.id} className="h-[48px] border-b border-slate-50" />);
-                }
+                results.push(
+                  <div key={macro.id} className="h-[48px] relative border-b border-slate-100 bg-slate-100/60 transition-colors">
+                    {/* Completamente vazia */}
+                  </div>
+                );
 
                 if (expandedMacros[macro.id]) {
                   macro.microActivities.forEach(micro => {
@@ -395,8 +396,13 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
                     const realStart = micro.realStartDate || micro.startDate || micro.dueDate;
                     const realEnd = micro.realEndDate || micro.completionDate || micro.dueDate;
                     
-                    const isPlannedVisible = getPosition(microEnd) > 0 && getPosition(microStart) < columns.length * columnWidth;
-                    const isRealVisible = getPosition(realEnd) > 0 && getPosition(realStart) < columns.length * columnWidth;
+                    const hasValidPlanned = isValidDate(microStart) && isValidDate(microEnd);
+                    const hasValidReal = isValidDate(realStart) && isValidDate(realEnd);
+
+                    const isPlannedVisible = hasValidPlanned && getPosition(microEnd) > 0 && getPosition(microStart) < columns.length * columnWidth;
+                    
+                    const isRealActive = micro.status === 'Em andamento' || micro.status === 'Concluído e aprovado' || micro.status === 'Concluído com restrições';
+                    const isRealVisible = isRealActive && hasValidReal && getPosition(realEnd) > 0 && getPosition(realStart) < columns.length * columnWidth;
 
                     // Progress style configurations based on status
                     let badgeColors = "bg-orange-500 text-white font-black";
