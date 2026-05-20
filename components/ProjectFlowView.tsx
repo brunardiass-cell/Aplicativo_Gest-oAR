@@ -116,12 +116,41 @@ const MacroCard: React.FC<{
         return <Clock size={14} className="text-slate-500" />;
     };
 
+    const getMacroCardStyles = (macroStatus: string) => {
+        if (macroStatus === 'Concluída') {
+            return {
+                borderColor: 'border-emerald-300',
+                bgColor: 'bg-emerald-50/40',
+                accentBar: 'bg-emerald-500',
+                progressBarColor: 'bg-emerald-500'
+            };
+        }
+        if (macroStatus === 'Em Andamento') {
+            return {
+                borderColor: 'border-blue-300',
+                bgColor: 'bg-blue-50/40',
+                accentBar: 'bg-blue-500',
+                progressBarColor: 'bg-blue-500'
+            };
+        }
+        return {
+            borderColor: 'border-slate-200',
+            bgColor: 'bg-white',
+            accentBar: 'bg-slate-350',
+            progressBarColor: 'bg-brand-primary'
+        };
+    };
+
+    const cardStyles = getMacroCardStyles(status);
+
     return (
         <div 
             draggable 
             onDragStart={onDragStart}
-            className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm hover:shadow-md hover:border-teal-100 transition-all cursor-grab"
+            className={`rounded-xl p-4 border-2 shadow-sm hover:shadow-md transition-all duration-300 cursor-grab relative overflow-hidden pl-5 ${cardStyles.borderColor} ${cardStyles.bgColor}`}
         >
+            {/* Left Accent Bar */}
+            <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${cardStyles.accentBar}`} />
             <div className="flex justify-between items-start">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
@@ -155,7 +184,7 @@ const MacroCard: React.FC<{
                     <span className="text-xs font-bold text-brand-primary">{progress}%</span>
                 </div>
                 <div className="w-full bg-slate-200 rounded-full h-1.5">
-                    <div className={`h-1.5 rounded-full transition-all duration-500 ${status === 'Concluída' ? 'bg-emerald-500' : 'bg-brand-primary'}`} style={{ width: `${progress}%` }}></div>
+                    <div className={`h-1.5 rounded-full transition-all duration-500 ${cardStyles.progressBarColor}`} style={{ width: `${progress}%` }}></div>
                 </div>
                 {restrictedCount > 0 && (
                     <div className="flex items-center justify-end gap-1 text-amber-600">
@@ -200,10 +229,48 @@ const MicroDetail: React.FC<{ micro: MicroActivity; regulatoryStandards: Regulat
         );
     }, [micro.name, regulatoryStandards]);
 
-    const colorClass = micro.status === 'Concluído e aprovado' ? 'text-emerald-600'
-                     : micro.status === 'Concluído com restrições' ? 'text-amber-600'
-                     : micro.status === 'A repetir / retrabalho' ? 'text-red-600'
-                     : 'text-slate-500';
+    const getMicroVisuals = (microStatus: string) => {
+        switch (microStatus) {
+            case 'Concluído e aprovado':
+                return {
+                    borderColor: 'border-emerald-250',
+                    bgColor: 'bg-emerald-50/20',
+                    accentBar: 'bg-emerald-500',
+                    statusClass: 'text-emerald-700 font-bold'
+                };
+            case 'Concluído com restrições':
+                return {
+                    borderColor: 'border-amber-250',
+                    bgColor: 'bg-amber-50/20',
+                    accentBar: 'bg-amber-550',
+                    statusClass: 'text-amber-700 font-bold'
+                };
+            case 'Em andamento':
+                return {
+                    borderColor: 'border-blue-250',
+                    bgColor: 'bg-blue-50/20',
+                    accentBar: 'bg-blue-500',
+                    statusClass: 'text-blue-700 font-bold'
+                };
+            case 'A repetir / retrabalho':
+                return {
+                    borderColor: 'border-red-250',
+                    bgColor: 'bg-red-50/20',
+                    accentBar: 'bg-red-500',
+                    statusClass: 'text-red-700 font-bold'
+                };
+            case 'Planejado':
+            default:
+                return {
+                    borderColor: 'border-slate-200',
+                    bgColor: 'bg-slate-50/60',
+                    accentBar: 'bg-slate-350',
+                    statusClass: 'text-slate-500'
+                };
+        }
+    };
+
+    const visuals = getMicroVisuals(micro.status);
 
     const prerequisiteAlert = useMemo(() => {
         if (!micro.prerequisites || micro.prerequisites.length === 0 || !micro.dueDate) return false;
@@ -219,7 +286,9 @@ const MicroDetail: React.FC<{ micro: MicroActivity; regulatoryStandards: Regulat
     }, [micro.dueDate, micro.prerequisites]);
 
     return (
-        <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+        <div className={`p-3 rounded-lg border-2 relative overflow-hidden pl-5 transition-all duration-300 ${visuals.borderColor} ${visuals.bgColor}`}>
+            {/* Left Accent Bar */}
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${visuals.accentBar}`} />
             <div className="flex items-center gap-2">
                 {prerequisiteAlert && (
                     <div className="animate-bounce" title="Pré-requisito pendente!">
@@ -238,7 +307,7 @@ const MicroDetail: React.FC<{ micro: MicroActivity; regulatoryStandards: Regulat
                 )}
             </div>
             <div className="mt-2 flex justify-between items-center">
-                <span className={`text-[9px] font-black uppercase ${colorClass}`}>{micro.status}</span>
+                <span className={`text-[9px] font-black uppercase ${visuals.statusClass}`}>{micro.status}</span>
                 <div className="flex items-center gap-2">
                     {micro.prerequisites && micro.prerequisites.length > 0 && (
                         <button onClick={() => setShowPrerequisites(!showPrerequisites)} className={`p-1 rounded-md ${showPrerequisites ? 'bg-teal-100 text-teal-600' : 'text-slate-400'}`}>

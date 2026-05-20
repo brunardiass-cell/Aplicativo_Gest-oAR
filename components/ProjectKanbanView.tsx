@@ -17,19 +17,50 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [detailType, setDetailType] = useState<'prerequisites' | 'budget' | null>(null);
   const columns = [
-    { title: 'Planejado', statuses: ['Planejado'] as MicroActivityStatus[] },
-    { title: 'Em andamento', statuses: ['Em andamento'] as MicroActivityStatus[] },
-    { title: 'A repetir / retrabalho', statuses: ['A repetir / retrabalho'] as MicroActivityStatus[] },
-    { title: 'Concluído', statuses: ['Concluído com restrições', 'Concluído e aprovado'] as MicroActivityStatus[] }
+    { title: 'Planejado', statuses: ['Planejado'] as MicroActivityStatus[], color: 'border-slate-300 bg-slate-55 border bg-slate-50 text-slate-700', badge: 'bg-slate-200 text-slate-700', bgCardContainer: 'bg-slate-50/80 border-slate-100' },
+    { title: 'Em andamento', statuses: ['Em andamento'] as MicroActivityStatus[], color: 'border-blue-300 bg-blue-50 border bg-blue-50/40 text-blue-800', badge: 'bg-blue-200 text-blue-800', bgCardContainer: 'bg-blue-50/20 border-blue-100' },
+    { title: 'A repetir / retrabalho', statuses: ['A repetir / retrabalho'] as MicroActivityStatus[], color: 'border-red-300 bg-red-50 border bg-red-50/40 text-red-800', badge: 'bg-red-200 text-red-800', bgCardContainer: 'bg-red-50/20 border-red-100' },
+    { title: 'Concluído', statuses: ['Concluído com restrições', 'Concluído e aprovado'] as MicroActivityStatus[], color: 'border-emerald-300 bg-emerald-50 border bg-emerald-50/40 text-emerald-800', badge: 'bg-emerald-200 text-emerald-800', bgCardContainer: 'bg-emerald-50/20 border-emerald-100' }
   ];
 
-  const getStatusColor = (status: string) => {
+  const getTaskVisuals = (status: string) => {
     switch (status) {
-      case 'Planejado': return 'bg-slate-100 border-slate-200 text-slate-600';
-      case 'Em andamento': return 'bg-teal-50 border-teal-200 text-teal-700';
-      case 'Concluído': return 'bg-emerald-50 border-emerald-200 text-emerald-700';
-      case 'A repetir / retrabalho': return 'bg-red-50 border-red-200 text-red-700';
-      default: return 'bg-slate-100 border-slate-200 text-slate-600';
+      case 'Concluído e aprovado':
+        return { 
+          borderColor: 'border-emerald-250', 
+          bgColor: 'bg-emerald-50/40', 
+          badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200', 
+          accentBar: 'bg-emerald-500'
+        };
+      case 'Concluído com restrições':
+        return { 
+          borderColor: 'border-amber-250', 
+          bgColor: 'bg-amber-50/40', 
+          badgeColor: 'bg-amber-100 text-amber-800 border-amber-200', 
+          accentBar: 'bg-amber-500'
+        };
+      case 'Em andamento':
+        return { 
+          borderColor: 'border-blue-250', 
+          bgColor: 'bg-blue-50/40', 
+          badgeColor: 'bg-blue-100 text-blue-800 border-blue-200', 
+          accentBar: 'bg-blue-500'
+        };
+      case 'A repetir / retrabalho':
+        return { 
+          borderColor: 'border-red-250', 
+          bgColor: 'bg-red-50/40', 
+          badgeColor: 'bg-red-100 text-red-800 border-red-200', 
+          accentBar: 'bg-red-500'
+        };
+      case 'Planejado':
+      default:
+        return { 
+          borderColor: 'border-slate-200', 
+          bgColor: 'bg-white', 
+          badgeColor: 'bg-slate-100 text-slate-600 border-slate-200', 
+          accentBar: 'bg-slate-350'
+        };
     }
   };
 
@@ -83,14 +114,18 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
         
         return (
           <div key={column.title} className="flex-1 min-w-[300px] flex flex-col gap-4">
-            <div className={`p-4 rounded-2xl border ${getStatusColor(column.title)} flex items-center justify-between`}>
+            <div className={`p-4 rounded-2xl border ${column.color} flex items-center justify-between shadow-xs`}>
               <h3 className="text-[10px] font-black uppercase tracking-widest">{column.title}</h3>
-              <span className="bg-white/50 px-2 py-0.5 rounded-full text-[10px] font-black">{tasksInColumn.length}</span>
+              <span className={`${column.badge} px-2 py-0.5 rounded-full text-[10px] font-black`}>{tasksInColumn.length}</span>
             </div>
             
-            <div className="flex-1 space-y-4 bg-slate-50/50 p-4 rounded-[2rem] border border-slate-100">
-              {tasksInColumn.map(task => (
-                <div key={task.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow space-y-3">
+            <div className={`flex-1 space-y-4 p-4 rounded-[2rem] border ${column.bgCardContainer}`}>
+              {tasksInColumn.map(task => {
+                const visuals = getTaskVisuals(task.status);
+                return (
+                  <div key={task.id} className={`bg-white p-4 rounded-2xl border-2 hover:shadow-md transition-all duration-300 space-y-3 relative overflow-hidden pl-5 ${visuals.borderColor} ${visuals.bgColor}`}>
+                    {/* Left Accent Bar */}
+                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${visuals.accentBar}`} />
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
@@ -277,7 +312,8 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+              })}
               {tasksInColumn.length === 0 && (
                 <div className="h-full flex items-center justify-center py-20">
                   <p className="text-slate-300 text-[10px] font-black uppercase tracking-widest italic">Vazio</p>

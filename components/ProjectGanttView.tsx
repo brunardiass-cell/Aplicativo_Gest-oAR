@@ -28,8 +28,54 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
     return initial;
   });
 
+  // Filter States
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('Todos');
+  const [assigneeFilter, setAssigneeFilter] = useState('Todos');
+
   const listRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+
+  // Memo for unique assignees from microactivities
+  const uniqueAssignees = useMemo(() => {
+    const list = new Set<string>();
+    project.macroActivities.forEach(m => {
+      m.microActivities.forEach(mi => {
+        if (mi.assignee) {
+          list.add(mi.assignee);
+        }
+      });
+    });
+    return Array.from(list).sort();
+  }, [project.macroActivities]);
+
+  // Memo for filtered macro and microactivities
+  const filteredMacroActivities = useMemo(() => {
+    return project.macroActivities.map((macro, macroIdx) => {
+      const filteredMicros = macro.microActivities.filter(micro => {
+        const matchesSearch = searchQuery === '' || 
+          micro.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          macro.name.toLowerCase().includes(searchQuery.toLowerCase());
+
+        const matchesStatus = statusFilter === 'Todos' || micro.status === statusFilter;
+
+        const matchesAssignee = assigneeFilter === 'Todos' || micro.assignee === assigneeFilter;
+
+        return matchesSearch && matchesStatus && matchesAssignee;
+      });
+
+      const macroMatchesSearch = searchQuery === '' || macro.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const isMacroVisible = (statusFilter === 'Todos' && assigneeFilter === 'Todos' && macroMatchesSearch) || filteredMicros.length > 0;
+
+      return {
+        ...macro,
+        originalIndex: macroIdx,
+        microActivities: filteredMicros,
+        isVisible: isMacroVisible
+      };
+    }).filter(m => m.isVisible);
+  }, [project.macroActivities, searchQuery, statusFilter, assigneeFilter]);
 
   const handleListScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = timelineRef.current;
@@ -165,7 +211,7 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
   return (
     <div className="flex flex-col h-[700px] bg-white rounded-3xl border border-slate-200 overflow-hidden font-sans">
       {/* Gantt Header */}
-      <div className="border-b border-slate-100 p-4 flex flex-wrap items-center justify-between gap-4 bg-white">
+      <div className="border-b border-slate-100 p-4 flex flex-wrap items-center justify-between gap-4 bg-white no-print">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100">
             {(['weeks', 'months', 'years'] as const).map(scale => (
@@ -218,12 +264,81 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
           
           <div className="flex items-center gap-2">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Filtros</span>
-            <button className="p-1.5 text-slate-400 hover:bg-slate-50 rounded-lg transition">
+            <button 
+              onClick={() => setShowFilterDropdown(!showFilterDropdown)} 
+              className={`p-1.5 rounded-lg transition ${showFilterDropdown ? 'bg-brand-primary text-white shadow-xs' : 'text-slate-400 hover:bg-slate-50'}`}
+              title="Filtrar Atividades"
+            >
               <Filter size={16} />
             </button>
           </div>
         </div>
       </div>
+
+      {/* Filter Options Bar */}
+      {showFilterDropdown && (
+        <div className="bg-slate-50 border-b border-slate-100 p-4 flex flex-wrap gap-4 items-center animate-in fade-in slide-in-from-top-1 duration-200 no-print">
+          <div className="relative w-full sm:w-64">
+            <input 
+              type="text" 
+              placeholder="Buscar por nome de macro/micro..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-8 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold placeholder:text-slate-400 outline-none focus:border-brand-primary"
+            />
+            <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-450 pointer-events-none">
+              <Filter size={12} />
+            </div>
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Status:</span>
+            <select 
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="p-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-brand-primary"
+            >
+              <option value="Todos">Todos os Status</option>
+              <option value="Planejado">Planejado</option>
+              <option value="Em andamento">Em andamento</option>
+              <option value="Concluído e aprovado">Concluído e aprovado</option>
+              <option value="Concluído com restrições">Concluído com restrições</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Responsável:</span>
+            <select 
+              value={assigneeFilter}
+              onChange={(e) => setAssigneeFilter(e.target.value)}
+              className="p-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-brand-primary"
+            >
+              <option value="Todos">Todos os Integrantes</option>
+              {uniqueAssignees.map(member => (
+                <option key={member} value={member}>{member}</option>
+              ))}
+            </select>
+          </div>
+
+          {(searchQuery || statusFilter !== 'Todos' || assigneeFilter !== 'Todos') && (
+            <button 
+              onClick={() => {
+                setSearchQuery('');
+                setStatusFilter('Todos');
+                setAssigneeFilter('Todos');
+              }}
+              className="text-xs text-brand-primary hover:underline font-bold"
+            >
+              Limpar Filtros
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Beautiful Clear Legend Bar */}
       <div className="bg-slate-50/50 border-b border-slate-100 px-6 py-2.5 flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px]">
@@ -271,63 +386,66 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
             className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-none"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
-            {project.macroActivities.map((macro, macroIdx) => (
-              <React.Fragment key={macro.id}>
-                <div 
-                  className={`h-[48px] flex items-center px-4 gap-2 bg-slate-100/60 hover:bg-slate-200/50 cursor-pointer transition-colors group border-b border-slate-100 ${selectedActivityId === macro.id ? 'bg-slate-200/60' : ''}`}
-                  onClick={() => setSelectedActivityId(macro.id)}
-                >
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); toggleMacro(macro.id); }}
-                    className="p-1 hover:bg-slate-200 rounded transition"
+            {filteredMacroActivities.map((macro, filteredIdx) => {
+              const macroIdx = macro.originalIndex;
+              return (
+                <React.Fragment key={macro.id}>
+                  <div 
+                    className={`h-[48px] flex items-center px-4 gap-2 bg-slate-100/60 hover:bg-slate-200/50 cursor-pointer transition-colors group border-b border-slate-100 ${selectedActivityId === macro.id ? 'bg-slate-200/60' : ''}`}
+                    onClick={() => setSelectedActivityId(macro.id)}
                   >
-                    {expandedMacros[macro.id] ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
-                  </button>
-                  <div className="flex-1 flex items-center min-w-0">
-                    <p className="text-[10px] font-black text-slate-900 uppercase truncate tracking-tight">{macroIdx + 1}. {macro.name}</p>
-                  </div>
-                </div>
-                
-                {expandedMacros[macro.id] && macro.microActivities.map((micro, microIdx) => {
-                  let badgeColors = "bg-orange-100 text-orange-850 border border-orange-300";
-                  let statusLabel = "Planejado";
-                  let isRestricted = false;
-
-                  if (micro.status === 'Concluído e aprovado') {
-                    badgeColors = "bg-emerald-100 text-emerald-800 border border-emerald-300";
-                    statusLabel = "Concluído";
-                  } else if (micro.status === 'Em andamento') {
-                    badgeColors = "bg-blue-100 text-blue-800 border border-blue-300";
-                    statusLabel = "Em andamento";
-                  } else if (micro.status === 'Concluído com restrições') {
-                    badgeColors = "bg-emerald-200 text-emerald-950 border border-emerald-400 font-extrabold";
-                    statusLabel = "Com Restrição";
-                    isRestricted = true;
-                  }
-
-                  return (
-                    <div 
-                      key={micro.id}
-                      className={`h-[48px] flex items-center pl-10 pr-4 gap-2 hover:bg-slate-50 cursor-pointer transition-colors group border-b border-slate-50 ${selectedActivityId === micro.id ? 'bg-slate-50 border-r-2 border-brand-primary' : ''}`}
-                      onClick={() => setSelectedActivityId(micro.id)}
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); toggleMacro(macro.id); }}
+                      className="p-1 hover:bg-slate-200 rounded transition"
                     >
-                      <div className="flex-1 flex justify-between items-center min-w-0">
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <p className="text-[10px] font-bold text-slate-500 truncate">{macroIdx + 1}.{microIdx + 1} {micro.name}</p>
-                          <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
-                            <span className={`text-[7px] px-1 py-0.2 rounded font-black uppercase tracking-wider ${badgeColors} flex items-center gap-0.5 shrink-0`}>
-                              {isRestricted && <span className="bg-emerald-950 text-white rounded-full w-2.5 h-2.5 flex items-center justify-center font-mono font-black text-[7px]" style={{ lineHeight: '1' }}>!</span>}
-                              {statusLabel} ({micro.progress || 0}%)
-                            </span>
-                            <span className="text-[8px] text-slate-400 font-mono truncate font-semibold">{micro.assignee}</span>
+                      {expandedMacros[macro.id] ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
+                    </button>
+                    <div className="flex-1 flex items-center min-w-0">
+                      <p className="text-[10px] font-black text-slate-900 uppercase truncate tracking-tight">{macroIdx + 1}. {macro.name}</p>
+                    </div>
+                  </div>
+                  
+                  {expandedMacros[macro.id] && macro.microActivities.map((micro, microIdx) => {
+                    let badgeColors = "bg-orange-100 text-orange-850 border border-orange-300";
+                    let statusLabel = "Planejado";
+                    let isRestricted = false;
+
+                    if (micro.status === 'Concluído e aprovado') {
+                      badgeColors = "bg-emerald-100 text-emerald-800 border border-emerald-300";
+                      statusLabel = "Concluído";
+                    } else if (micro.status === 'Em andamento') {
+                      badgeColors = "bg-blue-100 text-blue-800 border border-blue-300";
+                      statusLabel = "Em andamento";
+                    } else if (micro.status === 'Concluído com restrições') {
+                      badgeColors = "bg-emerald-200 text-emerald-950 border border-emerald-400 font-extrabold";
+                      statusLabel = "Com Restrição";
+                      isRestricted = true;
+                    }
+
+                    return (
+                      <div 
+                        key={micro.id}
+                        className={`h-[48px] flex items-center pl-10 pr-4 gap-2 hover:bg-slate-50 cursor-pointer transition-colors group border-b border-slate-50 ${selectedActivityId === micro.id ? 'bg-slate-50 border-r-2 border-brand-primary' : ''}`}
+                        onClick={() => setSelectedActivityId(micro.id)}
+                      >
+                        <div className="flex-1 flex justify-between items-center min-w-0">
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <p className="text-[10px] font-bold text-slate-500 truncate">{macroIdx + 1}.{microIdx + 1} {micro.name}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                              <span className={`text-[7px] px-1 py-0.2 rounded font-black uppercase tracking-wider ${badgeColors} flex items-center gap-0.5 shrink-0`}>
+                                {isRestricted && <span className="bg-emerald-950 text-white rounded-full w-2.5 h-2.5 flex items-center justify-center font-mono font-black text-[7px]" style={{ lineHeight: '1' }}>!</span>}
+                                {statusLabel} ({micro.progress || 0}%)
+                              </span>
+                              <span className="text-[8px] text-slate-400 font-mono truncate font-semibold">{micro.assignee}</span>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </React.Fragment>
-            ))}
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
           </div>
         </div>
 
@@ -380,7 +498,7 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
 
             {/* Bars */}
             <div className="relative">
-              {project.macroActivities.map((macro) => {
+              {filteredMacroActivities.map((macro) => {
                 const results = [];
                 
                 results.push(
@@ -477,7 +595,7 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
         </div>
 
         {/* Right Details Panel */}
-        <div className={`w-[320px] bg-white border-l border-slate-100 flex flex-col transition-all duration-300 ${selectedActivity ? 'translate-x-0' : 'translate-x-full absolute right-0 top-0 bottom-0'}`}>
+        <div className={`w-[320px] bg-white border-l border-slate-100 flex flex-col transition-all duration-300 no-print ${selectedActivity ? 'translate-x-0' : 'translate-x-full absolute right-0 top-0 bottom-0'}`}>
           <div className="h-[60px] border-b border-slate-100 flex items-center px-6 justify-between">
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detalhes da Atividade</span>
             <button onClick={() => setSelectedActivityId(null)} className="p-1.5 hover:bg-slate-100 rounded-lg transition"><X size={16} className="text-slate-400" /></button>

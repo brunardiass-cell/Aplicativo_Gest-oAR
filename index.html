@@ -47,6 +47,13 @@
       .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
       
       @media print {
+        /* Force color backgrounds to print */
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
+        }
+
         body.is-printing-project #root > div > aside,
         body.is-printing-project #root > div > main > header,
         body.is-printing-project .project-manager-header,
@@ -100,6 +107,44 @@
            margin: 0 !important;
            padding: 0 !important;
            overflow: visible !important;
+        }
+
+        /* Gantt View Overrides to print complete contents */
+        body.is-printing-project .h-\[700px\],
+        body.is-printing-project .flex-col.h-\[700px\],
+        body.is-printing-project div.gantt-container {
+          height: auto !important;
+          min-height: auto !important;
+          max-height: none !important;
+          overflow: visible !important;
+        }
+
+        body.is-printing-project div.flex-1.overflow-hidden,
+        body.is-printing-project .overflow-y-auto,
+        body.is-printing-project .overflow-x-hidden,
+        body.is-printing-project .overflow-auto,
+        body.is-printing-project .custom-scrollbar,
+        body.is-printing-project .scrollbar-none {
+          overflow: visible !important;
+          height: auto !important;
+          max-height: none !important;
+        }
+
+        body.is-printing-project .flex.flex-1.overflow-hidden.relative {
+          height: auto !important;
+          display: flex !important;
+          flex-direction: row !important;
+          overflow: visible !important;
+        }
+
+        body.is-printing-project div[ref="listRef"],
+        body.is-printing-project div[ref="timelineRef"] {
+          overflow: visible !important;
+          height: auto !important;
+        }
+
+        body.is-printing-project .sticky {
+          position: static !important;
         }
 
         @page {
