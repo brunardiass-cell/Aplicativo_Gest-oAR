@@ -18,10 +18,10 @@ const ROW_HEIGHT = 48; // Height of one activity row
 const HEADER_HEIGHT = 60;
 
 const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdateProject, teamMembers }) => {
-  const [viewScale, setViewScale] = useState<'days' | 'weeks' | 'months'>('months');
+  const [viewScale, setViewScale] = useState<'weeks' | 'months' | 'years'>('months');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
-  const [showBaseline, setShowBaseline] = useState(false);
+  const [showBaseline, setShowBaseline] = useState(true);
   const [expandedMacros, setExpandedMacros] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     project.macroActivities.forEach(m => initial[m.id] = true);
@@ -44,8 +44,13 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
       start.setDate(start.getDate() - start.getDay() - 14); // 2 weeks back
       end.setDate(start.getDate() + 70); // ~10 weeks forward
     } else {
-      start.setDate(start.getDate() - 10); // 10 days back
-      end.setDate(start.getDate() + 30); // 30 days forward
+      // Scale is years
+      start.setFullYear(start.getFullYear() - 2);
+      start.setMonth(0);
+      start.setDate(1);
+      end.setFullYear(end.getFullYear() + 3);
+      end.setMonth(11);
+      end.setDate(31);
     }
     
     return { start, end };
@@ -68,13 +73,13 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
     } else {
       while (current <= viewRange.end) {
         list.push(new Date(current));
-        current.setDate(current.getDate() + 1);
+        current.setFullYear(current.getFullYear() + 1);
       }
     }
     return list;
   }, [viewRange, viewScale]);
 
-  const columnWidth = viewScale === 'days' ? 60 : viewScale === 'weeks' ? 100 : 120;
+  const columnWidth = viewScale === 'weeks' ? 100 : viewScale === 'months' ? 120 : 180;
 
   const getPosition = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -89,8 +94,13 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
       const diffDays = (date.getTime() - startOfView.getTime()) / (1000 * 60 * 60 * 24);
       return (diffDays / 7) * columnWidth;
     } else {
-      const diffDays = (date.getTime() - startOfView.getTime()) / (1000 * 60 * 60 * 24);
-      return diffDays * columnWidth;
+      const diffYears = date.getFullYear() - startOfView.getFullYear();
+      const isLeap = (y: number) => (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+      const daysInYear = isLeap(date.getFullYear()) ? 366 : 365;
+      const startOfYear = new Date(date.getFullYear(), 0, 1);
+      const diffDays = (date.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24);
+      const progress = Math.max(0, diffDays) / daysInYear;
+      return (diffYears + progress) * columnWidth;
     }
   };
 
@@ -112,7 +122,7 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
     } else if (viewScale === 'weeks') {
       newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7));
     } else {
-      newDate.setDate(newDate.getDate() + (direction === 'next' ? 1 : -1));
+      newDate.setFullYear(newDate.getFullYear() + (direction === 'next' ? 1 : -1));
     }
     setCurrentDate(newDate);
   };
@@ -137,13 +147,13 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
       <div className="border-b border-slate-100 p-4 flex flex-wrap items-center justify-between gap-4 bg-white">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100">
-            {(['days', 'weeks', 'months'] as const).map(scale => (
+            {(['weeks', 'months', 'years'] as const).map(scale => (
               <button
                 key={scale}
                 onClick={() => setViewScale(scale)}
                 className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${viewScale === scale ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
               >
-                {scale === 'days' ? 'Dias' : scale === 'weeks' ? 'Semanas' : 'Meses'}
+                {scale === 'weeks' ? 'Semanas' : scale === 'months' ? 'Meses' : 'Anos'}
               </button>
             ))}
           </div>
@@ -176,7 +186,7 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
 
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Linha de base</span>
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Linha de Hoje (Data Atual)</span>
             <button 
               onClick={() => setShowBaseline(!showBaseline)}
               className={`w-9 h-5 rounded-full transition-colors relative ${showBaseline ? 'bg-emerald-500' : 'bg-slate-200'}`}
@@ -190,6 +200,40 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
             <button className="p-1.5 text-slate-400 hover:bg-slate-50 rounded-lg transition">
               <Filter size={16} />
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Beautiful Clear Legend Bar */}
+      <div className="bg-slate-50/50 border-b border-slate-100 px-6 py-2.5 flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px]">
+        <div className="flex items-center gap-2">
+          <span className="font-extrabold text-slate-400 uppercase tracking-wider">Cronograma:</span>
+          <div className="flex items-center gap-1">
+            <div className="w-5 h-2.5 bg-slate-300 border border-slate-400/30 rounded" />
+            <span className="font-bold text-slate-600">Planejado (Cinza)</span>
+          </div>
+          <div className="flex items-center gap-1 ml-2">
+            <div className="w-5 h-2.5 bg-emerald-500 border border-emerald-605/30 rounded animate-pulse" />
+            <span className="font-bold text-slate-600">Real (Verde)</span>
+          </div>
+        </div>
+        <div className="w-px h-3 bg-slate-200 hidden sm:block" />
+        <div className="flex items-center gap-2">
+          <span className="font-extrabold text-slate-400 uppercase tracking-wider font-semibold">Progresso dos Status:</span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="px-2 py-0.5 bg-orange-100 border border-orange-300 text-orange-855 font-black rounded-md text-[8.5px] uppercase">
+              Planejado (Laranja)
+            </span>
+            <span className="px-2 py-0.5 bg-blue-100 border border-blue-300 text-blue-800 font-bold rounded-md text-[8.5px] uppercase">
+              Em Andamento (Azul)
+            </span>
+            <span className="px-2 py-0.5 bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold rounded-md text-[8.5px] uppercase">
+              Concluído (Verde)
+            </span>
+            <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-300 text-emerald-800 font-extrabold rounded-md text-[8.5px] uppercase flex items-center gap-0.5">
+              <span className="bg-emerald-900 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center font-mono font-black text-[9px]">!</span>
+              Concluído com Restrições (Verde Claro + !)
+            </span>
           </div>
         </div>
       </div>
@@ -220,18 +264,44 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
                   </div>
                 </div>
                 
-                {expandedMacros[macro.id] && macro.microActivities.map((micro, microIdx) => (
-                  <div 
-                    key={micro.id}
-                    className={`h-[48px] flex items-center pl-10 pr-4 gap-2 hover:bg-slate-50 cursor-pointer transition-colors group border-b border-slate-50 ${selectedActivityId === micro.id ? 'bg-slate-50 border-r-2 border-brand-primary' : ''}`}
-                    onClick={() => setSelectedActivityId(micro.id)}
-                  >
-                    <div className="flex-1 flex justify-between items-center min-w-0">
-                      <p className="text-[10px] font-bold text-slate-500 truncate">{macroIdx + 1}.{microIdx + 1} {micro.name}</p>
-                      <p className="text-[9px] text-slate-400 truncate font-bold uppercase ml-2">{micro.assignee}</p>
+                {expandedMacros[macro.id] && macro.microActivities.map((micro, microIdx) => {
+                  let badgeColors = "bg-orange-100 text-orange-800 border border-orange-300";
+                  let statusLabel = "Planejado";
+                  let isRestricted = false;
+
+                  if (micro.status === 'Concluído e aprovado') {
+                    badgeColors = "bg-emerald-100 text-emerald-800 border border-emerald-300";
+                    statusLabel = "Concluído";
+                  } else if (micro.status === 'Em andamento') {
+                    badgeColors = "bg-blue-100 text-blue-800 border border-blue-300";
+                    statusLabel = "Em andamento";
+                  } else if (micro.status === 'Concluído com restrições') {
+                    badgeColors = "bg-emerald-200 text-emerald-950 border border-emerald-400 font-extrabold";
+                    statusLabel = "Com Restrição";
+                    isRestricted = true;
+                  }
+
+                  return (
+                    <div 
+                      key={micro.id}
+                      className={`h-[48px] flex items-center pl-10 pr-4 gap-2 hover:bg-slate-50 cursor-pointer transition-colors group border-b border-slate-50 ${selectedActivityId === micro.id ? 'bg-slate-50 border-r-2 border-brand-primary' : ''}`}
+                      onClick={() => setSelectedActivityId(micro.id)}
+                    >
+                      <div className="flex-1 flex justify-between items-center min-w-0">
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <p className="text-[10px] font-bold text-slate-500 truncate">{macroIdx + 1}.{microIdx + 1} {micro.name}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                            <span className={`text-[7px] px-1 py-0.2 rounded font-black uppercase tracking-wider ${badgeColors} flex items-center gap-0.5 shrink-0`}>
+                              {isRestricted && <span className="bg-emerald-950 text-white rounded-full w-2.5 h-2.5 flex items-center justify-center font-mono font-black text-[7px]" style={{ lineHeight: '1' }}>!</span>}
+                              {statusLabel} ({micro.progress || 0}%)
+                            </span>
+                            <span className="text-[8px] text-slate-400 font-mono truncate font-semibold">{micro.assignee}</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </React.Fragment>
             ))}
           </div>
@@ -268,15 +338,17 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
             </div>
 
             {/* Current Day Marker */}
-            <div 
-              className="absolute top-0 bottom-0 w-px bg-emerald-500/50 z-10 flex flex-col items-center"
-              style={{ left: getPosition(new Date().toISOString()) }}
-            >
-              <div className="mt-2 px-2 py-0.5 bg-emerald-600 text-white text-[8px] font-black rounded-full whitespace-nowrap shadow-sm">
-                HOJE - {new Date().toLocaleDateString('pt-BR')}
+            {showBaseline && (
+              <div 
+                className="absolute top-0 bottom-0 w-px bg-emerald-500/50 z-10 flex flex-col items-center"
+                style={{ left: getPosition(new Date().toISOString()) }}
+              >
+                <div className="mt-2 px-2 py-0.5 bg-emerald-600 text-white text-[8px] font-black rounded-full whitespace-nowrap shadow-sm">
+                  HOJE - {new Date().toLocaleDateString('pt-BR')}
+                </div>
+                <div className="h-full w-px border-l border-dashed border-emerald-500" />
               </div>
-              <div className="h-full w-px border-l border-dashed border-emerald-500" />
-            </div>
+            )}
 
             {/* Bars */}
             <div className="relative">
@@ -299,10 +371,25 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
                 const isMacroVisible = getPosition(macroEnd.toISOString()) > 0 && getPosition(macroStart.toISOString()) < columns.length * columnWidth;
 
                 if (isMacroVisible) {
+                  // Macro status progress ratio
+                  const completedRatio = macro.microActivities.length > 0
+                    ? macro.microActivities.filter(m => m.status === 'Concluído e aprovado').length / macro.microActivities.length
+                    : 0;
+                  const progressPercentage = Math.round(completedRatio * 100);
+
                   results.push(
                     <div key={macro.id} className="h-[48px] relative border-b border-slate-50 group hover:bg-slate-50/20 transition-colors">
+                      {/* Macro Planned Bar (Cinza) */}
                       <div 
-                        className="absolute top-4 h-4 bg-slate-100 rounded-full overflow-hidden flex items-center border border-slate-200"
+                        className="absolute top-2 h-2.5 bg-slate-300 border border-slate-400/20 rounded shadow-xs"
+                        style={{ 
+                          left: getPosition(macroStart.toISOString()), 
+                          width: getWidth(macroStart.toISOString(), macroEnd.toISOString()) 
+                        }}
+                      />
+                      {/* Macro Real Bar (Verde) */}
+                      <div 
+                        className="absolute top-5 h-3 bg-emerald-500/20 border border-emerald-500/30 rounded overflow-hidden"
                         style={{ 
                           left: getPosition(macroStart.toISOString()), 
                           width: getWidth(macroStart.toISOString(), macroEnd.toISOString()) 
@@ -310,8 +397,16 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
                       >
                         <div 
                           className="h-full bg-emerald-600/80 transition-all duration-1000"
-                          style={{ width: `${(macro.microActivities.filter(m => m.status === 'Concluído e aprovado').length / Math.max(1, macro.microActivities.length)) * 100}%` }}
+                          style={{ width: `${progressPercentage}%` }}
                         />
+                      </div>
+                      
+                      {/* Macro Progress Badge */}
+                      <div 
+                        className="absolute top-[14px] px-1 py-0.5 rounded text-[8px] font-black bg-emerald-600 text-white shadow-xs"
+                        style={{ left: getPosition(macroStart.toISOString()) + getWidth(macroStart.toISOString(), macroEnd.toISOString()) + 8 }}
+                      >
+                        {progressPercentage}%
                       </div>
                     </div>
                   );
@@ -323,30 +418,71 @@ const ProjectGanttView: React.FC<ProjectGanttViewProps> = ({ project, onUpdatePr
                   macro.microActivities.forEach(micro => {
                     const microStart = micro.startDate || micro.dueDate;
                     const microEnd = micro.dueDate;
+                    const realStart = micro.realStartDate || micro.startDate || micro.dueDate;
+                    const realEnd = micro.realEndDate || micro.completionDate || micro.dueDate;
                     
-                    const isVisible = getPosition(microEnd) > 0 && getPosition(microStart) < columns.length * columnWidth;
+                    const isPlannedVisible = getPosition(microEnd) > 0 && getPosition(microStart) < columns.length * columnWidth;
+                    const isRealVisible = getPosition(realEnd) > 0 && getPosition(realStart) < columns.length * columnWidth;
+
+                    // Progress style configurations based on status
+                    let badgeColors = "bg-orange-500 text-white font-black";
+                    let isRestricted = false;
+
+                    if (micro.status === 'Concluído e aprovado') {
+                      badgeColors = "bg-emerald-600 text-white font-black";
+                    } else if (micro.status === 'Em andamento') {
+                      badgeColors = "bg-blue-500 text-white font-black";
+                    } else if (micro.status === 'Concluído com restrições') {
+                      badgeColors = "bg-emerald-200 text-emerald-950 font-black border border-emerald-400";
+                      isRestricted = true;
+                    }
 
                     results.push(
                       <div key={micro.id} className="h-[48px] relative border-b border-slate-50 group hover:bg-slate-50/20 transition-colors">
-                        {isVisible && (
+                        {/* Micro Planned Bar (Cinza) */}
+                        {isPlannedVisible && (
                           <div 
-                            className={`absolute top-4.5 h-2.5 rounded-full shadow-sm flex items-center transition-all ${
-                              micro.status === 'Concluído e aprovado' ? 'bg-emerald-500' :
-                              (new Date(micro.dueDate) < new Date()) ? 'bg-rose-500 animate-pulse' :
-                              micro.status === 'Em andamento' ? 'bg-brand-primary' :
-                              'bg-slate-200'
-                            }`}
+                            className="absolute top-1.5 h-2 bg-slate-300 border border-slate-400/20 rounded shadow-xs"
                             style={{ 
                               left: getPosition(microStart), 
                               width: getWidth(microStart, microEnd) 
                             }}
+                          />
+                        )}
+
+                        {/* Micro Real Bar (Verde) */}
+                        {isRealVisible && (
+                          <div 
+                            className="absolute top-5 h-2.5 bg-emerald-500/20 border border-emerald-500/30 rounded overflow-hidden"
+                            style={{ 
+                              left: getPosition(realStart), 
+                              width: getWidth(realStart, realEnd) 
+                            }}
                           >
-                            {micro.progress && micro.progress > 0 && micro.progress < 100 && (
-                              <div className="h-full bg-black/10 rounded-full" style={{ width: `${micro.progress}%` }} />
+                            <div 
+                              className="h-full bg-emerald-500 rounded-sm"
+                              style={{ width: `${micro.progress || 0}%` }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Status/Progress Badge on Timeline */}
+                        {isRealVisible && (
+                          <div 
+                            className={`absolute top-[14px] h-[18px] text-[8px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 shadow-xs whitespace-nowrap leading-none ${badgeColors}`}
+                            style={{ left: getPosition(realStart) + getWidth(realStart, realEnd) + 8 }}
+                          >
+                            {isRestricted && (
+                              <span className="bg-emerald-900 text-white rounded-full w-3 h-3 flex items-center justify-center font-mono font-black text-[7.5px]" style={{ lineHeight: '1' }}>!</span>
                             )}
-                            <div className="absolute -right-16 top-1/2 -translate-y-1/2 text-[8px] font-bold text-slate-400 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
-                              {new Date(microEnd).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                            </div>
+                            {micro.progress || 0}%
+                          </div>
+                        )}
+
+                        {/* Due Date Indicator on Hover */}
+                        {isPlannedVisible && (
+                          <div className="absolute -right-16 top-1/2 -translate-y-1/2 text-[8px] font-bold text-slate-400 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+                            {new Date(microEnd).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                           </div>
                         )}
                       </div>
