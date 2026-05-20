@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Project, MacroActivity, MicroActivity, MicroActivityStatus, TeamMember, Prerequisite, BudgetInfo, PrerequisiteType, PrerequisiteStatus, BudgetStatus, RegulatoryStandard } from '../types';
 import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle, Layers, GripVertical, ListTodo, DollarSign, Calendar, User, CheckCircle2, Clock, ShieldCheck, ClipboardCheck, Activity, BadgeAlert } from 'lucide-react';
+import { PrerequisitesModal } from './PrerequisitesModal';
 import {
   DndContext, 
   closestCenter,
@@ -145,10 +146,16 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({
     
     if (updates.status) {
       const currentMicro = updatedProject.macroActivities[macroIndex].microActivities[microIndex];
-      if (updates.status === 'Concluído e aprovado') {
+      if (updates.status === 'Concluído e aprovado' || updates.status === 'Concluído com restrições') {
         finalUpdates.progress = 100;
         if (!currentMicro.completionDate) {
             finalUpdates.completionDate = new Date().toISOString().split('T')[0];
+        }
+        if (!currentMicro.realStartDate) {
+            finalUpdates.realStartDate = currentMicro.startDate || new Date().toISOString().split('T')[0];
+        }
+        if (!currentMicro.realEndDate) {
+            finalUpdates.realEndDate = finalUpdates.completionDate || new Date().toISOString().split('T')[0];
         }
       } else if (updates.status === 'A repetir / retrabalho') {
         finalUpdates.progress = 0;
@@ -413,6 +420,10 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
 
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
 
+  const hasBudgetPrerequisite = useMemo(() => {
+    return (macro.prerequisites || []).some(p => p.type === 'orçamento');
+  }, [macro.prerequisites]);
+
   const totalMicros = macro.microActivities.length;
   const completedMicros = macro.microActivities.filter(m => m.status === 'Concluído e aprovado' || m.status === 'Concluído com restrições').length;
   
@@ -568,109 +579,50 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
             )}
           </div>
         </div>
+
         <div className="flex items-center gap-4">
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
-                <button onClick={handleAddPrerequisite} className="p-2 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-md" title="Adicionar Pré-requisito"><ListTodo size={16}/></button>
-                <button onClick={() => setIsEditing(true)} className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-md"><Edit size={16}/></button>
-                <button onClick={() => onOpenDeletionModal({ type: 'macro', ids: { projectId: project.id, macroId: macro.id }, name: macro.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"><Trash2 size={16}/></button>
-            </div>
-            <div className="flex items-center gap-2">
-                {macro.prerequisites && macro.prerequisites.length > 0 && (
-                    <button 
-                        onClick={() => setShowPrerequisites(!showPrerequisites)}
-                        className={`p-2 rounded-xl transition flex items-center gap-1 ${showPrerequisites ? 'bg-teal-100 text-teal-600' : 'text-slate-400 hover:bg-slate-100'}`}
-                        title="Pré-requisitos da Macro"
-                    >
-                        <ListTodo size={14}/>
-                        <span className="text-[9px] font-bold">{macro.prerequisites.length}</span>
-                    </button>
-                )}
-                <div className="flex flex-col items-end">
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-800">{Math.round(progress)}%</span>
-                        <div className="w-16 h-1.5 bg-slate-200 rounded-full"><div className="bg-brand-primary h-1.5 rounded-full" style={{ width: `${progress}%` }}></div></div>
-                        <span className="text-[9px] font-black text-slate-400">{completedMicros}/{totalMicros}</span>
-                    </div>
-                    {restrictedCount > 0 && (
-                        <div className="flex items-center gap-1 mt-1 text-amber-600">
-                            <AlertTriangle size={12} />
-                            <span className="text-[9px] font-black uppercase">{restrictedCount}/{completedMicros} com restrições</span>
-                        </div>
-                    )}
-                </div>
-            </div>
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
+              <button onClick={() => setShowPrerequisites(true)} className="p-2 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-md" title="Adicionar Pré-requisito"><ListTodo size={16}/></button>
+              <button onClick={() => setIsEditing(true)} className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-md"><Edit size={16}/></button>
+              <button onClick={() => onOpenDeletionModal({ type: 'macro', ids: { projectId: project.id, macroId: macro.id }, name: macro.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"><Trash2 size={16}/></button>
+          </div>
+          <div className="flex items-center gap-2">
+              {macro.prerequisites && macro.prerequisites.length > 0 && (
+                  <button 
+                      onClick={() => setShowPrerequisites(!showPrerequisites)}
+                      className={`p-2 rounded-xl transition flex items-center gap-1 ${showPrerequisites ? 'bg-teal-100 text-teal-600' : 'text-slate-400 hover:bg-slate-100'}`}
+                      title="Pré-requisitos da Macro"
+                  >
+                      <ListTodo size={14}/>
+                      {hasBudgetPrerequisite && <DollarSign size={14} className="text-emerald-500 animate-pulse" />}
+                      <span className="text-[9px] font-bold">{macro.prerequisites.length}</span>
+                  </button>
+              )}
+              <div className="flex flex-col items-end">
+                  <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-800">{Math.round(progress)}%</span>
+                      <div className="w-16 h-1.5 bg-slate-200 rounded-full"><div className="bg-brand-primary h-1.5 rounded-full" style={{ width: `${progress}%` }}></div></div>
+                      <span className="text-[9px] font-black text-slate-400">{completedMicros}/{totalMicros}</span>
+                  </div>
+                  {restrictedCount > 0 && (
+                      <div className="flex items-center gap-1 mt-1 text-amber-600">
+                          <AlertTriangle size={12} />
+                          <span className="text-[9px] font-black uppercase">{restrictedCount}/{completedMicros} com restrições</span>
+                      </div>
+                  )}
+              </div>
+          </div>
         </div>
       </div>
 
-      {/* Macro Prerequisites Expansion */}
-      {showPrerequisites && macro.prerequisites && (
-          <div className="mx-4 mb-4 p-4 bg-white border border-teal-100 rounded-2xl animate-in slide-in-from-top-2 duration-300">
-              <div className="flex justify-between items-center mb-4">
-                  <h5 className="text-[10px] font-black uppercase tracking-widest text-teal-600 flex items-center gap-2">
-                      <ListTodo size={14}/> Pré-requisitos da Macroatividade
-                  </h5>
-                  <button onClick={() => setShowPrerequisites(false)} className="text-slate-400 hover:text-slate-600"><X size={14}/></button>
-              </div>
-              <div className="space-y-3">
-                  {macro.prerequisites.map(pre => (
-                      <div key={pre.id} className="flex items-center gap-3 p-2 bg-slate-50 rounded-xl border border-slate-100">
-                          <input 
-                            type="checkbox" 
-                            checked={pre.completed} 
-                            onChange={e => handleUpdatePrerequisite(pre.id, { completed: e.target.checked, status: e.target.checked ? 'concluído' : 'em andamento' })}
-                            className="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-                          />
-                          <div className="flex-1 grid grid-cols-12 gap-2 items-center">
-                              <div className="col-span-4">
-                                  <input 
-                                    value={pre.name} 
-                                    onChange={e => handleUpdatePrerequisite(pre.id, { name: e.target.value })}
-                                    className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none"
-                                  />
-                              </div>
-                              <div className="col-span-3">
-                                  <select 
-                                    value={pre.type} 
-                                    onChange={e => handleUpdatePrerequisite(pre.id, { type: e.target.value as PrerequisiteType })}
-                                    className="w-full bg-transparent text-[10px] font-bold text-slate-500 outline-none"
-                                  >
-                                      <option value="orçamento">Orçamento</option>
-                                      <option value="contratação">Contratação</option>
-                                      <option value="logística">Logística</option>
-                                      <option value="recurso">Recurso</option>
-                                  </select>
-                              </div>
-                              <div className="col-span-3">
-                                  <select 
-                                    value={pre.status} 
-                                    onChange={e => handleUpdatePrerequisite(pre.id, { status: e.target.value as PrerequisiteStatus, completed: e.target.value === 'concluído' })}
-                                    className="w-full bg-transparent text-[10px] font-bold text-slate-500 outline-none"
-                                  >
-                                      <option value="não iniciado">Não Iniciado</option>
-                                      <option value="em andamento">Em Andamento</option>
-                                      <option value="concluído">Concluído</option>
-                                  </select>
-                              </div>
-                              <div className="col-span-2 flex items-center gap-1">
-                                  <Clock size={12} className="text-slate-400"/>
-                                  <input 
-                                    type="number" 
-                                    value={pre.leadTimeDays} 
-                                    onChange={e => handleUpdatePrerequisite(pre.id, { leadTimeDays: parseInt(e.target.value) || 0 })}
-                                    className="w-8 bg-transparent text-[10px] font-bold text-slate-500 outline-none"
-                                    title="Dias de antecedência"
-                                  />
-                                  <span className="text-[8px] text-slate-400">d</span>
-                              </div>
-                          </div>
-                          <button onClick={() => handleDeletePrerequisite(pre.id)} className="p-1 text-slate-300 hover:text-red-500"><Trash2 size={12}/></button>
-                      </div>
-                  ))}
-                  <button onClick={handleAddPrerequisite} className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-400 hover:border-teal-300 hover:text-teal-500 transition flex items-center justify-center gap-2">
-                      <Plus size={12}/> Adicionar Pré-requisito à Macro
-                  </button>
-              </div>
-          </div>
+      {showPrerequisites && (
+        <PrerequisitesModal
+          isOpen={showPrerequisites}
+          onClose={() => setShowPrerequisites(false)}
+          title={macro.name}
+          prerequisites={macro.prerequisites || []}
+          onUpdatePrerequisites={(updated) => handleUpdateMacro({ prerequisites: updated })}
+        />
       )}
       {isResultsModalOpen && (
         <MacroActivityResultsModal 
@@ -957,10 +909,29 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
         onUpdate({ budget: undefined });
     };
 
+    const isCompleted = micro.status === 'Concluído e aprovado' || micro.status === 'Concluído com restrições';
+
+    const realStart = micro.realStartDate || micro.startDate || '';
+    const realEnd = micro.realEndDate || micro.completionDate || micro.dueDate || '';
+
+    const calculateRealDuration = (start?: string, end?: string) => {
+      if (!start || !end) return '-';
+      const s = new Date(start + 'T00:00:00');
+      const e = new Date(end + 'T00:00:00');
+      const diffTime = e.getTime() - s.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (isNaN(diffDays) || diffDays < 0) return '-';
+      return `${diffDays} ${diffDays === 1 ? 'dia' : 'dias'}`;
+    };
+
+    const hasBudgetPrerequisite = useMemo(() => {
+        return (micro.prerequisites || []).some(pre => pre.type === 'orçamento');
+    }, [micro.prerequisites]);
+
     return (
     <div ref={setNodeRef} style={style} id={`micro-${micro.id}`} className={`p-4 border rounded-2xl transition-all ${isEditing ? 'bg-teal-50/50 border-teal-200 shadow-lg' : 'bg-slate-50/30 border-slate-100'}`}>
       <div className="flex flex-col sm:grid sm:grid-cols-12 gap-4 items-start sm:items-center">
-        <div className="w-full sm:col-span-4 flex items-center gap-2">
+        <div className="w-full sm:col-span-3 flex items-center gap-2">
             <div {...attributes} {...listeners} className="p-2 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing">
               <GripVertical size={14} />
             </div>
@@ -994,13 +965,31 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
           </select>
         </div>
         <div className="w-full sm:col-span-2 relative">
-          <label className="text-[8px] font-black text-slate-400 uppercase block mb-1">Início</label>
-          <input type="date" value={micro.startDate || micro.dueDate} onChange={e => onUpdate({ startDate: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600 outline-none"/>
+          <label className={`text-[8px] font-black uppercase block mb-1 ${isCompleted ? 'text-emerald-500' : 'text-slate-400'}`}>
+            {isCompleted ? 'Início Real' : 'Início Plan.'}
+          </label>
+          <input 
+            type="date" 
+            value={isCompleted ? realStart : (micro.startDate || micro.dueDate)} 
+            onChange={e => onUpdate(isCompleted ? { realStartDate: e.target.value } : { startDate: e.target.value })} 
+            className={`w-full bg-transparent text-[10px] font-bold outline-none ${isCompleted ? 'text-emerald-600 font-extrabold' : 'text-slate-600'}`}
+          />
         </div>
         <div className="w-full sm:col-span-2 relative">
-          <label className="text-[8px] font-black text-slate-400 uppercase block mb-1">Término</label>
-          <input type="date" value={micro.dueDate} onChange={e => onUpdate({ dueDate: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600 outline-none"/>
-          {dueDateStatus && (<div className={`absolute -top-3.5 right-0 text-[8px] font-bold flex items-center gap-1 ${dueDateStatus.color}`}><AlertTriangle size={10} /> {dueDateStatus.text}</div>)}
+          <label className={`text-[8px] font-black uppercase block mb-1 ${isCompleted ? 'text-emerald-500' : 'text-slate-400'}`}>
+            {isCompleted ? 'Término Real' : 'Término Plan.'}
+          </label>
+          <input 
+            type="date" 
+            value={isCompleted ? realEnd : micro.dueDate} 
+            onChange={e => onUpdate(isCompleted ? { realEndDate: e.target.value } : { dueDate: e.target.value })} 
+            className={`w-full bg-transparent text-[10px] font-bold outline-none ${isCompleted ? 'text-emerald-700 font-extrabold' : 'text-slate-600'}`}
+          />
+          {!isCompleted && dueDateStatus && (
+            <div className={`absolute -top-3.5 right-0 text-[8px] font-bold flex items-center gap-1 ${dueDateStatus.color}`}>
+              <AlertTriangle size={10} /> {dueDateStatus.text}
+            </div>
+          )}
         </div>
         <div className="w-full sm:col-span-2">
           <select value={micro.status} onChange={e => onUpdate({ status: e.target.value as MicroActivityStatus })} className={`w-full bg-transparent text-[10px] font-bold outline-none ${
@@ -1015,167 +1004,30 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
              <option value="Concluído e aprovado">Concluído e aprovado ✅</option>
           </select>
         </div>
-        <div className="w-full sm:col-span-2 flex items-center justify-end gap-1">
-           {micro.prerequisites && micro.prerequisites.length > 0 && (
-               <button 
-                onClick={() => setShowPrerequisites(!showPrerequisites)}
-                className={`p-2 rounded-xl transition flex items-center gap-1 ${showPrerequisites ? 'bg-teal-100 text-teal-600' : 'text-slate-400 hover:bg-slate-100'}`}
-                title="Pré-requisitos"
-               >
-                   <ListTodo size={14}/>
-                   <span className="text-[9px] font-bold">{micro.prerequisites.length}</span>
-               </button>
-           )}
-           {micro.budget && (
-               <button 
-                onClick={() => setShowBudget(!showBudget)}
-                className={`p-2 rounded-xl transition flex items-center gap-1 ${showBudget ? 'bg-emerald-100 text-emerald-600' : 'text-slate-400 hover:bg-slate-100'}`}
-                title="Orçamento"
-               >
-                   <DollarSign size={14}/>
-               </button>
-           )}
-           <button onClick={onDelete} className="p-2 text-slate-300 hover:text-red-500 rounded-xl transition"><Trash2 size={14}/></button>
+        <div className="w-full sm:col-span-1 flex items-center justify-end gap-1.5">
+           <button 
+            onClick={() => setShowPrerequisites(!showPrerequisites)}
+            className={`p-1.5 rounded-lg transition flex items-center gap-1 ${showPrerequisites ? 'bg-teal-100 text-teal-600' : 'text-slate-400 hover:bg-slate-100'}`}
+            title="Pré-requisitos e Orçamentos"
+           >
+               <ListTodo size={12}/>
+               {hasBudgetPrerequisite && <DollarSign size={12} className="text-emerald-500 animate-pulse" />}
+               <span className="text-[8px] font-bold">{micro.prerequisites?.length || 0}</span>
+           </button>
+           <button onClick={onDelete} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Excluir"><Trash2 size={12}/></button>
         </div>
       </div>
 
-      {/* Prerequisites Expansion */}
-      {showPrerequisites && micro.prerequisites && (
-          <div className="mt-4 p-4 bg-white border border-teal-100 rounded-2xl animate-in slide-in-from-top-2 duration-300">
-              <div className="flex justify-between items-center mb-4">
-                  <h5 className="text-[10px] font-black uppercase tracking-widest text-teal-600 flex items-center gap-2">
-                      <ListTodo size={14}/> Pré-requisitos
-                  </h5>
-                  <button onClick={() => setShowPrerequisites(false)} className="text-slate-400 hover:text-slate-600"><X size={14}/></button>
-              </div>
-              <div className="space-y-3">
-                  {micro.prerequisites.map(pre => (
-                      <div key={pre.id} className="flex items-center gap-3 p-2 bg-slate-50 rounded-xl border border-slate-100">
-                          <input 
-                            type="checkbox" 
-                            checked={pre.completed} 
-                            onChange={e => handleUpdatePrerequisite(pre.id, { completed: e.target.checked, status: e.target.checked ? 'concluído' : 'em andamento' })}
-                            className="w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-                          />
-                          <div className="flex-1 grid grid-cols-12 gap-2 items-center">
-                              <div className="col-span-4">
-                                  <input 
-                                    value={pre.name} 
-                                    onChange={e => handleUpdatePrerequisite(pre.id, { name: e.target.value })}
-                                    className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none"
-                                  />
-                              </div>
-                              <div className="col-span-3">
-                                  <select 
-                                    value={pre.type} 
-                                    onChange={e => handleUpdatePrerequisite(pre.id, { type: e.target.value as PrerequisiteType })}
-                                    className="w-full bg-transparent text-[10px] font-bold text-slate-500 outline-none"
-                                  >
-                                      <option value="orçamento">Orçamento</option>
-                                      <option value="contratação">Contratação</option>
-                                      <option value="logística">Logística</option>
-                                      <option value="recurso">Recurso</option>
-                                  </select>
-                              </div>
-                              <div className="col-span-3">
-                                  <select 
-                                    value={pre.status} 
-                                    onChange={e => handleUpdatePrerequisite(pre.id, { status: e.target.value as PrerequisiteStatus, completed: e.target.value === 'concluído' })}
-                                    className="w-full bg-transparent text-[10px] font-bold text-slate-500 outline-none"
-                                  >
-                                      <option value="não iniciado">Não Iniciado</option>
-                                      <option value="em andamento">Em Andamento</option>
-                                      <option value="concluído">Concluído</option>
-                                  </select>
-                              </div>
-                              <div className="col-span-2 flex items-center gap-1">
-                                  <Clock size={12} className="text-slate-400"/>
-                                  <input 
-                                    type="number" 
-                                    value={pre.leadTimeDays} 
-                                    onChange={e => handleUpdatePrerequisite(pre.id, { leadTimeDays: parseInt(e.target.value) || 0 })}
-                                    className="w-8 bg-transparent text-[10px] font-bold text-slate-500 outline-none"
-                                    title="Dias de antecedência"
-                                  />
-                                  <span className="text-[8px] text-slate-400">d</span>
-                              </div>
-                          </div>
-                          <button onClick={() => handleDeletePrerequisite(pre.id)} className="p-1 text-slate-300 hover:text-red-500"><Trash2 size={12}/></button>
-                      </div>
-                  ))}
-                  <button onClick={handleAddPrerequisite} className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-400 hover:border-teal-300 hover:text-teal-500 transition flex items-center justify-center gap-2">
-                      <Plus size={12}/> Adicionar Pré-requisito
-                  </button>
-              </div>
-          </div>
+      {showPrerequisites && (
+        <PrerequisitesModal
+          isOpen={showPrerequisites}
+          onClose={() => setShowPrerequisites(false)}
+          title={micro.name}
+          prerequisites={micro.prerequisites || []}
+          onUpdatePrerequisites={(updated) => onUpdate({ prerequisites: updated })}
+        />
       )}
 
-      {/* Budget Expansion */}
-      {showBudget && micro.budget && (
-          <div className="mt-4 p-4 bg-white border border-emerald-100 rounded-2xl animate-in slide-in-from-top-2 duration-300">
-              <div className="flex justify-between items-center mb-4">
-                  <h5 className="text-[10px] font-black uppercase tracking-widest text-emerald-600 flex items-center gap-2">
-                      <DollarSign size={14}/> Detalhes do Orçamento
-                  </h5>
-                  <button onClick={() => setShowBudget(false)} className="text-slate-400 hover:text-slate-600"><X size={14}/></button>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="space-y-1">
-                      <label className="text-[8px] font-black text-slate-400 uppercase">Valor Estimado</label>
-                      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
-                          <span className="text-[10px] font-bold text-slate-400">R$</span>
-                          <input 
-                            type="number" 
-                            value={micro.budget.estimatedValue} 
-                            onChange={e => handleUpdateBudget({ estimatedValue: parseFloat(e.target.value) || 0 })}
-                            className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none"
-                          />
-                      </div>
-                  </div>
-                  <div className="space-y-1">
-                      <label className="text-[8px] font-black text-slate-400 uppercase">Fornecedor</label>
-                      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
-                          <User size={12} className="text-slate-400"/>
-                          <input 
-                            value={micro.budget.supplier} 
-                            onChange={e => handleUpdateBudget({ supplier: e.target.value })}
-                            className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none"
-                            placeholder="Nome do fornecedor"
-                          />
-                      </div>
-                  </div>
-                  <div className="space-y-1">
-                      <label className="text-[8px] font-black text-slate-400 uppercase">Data do Orçamento</label>
-                      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
-                          <Calendar size={12} className="text-slate-400"/>
-                          <input 
-                            type="date" 
-                            value={micro.budget.budgetDate} 
-                            onChange={e => handleUpdateBudget({ budgetDate: e.target.value })}
-                            className="w-full bg-transparent text-xs font-bold text-slate-700 outline-none"
-                          />
-                      </div>
-                  </div>
-                  <div className="space-y-1">
-                      <label className="text-[8px] font-black text-slate-400 uppercase">Status</label>
-                      <select 
-                        value={micro.budget.status} 
-                        onChange={e => handleUpdateBudget({ status: e.target.value as BudgetStatus })}
-                        className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-100 text-xs font-bold text-slate-700 outline-none"
-                      >
-                          <option value="solicitado">Solicitado</option>
-                          <option value="recebido">Recebido</option>
-                          <option value="aprovado">Aprovado</option>
-                      </select>
-                  </div>
-              </div>
-              <div className="mt-4 flex justify-end">
-                  <button onClick={handleRemoveBudget} className="text-[9px] font-black uppercase text-red-400 hover:text-red-600 flex items-center gap-1">
-                      <Trash2 size={12}/> Remover Orçamento
-                  </button>
-              </div>
-          </div>
-      )}
       {(micro.status === 'Em andamento' || micro.status === 'Concluído com restrições') && (
         <div className="mt-3 pt-3 border-t border-slate-100/80 flex items-center gap-4">
             <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Progresso</label>
@@ -1183,33 +1035,67 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
             <span className="text-sm font-bold text-brand-primary w-12 text-right">{micro.progress || 0}%</span>
         </div>
       )}
-      {(isEditing || micro.observations || micro.reportLink) && (
-          <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-4">
-              <div className="col-span-2 sm:col-span-1">
-                  <label className="text-[9px] font-black text-slate-400 flex items-center gap-1 mb-1"><MessageSquare size={12}/> Observações</label>
-                  <textarea value={micro.observations} onChange={e => onUpdate({ observations: e.target.value })} rows={2} placeholder="Ex: precisa de dado complementar..." className="w-full text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-900"/>
+
+      {isCompleted && (
+        <div className="mt-4 pt-4 border-t border-slate-100 animate-in slide-in-from-top-2 duration-300 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex flex-col justify-center">
+              <span className="text-[8.5px] font-black text-slate-400 uppercase tracking-wider block mb-1">
+                Cronograma Planejado
+              </span>
+              <div className="text-[10px] font-bold text-slate-600 flex flex-col gap-0.5">
+                <span>Início: <strong className="text-slate-800">{micro.startDate ? micro.startDate.split('-').reverse().join('/') : '-'}</strong></span>
+                <span>Término: <strong className="text-slate-800">{micro.dueDate ? micro.dueDate.split('-').reverse().join('/') : '-'}</strong></span>
               </div>
-              <div className="col-span-2 sm:col-span-1">
-                  <label className="text-[9px] font-black text-slate-400 flex items-center gap-1 mb-1"><LinkIcon size={12}/> Link do Relatório</label>
-                  <input value={micro.reportLink || ''} onChange={e => onUpdate({ reportLink: e.target.value })} placeholder="Cole o link aqui..." className="w-full text-xs p-2 border border-slate-200 rounded-md bg-slate-50 text-slate-900"/>
+            </div>
+
+            <div className="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100 flex flex-col justify-center items-center text-center font-bold">
+              <span className="text-[8.5px] font-black text-emerald-600 uppercase tracking-wider block mb-1">
+                Duração Real
+              </span>
+              <span className="text-sm font-black text-emerald-800">
+                {calculateRealDuration(realStart, realEnd)}
+              </span>
+            </div>
+
+            {hasBudgetPrerequisite && (
+              <div className="bg-teal-50/40 p-3 rounded-2xl border border-teal-100 flex flex-col justify-center items-center text-center">
+                <span className="text-[8.5px] font-black text-teal-600 uppercase tracking-wider block mb-1">
+                  Atividade Financeira
+                </span>
+                <span className="text-[9.5px] font-semibold text-teal-850 uppercase flex items-center gap-1 font-bold">
+                  <DollarSign size={12} className="text-teal-600 animate-pulse" /> Possui Orçamento
+                </span>
               </div>
-              {isEditing && (
-                  <div className="col-span-2 flex gap-2">
-                      <button 
-                        onClick={handleAddPrerequisite}
-                        className="flex-1 py-2 bg-teal-50 text-teal-600 border border-teal-200 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-teal-100 transition flex items-center justify-center gap-2"
-                      >
-                          <ListTodo size={14}/> Gerenciar Pré-requisitos
-                      </button>
-                      <button 
-                        onClick={() => handleUpdateBudget({})}
-                        className="flex-1 py-2 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100 transition flex items-center justify-center gap-2"
-                      >
-                          <DollarSign size={14}/> Gerenciar Orçamento
-                      </button>
-                  </div>
-              )}
+            )}
           </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2 sm:col-span-1">
+              <label className="text-[9px] font-black text-slate-400 flex items-center gap-1 mb-1">
+                <MessageSquare size={12}/> Observações de Conclusão / Análise
+              </label>
+              <textarea 
+                value={micro.observations || ''} 
+                onChange={e => onUpdate({ observations: e.target.value })} 
+                rows={2} 
+                placeholder="Insira detalhes adicionais sobre o resultado alcançado..." 
+                className="w-full text-xs p-3 border border-slate-200 rounded-2xl bg-white text-slate-900 outline-none focus:ring-1 focus:ring-teal-500"
+              />
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <label className="text-[9px] font-black text-slate-400 flex items-center gap-1 mb-1">
+                <LinkIcon size={12}/> Link do Relatório de Análise
+              </label>
+              <input 
+                value={micro.reportLink || ''} 
+                onChange={e => onUpdate({ reportLink: e.target.value })} 
+                placeholder="Acesse o documento para comprovação (SharePoint/Drive)..." 
+                className="w-full text-xs p-3 border border-slate-200 rounded-2xl bg-white text-slate-900 outline-none focus:ring-1 focus:ring-teal-500"
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
     );

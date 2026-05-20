@@ -23,6 +23,9 @@ export interface Prerequisite {
   status: PrerequisiteStatus;
   completed: boolean;
   leadTimeDays: number;
+  value?: number;
+  date?: string;
+  company?: string;
 }
 
 export type BudgetStatus = 'solicitado' | 'recebido' | 'aprovado';
@@ -190,6 +193,8 @@ export interface MicroActivity {
   progress?: number;
   prerequisites?: Prerequisite[];
   budget?: BudgetInfo;
+  realStartDate?: string;
+  realEndDate?: string;
 }
 
 export interface MacroActivity {
