@@ -281,7 +281,7 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
                         <span>{task.dueDate ? new Date(task.dueDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/D'}</span>
                       )}
                     </div>
-                    <span>{task.assignee}</span>
+                    <span>{task.assignee || 'Não Definido'}</span>
                   </div>
 
                   <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">

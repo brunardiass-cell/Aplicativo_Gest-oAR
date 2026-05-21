@@ -176,9 +176,9 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({
     const newMicro: MicroActivity = {
       id: 'micro_' + Math.random().toString(36).substr(2, 9),
       name: 'Nova Microatividade',
-      assignee: projectAssignees[0] || '',
-      startDate: new Date().toISOString().split('T')[0],
-      dueDate: new Date().toISOString().split('T')[0],
+      assignee: '',
+      startDate: '',
+      dueDate: '',
       status: 'Planejado',
       observations: '',
       progress: 0,
@@ -960,7 +960,8 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
             </>)}
         </div>
         <div className="w-full sm:col-span-2">
-          <select value={micro.assignee} onChange={e => onUpdate({ assignee: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600 outline-none">
+          <select value={micro.assignee || ''} onChange={e => onUpdate({ assignee: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600 outline-none">
+            <option value="">Não Definido</option>
             {assignees.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
         </div>
@@ -970,7 +971,7 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
           </label>
           <input 
             type="date" 
-            value={isCompleted ? realStart : (micro.startDate || micro.dueDate)} 
+            value={isCompleted ? realStart : (micro.startDate || '')} 
             onChange={e => onUpdate(isCompleted ? { realStartDate: e.target.value } : { startDate: e.target.value })} 
             className={`w-full bg-transparent text-[10px] font-bold outline-none ${isCompleted ? 'text-emerald-600 font-extrabold' : 'text-slate-600'}`}
           />
@@ -981,7 +982,7 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
           </label>
           <input 
             type="date" 
-            value={isCompleted ? realEnd : micro.dueDate} 
+            value={isCompleted ? realEnd : (micro.dueDate || '')} 
             onChange={e => onUpdate(isCompleted ? { realEndDate: e.target.value } : { dueDate: e.target.value })} 
             className={`w-full bg-transparent text-[10px] font-bold outline-none ${isCompleted ? 'text-emerald-700 font-extrabold' : 'text-slate-600'}`}
           />

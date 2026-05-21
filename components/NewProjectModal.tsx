@@ -79,9 +79,9 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plan
         microActivities: (macroTemplate.microActivities || []).map(microName => ({
           id: 'micro_' + Math.random().toString(36).substr(2, 9),
           name: microName,
-          assignee: responsibleMember,
-          startDate: new Date().toISOString().split('T')[0],
-          dueDate: new Date().toISOString().split('T')[0],
+          assignee: '',
+          startDate: '',
+          dueDate: '',
           status: 'Planejado',
           observations: '',
           progress: 0,

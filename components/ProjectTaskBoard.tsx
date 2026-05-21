@@ -264,7 +264,7 @@ const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex flex-col">
                     <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><User size={10}/> Atribuído a</span>
-                    <span className="text-[9px] font-bold text-slate-700 uppercase mt-1">{micro.assignee}</span>
+                    <span className="text-[9px] font-bold text-slate-700 uppercase mt-1">{micro.assignee || 'Não Definido'}</span>
                   </div>
                   <div className="flex flex-col text-right">
                     <span className={`text-[8px] font-black uppercase tracking-widest flex items-center gap-1 justify-end ${isOverdue ? 'text-red-500' : 'text-slate-400'}`}>

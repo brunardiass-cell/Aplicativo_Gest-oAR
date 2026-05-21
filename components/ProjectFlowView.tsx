@@ -319,7 +319,7 @@ const MicroDetail: React.FC<{ micro: MicroActivity; regulatoryStandards: Regulat
                             <DollarSign size={12}/>
                         </button>
                     )}
-                    <span className="text-[9px] font-bold text-slate-400">{micro.assignee}</span>
+                    <span className="text-[9px] font-bold text-slate-400">{micro.assignee || 'Não Definido'}</span>
                 </div>
             </div>
 

@@ -78,6 +78,15 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   }, [initialProjectId, projects, viewMode]);
 
   useEffect(() => {
+    if (selectedProject) {
+      const currentProj = projects.find(p => p.id === selectedProject.id);
+      if (currentProj) {
+        setSelectedProject(currentProj);
+      }
+    }
+  }, [projects]);
+
+  useEffect(() => {
     const afterPrintHandler = () => {
       document.body.classList.remove('is-printing-project');
     };
@@ -237,7 +246,12 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
   const handleStartEdit = () => {
     if (selectedProject) {
-      setEditedProjectData({ name: selectedProject.name, responsible: selectedProject.responsible, team: selectedProject.team || [] });
+      setEditedProjectData({ 
+        name: selectedProject.name, 
+        responsible: selectedProject.responsible, 
+        team: selectedProject.team || [],
+        status: selectedProject.status 
+      });
       setIsEditingProject(true);
     }
   };
@@ -864,6 +878,20 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                   >
                     <option value="">Selecione o responsável</option>
                     {teamMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Status do Projeto</label>
+                  <select 
+                    value={editedProjectData.status || 'Em Planejamento'} 
+                    onChange={e => setEditedProjectData({...editedProjectData, status: e.target.value as any})}
+                    className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-brand-primary/20 outline-none transition"
+                  >
+                    <option value="Em Planejamento">Em Planejamento</option>
+                    <option value="Ativo">Ativo</option>
+                    <option value="Suspenso">Suspenso</option>
+                    <option value="Concluído">Concluído</option>
                   </select>
                 </div>
 
