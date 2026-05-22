@@ -115,7 +115,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
     const teamLoad: Record<string, number> = {};
     const phaseDist: Record<string, number> = {};
-    const alerts: any[] = [];
+    const trulyLateAlerts: any[] = [];
+    const restrictedLateAlerts: any[] = [];
     const allMicros: any[] = [];
     
     selectedProject.macroActivities.forEach(macro => {
@@ -138,18 +139,35 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
         const dueDate = micro.dueDate ? new Date(micro.dueDate + 'T00:00:00') : null;
         
-        if (dueDate && dueDate < today && micro.status !== 'Concluído e aprovado') {
-          lateMicros++;
-          alerts.push({
-            id: micro.id,
-            name: micro.name,
-            macroName: macro.name,
-            dueDate: micro.dueDate,
-            daysLate: Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
-          });
+        if (dueDate && dueDate < today) {
+          const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+          if (micro.status === 'Planejado' || micro.status === 'Em andamento') {
+            lateMicros++;
+            trulyLateAlerts.push({
+              id: micro.id,
+              name: micro.name,
+              macroName: macro.name,
+              dueDate: micro.dueDate,
+              status: micro.status,
+              daysLate: daysOverdue,
+              isRestricted: false
+            });
+          } else if (micro.status === 'Concluído com restrições' || micro.status === 'A repetir / retrabalho') {
+            restrictedLateAlerts.push({
+              id: micro.id,
+              name: micro.name,
+              macroName: macro.name,
+              dueDate: micro.dueDate,
+              status: micro.status,
+              daysLate: daysOverdue,
+              isRestricted: true
+            });
+          }
         }
       });
     });
+
+    const alerts = trulyLateAlerts.length > 0 ? trulyLateAlerts : restrictedLateAlerts;
 
     const findStatus = (names: string[]) => {
       let isStarted = false;
@@ -740,17 +758,36 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                   <AlertTriangle size={16} className="text-red-500" /> ALERTAS CRÍTICOS
                 </div>
                 <div className="space-y-4">
-                    {projectStats?.alerts && projectStats.alerts.length > 0 ? projectStats.alerts.map((alert: any) => (
-                    <div key={alert.id} className="p-6 bg-red-50/50 rounded-[2rem] border border-red-100 flex items-start gap-4">
-                       <div className="p-2 bg-white rounded-xl text-red-500 shadow-sm">
-                          {ShieldAlert ? <ShieldAlert size={16} /> : <AlertTriangle size={16} />}
-                       </div>
-                       <div className="space-y-1">
-                          <h5 className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{alert.name}</h5>
-                          <p className="text-[10px] font-bold text-red-600 uppercase tracking-tighter">+{alert.daysLate} dias de atraso</p>
-                       </div>
-                    </div>
-                  )) : (
+                    {projectStats?.alerts && projectStats.alerts.length > 0 ? projectStats.alerts.map((alert: any) => {
+                      if (alert.isRestricted) {
+                        return (
+                          <div key={alert.id} className="p-6 bg-amber-50/40 rounded-[2rem] border border-amber-150 flex items-start gap-4">
+                             <div className="p-2 bg-white rounded-xl text-amber-500 shadow-sm">
+                                <ClipboardCheck size={16} />
+                             </div>
+                             <div className="space-y-1">
+                                <h5 className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{alert.name}</h5>
+                                <p className="text-[10px] font-bold text-amber-700 uppercase tracking-tighter">
+                                  {alert.status === 'Concluído com restrições' 
+                                    ? 'Concluída com restrições (aguardando validação)' 
+                                    : 'A repetir / retrabalho (aguardando ajuste)'}
+                                </p>
+                             </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={alert.id} className="p-6 bg-red-50/50 rounded-[2rem] border border-red-100 flex items-start gap-4">
+                           <div className="p-2 bg-white rounded-xl text-red-500 shadow-sm">
+                              {ShieldAlert ? <ShieldAlert size={16} /> : <AlertTriangle size={16} />}
+                           </div>
+                           <div className="space-y-1">
+                              <h5 className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{alert.name}</h5>
+                              <p className="text-[10px] font-bold text-red-600 uppercase tracking-tighter">+{alert.daysLate} dias de atraso</p>
+                           </div>
+                        </div>
+                      );
+                    }) : (
                     <div className="py-12 text-center flex flex-col items-center gap-4">
                        <div className="p-5 bg-emerald-50 text-emerald-500 rounded-full shadow-sm">
                         {CheckCircle2 ? <CheckCircle2 size={32}/> : <CheckCircle size={32} />}
