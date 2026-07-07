@@ -3,7 +3,7 @@
 // Versão corrigida para sincronização
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus } from './types';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject } from './types';
 import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS } from './constants';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
@@ -54,6 +54,7 @@ const App: React.FC = () => {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [appUsers, setAppUsers] = useState<AppUser[]>([]);
   const [regulatoryStandards, setRegulatoryStandards] = useState<RegulatoryStandard[]>([]);
+  const [regulatorySubjects, setRegulatorySubjects] = useState<RegulatorySubject[]>([]);
   const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
   const [dataVersion, setDataVersion] = useState<string | null>(null);
   const [isDataDirty, setIsDataDirty] = useState(false);
@@ -302,6 +303,7 @@ const App: React.FC = () => {
       logs: cloudData.logs || [],
       appUsers: cloudData.appUsers || DEFAULT_APP_USERS,
       regulatoryStandards: cloudData.regulatoryStandards || [],
+      regulatorySubjects: cloudData.regulatorySubjects || [],
     };
 
     setTasks(fullData.tasks);
@@ -312,6 +314,7 @@ const App: React.FC = () => {
     setLogs(fullData.logs);
     setAppUsers(fullData.appUsers);
     setRegulatoryStandards(fullData.regulatoryStandards);
+    setRegulatorySubjects(fullData.regulatorySubjects);
     setBaseData(JSON.parse(JSON.stringify(fullData)));
     setDataVersion(version);
     setIsDataDirty(false);
@@ -355,6 +358,8 @@ const App: React.FC = () => {
           notifications: mergeArrays(cloudData.notifications || [], notifications, baseData.notifications),
           logs: mergeArrays(cloudData.logs || [], logs, baseData.logs),
           appUsers: mergeArrays(cloudData.appUsers || [], appUsers, baseData.appUsers),
+          regulatoryStandards: mergeArrays(cloudData.regulatoryStandards || [], regulatoryStandards, baseData.regulatoryStandards || []),
+          regulatorySubjects: mergeArrays(cloudData.regulatorySubjects || [], regulatorySubjects, baseData.regulatorySubjects || [])
         };
 
         setTasks(merged.tasks);
@@ -364,6 +369,8 @@ const App: React.FC = () => {
         setNotifications(merged.notifications);
         setLogs(merged.logs);
         setAppUsers(merged.appUsers);
+        setRegulatoryStandards(merged.regulatoryStandards);
+        setRegulatorySubjects(merged.regulatorySubjects);
         
         const fullCloudData = {
           ...cloudData,
@@ -473,6 +480,7 @@ const App: React.FC = () => {
         logs, 
         appUsers,
         regulatoryStandards,
+        regulatorySubjects,
         lastEditor: selectedProfile?.name
       };
       console.log('Saving to cloud...');
@@ -507,7 +515,7 @@ const App: React.FC = () => {
 
     saveDataTimeout.current = window.setTimeout(handleSaveChanges, 2000);
 
-  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, dataVersion, isDataDirty]);
+  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, regulatoryStandards, regulatorySubjects, dataVersion, isDataDirty]);
 
   // Polling removed in favor of WebSockets
   /*
@@ -1293,6 +1301,8 @@ const App: React.FC = () => {
             onDeleteStandard={handleDeleteStandard} 
             activityPlans={activityPlans}
             projects={activeProjects}
+            subjects={regulatorySubjects}
+            onUpdateSubjects={(newSubjects) => { setRegulatorySubjects(newSubjects); setDataDirty(); }}
           />
         )}
       </main>

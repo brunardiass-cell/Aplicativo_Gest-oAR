@@ -94,6 +94,25 @@ export interface RegulatoryStandard {
   linkedStandards?: string[]; // Outras normas e guias vinculadas
   keyNotes?: string; // Principais notas sobre a norma
 }
+
+export interface RegulatoryBlockAssociation {
+  standardId: string;
+  importantNotes: string;
+  specificPassages: string;
+}
+
+export interface RegulatoryBlock {
+  id: string;
+  name: string;
+  associations: RegulatoryBlockAssociation[];
+}
+
+export interface RegulatorySubject {
+  id: string;
+  name: string;
+  blocks: RegulatoryBlock[];
+}
+
 export interface SyncInfo {
   timestamp: string;
   user: string;
