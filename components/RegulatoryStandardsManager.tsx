@@ -23,6 +23,7 @@ import {
   ChevronDown,
   ChevronUp,
   MessageSquare,
+  StickyNote,
   HelpCircle,
   PlusCircle,
   Sliders,
@@ -88,6 +89,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   const [subjectSearchTerm, setSubjectSearchTerm] = useState('');
   
   // Collapse states for standard associations
+  const [collapsedBlockIds, setCollapsedBlockIds] = useState<Record<string, boolean>>({});
   const [collapsedCards, setCollapsedCards] = useState<Record<string, boolean>>({});
   const [collapsedNotesSections, setCollapsedNotesSections] = useState<Record<string, boolean>>({});
   const [collapsedPassagesSections, setCollapsedPassagesSections] = useState<Record<string, boolean>>({});
@@ -1107,63 +1109,74 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                             </div>
                           ) : (
                             <div className="space-y-6">
-                              {subject.blocks.map(block => (
-                                <div key={block.id} className="border border-slate-100 rounded-2xl bg-slate-50/20 shadow-sm overflow-hidden">
-                                  
-                                  {/* Block Header */}
-                                  <div className="px-4 py-3 bg-slate-50/40 border-b border-slate-100 flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                      <Layers size={14} className="text-teal-600" />
-                                      <h4 className="text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wide">{block.name}</h4>
-                                      <span className="text-[9px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-black uppercase">
-                                        {block.associations.length}
-                                      </span>
+                              {subject.blocks.map(block => {
+                                const blockKey = `${subject.id}-${block.id}`;
+                                const isBlockCollapsed = !!collapsedBlockIds[blockKey];
+
+                                return (
+                                  <div key={block.id} className="border border-slate-100 rounded-2xl bg-slate-50/20 shadow-sm overflow-hidden">
+                                    
+                                    {/* Block Header */}
+                                    <div 
+                                      onClick={() => setCollapsedBlockIds(prev => ({ ...prev, [blockKey]: !prev[blockKey] }))}
+                                      className="px-4 py-3 bg-slate-50/40 border-b border-slate-100 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition select-none"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <Layers size={14} className="text-teal-600" />
+                                        <h4 className="text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wide">{block.name}</h4>
+                                        <span className="text-[9px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-black uppercase">
+                                          {block.associations.length}
+                                        </span>
+                                        <div className="text-slate-400">
+                                          {isBlockCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                                        </div>
+                                      </div>
+
+                                      {/* Block actions */}
+                                      <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                        <button 
+                                          onClick={() => setBlockModal({ isOpen: true, subjectId: subject.id, blockId: block.id, name: block.name })}
+                                          className="p-1 text-slate-400 hover:text-teal-600 rounded-md hover:bg-white transition"
+                                          title="Renomear Bloco"
+                                        >
+                                          <Edit2 size={12} />
+                                        </button>
+                                        <button 
+                                          onClick={() => handleDeleteBlock(subject.id, block.id)}
+                                          className="p-1 text-slate-400 hover:text-red-500 rounded-md hover:bg-white transition"
+                                          title="Excluir Bloco"
+                                        >
+                                          <Trash2 size={12} />
+                                        </button>
+                                        <div className="w-px h-4 bg-slate-200 mx-1"></div>
+                                        <button 
+                                          onClick={() => setLinkModal({ 
+                                            isOpen: true, 
+                                            subjectId: subject.id, 
+                                            blockId: block.id, 
+                                            standardId: '', 
+                                            importantNotes: '', 
+                                            specificPassages: '',
+                                            isEdit: false
+                                          })}
+                                          className="flex items-center gap-1 px-2.5 py-1 text-teal-700 hover:text-teal-800 hover:bg-teal-100/50 rounded-lg text-[9px] font-black uppercase tracking-wider transition"
+                                        >
+                                          <Link2 size={11} /> Vincular Norma
+                                        </button>
+                                      </div>
                                     </div>
 
-                                    {/* Block actions */}
-                                    <div className="flex items-center gap-1">
-                                      <button 
-                                        onClick={() => setBlockModal({ isOpen: true, subjectId: subject.id, blockId: block.id, name: block.name })}
-                                        className="p-1 text-slate-400 hover:text-teal-600 rounded-md hover:bg-white transition"
-                                        title="Renomear Bloco"
-                                      >
-                                        <Edit2 size={12} />
-                                      </button>
-                                      <button 
-                                        onClick={() => handleDeleteBlock(subject.id, block.id)}
-                                        className="p-1 text-slate-400 hover:text-red-500 rounded-md hover:bg-white transition"
-                                        title="Excluir Bloco"
-                                      >
-                                        <Trash2 size={12} />
-                                      </button>
-                                      <div className="w-px h-4 bg-slate-200 mx-1"></div>
-                                      <button 
-                                        onClick={() => setLinkModal({ 
-                                          isOpen: true, 
-                                          subjectId: subject.id, 
-                                          blockId: block.id, 
-                                          standardId: '', 
-                                          importantNotes: '', 
-                                          specificPassages: '',
-                                          isEdit: false
-                                        })}
-                                        className="flex items-center gap-1 px-2.5 py-1 text-teal-700 hover:text-teal-800 hover:bg-teal-100/50 rounded-lg text-[9px] font-black uppercase tracking-wider transition"
-                                      >
-                                        <Link2 size={11} /> Vincular Norma
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  {/* Block associations body */}
-                                  <div className="p-4 space-y-4">
-                                    {block.associations.length === 0 ? (
-                                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider text-center py-4 italic">Nenhuma norma vinculada a este bloco.</p>
-                                    ) : (
+                                    {/* Block associations body */}
+                                    {!isBlockCollapsed && (
+                                      <div className="p-4 space-y-4">
+                                        {block.associations.length === 0 ? (
+                                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider text-center py-4 italic">Nenhuma norma vinculada a este bloco.</p>
+                                        ) : (
                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {block.associations.map(assoc => {
                                           const std = standards.find(s => s.id === assoc.standardId);
                                           const assocKey = `${subject.id}-${block.id}-${assoc.standardId}`;
-                                          const isCardCollapsed = !!collapsedCards[assocKey];
+                                          const isCardCollapsed = collapsedCards[assocKey] !== undefined ? collapsedCards[assocKey] : true;
                                           const isNotesSectionCollapsed = !!collapsedNotesSections[assocKey];
                                           const isPassagesSectionCollapsed = !!collapsedPassagesSections[assocKey];
                                           const notesList = assoc.importantNotes ? assoc.importantNotes.split('\n---\n').filter(Boolean) : [];
@@ -1229,10 +1242,10 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                                                     </button>
                                                     <button 
                                                       onClick={() => setCollapsedCards(prev => ({ ...prev, [assocKey]: !prev[assocKey] }))}
-                                                      className="p-1 text-slate-400 hover:text-slate-700 rounded-md hover:bg-white transition"
-                                                      title={isCardCollapsed ? "Mostrar Informações" : "Esconder Informações"}
+                                                      className={`p-1 rounded-md transition ${!isCardCollapsed ? 'text-teal-600 bg-teal-50' : 'text-slate-400 hover:text-teal-600 hover:bg-white'}`}
+                                                      title={isCardCollapsed ? "Visualizar Notas" : "Esconder Notas"}
                                                     >
-                                                      {isCardCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+                                                      <StickyNote size={12} className={!isCardCollapsed ? "fill-teal-600/20" : ""} />
                                                     </button>
                                                   </div>
                                                 </div>
@@ -1296,9 +1309,11 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                                       </div>
                                     )}
                                   </div>
+                                )}
 
-                                </div>
-                              ))}
+                              </div>
+                            );
+                          })}
                             </div>
                           )}
 
