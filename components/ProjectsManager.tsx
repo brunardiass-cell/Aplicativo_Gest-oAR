@@ -262,6 +262,16 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     setSelectedProject(updatedProject);
   };
 
+  const handleNavigateToProject = (projectId: string) => {
+    const proj = projects.find(p => p.id === projectId);
+    if (proj) {
+      setSelectedProject(proj);
+      setViewMode('dashboard');
+      setProjectDetailView('timeline');
+      setIsActivityMapOpen(false);
+    }
+  };
+
   const handleStartEdit = () => {
     if (selectedProject) {
       setEditedProjectData({ 
@@ -428,6 +438,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
             templates={activityPlans} 
             projects={projects}
             onClose={() => setIsActivityMapOpen(false)} 
+            onNavigateToProject={handleNavigateToProject}
           />
         )}
         {isPlanModalOpen && (
@@ -559,6 +570,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
             templates={activityPlans} 
             projects={projects}
             onClose={() => setIsActivityMapOpen(false)} 
+            onNavigateToProject={handleNavigateToProject}
           />
         )}
       </div>
@@ -984,6 +996,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           templates={activityPlans} 
           projects={projects}
           onClose={() => setIsActivityMapOpen(false)} 
+          onNavigateToProject={handleNavigateToProject}
         />
       )}
     </div>

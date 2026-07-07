@@ -12,11 +12,13 @@ interface ProjectActivityMapProps {
   onClose: () => void;
   templates: ActivityPlanTemplate[];
   projects: Project[];
+  onNavigateToProject?: (projectId: string) => void;
 }
 
-const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templates, projects }) => {
+const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templates, projects, onNavigateToProject }) => {
   const [selectedTemplate, setSelectedTemplate] = useState<ActivityPlanTemplate | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedMacro, setSelectedMacro] = useState<any | null>(null);
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
 
@@ -183,12 +185,15 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
             // Get data from selected project if applicable
             const projectPhaseProgress = selectedProject ? 
               (() => {
-                const phaseMacros = selectedProject.macroActivities.filter(m => m.phase === phase);
+                const templateMacrosForThisPhase = selectedTemplate.macroActivities.filter(tm => tm.phase === phase);
+                const phaseMacros = selectedProject.macroActivities.filter(pm => 
+                  templateMacrosForThisPhase.some(tm => tm.name.toLowerCase().trim() === pm.name.toLowerCase().trim())
+                );
                 let total = 0, done = 0;
                 phaseMacros.forEach(m => {
                   m.microActivities.forEach(micro => {
                     total++;
-                    if (micro.status === 'Concluído e aprovado') done++;
+                    if (micro.status === 'Concluído e aprovado' || micro.status === 'Concluído com restrições') done++;
                   });
                 });
                 return total > 0 ? Math.round((done / total) * 100) : 0;
@@ -221,14 +226,27 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
 
                   <div className="p-8 space-y-6 flex-1 bg-white">
                     {templateMacros.map((macro, mIdx) => {
-                      const projectMacro = selectedProject?.macroActivities.find(m => m.name === macro.name && m.phase === phase);
+                      const projectMacro = selectedProject?.macroActivities.find(m => {
+                        const nameMatches = m.name.toLowerCase().trim() === macro.name.toLowerCase().trim();
+                        if (!nameMatches) return false;
+                        
+                        // Try loose phase matching
+                        const cleanProjectPhase = m.phase.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                        const cleanTemplatePhase = phase.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                        return cleanProjectPhase.includes(cleanTemplatePhase) || 
+                               cleanTemplatePhase.includes(cleanProjectPhase);
+                      }) || selectedProject?.macroActivities.find(m => m.name.toLowerCase().trim() === macro.name.toLowerCase().trim());
+                      
                       const status = projectMacro ? getMacroStatus(projectMacro) : 'Planejado';
                       const { icon, borderColor, bgColor } = getStatusVisuals(status);
                       const deliverableMissing = projectMacro?.hasDeliverable && !projectMacro?.isDeliverableRegistered && status === 'Concluído com restrições';
                       
                       return (
                         <div key={mIdx} className="space-y-4">
-                            <div className={`p-4 rounded-2xl border-2 transition-all group/item shadow-sm ${borderColor} ${bgColor} flex flex-col gap-3 relative`}>
+                            <div 
+                              onClick={() => setSelectedMacro({ macro, projectMacro, phase, pIdx, mIdx })}
+                              className={`p-4 rounded-2xl border-2 transition-all group/item shadow-sm ${borderColor} ${bgColor} flex flex-col gap-3 relative cursor-pointer hover:shadow-md hover:scale-[1.01] duration-200`}
+                            >
                                 <div className="flex items-start gap-4">
                                     <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center text-[10px] font-black mt-0.5 shrink-0 bg-white ${borderColor} ${styleParts[2]}`}>
                                         {pIdx + 1}.{mIdx + 1}
@@ -354,6 +372,147 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
             </div>
         )}
       </div>
+
+      {/* Macro Activity Detail Modal */}
+      {selectedMacro && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl max-h-[85vh] rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-300 text-left">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
+              <div className="space-y-1">
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                  Fase {selectedMacro.pIdx + 1}: {selectedMacro.phase}
+                </span>
+                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight leading-snug">
+                  {selectedMacro.pIdx + 1}.{selectedMacro.mIdx + 1} {selectedMacro.macro.name}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setSelectedMacro(null)} 
+                className="p-1.5 hover:bg-slate-200 rounded-xl transition text-slate-400 hover:text-slate-600 mt-1"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Macro Status & Actions */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">Status da Atividade</span>
+                  <div className="flex items-center gap-2">
+                    {getStatusVisuals(selectedMacro.projectMacro ? getMacroStatus(selectedMacro.projectMacro) : 'Planejado').icon}
+                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      {selectedMacro.projectMacro ? getMacroStatus(selectedMacro.projectMacro) : 'Planejado'}
+                    </span>
+                  </div>
+                </div>
+                
+                {selectedProjectId && onNavigateToProject && (
+                  <button
+                    onClick={() => {
+                      onNavigateToProject(selectedProjectId);
+                      setSelectedMacro(null);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm transition active:scale-95"
+                  >
+                    <Workflow size={14} /> Alterar Status / Ir para o Plano de Trabalho
+                  </button>
+                )}
+              </div>
+
+              {/* Expected Results */}
+              {selectedMacro.macro.expectedResults && (
+                <div className="space-y-1.5">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Resultados Esperados</h4>
+                  <p className="text-xs text-slate-600 leading-relaxed bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                    {selectedMacro.macro.expectedResults}
+                  </p>
+                </div>
+              )}
+
+              {/* Deliverable Info */}
+              {selectedMacro.projectMacro?.hasDeliverable && (
+                <div className="p-4 bg-amber-50/40 border border-amber-100 rounded-2xl space-y-2">
+                  <h4 className="text-[10px] font-black text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertTriangle size={12} /> Entregável Associado
+                  </h4>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-600 font-medium">
+                      Tipo: <strong className="text-slate-800">{selectedMacro.projectMacro.deliverableType || 'Não especificado'}</strong>
+                    </span>
+                    <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                      selectedMacro.projectMacro.isDeliverableRegistered 
+                        ? 'bg-emerald-100 text-emerald-800' 
+                        : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {selectedMacro.projectMacro.isDeliverableRegistered ? 'Registrado' : 'Pendente de Registro'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Micro Activities List */}
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Atividades de Detalhe (Microatividades)</h4>
+                
+                {!selectedProjectId ? (
+                  <p className="text-xs text-slate-400 italic">Selecione um projeto para visualizar o andamento das microatividades.</p>
+                ) : !selectedMacro.projectMacro?.microActivities || selectedMacro.projectMacro.microActivities.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">Nenhuma microatividade cadastrada para esta macroatividade.</p>
+                ) : (
+                  <div className="border border-slate-100 rounded-2xl overflow-hidden divide-y divide-slate-100">
+                    {selectedMacro.projectMacro.microActivities.map((micro: any, idx: number) => {
+                      const microStatusVisuals = getStatusVisuals(micro.status);
+                      return (
+                        <div key={micro.id || idx} className="p-4 hover:bg-slate-50/30 transition flex flex-col gap-2">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="space-y-0.5">
+                              <p className="text-xs font-bold text-slate-800">{micro.name}</p>
+                              {micro.assignee && (
+                                <p className="text-[10px] text-slate-500 font-medium">Responsável: <span className="font-bold text-slate-700">{micro.assignee}</span></p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 border border-slate-100 rounded-lg shrink-0">
+                              {microStatusVisuals.icon}
+                              <span className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">{micro.status}</span>
+                            </div>
+                          </div>
+
+                          {(micro.startDate || micro.dueDate) && (
+                            <div className="flex gap-4 text-[10px] text-slate-400 font-medium">
+                              {micro.startDate && <span>Início: <strong className="text-slate-600">{micro.startDate}</strong></span>}
+                              {micro.dueDate && <span>Prazo: <strong className="text-slate-600">{micro.dueDate}</strong></span>}
+                            </div>
+                          )}
+
+                          {micro.observations && (
+                            <div className="mt-1 p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-[11px] text-slate-600 leading-relaxed whitespace-pre-wrap">
+                              <span className="font-bold text-slate-700 block mb-0.5 uppercase text-[9px] tracking-wider">Observações / Links:</span>
+                              {micro.observations}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex justify-end">
+              <button 
+                onClick={() => setSelectedMacro(null)}
+                className="px-5 py-2.5 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest transition"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
