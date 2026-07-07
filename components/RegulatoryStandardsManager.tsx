@@ -87,6 +87,11 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   const [expandedSubjectIds, setExpandedSubjectIds] = useState<Record<string, boolean>>({});
   const [subjectSearchTerm, setSubjectSearchTerm] = useState('');
   
+  // Collapse states for standard associations
+  const [collapsedCards, setCollapsedCards] = useState<Record<string, boolean>>({});
+  const [collapsedNotesSections, setCollapsedNotesSections] = useState<Record<string, boolean>>({});
+  const [collapsedPassagesSections, setCollapsedPassagesSections] = useState<Record<string, boolean>>({});
+  
   // Modals / forms states
   const [subjectModal, setSubjectModal] = useState<{ isOpen: boolean; subjectId?: string; name: string } | null>(null);
   const [blockModal, setBlockModal] = useState<{ isOpen: boolean; subjectId: string; blockId?: string; name: string } | null>(null);
@@ -377,6 +382,12 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       return;
     }
 
+    const sanitizedNotes = importantNotes
+      .split('\n---\n')
+      .map(note => note.trim())
+      .filter(Boolean)
+      .join('\n---\n');
+
     onUpdateSubjects(subjects.map(s => {
       if (s.id === subjectId) {
         return {
@@ -389,13 +400,13 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
               if (existsIdx >= 0) {
                 updated[existsIdx] = {
                   standardId,
-                  importantNotes: importantNotes.trim(),
+                  importantNotes: sanitizedNotes,
                   specificPassages: specificPassages.trim()
                 };
               } else {
                 updated.push({
                   standardId,
-                  importantNotes: importantNotes.trim(),
+                  importantNotes: sanitizedNotes,
                   specificPassages: specificPassages.trim()
                 });
               }
@@ -1151,6 +1162,11 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {block.associations.map(assoc => {
                                           const std = standards.find(s => s.id === assoc.standardId);
+                                          const assocKey = `${subject.id}-${block.id}-${assoc.standardId}`;
+                                          const isCardCollapsed = !!collapsedCards[assocKey];
+                                          const isNotesSectionCollapsed = !!collapsedNotesSections[assocKey];
+                                          const isPassagesSectionCollapsed = !!collapsedPassagesSections[assocKey];
+                                          const notesList = assoc.importantNotes ? assoc.importantNotes.split('\n---\n').filter(Boolean) : [];
                                           
                                           return (
                                             <div key={assoc.standardId} className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between group relative">
@@ -1211,30 +1227,65 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                                                     >
                                                       <Trash2 size={12} />
                                                     </button>
+                                                    <button 
+                                                      onClick={() => setCollapsedCards(prev => ({ ...prev, [assocKey]: !prev[assocKey] }))}
+                                                      className="p-1 text-slate-400 hover:text-slate-700 rounded-md hover:bg-white transition"
+                                                      title={isCardCollapsed ? "Mostrar Informações" : "Esconder Informações"}
+                                                    >
+                                                      {isCardCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+                                                    </button>
                                                   </div>
                                                 </div>
 
                                                 {/* Important Notes */}
-                                                {assoc.importantNotes && (
+                                                {!isCardCollapsed && notesList.length > 0 && (
                                                   <div className="mt-3 bg-amber-50/50 border-l-4 border-amber-300 p-2.5 rounded-r-xl">
-                                                    <span className="text-[9px] font-black text-amber-700 uppercase tracking-widest flex items-center gap-1 mb-1">
-                                                      <MessageSquare size={10} /> Notas Importantes:
-                                                    </span>
-                                                    <p className="text-[11px] text-slate-700 font-medium leading-relaxed text-justify whitespace-pre-line">
-                                                      {assoc.importantNotes}
-                                                    </p>
+                                                    <div className="flex items-center justify-between gap-1 mb-1">
+                                                      <span className="text-[9px] font-black text-amber-700 uppercase tracking-widest flex items-center gap-1">
+                                                        <MessageSquare size={10} /> Notas Importantes ({notesList.length}):
+                                                      </span>
+                                                      <button 
+                                                        onClick={() => setCollapsedNotesSections(prev => ({ ...prev, [assocKey]: !prev[assocKey] }))}
+                                                        className="p-0.5 text-amber-600 hover:text-amber-800 hover:bg-amber-100/50 rounded transition"
+                                                        title={isNotesSectionCollapsed ? "Expandir Notas" : "Recolher Notas"}
+                                                      >
+                                                        {isNotesSectionCollapsed ? <ChevronDown size={10} /> : <ChevronUp size={10} />}
+                                                      </button>
+                                                    </div>
+                                                    {!isNotesSectionCollapsed && (
+                                                      <div className="space-y-1.5 mt-1.5">
+                                                        {notesList.map((note, nIdx) => (
+                                                          <div key={nIdx} className="bg-white/80 p-2 rounded-lg border border-amber-100 shadow-xs">
+                                                            <p className="text-[11px] text-slate-700 font-medium leading-relaxed text-justify whitespace-pre-line">
+                                                              {note}
+                                                            </p>
+                                                          </div>
+                                                        ))}
+                                                      </div>
+                                                    )}
                                                   </div>
                                                 )}
 
                                                 {/* Specific Passages */}
-                                                {assoc.specificPassages && (
+                                                {!isCardCollapsed && assoc.specificPassages && (
                                                   <div className="mt-2.5 bg-slate-50 border border-slate-200/60 p-2.5 rounded-xl">
-                                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1 mb-1">
-                                                      <FileText size={10} /> Trechos Abordados:
-                                                    </span>
-                                                    <p className="text-[11px] text-slate-600 font-medium leading-relaxed text-justify whitespace-pre-line">
-                                                      {assoc.specificPassages}
-                                                    </p>
+                                                    <div className="flex items-center justify-between gap-1 mb-1">
+                                                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1">
+                                                        <FileText size={10} /> Seções Importantes do Documento:
+                                                      </span>
+                                                      <button 
+                                                        onClick={() => setCollapsedPassagesSections(prev => ({ ...prev, [assocKey]: !prev[assocKey] }))}
+                                                        className="p-0.5 text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 rounded transition"
+                                                        title={isPassagesSectionCollapsed ? "Expandir Seções" : "Recolher Seções"}
+                                                      >
+                                                        {isPassagesSectionCollapsed ? <ChevronDown size={10} /> : <ChevronUp size={10} />}
+                                                      </button>
+                                                    </div>
+                                                    {!isPassagesSectionCollapsed && (
+                                                      <p className="text-[11px] text-slate-600 font-medium leading-relaxed text-justify whitespace-pre-line mt-1">
+                                                        {assoc.specificPassages}
+                                                      </p>
+                                                    )}
                                                   </div>
                                                 )}
                                               </div>
@@ -1411,26 +1462,73 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
               </div>
 
               {/* Notes of standard */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Notas Importantes (Notas Rápidas / Flashcards)</label>
-                <textarea
-                  required
-                  rows={4}
-                  value={linkModal.importantNotes}
-                  onChange={e => setLinkModal({ ...linkModal, importantNotes: e.target.value })}
-                  placeholder="Insira as notas chaves, anotações e resumos específicos para este assunto..."
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-medium resize-none"
-                />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                    Notas Importantes (Notas Rápidas / Post-its)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const currentNotes = linkModal.importantNotes ? linkModal.importantNotes.split('\n---\n') : [];
+                      setLinkModal({
+                        ...linkModal,
+                        importantNotes: [...currentNotes, ''].join('\n---\n')
+                      });
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1 text-teal-700 hover:text-teal-800 bg-teal-50 hover:bg-teal-100 rounded-lg text-[9px] font-black uppercase tracking-wider transition font-mono"
+                  >
+                    <Plus size={10} /> Adicionar Nota / Post-it
+                  </button>
+                </div>
+                
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {(linkModal.importantNotes ? linkModal.importantNotes.split('\n---\n') : ['']).map((note, idx, arr) => (
+                    <div key={idx} className="flex gap-2 items-start bg-amber-50/20 p-2.5 rounded-xl border border-amber-100 shadow-xs">
+                      <textarea
+                        required
+                        rows={2}
+                        value={note}
+                        onChange={e => {
+                          const currentNotes = [...arr];
+                          currentNotes[idx] = e.target.value;
+                          setLinkModal({
+                            ...linkModal,
+                            importantNotes: currentNotes.join('\n---\n')
+                          });
+                        }}
+                        placeholder={`Insira a nota #${idx + 1}...`}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium resize-none bg-white"
+                      />
+                      {arr.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const currentNotes = arr.filter((_, nIdx) => nIdx !== idx);
+                            setLinkModal({
+                              ...linkModal,
+                              importantNotes: currentNotes.join('\n---\n')
+                            });
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition self-center"
+                          title="Remover Nota"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Passages addressed */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Trechos Abordados / Artigos Específicos</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Seções Importantes do Documento</label>
                 <textarea
                   rows={3}
                   value={linkModal.specificPassages}
                   onChange={e => setLinkModal({ ...linkModal, specificPassages: e.target.value })}
-                  placeholder="Informe os artigos, seções ou trechos específicos dessa norma aplicados a este bloco..."
+                  placeholder="Informe as seções importantes do documento dessa norma aplicadas a este bloco..."
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-medium resize-none"
                 />
               </div>
