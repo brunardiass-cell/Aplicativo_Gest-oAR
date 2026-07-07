@@ -8,6 +8,20 @@ import {
 } from 'lucide-react';
 import { ActivityPlanTemplate, Project, MicroActivityStatus } from '../types';
 
+const getKeywords = (str: string): string[] => {
+  if (!str) return [];
+  return str.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, "")
+    .split(/\s+/)
+    .filter(w => w.length > 3)
+    .map(w => {
+      if (w.endsWith('s')) return w.slice(0, -1);
+      if (w.endsWith('es')) return w.slice(0, -2);
+      return w;
+    });
+};
+
 interface ProjectActivityMapProps {
   onClose: () => void;
   templates: ActivityPlanTemplate[];
@@ -182,15 +196,74 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
             const styles = getPhaseColor(pIdx);
             const styleParts = styles.split(' ');
             
+            // Filter project macros for the current phase
+            const projectPhaseMacros = selectedProject ? selectedProject.macroActivities.filter(pm => {
+              const cleanProjectPhase = pm.phase.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+              const cleanTemplatePhase = phase.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+              return cleanProjectPhase.includes(cleanTemplatePhase) || 
+                     cleanTemplatePhase.includes(cleanProjectPhase);
+            }) : [];
+
+            // Pre-calculate smart matches for template macros of this phase
+            const matchedProjectMacrosForPhase: (any | undefined)[] = [];
+            if (selectedProject) {
+              const usedProjectMacroIds = new Set<string>();
+
+              // Step 1: Exact / close name matching in this phase
+              templateMacros.forEach((tMacro, tIdx) => {
+                const exactMatch = projectPhaseMacros.find(pm => 
+                  pm.name.toLowerCase().trim() === tMacro.name.toLowerCase().trim()
+                );
+                if (exactMatch) {
+                  matchedProjectMacrosForPhase[tIdx] = exactMatch;
+                  usedProjectMacroIds.add(exactMatch.id);
+                }
+              });
+
+              // Step 2: Keyword overlap matching for remaining
+              templateMacros.forEach((tMacro, tIdx) => {
+                if (matchedProjectMacrosForPhase[tIdx]) return;
+
+                const tKeywords = getKeywords(tMacro.name);
+                let bestMatch: any = null;
+                let highestScore = 0;
+
+                projectPhaseMacros.forEach(pm => {
+                  if (usedProjectMacroIds.has(pm.id)) return;
+
+                  const pmKeywords = getKeywords(pm.name);
+                  const common = pmKeywords.filter(w => tKeywords.includes(w));
+                  const score = common.length;
+
+                  if (score > highestScore) {
+                    highestScore = score;
+                    bestMatch = pm;
+                  }
+                });
+
+                if (bestMatch && highestScore >= 1) {
+                  matchedProjectMacrosForPhase[tIdx] = bestMatch;
+                  usedProjectMacroIds.add(bestMatch.id);
+                }
+              });
+
+              // Step 3: Index-based fallback
+              templateMacros.forEach((tMacro, tIdx) => {
+                if (matchedProjectMacrosForPhase[tIdx]) return;
+
+                const indexMatch = projectPhaseMacros.find(pm => !usedProjectMacroIds.has(pm.id));
+                if (indexMatch) {
+                  matchedProjectMacrosForPhase[tIdx] = indexMatch;
+                  usedProjectMacroIds.add(indexMatch.id);
+                }
+              });
+            }
+
             // Get data from selected project if applicable
             const projectPhaseProgress = selectedProject ? 
               (() => {
-                const templateMacrosForThisPhase = selectedTemplate.macroActivities.filter(tm => tm.phase === phase);
-                const phaseMacros = selectedProject.macroActivities.filter(pm => 
-                  templateMacrosForThisPhase.some(tm => tm.name.toLowerCase().trim() === pm.name.toLowerCase().trim())
-                );
                 let total = 0, done = 0;
-                phaseMacros.forEach(m => {
+                projectPhaseMacros.forEach(m => {
                   m.microActivities.forEach(micro => {
                     total++;
                     if (micro.status === 'Concluído e aprovado' || micro.status === 'Concluído com restrições') done++;
@@ -226,16 +299,7 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
 
                   <div className="p-8 space-y-6 flex-1 bg-white">
                     {templateMacros.map((macro, mIdx) => {
-                      const projectMacro = selectedProject?.macroActivities.find(m => {
-                        const nameMatches = m.name.toLowerCase().trim() === macro.name.toLowerCase().trim();
-                        if (!nameMatches) return false;
-                        
-                        // Try loose phase matching
-                        const cleanProjectPhase = m.phase.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-                        const cleanTemplatePhase = phase.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-                        return cleanProjectPhase.includes(cleanTemplatePhase) || 
-                               cleanTemplatePhase.includes(cleanProjectPhase);
-                      }) || selectedProject?.macroActivities.find(m => m.name.toLowerCase().trim() === macro.name.toLowerCase().trim());
+                      const projectMacro = selectedProject ? matchedProjectMacrosForPhase[mIdx] : undefined;
                       
                       const status = projectMacro ? getMacroStatus(projectMacro) : 'Planejado';
                       const { icon, borderColor, bgColor } = getStatusVisuals(status);
