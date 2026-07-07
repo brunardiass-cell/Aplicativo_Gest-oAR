@@ -191,86 +191,44 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
       <div className="flex-1 p-6 lg:p-10 space-y-10 max-w-[1920px] mx-auto w-full">
         {/* Infographic Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
-          {selectedTemplate.phases.map((phase, pIdx) => {
-            const templateMacros = selectedTemplate.macroActivities.filter(m => m.phase === phase);
+          {(selectedProject && selectedProject.phases && selectedProject.phases.length > 0
+            ? selectedProject.phases
+            : selectedTemplate.phases
+          ).map((phase, pIdx) => {
             const styles = getPhaseColor(pIdx);
             const styleParts = styles.split(' ');
             
-            // Filter project macros for the current phase
-            const projectPhaseMacros = selectedProject ? selectedProject.macroActivities.filter(pm => {
-              const cleanProjectPhase = pm.phase.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-              const cleanTemplatePhase = phase.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-              return cleanProjectPhase.includes(cleanTemplatePhase) || 
-                     cleanTemplatePhase.includes(cleanProjectPhase);
-            }) : [];
-
-            // Pre-calculate smart matches for template macros of this phase
-            const matchedProjectMacrosForPhase: (any | undefined)[] = [];
-            if (selectedProject) {
-              const usedProjectMacroIds = new Set<string>();
-
-              // Step 1: Exact / close name matching in this phase
-              templateMacros.forEach((tMacro, tIdx) => {
-                const exactMatch = projectPhaseMacros.find(pm => 
-                  pm.name.toLowerCase().trim() === tMacro.name.toLowerCase().trim()
-                );
-                if (exactMatch) {
-                  matchedProjectMacrosForPhase[tIdx] = exactMatch;
-                  usedProjectMacroIds.add(exactMatch.id);
-                }
-              });
-
-              // Step 2: Keyword overlap matching for remaining
-              templateMacros.forEach((tMacro, tIdx) => {
-                if (matchedProjectMacrosForPhase[tIdx]) return;
-
-                const tKeywords = getKeywords(tMacro.name);
-                let bestMatch: any = null;
-                let highestScore = 0;
-
-                projectPhaseMacros.forEach(pm => {
-                  if (usedProjectMacroIds.has(pm.id)) return;
-
-                  const pmKeywords = getKeywords(pm.name);
-                  const common = pmKeywords.filter(w => tKeywords.includes(w));
-                  const score = common.length;
-
-                  if (score > highestScore) {
-                    highestScore = score;
-                    bestMatch = pm;
-                  }
+            // Filter macros for the current phase exactly, using robust normalized comparison
+            const macrosForThisPhase = selectedProject
+              ? selectedProject.macroActivities.filter(m => {
+                  const cleanMPhase = m.phase.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                  const cleanPhase = phase.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                  return cleanMPhase === cleanPhase;
+                })
+              : selectedTemplate.macroActivities.filter(m => {
+                  const cleanMPhase = m.phase.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                  const cleanPhase = phase.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+                  return cleanMPhase === cleanPhase;
                 });
-
-                if (bestMatch && highestScore >= 1) {
-                  matchedProjectMacrosForPhase[tIdx] = bestMatch;
-                  usedProjectMacroIds.add(bestMatch.id);
-                }
-              });
-
-              // Step 3: Index-based fallback
-              templateMacros.forEach((tMacro, tIdx) => {
-                if (matchedProjectMacrosForPhase[tIdx]) return;
-
-                const indexMatch = projectPhaseMacros.find(pm => !usedProjectMacroIds.has(pm.id));
-                if (indexMatch) {
-                  matchedProjectMacrosForPhase[tIdx] = indexMatch;
-                  usedProjectMacroIds.add(indexMatch.id);
-                }
-              });
-            }
 
             // Get data from selected project if applicable
             const projectPhaseProgress = selectedProject ? 
               (() => {
                 let total = 0, done = 0;
-                projectPhaseMacros.forEach(m => {
-                  m.microActivities.forEach(micro => {
-                    total++;
-                    if (micro.status === 'Concluído e aprovado' || micro.status === 'Concluído com restrições') done++;
-                  });
+                macrosForThisPhase.forEach(m => {
+                  if (m.microActivities) {
+                    m.microActivities.forEach((micro: any) => {
+                      total++;
+                      if (micro.status === 'Concluído e aprovado' || micro.status === 'Concluído com restrições') done++;
+                    });
+                  }
                 });
                 return total > 0 ? Math.round((done / total) * 100) : 0;
               })() : 0;
+
+            const totalPhasesCount = selectedProject && selectedProject.phases && selectedProject.phases.length > 0
+              ? selectedProject.phases.length
+              : selectedTemplate.phases.length;
 
             return (
               <div key={phase} className="flex flex-col gap-5 group">
@@ -278,10 +236,10 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-black shrink-0 z-10 shadow-lg ${styleParts[2]} ${styleParts[1]}`}>
                     {String(pIdx + 1).padStart(2, '0')}
                   </div>
-                  {pIdx < selectedTemplate.phases.length - 1 && (
+                  {pIdx < totalPhasesCount - 1 && (
                     <div className="absolute left-10 right-[-2.5rem] top-1/2 -translate-y-1/2 h-0.5 border-t-2 border-dashed border-slate-200 z-0 hidden xl:block" />
                   )}
-                  {pIdx < selectedTemplate.phases.length - 1 && (
+                  {pIdx < totalPhasesCount - 1 && (
                     <div className="absolute right-[-1.5rem] top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center z-10 hidden xl:flex">
                         <ArrowRight size={12} className="text-slate-300" />
                     </div>
@@ -298,8 +256,8 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
                   </div>
 
                   <div className="p-8 space-y-6 flex-1 bg-white">
-                    {templateMacros.map((macro, mIdx) => {
-                      const projectMacro = selectedProject ? matchedProjectMacrosForPhase[mIdx] : undefined;
+                    {macrosForThisPhase.map((macro, mIdx) => {
+                      const projectMacro = selectedProject ? macro as any : undefined;
                       
                       const status = projectMacro ? getMacroStatus(projectMacro) : 'Planejado';
                       const { icon, borderColor, bgColor } = getStatusVisuals(status);
@@ -371,7 +329,7 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
                     <span className="text-[11px] font-black uppercase tracking-widest">OBJETIVO GERAL</span>
                 </div>
                 <p className="text-xs font-bold text-emerald-800 leading-relaxed italic">
-                    "{selectedTemplate.objective || 'Nenhum objetivo definido para este plano.'}"
+                    "{selectedProject?.objective || selectedTemplate.objective || 'Nenhum objetivo definido para este plano.'}"
                 </p>
              </div>
 
@@ -407,14 +365,17 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
         </div>
 
         {/* Transversal Activities Section */}
-        {selectedTemplate.transversalActivities && selectedTemplate.transversalActivities.length > 0 && (
+        {((selectedProject?.transversalActivities && selectedProject.transversalActivities.length > 0) || 
+          (selectedTemplate.transversalActivities && selectedTemplate.transversalActivities.length > 0)) && (
             <div className="space-y-8 pt-6 border-t border-slate-200">
                 <div className="flex flex-col items-center">
                     <h4 className="px-8 text-[11px] font-black text-slate-400 uppercase tracking-[0.4em] relative">Atividades Transversais (Ao longo de todo o projeto)</h4>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-                    {selectedTemplate.transversalActivities.map((act) => (
+                    {(selectedProject?.transversalActivities && selectedProject.transversalActivities.length > 0 
+                      ? selectedProject.transversalActivities 
+                      : selectedTemplate.transversalActivities || []).map((act) => (
                     <div key={act.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col items-center text-center gap-4 hover:shadow-xl transition-all hover:-translate-y-1">
                         <div className="p-4 bg-slate-50 text-slate-500 rounded-2xl">
                             {act.iconName === 'ShieldCheck' && <ShieldCheck size={24} />}
