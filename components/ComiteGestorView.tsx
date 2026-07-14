@@ -33,8 +33,14 @@ const ComiteGestorView: React.FC<ComiteGestorViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'projects'>(defaultTab);
   
+  // Sync activeTab when defaultTab prop changes
+  React.useEffect(() => {
+    setActiveTab(defaultTab);
+  }, [defaultTab]);
+  
   // Dashboard state
   const [searchTerm, setSearchTerm] = useState('');
+  const [projectSearchTerm, setProjectSearchTerm] = useState('');
   
   // Project visualization state
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -43,18 +49,20 @@ const ComiteGestorView: React.FC<ComiteGestorViewProps> = ({
 
   const activeProjects = useMemo(() => projects.filter(p => !p.deleted), [projects]);
 
-  // 1. Calculate dashboard statistics for each team member
-  const personStatsList = useMemo(() => {
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
+  const now = useMemo(() => new Date(), []);
+  const currentMonth = useMemo(() => now.getMonth(), [now]);
+  const currentYear = useMemo(() => now.getFullYear(), [now]);
 
-    const isThisMonth = (dateStr: string | undefined) => {
+  const isThisMonth = useMemo(() => {
+    return (dateStr: string | undefined) => {
       if (!dateStr) return false;
       const d = new Date(dateStr + 'T00:00:00');
       return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     };
+  }, [currentMonth, currentYear]);
 
+  // 1. Calculate dashboard statistics for each team member
+  const personStatsList = useMemo(() => {
     // Filter out other comitê gestor profiles from stats if needed, but keeping all team members
     return teamMembers.map(member => {
       // a) Atividades em andamento:
@@ -147,7 +155,88 @@ const ComiteGestorView: React.FC<ComiteGestorViewProps> = ({
         projectsCount
       };
     });
-  }, [teamMembers, tasks, activeProjects]);
+  }, [teamMembers, tasks, activeProjects, isThisMonth]);
+
+  // 1b. Calculate dashboard statistics for each project
+  const projectStatsList = useMemo(() => {
+    return activeProjects.map(project => {
+      let inProgressCount = 0;
+      let criticalCount = 0;
+      let monthlyDeliveriesCount = 0;
+      let completedCount = 0;
+
+      project.macroActivities?.forEach(macro => {
+        macro.microActivities?.forEach(micro => {
+          // In progress
+          if (micro.status === 'Em andamento') {
+            inProgressCount++;
+          }
+          // Critical / rework
+          if (micro.status === 'A repetir / retrabalho') {
+            criticalCount++;
+          }
+          // Completed
+          if (micro.status === 'Concluído e aprovado' || micro.status === 'Concluído com restrições') {
+            completedCount++;
+          }
+          // Deliveries in current month (due date is in this month, and not completed)
+          if (
+            micro.status !== 'Concluído e aprovado' && 
+            micro.status !== 'Concluído com restrições' && 
+            micro.dueDate && 
+            isThisMonth(micro.dueDate)
+          ) {
+            monthlyDeliveriesCount++;
+          }
+        });
+      });
+
+      // Calculate current phase and its progress
+      const phases = project.phases && project.phases.length > 0 
+        ? project.phases 
+        : Array.from(new Set(project.macroActivities?.map(m => m.phase) || []));
+
+      const phaseCompletionList = phases.map(phaseName => {
+        const phaseMacros = project.macroActivities?.filter(m => m.phase === phaseName) || [];
+        const phaseMicros = phaseMacros.flatMap(m => m.microActivities || []);
+        
+        if (phaseMicros.length === 0) {
+          return { phaseName, isCompleted: true, completedCount: 0, totalCount: 0 };
+        }
+        
+        const completedMicros = phaseMicros.filter(mi => mi.status === 'Concluído e aprovado' || mi.status === 'Concluído com restrições');
+        const isCompleted = completedMicros.length === phaseMicros.length;
+        
+        return {
+          phaseName,
+          isCompleted,
+          completedCount: completedMicros.length,
+          totalCount: phaseMicros.length
+        };
+      });
+
+      // Find the first phase that is not completed, or default to the last one
+      const currentPhaseIndex = phaseCompletionList.findIndex(p => !p.isCompleted);
+      const activePhaseInfo = currentPhaseIndex !== -1 
+        ? phaseCompletionList[currentPhaseIndex] 
+        : (phaseCompletionList.length > 0 ? phaseCompletionList[phaseCompletionList.length - 1] : null);
+
+      const currentPhaseName = activePhaseInfo ? activePhaseInfo.phaseName : 'N/A';
+      const currentPhaseCompleted = activePhaseInfo ? activePhaseInfo.completedCount : 0;
+      const currentPhaseTotal = activePhaseInfo ? activePhaseInfo.totalCount : 0;
+
+      return {
+        project,
+        inProgressCount,
+        criticalCount,
+        monthlyDeliveriesCount,
+        completedCount,
+        currentPhaseName,
+        currentPhaseCompleted,
+        currentPhaseTotal
+      };
+    });
+  }, [activeProjects, isThisMonth]);
 
   // Filter list by search term
   const filteredStatsList = useMemo(() => {
@@ -156,6 +245,14 @@ const ComiteGestorView: React.FC<ComiteGestorViewProps> = ({
       item.member.role.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [personStatsList, searchTerm]);
+
+  // Filter projects by search term
+  const filteredProjectStatsList = useMemo(() => {
+    return projectStatsList.filter(item => 
+      item.project.name.toLowerCase().includes(projectSearchTerm.toLowerCase()) ||
+      (item.project.responsible || '').toLowerCase().includes(projectSearchTerm.toLowerCase())
+    );
+  }, [projectStatsList, projectSearchTerm]);
 
   // Set default selected project when project visualization tab opens
   const selectedProject = useMemo(() => {
@@ -185,25 +282,22 @@ const ComiteGestorView: React.FC<ComiteGestorViewProps> = ({
 
   return (
     <div className="space-y-8">
-      {/* Upper Tab Navigation */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm">
-        <div className="flex gap-2">
-          <button 
-            onClick={() => setActiveTab('dashboard')}
-            className={`px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-wider transition flex items-center gap-2 ${activeTab === 'dashboard' ? 'bg-brand-primary text-white shadow-lg shadow-teal-500/10' : 'text-slate-500 hover:bg-slate-50'}`}
-          >
-            <LayoutDashboard size={16} /> Painel de Equipe
-          </button>
-          <button 
-            onClick={() => setActiveTab('projects')}
-            className={`px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-wider transition flex items-center gap-2 ${activeTab === 'projects' ? 'bg-brand-primary text-white shadow-lg shadow-teal-500/10' : 'text-slate-500 hover:bg-slate-50'}`}
-          >
-            <FolderKanban size={16} /> Visão de Projetos
-          </button>
+      {/* Upper Tab Navigation Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-[2rem] border border-slate-200/80 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-brand-primary">
+            {activeTab === 'dashboard' ? <LayoutDashboard size={22} /> : <FolderKanban size={22} />}
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight leading-none">
+              {activeTab === 'dashboard' ? 'Painel de Desempenho e Indicadores' : 'Gestão e Visão de Projetos'}
+            </h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1.5">Acompanhamento de alta performance do Comitê Gestor</p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="bg-teal-50 text-teal-700 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border border-teal-100 flex items-center gap-1.5">
+          <span className="bg-teal-50 text-teal-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border border-teal-100 flex items-center gap-2">
             <Briefcase size={12} className="text-teal-600 animate-pulse" /> Perfil: Comitê Gestor
           </span>
         </div>
@@ -303,6 +397,134 @@ const ComiteGestorView: React.FC<ComiteGestorViewProps> = ({
               <div className="col-span-full bg-white p-16 text-center border border-slate-200 rounded-3xl">
                 <Users size={48} className="mx-auto text-slate-200 mb-4" />
                 <p className="text-slate-400 font-bold uppercase text-xs tracking-widest italic">Nenhum colaborador encontrado com os filtros atuais.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Projects Performance Dashboard Panel */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm mt-10">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-black text-slate-800 uppercase tracking-tighter">Indicadores de Desempenho por Projeto</h3>
+                <p className="text-xs text-slate-400 mt-1 uppercase font-bold tracking-wider">Acompanhamento consolidado de progresso, fases e indicadores específicos de cada projeto.</p>
+              </div>
+
+              {/* Search input for projects */}
+              <div className="relative w-full md:w-80">
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text" 
+                  value={projectSearchTerm}
+                  onChange={(e) => setProjectSearchTerm(e.target.value)}
+                  placeholder="Buscar projeto..."
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-brand-primary/20 focus:bg-white transition"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Grid of Projects Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredProjectStatsList.map(({ 
+              project, 
+              inProgressCount, 
+              criticalCount, 
+              monthlyDeliveriesCount, 
+              completedCount, 
+              currentPhaseName, 
+              currentPhaseCompleted, 
+              currentPhaseTotal 
+            }) => (
+              <div key={project.id} className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm hover:border-teal-300 transition flex flex-col justify-between h-full group">
+                <div>
+                  {/* Top: Icon, Name, Coordinator */}
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 bg-teal-500/10 rounded-2xl flex items-center justify-center text-md font-black text-brand-primary shrink-0">
+                      <FolderKanban size={22} className="text-brand-primary" />
+                    </div>
+                    <div className="overflow-hidden">
+                      <h4 className="text-sm font-black text-slate-800 tracking-tight group-hover:text-brand-primary transition-colors truncate" title={project.name}>{project.name}</h4>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5 truncate">Coord: {project.responsible || 'Sem responsável'}</p>
+                    </div>
+                  </div>
+
+                  {/* Indicators Grid */}
+                  <div className="grid grid-cols-2 gap-3 mb-6">
+                    {/* In Progress */}
+                    <div className="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 flex flex-col justify-between">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Em Andamento</span>
+                      <div className="flex items-baseline gap-1 mt-2">
+                        <span className="text-xl font-black text-slate-800">{inProgressCount}</span>
+                        <Activity size={12} className="text-slate-400" />
+                      </div>
+                    </div>
+
+                    {/* Critical */}
+                    <div className={`p-3 rounded-2xl border flex flex-col justify-between ${criticalCount > 0 ? 'bg-red-50/50 border-red-100' : 'bg-slate-50/70 border-slate-100'}`}>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Críticas / Retrabalho</span>
+                      <div className="flex items-baseline gap-1 mt-2">
+                        <span className={`text-xl font-black ${criticalCount > 0 ? 'text-red-600' : 'text-slate-800'}`}>{criticalCount}</span>
+                        <AlertTriangle size={12} className={criticalCount > 0 ? 'text-red-500 animate-pulse' : 'text-slate-300'} />
+                      </div>
+                    </div>
+
+                    {/* Month Deliveries */}
+                    <div className="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 flex flex-col justify-between">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Entregas no Mês</span>
+                      <div className="flex items-baseline gap-1 mt-2">
+                        <span className="text-xl font-black text-slate-800">{monthlyDeliveriesCount}</span>
+                        <Calendar size={12} className="text-slate-400" />
+                      </div>
+                    </div>
+
+                    {/* Total Completed */}
+                    <div className="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 flex flex-col justify-between">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Atividades Concluídas</span>
+                      <div className="flex items-baseline gap-1 mt-2">
+                        <span className="text-xl font-black text-slate-800">{completedCount}</span>
+                        <CheckCircle size={12} className="text-slate-400" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Fase Atual & Progresso da Fase */}
+                  <div className="bg-teal-50/40 p-4 rounded-2xl border border-teal-100/70 mb-5 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fase Atual</span>
+                      <span className="text-[10px] font-black text-brand-primary bg-teal-50 px-2.5 py-1 rounded-md border border-teal-100 uppercase tracking-wider max-w-[140px] truncate" title={currentPhaseName}>
+                        {currentPhaseName}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-600">
+                      <span>Progresso da Fase:</span>
+                      <span className="font-extrabold text-slate-800">{currentPhaseCompleted} / {currentPhaseTotal}</span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-brand-primary h-full transition-all duration-500" 
+                        style={{ width: `${currentPhaseTotal > 0 ? (currentPhaseCompleted / currentPhaseTotal) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* View Project flow Button */}
+                <button 
+                  onClick={() => {
+                    setSelectedProjectId(project.id);
+                    setActiveTab('projects');
+                  }}
+                  className="w-full py-3 bg-slate-50 hover:bg-brand-primary hover:text-white text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest transition flex items-center justify-center gap-2 border border-slate-150"
+                >
+                  Ver Fluxo do Projeto <ArrowUpRight size={14} />
+                </button>
+              </div>
+            ))}
+
+            {filteredProjectStatsList.length === 0 && (
+              <div className="col-span-full bg-white p-16 text-center border border-slate-200 rounded-3xl">
+                <FolderKanban size={48} className="mx-auto text-slate-200 mb-4" />
+                <p className="text-slate-400 font-bold uppercase text-xs tracking-widest italic">Nenhum projeto encontrado com os filtros atuais.</p>
               </div>
             )}
           </div>
