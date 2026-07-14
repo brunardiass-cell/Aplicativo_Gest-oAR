@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Project, Task } from '../types';
-import { FolderKanban, Activity, PauseCircle, AlertTriangle, ArrowRight, Clock } from 'lucide-react';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { FolderKanban, Activity, PauseCircle, AlertTriangle, ArrowRight, Clock, CheckCircle } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
 interface ProjectsDashboardProps {
   projects: Project[];
@@ -103,8 +103,6 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
   const calculateProjectProgress = (project: Project) => {
     const totalMacros = project.macroActivities.length;
     if (totalMacros === 0) return 0;
-    // FIX: Property 'status' does not exist on type 'MacroActivity'.
-    // A macro is considered completed if it has micro-activities and all of them are approved.
     const completedMacros = project.macroActivities.filter(ma => 
       ma.microActivities.length > 0 && 
       ma.microActivities.every(mi => mi.status === 'Concluído e aprovado')
@@ -112,164 +110,133 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
     return Math.round((completedMacros / totalMacros) * 100);
   };
 
+  const projectsProgressData = useMemo(() => {
+    return userProjects.map(p => ({
+      name: p.name.length > 25 ? p.name.substring(0, 25) + '...' : p.name,
+      fullName: p.name,
+      progress: calculateProjectProgress(p),
+    })).sort((a, b) => b.progress - a.progress);
+  }, [userProjects]);
+
+  const avgProgress = useMemo(() => {
+    if (userProjects.length === 0) return 0;
+    const total = userProjects.reduce((acc, p) => acc + calculateProjectProgress(p), 0);
+    return Math.round(total / userProjects.length);
+  }, [userProjects]);
+
   return (
     <div className="space-y-8">
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard label="Projetos Ativos" value={projectStats.active} icon={<Activity size={20}/>} color="bg-emerald-600" />
-        <StatCard label="Projetos Suspensos" value={projectStats.paused} icon={<PauseCircle size={20}/>} color="bg-amber-600" />
-        <StatCard label="Total de Atividades" value={projectStats.totalTasks} icon={<FolderKanban size={20}/>} color="bg-teal-700" />
-        <StatCard label="Atividades Atrasadas" value={projectStats.lateTasks} icon={<AlertTriangle size={20}/>} color="bg-red-600" />
+        <StatCard label="Progresso Médio Geral" value={`${avgProgress}%`} icon={<FolderKanban size={20}/>} color="bg-brand-primary" />
+        <StatCard label="Atividades Concluídas" value={microActivityStats.completed} icon={<CheckCircle size={20}/>} color="bg-teal-700" />
+        <StatCard label="Atividades Atrasadas" value={microActivityStats.overdue} icon={<AlertTriangle size={20}/>} color="bg-red-600" />
       </div>
 
-      {/* Lists & Charts */}
+      {/* Lists */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-7">
-            <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-200 h-full">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Status dos Projetos (baseado em Macroatividades)</h3>
-                <div className="space-y-5 max-h-[600px] overflow-y-auto custom-scrollbar pr-4">
-                     {userProjects.length > 0 ? userProjects.map(project => {
-                     const progress = calculateProjectProgress(project);
-                     const totalMacros = project.macroActivities.length;
-                     const completedMacros = project.macroActivities.filter(m => 
-                       m.microActivities.length > 0 && 
-                       m.microActivities.every(mi => mi.status === 'Concluído e aprovado')
-                     ).length;
-
-                     // Calculate micro-activity stats for this project
-                     const stats = {
-                       ongoing: 0,
-                       completed: 0,
-                       rework: 0,
-                       planned: 0
-                     };
-                     project.macroActivities.forEach(ma => {
-                       ma.microActivities.forEach(mi => {
-                         if (mi.status === 'Em andamento') stats.ongoing++;
-                         else if (mi.status === 'Concluído e aprovado' || mi.status === 'Concluído com restrições') stats.completed++;
-                         else if (mi.status === 'A repetir / retrabalho') stats.rework++;
-                         else if (mi.status === 'Planejado') stats.planned++;
-                       });
-                     });
-
-                     // Determine the current phase dynamically
-                     let currentPhase = '';
-                     const firstUnfinishedMacro = project.macroActivities.find(ma => 
-                       ma.microActivities.some(mi => mi.status !== 'Concluído e aprovado')
-                     );
-                     if (firstUnfinishedMacro) {
-                       currentPhase = firstUnfinishedMacro.phase;
-                     } else if (project.macroActivities.length > 0) {
-                       currentPhase = project.macroActivities[project.macroActivities.length - 1].phase;
-                     }
-
-                     return (
-                         <div key={project.id} className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-4">
-                           <div className="flex justify-between items-start gap-3">
-                             <div>
-                               <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{project.name}</p>
-                               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Responsável: <span className="font-extrabold text-slate-600">{project.responsible || 'Sem responsável'}</span></p>
-                             </div>
-                             <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase shrink-0 ${
-                             project.status === 'Ativo' ? 'bg-emerald-100 text-emerald-700' :
-                             project.status === 'Suspenso' ? 'bg-amber-100 text-amber-700' :
-                             project.status === 'Concluído' ? 'bg-slate-200 text-slate-600' : 'bg-slate-100 text-slate-500'
-                             }`}>{project.status}</span>
-                           </div>
-
-                           {/* Phase & Stats Grid */}
-                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3 rounded-xl border border-slate-100">
-                             <div>
-                               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Fase Atual</p>
-                               <p className="text-xs font-bold text-brand-primary truncate uppercase mt-0.5" title={currentPhase || 'Planejamento'}>{currentPhase || 'Planejamento'}</p>
-                             </div>
-                             <div>
-                               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Em Andamento</p>
-                               <p className="text-xs font-black text-teal-600 mt-0.5">{stats.ongoing}</p>
-                             </div>
-                             <div>
-                               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Retrabalho</p>
-                               <p className="text-xs font-black text-red-500 mt-0.5">{stats.rework}</p>
-                             </div>
-                             <div>
-                               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Concluídas</p>
-                               <p className="text-xs font-black text-emerald-600 mt-0.5">{stats.completed}</p>
-                             </div>
-                           </div>
-
-                           <div className="space-y-1.5">
-                             <div className="flex justify-between items-center text-[10px]">
-                               <span className="font-bold text-slate-400 uppercase tracking-wider">{completedMacros} de {totalMacros} macroatividades</span>
-                               <span className="font-black text-brand-primary">{progress}%</span>
-                             </div>
-                             <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                               <div className="h-full bg-brand-primary" style={{ width: `${progress}%` }}></div>
-                             </div>
-                           </div>
-
-                           <div className="flex justify-end pt-1">
-                             <button 
-                               onClick={() => onNavigateToProject(project.id)}
-                               className="text-[9px] font-black text-brand-primary uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all"
-                             >
-                               Ver Detalhes do Projeto <ArrowRight size={12} />
-                             </button>
-                           </div>
-                         </div>
-                     );
-                     }) : <p className="text-center text-slate-400 text-xs py-20 italic">Nenhum projeto associado a este perfil.</p>}
-                </div>
-            </div>
+        {/* Upcoming Microactivities */}
+        <div className="lg:col-span-7 bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
+           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Prazos Próximos de Microatividades (Top 5)</h3>
+           <div className="space-y-4">
+             {upcomingMicroActivities.length > 0 ? upcomingMicroActivities.map(micro => (
+               <button 
+                 key={micro.id} 
+                 onClick={() => onNavigateToProject(micro.projectId)}
+                 className="w-full text-left p-4 bg-slate-50 border border-slate-100 hover:border-slate-300 hover:bg-slate-100/50 transition rounded-2xl flex items-center justify-between group"
+               >
+                 <div>
+                   <p className="text-xs font-bold text-slate-900 group-hover:text-brand-primary transition-colors">{micro.name}</p>
+                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">{micro.projectName} • {micro.macroName}</p>
+                 </div>
+                 <div className="px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-[9px] font-black uppercase shrink-0">
+                   {new Date(micro.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                 </div>
+               </button>
+             )) : <p className="text-center text-slate-400 text-xs py-10 italic">Nenhum prazo próximo.</p>}
+           </div>
         </div>
-        
-        <div className="lg:col-span-5 space-y-6">
-            <div className="bg-red-50 p-5 rounded-[1.5rem] border border-red-200">
-                <h3 className="text-[10px] font-black text-red-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <AlertTriangle size={14}/> Microatividades Vencidas
-                </h3>
-                <div className="space-y-3 max-h-[250px] overflow-y-auto custom-scrollbar pr-2">
-                    {overdueMicroActivities.length > 0 ? overdueMicroActivities.map(micro => (
-                        <button key={micro.id} onClick={() => onNavigateToProject(micro.projectId)} className="w-full text-left p-3 bg-white border border-red-200 rounded-xl group hover:bg-red-100/50 transition">
-                            <div className="flex justify-between items-center">
-                                <div>
-                                <p className="text-xs font-bold text-slate-800">{micro.name}</p>
-                                <p className="text-[9px] font-bold text-slate-400 uppercase">{micro.projectName}</p>
-                                </div>
-                                <ArrowRight size={16} className="text-red-400 group-hover:translate-x-1 transition-transform" />
-                            </div>
-                        </button>
-                    )) : <p className="text-center text-red-800/60 text-xs py-10 italic">Nenhuma vencida!</p>}
-                </div>
-            </div>
 
-            <div className="bg-amber-50 p-5 rounded-[1.5rem] border border-amber-200">
-                <h3 className="text-[10px] font-black text-amber-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <Clock size={14}/> Prazos Próximos (Top 5)
-                </h3>
-                <div className="space-y-3 max-h-[250px] overflow-y-auto custom-scrollbar pr-2">
-                    {upcomingMicroActivities.length > 0 ? upcomingMicroActivities.map(micro => (
-                        <button key={micro.id} onClick={() => onNavigateToProject(micro.projectId)} className="w-full text-left p-3 bg-white border border-amber-200 rounded-xl group hover:bg-amber-100/50 transition">
-                           <div className="flex justify-between items-center">
-                                <div>
-                                    <p className="text-xs font-bold text-slate-800">{micro.name}</p>
-                                    <p className="text-[9px] font-bold text-slate-400 uppercase">{micro.projectName}</p>
-                                </div>
-                                <span className="text-[9px] font-bold text-amber-700">
-                                    {new Date(micro.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}
-                                </span>
-                            </div>
-                        </button>
-                    )) : <p className="text-center text-amber-800/60 text-xs py-10 italic">Nenhum prazo próximo.</p>}
-                </div>
-            </div>
+        {/* Project Alerts and At-Risk */}
+        <div className="lg:col-span-5 bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200 flex flex-col justify-between">
+           <div>
+             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Alertas e Notificações de Projetos</h3>
+             <div className="space-y-4">
+               <div className="p-4 bg-red-50/70 border border-red-100 rounded-2xl flex items-center justify-between">
+                 <div className="flex items-center gap-3">
+                   <div className="p-2 bg-red-100 text-red-600 rounded-xl"><AlertTriangle size={16}/></div>
+                   <div>
+                     <p className="text-xs font-black text-slate-800 uppercase">Microatividades Vencidas</p>
+                     <p className="text-[10px] font-bold text-slate-400">Total acumulado que necessita de atenção</p>
+                   </div>
+                 </div>
+                 <span className="text-xl font-black text-red-600 pr-2">{microActivityStats.overdue}</span>
+               </div>
+
+               <div className="p-4 bg-amber-50/70 border border-amber-100 rounded-2xl flex items-center justify-between">
+                 <div className="flex items-center gap-3">
+                   <div className="p-2 bg-amber-100 text-amber-600 rounded-xl"><PauseCircle size={16}/></div>
+                   <div>
+                     <p className="text-xs font-black text-slate-800 uppercase">Projetos Suspensos</p>
+                     <p className="text-[10px] font-bold text-slate-400">Projetos com cronograma pausado</p>
+                   </div>
+                 </div>
+                 <span className="text-xl font-black text-amber-600 pr-2">{projectStats.paused}</span>
+               </div>
+             </div>
+           </div>
+
+           {userProjects.length > 0 && (
+             <div className="pt-6 border-t border-slate-100 mt-6 flex justify-end">
+               <button 
+                 onClick={() => onNavigateToProject(userProjects[0].id)}
+                 className="text-[10px] font-black text-brand-primary uppercase tracking-widest flex items-center gap-2 hover:gap-3 transition-all"
+               >
+                 Acessar Visão de Projetos <ArrowRight size={14} />
+               </button>
+             </div>
+           )}
         </div>
       </div>
 
-      {/* Charts - Bottom */}
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-200">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Status das Microatividades</h3>
-            <div className="h-[300px]">
+        {/* Project Progress Bar Chart */}
+        <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Progresso Individual por Projeto (%)</h3>
+          <div className="h-[300px]">
+            {projectsProgressData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={projectsProgressData} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e2e8f0" />
+                  <XAxis type="number" domain={[0, 100]} hide />
+                  <YAxis dataKey="name" type="category" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} width={120} stroke="#64748b" />
+                  <Tooltip 
+                    formatter={(value) => [`${value}%`, 'Progresso']}
+                    contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }} 
+                    cursor={{fill: 'rgba(0,0,0,0.02)'}} 
+                  />
+                  <Bar dataKey="progress" fill="#2dd4bf" radius={[0, 8, 8, 0]} barSize={20}>
+                    {projectsProgressData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.progress === 100 ? '#10b981' : '#2dd4bf'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center">
+                <p className="text-slate-400 text-xs italic uppercase font-bold tracking-widest">Nenhum projeto cadastrado</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Microactivity Distribution Pie Chart */}
+        <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200">
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Distribuição Geral de Microatividades</h3>
+          <div className="h-[300px] flex items-center justify-center">
+            {microStatusChartData.some(d => d.value > 0) ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie 
@@ -278,34 +245,21 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
                     nameKey="name" 
                     cx="50%" 
                     cy="50%" 
-                    outerRadius={80} 
+                    outerRadius={75} 
                     labelLine={true} 
-                    label={({ name, percent, cx, cy, midAngle, outerRadius }) => {
-                      const RADIAN = Math.PI / 180;
-                      const radius = outerRadius + 25;
-                      const lx = cx + radius * Math.cos(-midAngle * RADIAN);
-                      const ly = cy + radius * Math.sin(-midAngle * RADIAN);
-                      
-                      return (
-                        <text 
-                          x={lx} 
-                          y={ly} 
-                          fill="#64748b" 
-                          textAnchor={lx > cx ? 'start' : 'end'} 
-                          dominantBaseline="central"
-                          className="text-[10px] font-black uppercase"
-                        >
-                          {`${name} ${(percent * 100).toFixed(0)}%`}
-                        </text>
-                      );
-                    }}
+                    label={({ name, percent }) => percent > 0 ? `${name} ${(percent * 100).toFixed(0)}%` : ''}
                   >
-                    {microStatusChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                    {microStatusChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
                   </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
+                  <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }} />
                 </PieChart>
               </ResponsiveContainer>
-            </div>
+            ) : (
+              <p className="text-slate-400 text-xs italic uppercase font-bold tracking-widest">Sem atividades planejadas</p>
+            )}
+          </div>
         </div>
       </div>
     </div>

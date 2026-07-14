@@ -18,6 +18,7 @@ interface ComiteGestorViewProps {
   regulatoryStandards: RegulatoryStandard[];
   onImpersonate: (member: TeamMember) => void;
   onOpenRegulatoryModal: (activityName: string) => void;
+  defaultTab?: 'dashboard' | 'projects';
 }
 
 const ComiteGestorView: React.FC<ComiteGestorViewProps> = ({
@@ -27,16 +28,17 @@ const ComiteGestorView: React.FC<ComiteGestorViewProps> = ({
   activityPlans,
   regulatoryStandards,
   onImpersonate,
-  onOpenRegulatoryModal
+  onOpenRegulatoryModal,
+  defaultTab = 'dashboard'
 }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'projects'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'projects'>(defaultTab);
   
   // Dashboard state
   const [searchTerm, setSearchTerm] = useState('');
   
   // Project visualization state
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [projVisualTab, setProjVisualTab] = useState<'map' | 'gantt' | 'kanban' | 'phases'>('map');
+  const [projVisualTab, setProjVisualTab] = useState<'map' | 'gantt' | 'kanban' | 'phases'>('phases');
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   const activeProjects = useMemo(() => projects.filter(p => !p.deleted), [projects]);

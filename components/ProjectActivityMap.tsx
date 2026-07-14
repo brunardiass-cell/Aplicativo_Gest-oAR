@@ -30,11 +30,20 @@ interface ProjectActivityMapProps {
 }
 
 const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templates, projects, onNavigateToProject }) => {
-  const [selectedTemplate, setSelectedTemplate] = useState<ActivityPlanTemplate | null>(null);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [showEmptyModel, setShowEmptyModel] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => {
+    return projects.length > 0 ? projects[0].id : null;
+  });
+  const [selectedTemplate, setSelectedTemplate] = useState<ActivityPlanTemplate | null>(() => {
+    const defaultProj = projects.length > 0 ? projects[0] : null;
+    if (defaultProj) {
+      return templates.find(t => t.id === defaultProj.templateId) || (templates.length > 0 ? templates[0] : null);
+    }
+    return templates.length > 0 ? templates[0] : null;
+  });
   const [selectedMacro, setSelectedMacro] = useState<any | null>(null);
 
-  const selectedProject = projects.find(p => p.id === selectedProjectId);
+  const selectedProject = showEmptyModel ? undefined : projects.find(p => p.id === selectedProjectId);
 
   const getIcon = (phase: string) => {
     const p = phase.toLowerCase();
@@ -136,40 +145,51 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
     );
   }
 
-  // Filtrar projetos que usam este template
-  const projectsForTemplate = projects.filter(p => p.templateId === selectedTemplate.id);
-
   return (
     <div className="fixed inset-0 bg-[#f8fafc] z-[100] flex flex-col animate-in fade-in duration-500 overflow-auto">
       {/* Top Navigation Bar */}
       <div className="bg-white border-b border-slate-200 px-8 py-5 flex flex-col lg:flex-row lg:items-center justify-between sticky top-0 z-50 gap-4">
         <div className="flex items-center gap-6">
           <button 
-            onClick={() => { setSelectedTemplate(null); setSelectedProjectId(null); }} 
+            onClick={onClose} 
             className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition"
           >
             <ChevronDown size={14} className="rotate-90" /> Voltar
           </button>
           <div className="h-10 w-px bg-slate-100 hidden lg:block" />
           <div className="space-y-0.5">
-            <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-none">MAPA DO FLUXO – {selectedTemplate.name}</h2>
+            <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-none">
+              MAPA DO FLUXO – {selectedTemplate.name} {showEmptyModel ? '(MODELO VAZIO)' : ''}
+            </h2>
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Fluxo e ordem das atividades para a conclusão do projeto</p>
           </div>
         </div>
 
         <div className="flex items-center gap-4 lg:gap-8 bg-slate-50 lg:bg-transparent p-3 lg:p-0 rounded-2xl lg:rounded-none">
           <div className="flex flex-col lg:items-end">
-             <span className={`text-[8px] font-black uppercase tracking-widest mb-1 ${selectedProjectId ? 'text-emerald-500 uppercase' : 'text-red-500 uppercase'}`}>
-                {selectedProjectId ? 'PROJETO SELECIONADO' : 'NENHUM PROJETO SELECIONADO'}
+             <span className={`text-[8px] font-black uppercase tracking-widest mb-1 ${selectedProjectId && !showEmptyModel ? 'text-emerald-500 uppercase' : (showEmptyModel ? 'text-blue-500 uppercase' : 'text-red-500 uppercase')}`}>
+                {selectedProjectId && !showEmptyModel ? 'PROJETO SELECIONADO' : (showEmptyModel ? 'MODELO DE PLATAFORMA VAZIO' : 'NENHUM PROJETO SELECIONADO')}
              </span>
              <div className="relative">
                 <select 
                   value={selectedProjectId || ''} 
-                  onChange={e => setSelectedProjectId(e.target.value || null)}
+                  onChange={e => {
+                    const nextId = e.target.value;
+                    setSelectedProjectId(nextId || null);
+                    if (nextId) {
+                      const nextProj = projects.find(p => p.id === nextId);
+                      if (nextProj) {
+                        const nextTemp = templates.find(t => t.id === nextProj.templateId);
+                        if (nextTemp) {
+                          setSelectedTemplate(nextTemp);
+                        }
+                      }
+                    }
+                  }}
                   className="pl-4 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700 outline-none focus:ring-2 focus:ring-brand-primary/20 transition appearance-none min-w-[240px]"
                 >
                   <option value="">Selecione um projeto</option>
-                  {projectsForTemplate.map(p => (
+                  {projects.map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
@@ -177,6 +197,19 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
              </div>
           </div>
           
+          {selectedProjectId && (
+            <button 
+              onClick={() => setShowEmptyModel(!showEmptyModel)} 
+              className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition shadow-sm no-print border ${
+                showEmptyModel 
+                  ? 'bg-brand-primary text-white border-brand-primary hover:bg-brand-accent' 
+                  : 'bg-teal-50 text-brand-primary border-teal-200 hover:bg-teal-100'
+              }`}
+            >
+              <Workflow size={16} /> {showEmptyModel ? 'Ver Dados do Projeto' : 'Visualizar Modelo Vazio'}
+            </button>
+          )}
+
           <button onClick={() => window.print()} className="flex items-center gap-2 px-5 py-3 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition no-print shadow-sm">
             <Printer size={16} /> Imprimir Mapa
           </button>

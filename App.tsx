@@ -1248,6 +1248,8 @@ const App: React.FC = () => {
         {view === 'dashboard' && (
           selectedProfile?.isComiteGestor ? (
             <ComiteGestorView 
+              key="comite-dashboard"
+              defaultTab="dashboard"
               tasks={tasks}
               projects={activeProjects}
               teamMembers={teamMembers}
@@ -1330,6 +1332,8 @@ const App: React.FC = () => {
         {view === 'projects' && (
           selectedProfile?.isComiteGestor ? (
             <ComiteGestorView 
+              key="comite-projects"
+              defaultTab="projects"
               tasks={tasks}
               projects={activeProjects}
               teamMembers={teamMembers}
