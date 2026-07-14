@@ -22,9 +22,10 @@ import AccessControl from './components/AccessControl';
 import RegulatoryStandardsManager from './components/RegulatoryStandardsManager';
 import RegulatoryStandardsModal from './components/RegulatoryStandardsModal';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
-import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu } from 'lucide-react';
+import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
 import PreSaveConfirmationModal from './components/PreSaveConfirmationModal';
+import ComiteGestorView from './components/ComiteGestorView';
 
 function isEqual(a: any, b: any): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -73,6 +74,7 @@ const App: React.FC = () => {
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<TeamMember | null>(null);
   const [isPasswordAuthenticated, setIsPasswordAuthenticated] = useState(false);
+  const [comiteImpersonatingFrom, setComiteImpersonatingFrom] = useState<TeamMember | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -645,6 +647,20 @@ const App: React.FC = () => {
     setIsPasswordAuthenticated(false);
     setPasswordError(null);
     setIsSidebarOpen(false);
+    setComiteImpersonatingFrom(null);
+  };
+
+  const handleStopImpersonation = () => {
+    if (comiteImpersonatingFrom) {
+      setSelectedProfile(comiteImpersonatingFrom);
+      setComiteImpersonatingFrom(null);
+    }
+  };
+
+  const handleImpersonate = (member: TeamMember) => {
+    setComiteImpersonatingFrom(selectedProfile);
+    setSelectedProfile(member);
+    setIsPasswordAuthenticated(true);
   };
 
   const mergeArrays = (serverArr: any[], localArr: any[], baseArr: any[]) => {
@@ -1133,6 +1149,26 @@ const App: React.FC = () => {
       <input type="file" ref={fileInputRef} onChange={handleLoadLocalBackup} accept=".json" className="hidden" />
 
       <main className={`flex-1 overflow-y-auto transition-all duration-300 ${isDesktop ? 'ml-64 p-10' : 'ml-0 p-4 pt-24'}`}>
+        {comiteImpersonatingFrom && (
+          <div className="mb-6 bg-teal-50 border border-teal-200 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-in fade-in duration-300">
+            <div className="flex items-center gap-3">
+              <div className="bg-teal-100 p-2 rounded-xl text-teal-700 animate-pulse">
+                <Users size={18} />
+              </div>
+              <div>
+                <p className="text-xs font-black text-teal-800 uppercase tracking-tight">Visitação de Perfil Ativa</p>
+                <p className="text-[10px] font-bold text-teal-600 uppercase tracking-widest mt-0.5">Você está visualizando o portal com o perfil de: <span className="font-extrabold text-teal-800">{selectedProfile?.name}</span></p>
+              </div>
+            </div>
+            <button 
+              onClick={handleStopImpersonation}
+              className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition flex items-center gap-1.5 self-start sm:self-auto"
+            >
+              <ArrowLeft size={14} /> Voltar ao Comitê Gestor
+            </button>
+          </div>
+        )}
+
         <header className={`flex justify-between items-center mb-8 ${isDesktop ? '' : 'fixed top-0 left-0 right-0 bg-slate-100/80 backdrop-blur-md z-40 p-4 border-b border-slate-200'}`}>
             <div className="flex items-center gap-4">
               {!isDesktop && (
@@ -1190,13 +1226,25 @@ const App: React.FC = () => {
         </header>
 
         {view === 'dashboard' && (
-          <div className="space-y-6">
-            <div className={`bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-full sm:w-fit overflow-x-auto`}>
-              <button onClick={() => setDashboardView('activities')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'activities' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Activity size={14} /> {isMobile ? 'Atividades' : 'Dashboard de Atividades'}</button>
-              <button onClick={() => setDashboardView('projects')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'projects' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><FolderKanban size={14} /> {isMobile ? 'Projetos' : 'Dashboard de Projetos'}</button>
+          selectedProfile?.isComiteGestor ? (
+            <ComiteGestorView 
+              tasks={tasks}
+              projects={activeProjects}
+              teamMembers={teamMembers}
+              activityPlans={activityPlans}
+              regulatoryStandards={regulatoryStandards}
+              onImpersonate={handleImpersonate}
+              onOpenRegulatoryModal={openRegulatoryModal}
+            />
+          ) : (
+            <div className="space-y-6">
+              <div className={`bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-full sm:w-fit overflow-x-auto`}>
+                <button onClick={() => setDashboardView('activities')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'activities' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Activity size={14} /> {isMobile ? 'Atividades' : 'Dashboard de Atividades'}</button>
+                <button onClick={() => setDashboardView('projects')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'projects' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><FolderKanban size={14} /> {isMobile ? 'Projetos' : 'Dashboard de Projetos'}</button>
+              </div>
+              {dashboardView === 'activities' ? (<Dashboard tasks={tasks} projects={activeProjects} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />) : (<ProjectsDashboard projects={activeProjects} tasks={tasks} filteredUser={filterMember} onNavigateToProject={handleNavigateToProject}/>)}
             </div>
-            {dashboardView === 'activities' ? (<Dashboard tasks={tasks} projects={activeProjects} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />) : (<ProjectsDashboard projects={activeProjects} tasks={tasks} filteredUser={filterMember} onNavigateToProject={handleNavigateToProject}/>)}
-          </div>
+          )
         )}
         {view === 'tasks' && (
           <div className="space-y-6">
@@ -1260,36 +1308,48 @@ const App: React.FC = () => {
           </div>
         )}
         {view === 'projects' && (
-          <div className="space-y-6">
+          selectedProfile?.isComiteGestor ? (
+            <ComiteGestorView 
+              tasks={tasks}
+              projects={activeProjects}
+              teamMembers={teamMembers}
+              activityPlans={activityPlans}
+              regulatoryStandards={regulatoryStandards}
+              onImpersonate={handleImpersonate}
+              onOpenRegulatoryModal={openRegulatoryModal}
+            />
+          ) : (
+            <div className="space-y-6">
 
-            {projectManagerViewTab === 'management' ? (
-              <ProjectsManager 
-                projects={activeProjects} 
-                onUpdateProjects={(p) => { setProjects(p); setDataDirty(); }} 
-                activityPlans={activityPlans} 
-                onUpdateActivityPlans={(ap) => { setActivityPlans(ap); setDataDirty(); }} 
-                onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} 
-                teamMembers={teamMembers} 
-                currentUserRole={currentUserRole} 
-                initialProjectId={initialProjectId} 
-                targetMicroId={targetMicroId}
-                onClearTargetMicroId={() => setTargetMicroId(null)}
-                regulatoryStandards={regulatoryStandards}
-                onOpenRegulatoryModal={openRegulatoryModal}
-                currentUser={selectedProfile}
-              />
-            ) : (
-              <ProjectsVisualBoard 
-                projects={activeProjects} 
-                onUpdateProjects={setProjects} 
-                initialProjectId={initialProjectId} 
-                onClearInitialProjectId={() => setInitialProjectId(null)} 
-                onNavigateToMicroActivity={handleNavigateToMicroActivity}
-                regulatoryStandards={regulatoryStandards}
-                onOpenRegulatoryModal={openRegulatoryModal}
-              />
-            )}
-          </div>
+              {projectManagerViewTab === 'management' ? (
+                <ProjectsManager 
+                  projects={activeProjects} 
+                  onUpdateProjects={(p) => { setProjects(p); setDataDirty(); }} 
+                  activityPlans={activityPlans} 
+                  onUpdateActivityPlans={(ap) => { setActivityPlans(ap); setDataDirty(); }} 
+                  onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} 
+                  teamMembers={teamMembers} 
+                  currentUserRole={currentUserRole} 
+                  initialProjectId={initialProjectId} 
+                  targetMicroId={targetMicroId}
+                  onClearTargetMicroId={() => setTargetMicroId(null)}
+                  regulatoryStandards={regulatoryStandards}
+                  onOpenRegulatoryModal={openRegulatoryModal}
+                  currentUser={selectedProfile}
+                />
+              ) : (
+                <ProjectsVisualBoard 
+                  projects={activeProjects} 
+                  onUpdateProjects={setProjects} 
+                  initialProjectId={initialProjectId} 
+                  onClearInitialProjectId={() => setInitialProjectId(null)} 
+                  onNavigateToMicroActivity={handleNavigateToMicroActivity}
+                  regulatoryStandards={regulatoryStandards}
+                  onOpenRegulatoryModal={openRegulatoryModal}
+                />
+              )}
+            </div>
+          )
         )}
         {view === 'quality' && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={(tm) => { setTeamMembers(tm); setDataDirty(); }} appUsers={appUsers} onUpdateAppUsers={(u) => { setAppUsers(u); setDataDirty(); }} />}
         {view === 'traceability' && <ActivityLogView logs={logs} onRestoreItem={handleRestoreItem} onClearLog={handleClearLog} onClearAllLogs={handleClearAllLogs} />}

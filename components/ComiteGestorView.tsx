@@ -1,0 +1,573 @@
+import React, { useMemo, useState } from 'react';
+import { Project, Task, TeamMember, RegulatoryStandard, ActivityPlanTemplate } from '../types';
+import { 
+  LayoutDashboard, FolderKanban, Activity, CheckCircle, AlertTriangle, 
+  User, Briefcase, Calendar, Map, Kanban, LayoutGrid, X, Search, 
+  Users, ArrowUpRight, Info, Clock, ArrowLeft, Sliders, CheckSquare, ListTodo
+} from 'lucide-react';
+import ProjectGanttView from './ProjectGanttView';
+import ProjectKanbanView from './ProjectKanbanView';
+import ProjectFlowView from './ProjectFlowView';
+import ProjectActivityMap from './ProjectActivityMap';
+
+interface ComiteGestorViewProps {
+  tasks: Task[];
+  projects: Project[];
+  teamMembers: TeamMember[];
+  activityPlans: ActivityPlanTemplate[];
+  regulatoryStandards: RegulatoryStandard[];
+  onImpersonate: (member: TeamMember) => void;
+  onOpenRegulatoryModal: (activityName: string) => void;
+}
+
+const ComiteGestorView: React.FC<ComiteGestorViewProps> = ({
+  tasks,
+  projects,
+  teamMembers,
+  activityPlans,
+  regulatoryStandards,
+  onImpersonate,
+  onOpenRegulatoryModal
+}) => {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'projects'>('dashboard');
+  
+  // Dashboard state
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Project visualization state
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [projVisualTab, setProjVisualTab] = useState<'map' | 'gantt' | 'kanban' | 'phases'>('map');
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+
+  const activeProjects = useMemo(() => projects.filter(p => !p.deleted), [projects]);
+
+  // 1. Calculate dashboard statistics for each team member
+  const personStatsList = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const isThisMonth = (dateStr: string | undefined) => {
+      if (!dateStr) return false;
+      const d = new Date(dateStr + 'T00:00:00');
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    };
+
+    // Filter out other comitê gestor profiles from stats if needed, but keeping all team members
+    return teamMembers.map(member => {
+      // a) Atividades em andamento:
+      // Standard tasks where member is lead or collaborator
+      const tasksInProgress = tasks.filter(t => 
+        !t.deleted && 
+        t.status === 'Em Andamento' && 
+        (t.projectLead === member.name || (Array.isArray(t.collaborators) && t.collaborators.includes(member.name)))
+      ).length;
+
+      // Project microactivities with 'Em andamento'
+      let microInProgress = 0;
+      activeProjects.forEach(p => {
+        p.macroActivities?.forEach(macro => {
+          macro.microActivities?.forEach(micro => {
+            if (micro.assignee === member.name && micro.status === 'Em andamento') {
+              microInProgress++;
+            }
+          });
+        });
+      });
+
+      const inProgressCount = tasksInProgress + microInProgress;
+
+      // b) Atividades críticas:
+      // Standard tasks not completed with Alta or Urgente priority
+      const tasksCritical = tasks.filter(t => 
+        !t.deleted && 
+        t.status !== 'Concluída' && 
+        (t.priority === 'Alta' || t.priority === 'Urgente') && 
+        (t.projectLead === member.name || (Array.isArray(t.collaborators) && t.collaborators.includes(member.name)))
+      ).length;
+
+      // Project microactivities with status 'A repetir / retrabalho'
+      let microCritical = 0;
+      activeProjects.forEach(p => {
+        p.macroActivities?.forEach(macro => {
+          macro.microActivities?.forEach(micro => {
+            if (micro.assignee === member.name && micro.status === 'A repetir / retrabalho') {
+              microCritical++;
+            }
+          });
+        });
+      });
+
+      const criticalCount = tasksCritical + microCritical;
+
+      // c) Entregas previstas no mês:
+      // Standard tasks due this month not completed
+      const tasksDueThisMonth = tasks.filter(t => 
+        !t.deleted && 
+        t.status !== 'Concluída' && 
+        t.completionDate && 
+        isThisMonth(t.completionDate) && 
+        (t.projectLead === member.name || (Array.isArray(t.collaborators) && t.collaborators.includes(member.name)))
+      ).length;
+
+      // Project microactivities due this month not completed
+      let microDueThisMonth = 0;
+      activeProjects.forEach(p => {
+        p.macroActivities?.forEach(macro => {
+          macro.microActivities?.forEach(micro => {
+            if (
+              micro.assignee === member.name && 
+              micro.status !== 'Concluído com restrições' && 
+              micro.status !== 'Concluído e aprovado' && 
+              micro.dueDate && 
+              isThisMonth(micro.dueDate)
+            ) {
+              microDueThisMonth++;
+            }
+          });
+        });
+      });
+
+      const monthlyDeliveriesCount = tasksDueThisMonth + microDueThisMonth;
+
+      // d) Projetos acompanhados:
+      // Projects where member is responsible or in the team, and not concluded
+      const projectsCount = activeProjects.filter(p => 
+        p.status !== 'Concluído' && 
+        (p.responsible === member.name || (Array.isArray(p.team) && p.team.includes(member.name)))
+      ).length;
+
+      return {
+        member,
+        inProgressCount,
+        criticalCount,
+        monthlyDeliveriesCount,
+        projectsCount
+      };
+    });
+  }, [teamMembers, tasks, activeProjects]);
+
+  // Filter list by search term
+  const filteredStatsList = useMemo(() => {
+    return personStatsList.filter(item => 
+      item.member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.member.role.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [personStatsList, searchTerm]);
+
+  // Set default selected project when project visualization tab opens
+  const selectedProject = useMemo(() => {
+    if (activeProjects.length === 0) return null;
+    return activeProjects.find(p => p.id === selectedProjectId) || activeProjects[0];
+  }, [activeProjects, selectedProjectId]);
+
+  // Update selected project state if needed
+  React.useEffect(() => {
+    if (selectedProject && selectedProject.id !== selectedProjectId) {
+      setSelectedProjectId(selectedProject.id);
+    }
+  }, [selectedProject, selectedProjectId]);
+
+  // Dummy updates so visualizers can still call onUpdateProject without erroring (since Comitê is read-only view)
+  const handleNoopUpdateProject = (updatedProj: Project) => {
+    console.log("Comitê Gestor is a visual-only view. Project update ignored:", updatedProj.name);
+  };
+
+  const getInitials = (name: string): string => {
+    const parts = name.split(' ');
+    if (parts.length > 1 && parts[1]) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Upper Tab Navigation */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm">
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setActiveTab('dashboard')}
+            className={`px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-wider transition flex items-center gap-2 ${activeTab === 'dashboard' ? 'bg-brand-primary text-white shadow-lg shadow-teal-500/10' : 'text-slate-500 hover:bg-slate-50'}`}
+          >
+            <LayoutDashboard size={16} /> Painel de Equipe
+          </button>
+          <button 
+            onClick={() => setActiveTab('projects')}
+            className={`px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-wider transition flex items-center gap-2 ${activeTab === 'projects' ? 'bg-brand-primary text-white shadow-lg shadow-teal-500/10' : 'text-slate-500 hover:bg-slate-50'}`}
+          >
+            <FolderKanban size={16} /> Visão de Projetos
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="bg-teal-50 text-teal-700 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border border-teal-100 flex items-center gap-1.5">
+            <Briefcase size={12} className="text-teal-600 animate-pulse" /> Perfil: Comitê Gestor
+          </span>
+        </div>
+      </div>
+
+      {/* 1. DASHBOARD VIEW */}
+      {activeTab === 'dashboard' && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-black text-slate-800 uppercase tracking-tighter">Indicadores de Desempenho por Pessoa</h3>
+                <p className="text-xs text-slate-400 mt-1 uppercase font-bold tracking-wider">Acompanhamento resumido e consolidado de atividades e projetos da equipe.</p>
+              </div>
+
+              {/* Search input */}
+              <div className="relative w-full md:w-80">
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text" 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Buscar colaborador..."
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-brand-primary/20 focus:bg-white transition"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Grid of Team Members Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredStatsList.map(({ member, inProgressCount, criticalCount, monthlyDeliveriesCount, projectsCount }) => (
+              <div key={member.id} className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm hover:border-teal-300 transition flex flex-col justify-between h-full group">
+                <div>
+                  {/* Top: Avatar, Name, Role */}
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-md font-black text-brand-primary">
+                      {getInitials(member.name)}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-800 tracking-tight group-hover:text-brand-primary transition-colors">{member.name}</h4>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">{member.role}</p>
+                    </div>
+                  </div>
+
+                  {/* Indicators Grid */}
+                  <div className="grid grid-cols-2 gap-3 mb-6">
+                    {/* In Progress */}
+                    <div className="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 flex flex-col justify-between">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Em Andamento</span>
+                      <div className="flex items-baseline gap-1 mt-2">
+                        <span className="text-xl font-black text-slate-800">{inProgressCount}</span>
+                        <Activity size={12} className="text-slate-400" />
+                      </div>
+                    </div>
+
+                    {/* Critical */}
+                    <div className={`p-3 rounded-2xl border flex flex-col justify-between ${criticalCount > 0 ? 'bg-red-50/50 border-red-100' : 'bg-slate-50/70 border-slate-100'}`}>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Críticas / Retrabalho</span>
+                      <div className="flex items-baseline gap-1 mt-2">
+                        <span className={`text-xl font-black ${criticalCount > 0 ? 'text-red-600' : 'text-slate-800'}`}>{criticalCount}</span>
+                        <AlertTriangle size={12} className={criticalCount > 0 ? 'text-red-500 animate-pulse' : 'text-slate-300'} />
+                      </div>
+                    </div>
+
+                    {/* Month Deliveries */}
+                    <div className="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 flex flex-col justify-between">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Entregas no Mês</span>
+                      <div className="flex items-baseline gap-1 mt-2">
+                        <span className="text-xl font-black text-slate-800">{monthlyDeliveriesCount}</span>
+                        <Calendar size={12} className="text-slate-400" />
+                      </div>
+                    </div>
+
+                    {/* Monitored Projects */}
+                    <div className="bg-slate-50/70 p-3 rounded-2xl border border-slate-100 flex flex-col justify-between">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-tight">Projetos Ativos</span>
+                      <div className="flex items-baseline gap-1 mt-2">
+                        <span className="text-xl font-black text-slate-800">{projectsCount}</span>
+                        <FolderKanban size={12} className="text-slate-400" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Impersonation Button */}
+                <button 
+                  onClick={() => onImpersonate(member)}
+                  className="w-full py-3 bg-slate-50 hover:bg-brand-primary hover:text-white text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest transition flex items-center justify-center gap-2 border border-slate-150"
+                >
+                  Visitar Perfil <ArrowUpRight size={14} />
+                </button>
+              </div>
+            ))}
+
+            {filteredStatsList.length === 0 && (
+              <div className="col-span-full bg-white p-16 text-center border border-slate-200 rounded-3xl">
+                <Users size={48} className="mx-auto text-slate-200 mb-4" />
+                <p className="text-slate-400 font-bold uppercase text-xs tracking-widest italic">Nenhum colaborador encontrado com os filtros atuais.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 2. PROJECT VISUALIZATION VIEW */}
+      {activeTab === 'projects' && (
+        <div className="space-y-6">
+          {/* Top Panel: Project Selection and Visual Type Selection */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+            <div className="flex items-center gap-4 w-full lg:w-fit">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest shrink-0">Projeto</span>
+              <select
+                value={selectedProjectId || ''}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                className="w-full lg:w-80 p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-brand-primary/20 focus:bg-white"
+                disabled={activeProjects.length === 0}
+              >
+                {activeProjects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+
+              {selectedProject && (
+                <button 
+                  onClick={() => setIsDetailModalOpen(true)}
+                  className="p-3 bg-teal-50 text-brand-primary rounded-xl hover:bg-teal-100 transition shrink-0 flex items-center gap-1.5 font-bold text-[10px] uppercase tracking-wider"
+                  title="Ver Projeto em Detalhes"
+                >
+                  <Info size={16} /> <span className="hidden sm:inline">Detalhes</span>
+                </button>
+              )}
+            </div>
+
+            {/* Restricted Visual Tabs */}
+            <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1.5 rounded-2xl w-full lg:w-auto">
+              <button 
+                onClick={() => setProjVisualTab('map')} 
+                className={`flex-1 lg:flex-none px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition flex items-center justify-center gap-2 ${projVisualTab === 'map' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                <Map size={14} /> Mapa de Atividades
+              </button>
+              <button 
+                onClick={() => setProjVisualTab('gantt')} 
+                className={`flex-1 lg:flex-none px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition flex items-center justify-center gap-2 ${projVisualTab === 'gantt' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                <Clock size={14} /> Gantt
+              </button>
+              <button 
+                onClick={() => setProjVisualTab('kanban')} 
+                className={`flex-1 lg:flex-none px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition flex items-center justify-center gap-2 ${projVisualTab === 'kanban' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                <Kanban size={14} /> Kanban
+              </button>
+              <button 
+                onClick={() => setProjVisualTab('phases')} 
+                className={`flex-1 lg:flex-none px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition flex items-center justify-center gap-2 ${projVisualTab === 'phases' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                <LayoutGrid size={14} /> Fases
+              </button>
+            </div>
+          </div>
+
+          {/* Visualization Container */}
+          {selectedProject ? (
+            <div className="bg-white rounded-[2.5rem] border border-slate-200/80 shadow-sm p-6 overflow-hidden min-h-[500px]">
+              {projVisualTab === 'map' && (
+                <div className="space-y-4">
+                  <ProjectActivityMap 
+                    onClose={() => {}}
+                    templates={activityPlans}
+                    projects={activeProjects.filter(p => p.id === selectedProjectId)} // Only pass currently selected
+                  />
+                </div>
+              )}
+
+              {projVisualTab === 'gantt' && (
+                <ProjectGanttView 
+                  project={selectedProject} 
+                  onUpdateProject={handleNoopUpdateProject} 
+                  teamMembers={teamMembers}
+                />
+              )}
+
+              {projVisualTab === 'kanban' && (
+                <ProjectKanbanView 
+                  project={selectedProject} 
+                  onUpdateProject={handleNoopUpdateProject} 
+                  onNavigateToMicroActivity={() => {}} // Read-only view
+                  regulatoryStandards={regulatoryStandards}
+                  onOpenRegulatoryModal={onOpenRegulatoryModal}
+                />
+              )}
+
+              {projVisualTab === 'phases' && (
+                <ProjectFlowView 
+                  project={selectedProject} 
+                  onUpdateProject={handleNoopUpdateProject} 
+                  regulatoryStandards={regulatoryStandards} 
+                  onOpenRegulatoryModal={onOpenRegulatoryModal} 
+                />
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-96 bg-white rounded-3xl border-2 border-dashed border-slate-200">
+              <p className="text-slate-400 font-bold uppercase text-xs tracking-widest italic">Nenhum projeto ativo para visualizar.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 3. DETAILED VIEW MODAL OVERLAY */}
+      {isDetailModalOpen && selectedProject && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-4xl h-[85vh] rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <header className="p-8 bg-slate-50 border-b border-slate-100 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="bg-brand-primary p-3.5 rounded-2xl text-white shadow-lg shadow-teal-500/10">
+                  <FolderKanban size={24} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">{selectedProject.name}</h3>
+                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${
+                      selectedProject.status === 'Ativo' ? 'bg-emerald-50 text-emerald-600' :
+                      selectedProject.status === 'Em Planejamento' ? 'bg-blue-50 text-blue-600' : 'bg-slate-150 text-slate-500'
+                    }`}>
+                      {selectedProject.status}
+                    </span>
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Responsável: {selectedProject.responsible || 'Sem responsável oficial'}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsDetailModalOpen(false)} 
+                className="p-2 hover:bg-slate-200 rounded-full transition"
+              >
+                <X size={20} />
+              </button>
+            </header>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-8 space-y-8">
+              {/* Objective & Description */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/50 p-6 rounded-3xl border border-slate-100">
+                <div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
+                    <Info size={14} className="text-slate-400" /> Objetivo Geral
+                  </h4>
+                  <p className="text-xs font-bold text-slate-700 leading-relaxed whitespace-pre-line">{selectedProject.objective || 'Nenhum objetivo cadastrado para este projeto.'}</p>
+                </div>
+                <div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
+                    <ListTodo size={14} className="text-slate-400" /> Descrição do Escopo
+                  </h4>
+                  <p className="text-xs font-bold text-slate-700 leading-relaxed whitespace-pre-line">{selectedProject.description || 'Nenhuma descrição detalhada cadastrada.'}</p>
+                </div>
+              </div>
+
+              {/* Equipe do Projeto */}
+              <div>
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-4">
+                  <Users size={14} /> Equipe Vinculada ({selectedProject.team?.length || 0} membros)
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedProject.team && selectedProject.team.length > 0 ? (
+                    selectedProject.team.map(name => (
+                      <span key={name} className="px-3.5 py-2 bg-teal-50 text-teal-700 text-xs font-bold rounded-xl border border-teal-100 flex items-center gap-1.5">
+                        <User size={12} className="text-teal-500" /> {name}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-slate-400 text-xs italic">Nenhum membro vinculado à equipe do projeto.</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Cronograma / Atividades do Projeto */}
+              <div>
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-4">
+                  <Clock size={14} /> Detalhamento do Plano de Trabalho ({selectedProject.macroActivities?.length || 0} macroatividades)
+                </h4>
+                <div className="space-y-6">
+                  {selectedProject.macroActivities?.map((macro, idx) => (
+                    <div key={macro.id || idx} className="border border-slate-150 rounded-2xl bg-white shadow-sm overflow-hidden">
+                      <header className="p-4 bg-slate-50 border-b border-slate-100 flex flex-wrap justify-between items-center gap-2">
+                        <div>
+                          <span className="text-[8px] font-black uppercase bg-slate-200 text-slate-600 px-2 py-0.5 rounded mr-2">{macro.phase}</span>
+                          <span className="text-xs font-black text-slate-800">{macro.name}</span>
+                        </div>
+                        {macro.dueDate && (
+                          <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1 bg-white border border-slate-250 px-2.5 py-1 rounded-lg">
+                            <Calendar size={12} /> Prazo: {new Date(macro.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                          </span>
+                        )}
+                      </header>
+
+                      {/* Micro atividades da macro */}
+                      <div className="p-4 bg-white divide-y divide-slate-100">
+                        {macro.microActivities && macro.microActivities.length > 0 ? (
+                          macro.microActivities.map((micro) => {
+                            const hasCompleted = micro.status === 'Concluído com restrições' || micro.status === 'Concluído e aprovado';
+                            return (
+                              <div key={micro.id} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                                <div>
+                                  <p className="text-xs font-bold text-slate-800">{micro.name}</p>
+                                  <div className="flex items-center gap-3 mt-1.5">
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                      <User size={10} /> {micro.assignee || 'Não atribuído'}
+                                    </span>
+                                    {micro.dueDate && (
+                                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                        <Calendar size={10} /> {new Date(micro.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  {/* Progress bar */}
+                                  {micro.progress !== undefined && (
+                                    <div className="w-20 bg-slate-100 h-1.5 rounded-full overflow-hidden mr-2">
+                                      <div className="bg-brand-primary h-full" style={{ width: `${micro.progress}%` }}></div>
+                                    </div>
+                                  )}
+
+                                  {/* Status badge */}
+                                  <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1 border ${
+                                    micro.status === 'Concluído e aprovado' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                                    micro.status === 'Concluído com restrições' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                    micro.status === 'Em andamento' ? 'bg-teal-50 text-teal-700 border-teal-100' :
+                                    micro.status === 'A repetir / retrabalho' ? 'bg-red-50 text-red-700 border-red-100' :
+                                    'bg-slate-50 text-slate-500 border-slate-200'
+                                  }`}>
+                                    {hasCompleted ? <CheckSquare size={10} /> : <Clock size={10} />}
+                                    {micro.status}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="p-4 text-center text-slate-400 text-xs italic">Nenhuma microatividade programada para esta macroatividade.</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <footer className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
+              <button 
+                onClick={() => setIsDetailModalOpen(false)}
+                className="px-6 py-3 bg-slate-800 hover:bg-black text-white text-xs font-black uppercase tracking-widest rounded-2xl transition"
+              >
+                Fechar Detalhes
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ComiteGestorView;

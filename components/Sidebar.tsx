@@ -86,10 +86,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         <nav className="space-y-2">
           <SidebarButton active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} icon={<LayoutDashboard size={18} />} label="Dashboard" />
-          <SidebarButton active={currentView === 'tasks'} onClick={() => onViewChange('tasks')} icon={<ListTodo size={18} />} label="Atividades" />
+          {!selectedProfile?.isComiteGestor && (
+            <SidebarButton active={currentView === 'tasks'} onClick={() => onViewChange('tasks')} icon={<ListTodo size={18} />} label="Atividades" />
+          )}
           <SidebarButton active={currentView === 'projects'} onClick={() => onViewChange('projects')} icon={<FolderKanban size={18} />} label="Projetos" />
-          <SidebarButton active={currentView === 'regulatory'} onClick={() => onViewChange('regulatory')} icon={<ShieldCheck size={18} />} label="Normas" />
-          {hasFullAccess && (
+          {!selectedProfile?.isComiteGestor && (
+            <SidebarButton active={currentView === 'regulatory'} onClick={() => onViewChange('regulatory')} icon={<ShieldCheck size={18} />} label="Normas" />
+          )}
+          {hasFullAccess && !selectedProfile?.isComiteGestor && (
             <>
               <SidebarButton active={currentView === 'quality'} onClick={() => onViewChange('quality')} icon={<ShieldCheck size={18} />} label="Acessos" />
               <SidebarButton active={currentView === 'traceability'} onClick={() => onViewChange('traceability')} icon={<History size={18} />} label="Auditoria" />

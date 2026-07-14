@@ -258,6 +258,7 @@ export interface TeamMember {
   role: string;
   isLeader: boolean;
   password?: string;
+  isComiteGestor?: boolean;
 }
 
 

@@ -19,7 +19,7 @@ const AccessControl: React.FC<AccessControlProps> = ({ teamMembers, onUpdateTeam
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
 
   // States para Membros da Equipe (TeamMembers)
-  const [newMember, setNewMember] = useState({ name: '', role: '' });
+  const [newMember, setNewMember] = useState({ name: '', role: '', isComiteGestor: false });
 
   // Funções para Gerenciamento de AppUsers (Contas)
   const handleAddAppUser = (e: React.FormEvent) => {
@@ -71,9 +71,10 @@ const AccessControl: React.FC<AccessControlProps> = ({ teamMembers, onUpdateTeam
       name: newMember.name.trim(),
       role: newMember.role.trim(),
       isLeader: false,
+      isComiteGestor: newMember.isComiteGestor,
     };
     onUpdateTeamMembers([...teamMembers, member]);
-    setNewMember({ name: '', role: '' });
+    setNewMember({ name: '', role: '', isComiteGestor: false });
   };
 
   const handleDeleteMember = (id: string) => {
@@ -232,7 +233,7 @@ const AccessControl: React.FC<AccessControlProps> = ({ teamMembers, onUpdateTeam
               <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Estrutura de Equipe</h3>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Integrantes que podem ser vinculados a atividades e lideranças.</p>
             </header>
-            <form onSubmit={handleAddMember} className="p-8 grid grid-cols-1 md:grid-cols-3 gap-4 items-end bg-slate-50/50 border-b border-slate-100">
+            <form onSubmit={handleAddMember} className="p-8 grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-slate-50/50 border-b border-slate-100">
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Nome do Integrante</label>
                 <input required value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} placeholder="Nome completo" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-black outline-none focus:ring-2 focus:ring-brand-primary"/>
@@ -240,6 +241,12 @@ const AccessControl: React.FC<AccessControlProps> = ({ teamMembers, onUpdateTeam
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Função / Cargo</label>
                 <input required value={newMember.role} onChange={e => setNewMember({...newMember, role: e.target.value})} placeholder="Ex: Gestor de Projetos, Biólogo" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-black outline-none focus:ring-2 focus:ring-brand-primary"/>
+              </div>
+              <div className="flex items-center h-full pb-3 pl-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={newMember.isComiteGestor} onChange={e => setNewMember({...newMember, isComiteGestor: e.target.checked})} className="w-4 h-4 text-brand-primary border-slate-200 rounded focus:ring-brand-primary"/>
+                  <span className="text-xs font-bold text-slate-600">Perfil Comitê Gestor</span>
+                </label>
               </div>
               <button type="submit" className="px-6 py-3.5 bg-brand-primary text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-brand-accent transition shadow-lg flex items-center justify-center gap-2">
                 <UserPlus size={16}/> Criar Perfil
@@ -253,7 +260,12 @@ const AccessControl: React.FC<AccessControlProps> = ({ teamMembers, onUpdateTeam
                       {member.name[0]}
                     </div>
                     <div>
-                      <h4 className="text-sm font-black text-slate-900 uppercase tracking-tighter">{member.name}</h4>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-tighter">{member.name}</h4>
+                        {member.isComiteGestor && (
+                          <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-amber-100 text-amber-700">Comitê Gestor</span>
+                        )}
+                      </div>
                       <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-400">{member.role}</span>
                     </div>
                   </div>

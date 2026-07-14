@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { TeamMember, AppUser, AppUserRole } from '../types';
-import { Crown, LogOut, Users, Eye } from 'lucide-react';
+import { Crown, LogOut, Users, Eye, Briefcase } from 'lucide-react';
 
 interface UserSelectionViewProps {
   teamMembers: TeamMember[];
@@ -52,7 +52,7 @@ const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSe
                 if (isLeaderProfile) {
                   isDisabled = true;
                   title = "Acesso restrito ao perfil de liderança.";
-                } else if (currentUserRole === 'user_general') {
+                } else if (currentUserRole === 'user_general' && !member.isComiteGestor) {
                   isDisabled = true;
                   title = "Seu perfil só permite a Visão Geral.";
                 } else if (currentUserRole && currentUserRole.startsWith('user_team_')) {
@@ -79,6 +79,11 @@ const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSe
                     {member.isLeader && (
                       <div className="absolute -top-1 -right-1 bg-amber-400 p-1.5 rounded-full text-white border-2 border-white">
                         <Crown size={12} />
+                      </div>
+                    )}
+                    {member.isComiteGestor && (
+                      <div className="absolute -top-1 -right-1 bg-teal-500 p-1.5 rounded-full text-white border-2 border-white">
+                        <Briefcase size={12} />
                       </div>
                     )}
                   </div>
