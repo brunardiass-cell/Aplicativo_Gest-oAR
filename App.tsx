@@ -24,6 +24,10 @@ import RegulatoryStandardsModal from './components/RegulatoryStandardsModal';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
 import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
+import ProjectFlowView from './components/ProjectFlowView';
+import ProjectKanbanView from './components/ProjectKanbanView';
+import ProjectGanttView from './components/ProjectGanttView';
+import ProjectActivityMap from './components/ProjectActivityMap';
 import PreSaveConfirmationModal from './components/PreSaveConfirmationModal';
 import ComiteGestorView from './components/ComiteGestorView';
 
@@ -102,6 +106,9 @@ const App: React.FC = () => {
   const [projectManagerViewTab, setProjectManagerViewTab] = useState<'management' | 'visual'>('management');
   const [initialProjectId, setInitialProjectId] = useState<string | null>(null);
   const [targetMicroId, setTargetMicroId] = useState<string | null>(null);
+  const [selectedProjectIdForView, setSelectedProjectIdForView] = useState<string | 'Todos' | null>(null);
+  const [projectVisualizationMode, setProjectVisualizationMode] = useState<'gantt' | 'kanban' | 'phases' | 'map'>('phases');
+  const [projectSubView, setProjectSubView] = useState<'visual' | 'management'>('management');
   const [isRegulatoryModalOpen, setIsRegulatoryModalOpen] = useState(false);
   const [regulatoryModalData, setRegulatoryModalData] = useState<{ name: string; standards: RegulatoryStandard[] }>({ name: '', standards: [] });
 
@@ -980,6 +987,12 @@ const App: React.FC = () => {
 
   const activeProjects = useMemo(() => projects.filter(p => !p.deleted), [projects]);
 
+  useEffect(() => {
+    if (!selectedProjectIdForView && activeProjects.length > 0) {
+      setSelectedProjectIdForView(activeProjects[0].id);
+    }
+  }, [activeProjects, selectedProjectIdForView]);
+
   const uniqueLeads = useMemo(() => {
     const leads = new Set(tasks.filter(t => !t.deleted).map(t => t.projectLead));
     return ['Todos', ...Array.from(leads).sort()];
@@ -1145,6 +1158,13 @@ const App: React.FC = () => {
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         isMobile={isMobile || isTablet}
+        activeProjects={activeProjects}
+        selectedProjectId={selectedProjectIdForView}
+        onSelectProjectId={setSelectedProjectIdForView}
+        visualizationMode={projectVisualizationMode}
+        onSelectVisualizationMode={setProjectVisualizationMode}
+        projectSubView={projectSubView}
+        onSelectProjectSubView={setProjectSubView}
       />
       <input type="file" ref={fileInputRef} onChange={handleLoadLocalBackup} accept=".json" className="hidden" />
 
@@ -1321,7 +1341,7 @@ const App: React.FC = () => {
           ) : (
             <div className="space-y-6">
 
-              {projectManagerViewTab === 'management' ? (
+              {projectSubView === 'management' ? (
                 <ProjectsManager 
                   projects={activeProjects} 
                   onUpdateProjects={(p) => { setProjects(p); setDataDirty(); }} 
@@ -1338,15 +1358,89 @@ const App: React.FC = () => {
                   currentUser={selectedProfile}
                 />
               ) : (
-                <ProjectsVisualBoard 
-                  projects={activeProjects} 
-                  onUpdateProjects={setProjects} 
-                  initialProjectId={initialProjectId} 
-                  onClearInitialProjectId={() => setInitialProjectId(null)} 
-                  onNavigateToMicroActivity={handleNavigateToMicroActivity}
-                  regulatoryStandards={regulatoryStandards}
-                  onOpenRegulatoryModal={openRegulatoryModal}
-                />
+                <div className="space-y-6">
+                  {/* Select Project if not in full-screen map mode */}
+                  {projectVisualizationMode !== 'map' && (
+                    <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Painel de Visualização</h2>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Navegando pelo progresso do projeto</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-slate-500">Projeto Ativo:</span>
+                        <select 
+                          value={selectedProjectIdForView || ''} 
+                          onChange={(e) => setSelectedProjectIdForView(e.target.value)}
+                          className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-brand-primary min-w-[200px]"
+                        >
+                          {activeProjects.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {projectVisualizationMode === 'phases' && (
+                    <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-4 sm:p-8">
+                      <ProjectFlowView 
+                        project={activeProjects.find(p => p.id === selectedProjectIdForView) || activeProjects[0]} 
+                        onUpdateProject={(updatedProj) => {
+                          const updatedProjects = projects.map(p => p.id === updatedProj.id ? updatedProj : p);
+                          setProjects(updatedProjects);
+                          setDataDirty();
+                        }}
+                        regulatoryStandards={regulatoryStandards}
+                        onOpenRegulatoryModal={openRegulatoryModal}
+                      />
+                    </div>
+                  )}
+
+                  {projectVisualizationMode === 'kanban' && (
+                    <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-4 sm:p-8">
+                      <ProjectKanbanView 
+                        project={activeProjects.find(p => p.id === selectedProjectIdForView) || activeProjects[0]} 
+                        onUpdateProject={(updatedProj) => {
+                          const updatedProjects = projects.map(p => p.id === updatedProj.id ? updatedProj : p);
+                          setProjects(updatedProjects);
+                          setDataDirty();
+                        }}
+                        onNavigateToMicroActivity={handleNavigateToMicroActivity}
+                        regulatoryStandards={regulatoryStandards}
+                        onOpenRegulatoryModal={openRegulatoryModal}
+                      />
+                    </div>
+                  )}
+
+                  {projectVisualizationMode === 'gantt' && (
+                    <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-4 sm:p-8">
+                      <ProjectGanttView 
+                        project={activeProjects.find(p => p.id === selectedProjectIdForView) || activeProjects[0]} 
+                        onUpdateProject={(updatedProj) => {
+                          const updatedProjects = projects.map(p => p.id === updatedProj.id ? updatedProj : p);
+                          setProjects(updatedProjects);
+                          setDataDirty();
+                        }}
+                        teamMembers={teamMembers}
+                      />
+                    </div>
+                  )}
+
+                  {projectVisualizationMode === 'map' && (
+                    <ProjectActivityMap 
+                      templates={activityPlans}
+                      projects={selectedProjectIdForView === 'Todos' ? activeProjects : activeProjects.filter(p => p.id === selectedProjectIdForView)}
+                      onClose={() => {
+                        setProjectSubView('management');
+                        setProjectVisualizationMode('phases');
+                      }}
+                      onNavigateToProject={(projId) => {
+                        setSelectedProjectIdForView(projId);
+                        setProjectVisualizationMode('phases');
+                      }}
+                    />
+                  )}
+                </div>
               )}
             </div>
           )

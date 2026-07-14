@@ -131,15 +131,19 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
              {upcomingTasks.length > 0 ? upcomingTasks.map(task => {
                 const daysLeft = Math.ceil((new Date(task.completionDate + 'T00:00:00').getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
                 return (
-                  <div key={task.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
+                  <button 
+                    key={task.id} 
+                    onClick={() => onViewTaskDetails(task)}
+                    className="w-full text-left p-4 bg-slate-50 border border-slate-100 hover:border-slate-300 hover:bg-slate-100/50 transition rounded-2xl flex items-center justify-between group"
+                  >
                     <div>
-                      <p className="text-xs font-bold text-slate-900">{task.activity}</p>
+                      <p className="text-xs font-bold text-slate-900 group-hover:text-brand-primary transition-colors">{task.activity}</p>
                       <p className="text-[9px] font-bold text-brand-primary uppercase">{task.project}</p>
                     </div>
                     <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${daysLeft <= 2 ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
                        {daysLeft <= 1 ? 'Vence hoje/amanhã' : `Vence em ${daysLeft} dias`}
                     </div>
-                  </div>
+                  </button>
                 )
              }) : <p className="text-center text-slate-400 text-xs py-10 italic">Nenhuma entrega nos próximos 7 dias.</p>}
            </div>

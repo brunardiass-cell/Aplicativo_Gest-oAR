@@ -371,7 +371,7 @@ const ComiteGestorView: React.FC<ComiteGestorViewProps> = ({
               {projVisualTab === 'map' && (
                 <div className="space-y-4">
                   <ProjectActivityMap 
-                    onClose={() => {}}
+                    onClose={() => setProjVisualTab('phases')}
                     templates={activityPlans}
                     projects={activeProjects.filter(p => p.id === selectedProjectId)} // Only pass currently selected
                   />

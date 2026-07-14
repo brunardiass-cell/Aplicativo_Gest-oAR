@@ -128,34 +128,96 @@ const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, 
             <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-200 h-full">
                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Status dos Projetos (baseado em Macroatividades)</h3>
                 <div className="space-y-5 max-h-[600px] overflow-y-auto custom-scrollbar pr-4">
-                    {userProjects.length > 0 ? userProjects.map(project => {
-                    const progress = calculateProjectProgress(project);
-                    const totalMacros = project.macroActivities.length;
-                    const completedMacros = project.macroActivities.filter(m => 
-                      m.microActivities.length > 0 && 
-                      m.microActivities.every(mi => mi.status === 'Concluído e aprovado')
-                    ).length;
+                     {userProjects.length > 0 ? userProjects.map(project => {
+                     const progress = calculateProjectProgress(project);
+                     const totalMacros = project.macroActivities.length;
+                     const completedMacros = project.macroActivities.filter(m => 
+                       m.microActivities.length > 0 && 
+                       m.microActivities.every(mi => mi.status === 'Concluído e aprovado')
+                     ).length;
 
-                    return (
-                        <div key={project.id} className="space-y-2">
-                        <div className="flex justify-between items-center">
-                            <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{project.name}</p>
-                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
-                            project.status === 'Ativo' ? 'bg-emerald-100 text-emerald-700' :
-                            project.status === 'Suspenso' ? 'bg-amber-100 text-amber-700' :
-                            project.status === 'Concluído' ? 'bg-slate-200 text-slate-600' : 'bg-slate-100 text-slate-500'
-                            }`}>{project.status}</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                            <div className="h-full bg-brand-primary" style={{ width: `${progress}%` }}></div>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-[9px] font-bold text-slate-400">{completedMacros} de {totalMacros} macroatividades concluídas</span>
-                            <span className="text-xs font-black text-brand-primary">{progress}%</span>
-                        </div>
-                        </div>
-                    );
-                    }) : <p className="text-center text-slate-400 text-xs py-20 italic">Nenhum projeto associado a este perfil.</p>}
+                     // Calculate micro-activity stats for this project
+                     const stats = {
+                       ongoing: 0,
+                       completed: 0,
+                       rework: 0,
+                       planned: 0
+                     };
+                     project.macroActivities.forEach(ma => {
+                       ma.microActivities.forEach(mi => {
+                         if (mi.status === 'Em andamento') stats.ongoing++;
+                         else if (mi.status === 'Concluído e aprovado' || mi.status === 'Concluído com restrições') stats.completed++;
+                         else if (mi.status === 'A repetir / retrabalho') stats.rework++;
+                         else if (mi.status === 'Planejado') stats.planned++;
+                       });
+                     });
+
+                     // Determine the current phase dynamically
+                     let currentPhase = '';
+                     const firstUnfinishedMacro = project.macroActivities.find(ma => 
+                       ma.microActivities.some(mi => mi.status !== 'Concluído e aprovado')
+                     );
+                     if (firstUnfinishedMacro) {
+                       currentPhase = firstUnfinishedMacro.phase;
+                     } else if (project.macroActivities.length > 0) {
+                       currentPhase = project.macroActivities[project.macroActivities.length - 1].phase;
+                     }
+
+                     return (
+                         <div key={project.id} className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                           <div className="flex justify-between items-start gap-3">
+                             <div>
+                               <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{project.name}</p>
+                               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Responsável: <span className="font-extrabold text-slate-600">{project.responsible || 'Sem responsável'}</span></p>
+                             </div>
+                             <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase shrink-0 ${
+                             project.status === 'Ativo' ? 'bg-emerald-100 text-emerald-700' :
+                             project.status === 'Suspenso' ? 'bg-amber-100 text-amber-700' :
+                             project.status === 'Concluído' ? 'bg-slate-200 text-slate-600' : 'bg-slate-100 text-slate-500'
+                             }`}>{project.status}</span>
+                           </div>
+
+                           {/* Phase & Stats Grid */}
+                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3 rounded-xl border border-slate-100">
+                             <div>
+                               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Fase Atual</p>
+                               <p className="text-xs font-bold text-brand-primary truncate uppercase mt-0.5" title={currentPhase || 'Planejamento'}>{currentPhase || 'Planejamento'}</p>
+                             </div>
+                             <div>
+                               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Em Andamento</p>
+                               <p className="text-xs font-black text-teal-600 mt-0.5">{stats.ongoing}</p>
+                             </div>
+                             <div>
+                               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Retrabalho</p>
+                               <p className="text-xs font-black text-red-500 mt-0.5">{stats.rework}</p>
+                             </div>
+                             <div>
+                               <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Concluídas</p>
+                               <p className="text-xs font-black text-emerald-600 mt-0.5">{stats.completed}</p>
+                             </div>
+                           </div>
+
+                           <div className="space-y-1.5">
+                             <div className="flex justify-between items-center text-[10px]">
+                               <span className="font-bold text-slate-400 uppercase tracking-wider">{completedMacros} de {totalMacros} macroatividades</span>
+                               <span className="font-black text-brand-primary">{progress}%</span>
+                             </div>
+                             <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                               <div className="h-full bg-brand-primary" style={{ width: `${progress}%` }}></div>
+                             </div>
+                           </div>
+
+                           <div className="flex justify-end pt-1">
+                             <button 
+                               onClick={() => onNavigateToProject(project.id)}
+                               className="text-[9px] font-black text-brand-primary uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all"
+                             >
+                               Ver Detalhes do Projeto <ArrowRight size={12} />
+                             </button>
+                           </div>
+                         </div>
+                     );
+                     }) : <p className="text-center text-slate-400 text-xs py-20 italic">Nenhum projeto associado a este perfil.</p>}
                 </div>
             </div>
         </div>

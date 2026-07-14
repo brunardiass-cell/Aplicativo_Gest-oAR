@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ViewMode, SyncInfo, TeamMember } from '../types';
+import { ViewMode, SyncInfo, TeamMember, Project } from '../types';
 import { 
   LayoutDashboard, 
   ListTodo, 
@@ -31,6 +31,15 @@ interface SidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
   isMobile?: boolean;
+  
+  // New props for project sub-navigation
+  activeProjects: Project[];
+  selectedProjectId: string | 'Todos' | null;
+  onSelectProjectId: (id: string | 'Todos') => void;
+  visualizationMode: 'gantt' | 'kanban' | 'phases' | 'map';
+  onSelectVisualizationMode: (mode: 'gantt' | 'kanban' | 'phases' | 'map') => void;
+  projectSubView: 'visual' | 'management';
+  onSelectProjectSubView: (view: 'visual' | 'management') => void;
 }
 
 const getInitials = (name?: string): string => {
@@ -52,7 +61,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   onLoadBackup,
   isOpen,
   onClose,
-  isMobile
+  isMobile,
+  activeProjects,
+  selectedProjectId,
+  onSelectProjectId,
+  visualizationMode,
+  onSelectVisualizationMode,
+  projectSubView,
+  onSelectProjectSubView
 }) => {
 
   const formatSyncTime = (timestamp: string) => {
@@ -89,7 +105,80 @@ const Sidebar: React.FC<SidebarProps> = ({
           {!selectedProfile?.isComiteGestor && (
             <SidebarButton active={currentView === 'tasks'} onClick={() => onViewChange('tasks')} icon={<ListTodo size={18} />} label="Atividades" />
           )}
-          <SidebarButton active={currentView === 'projects'} onClick={() => onViewChange('projects')} icon={<FolderKanban size={18} />} label="Projetos" />
+          <SidebarButton active={currentView === 'projects'} onClick={() => { onViewChange('projects'); onSelectProjectSubView('management'); }} icon={<FolderKanban size={18} />} label="Projetos" />
+          
+          {currentView === 'projects' && (
+            <div className="ml-4 pl-3 border-l-2 border-slate-700 space-y-4 py-2 my-1 animate-in fade-in duration-200">
+              {/* Project SubView Toggle */}
+              <div className="flex bg-slate-900/45 p-1 rounded-lg">
+                <button 
+                  onClick={() => onSelectProjectSubView('management')}
+                  className={`flex-1 py-1.5 text-[9px] font-black uppercase tracking-wider rounded transition-all ${projectSubView === 'management' ? 'bg-brand-primary text-white' : 'text-slate-400 hover:text-white'}`}
+                >
+                  Gestão
+                </button>
+                <button 
+                  onClick={() => onSelectProjectSubView('visual')}
+                  className={`flex-1 py-1.5 text-[9px] font-black uppercase tracking-wider rounded transition-all ${projectSubView === 'visual' ? 'bg-brand-primary text-white' : 'text-slate-400 hover:text-white'}`}
+                >
+                  Painel Visual
+                </button>
+              </div>
+
+              {projectSubView === 'visual' && (
+                <div className="space-y-3">
+                  {/* Select Project */}
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Projeto</label>
+                    <select 
+                      value={selectedProjectId || ''} 
+                      onChange={(e) => onSelectProjectId(e.target.value as any)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-[10px] font-bold text-white outline-none focus:ring-1 focus:ring-brand-primary"
+                    >
+                      {visualizationMode === 'map' && <option value="Todos">Todos os Projetos</option>}
+                      {activeProjects.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Select Mode */}
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">Visualização</label>
+                    <div className="grid grid-cols-2 gap-1">
+                      <button 
+                        onClick={() => onSelectVisualizationMode('phases')}
+                        className={`py-1.5 px-2 rounded text-[9px] font-bold uppercase text-center transition-all border ${visualizationMode === 'phases' ? 'bg-brand-primary/20 border-brand-primary text-white font-extrabold' : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white font-medium'}`}
+                      >
+                        Fases
+                      </button>
+                      <button 
+                        onClick={() => onSelectVisualizationMode('kanban')}
+                        className={`py-1.5 px-2 rounded text-[9px] font-bold uppercase text-center transition-all border ${visualizationMode === 'kanban' ? 'bg-brand-primary/20 border-brand-primary text-white font-extrabold' : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white font-medium'}`}
+                      >
+                        Kanban
+                      </button>
+                      <button 
+                        onClick={() => onSelectVisualizationMode('gantt')}
+                        className={`py-1.5 px-2 rounded text-[9px] font-bold uppercase text-center transition-all border ${visualizationMode === 'gantt' ? 'bg-brand-primary/20 border-brand-primary text-white font-extrabold' : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white font-medium'}`}
+                      >
+                        Gantt
+                      </button>
+                      <button 
+                        onClick={() => {
+                          onSelectVisualizationMode('map');
+                          onSelectProjectId('Todos');
+                        }}
+                        className={`py-1.5 px-2 rounded text-[9px] font-bold uppercase text-center transition-all border ${visualizationMode === 'map' ? 'bg-brand-primary/20 border-brand-primary text-white font-extrabold' : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white font-medium'}`}
+                      >
+                        Mapa
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {!selectedProfile?.isComiteGestor && (
             <SidebarButton active={currentView === 'regulatory'} onClick={() => onViewChange('regulatory')} icon={<ShieldCheck size={18} />} label="Normas" />
           )}
