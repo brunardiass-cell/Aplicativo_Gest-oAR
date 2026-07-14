@@ -27,15 +27,19 @@ interface ProjectActivityMapProps {
   templates: ActivityPlanTemplate[];
   projects: Project[];
   onNavigateToProject?: (projectId: string) => void;
+  initialProjectId?: string;
 }
 
-const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templates, projects, onNavigateToProject }) => {
+const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templates, projects, onNavigateToProject, initialProjectId }) => {
   const [showEmptyModel, setShowEmptyModel] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => {
+    if (initialProjectId && projects.some(p => p.id === initialProjectId)) {
+      return initialProjectId;
+    }
     return projects.length > 0 ? projects[0].id : null;
   });
   const [selectedTemplate, setSelectedTemplate] = useState<ActivityPlanTemplate | null>(() => {
-    const defaultProj = projects.length > 0 ? projects[0] : null;
+    const defaultProj = initialProjectId && projects.find(p => p.id === initialProjectId) || (projects.length > 0 ? projects[0] : null);
     if (defaultProj) {
       return templates.find(t => t.id === defaultProj.templateId) || (templates.length > 0 ? templates[0] : null);
     }

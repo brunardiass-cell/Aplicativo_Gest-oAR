@@ -8,9 +8,18 @@ interface AccessControlProps {
   onUpdateTeamMembers: (members: TeamMember[]) => void;
   appUsers: AppUser[];
   onUpdateAppUsers: (users: AppUser[]) => void;
+  managerEmail?: string;
+  onUpdateManagerEmail?: (email: string) => void;
 }
 
-const AccessControl: React.FC<AccessControlProps> = ({ teamMembers, onUpdateTeamMembers, appUsers, onUpdateAppUsers }) => {
+const AccessControl: React.FC<AccessControlProps> = ({ 
+  teamMembers, 
+  onUpdateTeamMembers, 
+  appUsers, 
+  onUpdateAppUsers,
+  managerEmail = 'brunadias@ctvacinas.org',
+  onUpdateManagerEmail
+}) => {
   const [activeTab, setActiveTab] = useState<'team' | 'users'>('users');
   
   // States para Usuários (AppUsers)
@@ -225,6 +234,28 @@ const AccessControl: React.FC<AccessControlProps> = ({ teamMembers, onUpdateTeam
                   <p className="text-slate-400 font-bold uppercase text-xs italic tracking-widest">Nenhuma conta de acesso registrada.</p>
                 </div>
               )}
+            </div>
+
+            {/* Configuração de E-mail do Gestor (Administrador) */}
+            <div className="p-8 border-t border-slate-100 bg-slate-50/40">
+              <div className="max-w-md bg-white border border-slate-200/60 rounded-3xl p-6 shadow-sm">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2 mb-2">
+                  <Mail size={16} className="text-brand-primary" />
+                  E-mail do Gestor para Notificações
+                </h4>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-relaxed mb-4">
+                  E-mail de destino que receberá alertas automáticos sempre que um novo projeto for cadastrado.
+                </p>
+                <div className="flex gap-2">
+                  <input 
+                    type="email" 
+                    value={managerEmail} 
+                    onChange={e => onUpdateManagerEmail?.(e.target.value)}
+                    placeholder="gestor@ctvacinas.org" 
+                    className="flex-1 px-4 py-3 bg-slate-50 border border-slate-250 rounded-xl text-xs font-bold text-black outline-none focus:ring-2 focus:ring-brand-primary/20 focus:bg-white transition"
+                  />
+                </div>
+              </div>
             </div>
           </>
         ) : (

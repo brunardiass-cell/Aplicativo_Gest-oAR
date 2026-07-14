@@ -30,6 +30,7 @@ import ProjectGanttView from './components/ProjectGanttView';
 import ProjectActivityMap from './components/ProjectActivityMap';
 import PreSaveConfirmationModal from './components/PreSaveConfirmationModal';
 import ComiteGestorView from './components/ComiteGestorView';
+import { sendNewProjectEmail } from './services/emailService';
 
 function isEqual(a: any, b: any): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -58,6 +59,7 @@ const App: React.FC = () => {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [appUsers, setAppUsers] = useState<AppUser[]>([]);
+  const [managerEmail, setManagerEmail] = useState<string>('brunadias@ctvacinas.org');
   const [regulatoryStandards, setRegulatoryStandards] = useState<RegulatoryStandard[]>([]);
   const [regulatorySubjects, setRegulatorySubjects] = useState<RegulatorySubject[]>([]);
   const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
@@ -313,6 +315,7 @@ const App: React.FC = () => {
       appUsers: cloudData.appUsers || DEFAULT_APP_USERS,
       regulatoryStandards: cloudData.regulatoryStandards || [],
       regulatorySubjects: cloudData.regulatorySubjects || [],
+      managerEmail: cloudData.managerEmail || 'brunadias@ctvacinas.org',
     };
 
     setTasks(fullData.tasks);
@@ -322,6 +325,7 @@ const App: React.FC = () => {
     setNotifications(fullData.notifications);
     setLogs(fullData.logs);
     setAppUsers(fullData.appUsers);
+    setManagerEmail(fullData.managerEmail);
     setRegulatoryStandards(fullData.regulatoryStandards);
     setRegulatorySubjects(fullData.regulatorySubjects);
     setBaseData(JSON.parse(JSON.stringify(fullData)));
@@ -381,11 +385,16 @@ const App: React.FC = () => {
         setRegulatoryStandards(merged.regulatoryStandards);
         setRegulatorySubjects(merged.regulatorySubjects);
         
+        if (cloudData.managerEmail && cloudData.managerEmail !== managerEmail) {
+          setManagerEmail(cloudData.managerEmail);
+        }
+
         const fullCloudData = {
           ...cloudData,
           activityPlans: migratedPlans,
           teamMembers: cloudData.teamMembers || DEFAULT_TEAM_MEMBERS,
-          appUsers: cloudData.appUsers || DEFAULT_APP_USERS
+          appUsers: cloudData.appUsers || DEFAULT_APP_USERS,
+          managerEmail: cloudData.managerEmail || 'brunadias@ctvacinas.org'
         };
         setBaseData(JSON.parse(JSON.stringify(fullCloudData)));
         setDataVersion(version);
@@ -458,6 +467,7 @@ const App: React.FC = () => {
           logs: mergeArrays(serverData.logs, logs, baseData.logs),
           appUsers: mergeArrays(serverData.appUsers, appUsers, baseData.appUsers),
           regulatoryStandards: mergeArrays(serverData.regulatoryStandards || [], regulatoryStandards, baseData.regulatoryStandards || []),
+          managerEmail: serverData.managerEmail || managerEmail,
           lastEditor: selectedProfile?.name
         };
 
@@ -490,6 +500,7 @@ const App: React.FC = () => {
         appUsers,
         regulatoryStandards,
         regulatorySubjects,
+        managerEmail,
         lastEditor: selectedProfile?.name
       };
       console.log('Saving to cloud...');
@@ -524,7 +535,7 @@ const App: React.FC = () => {
 
     saveDataTimeout.current = window.setTimeout(handleSaveChanges, 2000);
 
-  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, regulatoryStandards, regulatorySubjects, dataVersion, isDataDirty]);
+  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, regulatoryStandards, regulatorySubjects, managerEmail, dataVersion, isDataDirty]);
 
   // Polling removed in favor of WebSockets
   /*
@@ -1422,7 +1433,16 @@ const App: React.FC = () => {
               {projectSubView === 'management' ? (
                 <ProjectsManager 
                   projects={activeProjects} 
-                  onUpdateProjects={(p) => { setProjects(p); setDataDirty(); }} 
+                  onUpdateProjects={(p) => { 
+                    if (p.length > projects.length) {
+                      const newProj = p.find(proj => !projects.some(old => old.id === proj.id));
+                      if (newProj) {
+                        sendNewProjectEmail(newProj.name, selectedProfile?.name || 'Administrador', managerEmail);
+                      }
+                    }
+                    setProjects(p); 
+                    setDataDirty(); 
+                  }} 
                   activityPlans={activityPlans} 
                   onUpdateActivityPlans={(ap) => { setActivityPlans(ap); setDataDirty(); }} 
                   onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} 
@@ -1501,7 +1521,16 @@ const App: React.FC = () => {
             </div>
           )
         )}
-        {view === 'quality' && <AccessControl teamMembers={teamMembers} onUpdateTeamMembers={(tm) => { setTeamMembers(tm); setDataDirty(); }} appUsers={appUsers} onUpdateAppUsers={(u) => { setAppUsers(u); setDataDirty(); }} />}
+        {view === 'quality' && (
+          <AccessControl 
+            teamMembers={teamMembers} 
+            onUpdateTeamMembers={(tm) => { setTeamMembers(tm); setDataDirty(); }} 
+            appUsers={appUsers} 
+            onUpdateAppUsers={(u) => { setAppUsers(u); setDataDirty(); }} 
+            managerEmail={managerEmail}
+            onUpdateManagerEmail={(email) => { setManagerEmail(email); setDataDirty(); }}
+          />
+        )}
         {view === 'traceability' && <ActivityLogView logs={logs} onRestoreItem={handleRestoreItem} onClearLog={handleClearLog} onClearAllLogs={handleClearAllLogs} />}
         {view === 'regulatory' && (
           <RegulatoryStandardsManager 
