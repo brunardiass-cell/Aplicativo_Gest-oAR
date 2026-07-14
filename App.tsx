@@ -22,7 +22,7 @@ import AccessControl from './components/AccessControl';
 import RegulatoryStandardsManager from './components/RegulatoryStandardsManager';
 import RegulatoryStandardsModal from './components/RegulatoryStandardsModal';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
-import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft } from 'lucide-react';
+import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft, LayoutGrid, Kanban, Clock, Briefcase, Map as MapIcon } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
 import ProjectFlowView from './components/ProjectFlowView';
 import ProjectKanbanView from './components/ProjectKanbanView';
@@ -1344,6 +1344,80 @@ const App: React.FC = () => {
             />
           ) : (
             <div className="space-y-6">
+              {/* Header and Horizontal Navigation Tabs for Projects page */}
+              <div className="bg-white p-6 rounded-[2rem] border border-slate-200/80 shadow-sm flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6">
+                <div>
+                  <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Projetos</h2>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Gestão, Fases, Kanban, Gantt e Mapa de Atividades</p>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+                  {/* Visualizer and Management tab navigation */}
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-full sm:w-auto overflow-x-auto">
+                    <button 
+                      onClick={() => {
+                        setProjectSubView('visual');
+                        setProjectVisualizationMode('phases');
+                      }}
+                      className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 ${projectSubView === 'visual' && projectVisualizationMode === 'phases' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      <LayoutGrid size={14} /> Fases
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setProjectSubView('visual');
+                        setProjectVisualizationMode('kanban');
+                      }}
+                      className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 ${projectSubView === 'visual' && projectVisualizationMode === 'kanban' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      <Kanban size={14} /> Kanban
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setProjectSubView('visual');
+                        setProjectVisualizationMode('gantt');
+                      }}
+                      className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 ${projectSubView === 'visual' && projectVisualizationMode === 'gantt' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      <Clock size={14} /> Gantt
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setProjectSubView('visual');
+                        setProjectVisualizationMode('map');
+                      }}
+                      className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 ${projectSubView === 'visual' && projectVisualizationMode === 'map' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      <MapIcon size={14} /> Mapa de Atividades
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setProjectSubView('management');
+                      }}
+                      className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 ${projectSubView === 'management' ? 'bg-white text-brand-primary shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      <Briefcase size={14} /> Gestão
+                    </button>
+                  </div>
+
+                  {/* Project Selector (only visible if we are in visual views) */}
+                  {projectSubView === 'visual' && (
+                    <div className="flex items-center gap-2 bg-slate-50 p-1 px-3 rounded-2xl border border-slate-200/60 w-full sm:w-auto">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider shrink-0">Projeto Ativo</span>
+                      <select 
+                        value={selectedProjectIdForView || ''} 
+                        onChange={(e) => setSelectedProjectIdForView(e.target.value)}
+                        className="bg-transparent border-none text-xs font-bold text-slate-800 outline-none pr-6 focus:ring-0 cursor-pointer min-w-[150px] sm:max-w-[200px]"
+                      >
+                        {projectVisualizationMode === 'map' && <option value="Todos">Todos os Projetos</option>}
+                        {activeProjects.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {projectSubView === 'management' ? (
                 <ProjectsManager 
@@ -1363,28 +1437,6 @@ const App: React.FC = () => {
                 />
               ) : (
                 <div className="space-y-6">
-                  {/* Select Project if not in full-screen map mode */}
-                  {projectVisualizationMode !== 'map' && (
-                    <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div>
-                        <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Painel de Visualização</h2>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Navegando pelo progresso do projeto</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-slate-500">Projeto Ativo:</span>
-                        <select 
-                          value={selectedProjectIdForView || ''} 
-                          onChange={(e) => setSelectedProjectIdForView(e.target.value)}
-                          className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-brand-primary min-w-[200px]"
-                        >
-                          {activeProjects.map(p => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  )}
-
                   {projectVisualizationMode === 'phases' && (
                     <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-4 sm:p-8">
                       <ProjectFlowView 
@@ -1435,7 +1487,7 @@ const App: React.FC = () => {
                       templates={activityPlans}
                       projects={selectedProjectIdForView === 'Todos' ? activeProjects : activeProjects.filter(p => p.id === selectedProjectIdForView)}
                       onClose={() => {
-                        setProjectSubView('management');
+                        setProjectSubView('visual');
                         setProjectVisualizationMode('phases');
                       }}
                       onNavigateToProject={(projId) => {
