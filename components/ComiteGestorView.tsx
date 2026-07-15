@@ -307,10 +307,20 @@ const ComiteGestorView: React.FC<ComiteGestorViewProps> = ({
 
   // Update selected project state if needed
   React.useEffect(() => {
+    if (selectedProjectId === 'Todos') return;
     if (selectedProject && selectedProject.id !== selectedProjectId) {
       setSelectedProjectId(selectedProject.id);
     }
   }, [selectedProject, selectedProjectId]);
+
+  // Sync selectedProjectId with projVisualTab
+  React.useEffect(() => {
+    if (projVisualTab === 'map') {
+      setSelectedProjectId('Todos');
+    } else if (selectedProjectId === 'Todos' && activeProjects.length > 0) {
+      setSelectedProjectId(activeProjects[0].id);
+    }
+  }, [projVisualTab, activeProjects]);
 
   // Dummy updates so visualizers can still call onUpdateProject without erroring (since Comitê is read-only view)
   const handleNoopUpdateProject = (updatedProj: Project) => {
@@ -657,12 +667,15 @@ const ComiteGestorView: React.FC<ComiteGestorViewProps> = ({
                 className="w-full lg:w-80 p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-brand-primary/20 focus:bg-white"
                 disabled={activeProjects.length === 0}
               >
+                {projVisualTab === 'map' && (
+                  <option value="Todos">Todos os Projetos</option>
+                )}
                 {activeProjects.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
 
-              {selectedProject && (
+              {selectedProject && selectedProjectId !== 'Todos' && (
                 <button 
                   onClick={() => setIsDetailModalOpen(true)}
                   className="p-3 bg-teal-50 text-brand-primary rounded-xl hover:bg-teal-100 transition shrink-0 flex items-center gap-1.5 font-bold text-[10px] uppercase tracking-wider"
@@ -703,21 +716,26 @@ const ComiteGestorView: React.FC<ComiteGestorViewProps> = ({
           </div>
 
           {/* Visualization Container */}
-          {selectedProject ? (
+          {selectedProject || selectedProjectId === 'Todos' ? (
             <div className="bg-white rounded-[2.5rem] border border-slate-200/80 shadow-sm p-6 overflow-hidden min-h-[500px]">
               {projVisualTab === 'map' && (
                 <div className="space-y-4">
                   <ProjectActivityMap 
                     onClose={() => setProjVisualTab('phases')}
                     templates={activityPlans}
-                    projects={activeProjects.filter(p => p.id === selectedProjectId)} // Only pass currently selected
+                    projects={selectedProjectId === 'Todos' ? activeProjects : activeProjects.filter(p => p.id === selectedProjectId)}
+                    onNavigateToProject={(projId) => {
+                      setSelectedProjectId(projId);
+                      setProjVisualTab('phases');
+                    }}
+                    initialProjectId={selectedProjectId !== 'Todos' && selectedProjectId ? selectedProjectId : undefined}
                   />
                 </div>
               )}
 
               {projVisualTab === 'gantt' && (
                 <ProjectGanttView 
-                  project={selectedProject} 
+                  project={selectedProject!} 
                   onUpdateProject={handleNoopUpdateProject} 
                   teamMembers={teamMembers}
                 />
@@ -725,7 +743,7 @@ const ComiteGestorView: React.FC<ComiteGestorViewProps> = ({
 
               {projVisualTab === 'kanban' && (
                 <ProjectKanbanView 
-                  project={selectedProject} 
+                  project={selectedProject!} 
                   onUpdateProject={handleNoopUpdateProject} 
                   onNavigateToMicroActivity={() => {}} // Read-only view
                   regulatoryStandards={regulatoryStandards}
@@ -735,7 +753,7 @@ const ComiteGestorView: React.FC<ComiteGestorViewProps> = ({
 
               {projVisualTab === 'phases' && (
                 <ProjectFlowView 
-                  project={selectedProject} 
+                  project={selectedProject!} 
                   onUpdateProject={handleNoopUpdateProject} 
                   regulatoryStandards={regulatoryStandards} 
                   onOpenRegulatoryModal={onOpenRegulatoryModal} 
