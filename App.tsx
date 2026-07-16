@@ -642,6 +642,12 @@ const App: React.FC = () => {
     if (!user.password) {
       setIsPasswordAuthenticated(true);
     }
+    if (user.isComiteGestor) {
+      setProjectSubView('visual');
+      setProjectVisualizationMode('phases');
+    } else {
+      setProjectSubView('management');
+    }
   };
 
   const handleTeamViewSelect = () => {
@@ -649,6 +655,7 @@ const App: React.FC = () => {
     setSelectedProfile(teamViewerProfile);
     setFilterMember('Todos');
     setIsPasswordAuthenticated(true);
+    setProjectSubView('management');
   };
   
   const handlePasswordConfirm = (password: string) => {
@@ -1434,13 +1441,16 @@ const App: React.FC = () => {
                 <ProjectsManager 
                   projects={activeProjects} 
                   onUpdateProjects={(p) => { 
-                    if (p.length > projects.length) {
-                      const newProj = p.find(proj => !projects.some(old => old.id === proj.id));
+                    if (p.length > activeProjects.length) {
+                      const newProj = p.find(proj => !activeProjects.some(old => old.id === proj.id));
                       if (newProj) {
                         sendNewProjectEmail(newProj.name, selectedProfile?.name || 'Administrador', managerEmail);
                       }
                     }
-                    setProjects(p); 
+                    const deletedProjects = projects.filter(old => old.deleted);
+                    const safeDeleted = deletedProjects.filter(old => !p.some(updated => updated.id === old.id));
+                    const mergedProjects = [...p, ...safeDeleted];
+                    setProjects(mergedProjects); 
                     setDataDirty(); 
                   }} 
                   activityPlans={activityPlans} 

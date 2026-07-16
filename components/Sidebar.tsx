@@ -105,7 +105,20 @@ const Sidebar: React.FC<SidebarProps> = ({
           {!selectedProfile?.isComiteGestor && (
             <SidebarButton active={currentView === 'tasks'} onClick={() => onViewChange('tasks')} icon={<ListTodo size={18} />} label="Atividades" />
           )}
-          <SidebarButton active={currentView === 'projects'} onClick={() => { onViewChange('projects'); onSelectProjectSubView('visual'); onSelectVisualizationMode('phases'); }} icon={<FolderKanban size={18} />} label="Projetos" />
+          <SidebarButton 
+            active={currentView === 'projects'} 
+            onClick={() => { 
+              onViewChange('projects'); 
+              if (selectedProfile?.isComiteGestor) {
+                onSelectProjectSubView('visual'); 
+                onSelectVisualizationMode('phases'); 
+              } else {
+                onSelectProjectSubView('management'); 
+              }
+            }} 
+            icon={<FolderKanban size={18} />} 
+            label="Projetos" 
+          />
           
           {!selectedProfile?.isComiteGestor && (
             <SidebarButton active={currentView === 'regulatory'} onClick={() => onViewChange('regulatory')} icon={<ShieldCheck size={18} />} label="Normas" />

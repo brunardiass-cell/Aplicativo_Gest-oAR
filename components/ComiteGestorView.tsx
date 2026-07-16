@@ -723,7 +723,7 @@ const ComiteGestorView: React.FC<ComiteGestorViewProps> = ({
                   <ProjectActivityMap 
                     onClose={() => setProjVisualTab('phases')}
                     templates={activityPlans}
-                    projects={selectedProjectId === 'Todos' ? activeProjects : activeProjects.filter(p => p.id === selectedProjectId)}
+                    projects={activeProjects}
                     onNavigateToProject={(projId) => {
                       setSelectedProjectId(projId);
                       setProjVisualTab('phases');
