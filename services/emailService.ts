@@ -1,5 +1,6 @@
 
 import { Task, Person } from '../types';
+import { MicrosoftGraphService } from './microsoftGraphService';
 
 /**
  * Nota Técnica: Para disparar e-mails reais de um navegador, 
@@ -49,7 +50,7 @@ export const sendSimulatedEmail = (task: Task, recipientEmail: string, type: 'JO
   }, 5000);
 };
 
-export const sendNewProjectEmail = (projectName: string, creatorName: string, managerEmail: string) => {
+export const sendNewProjectEmail = async (projectName: string, creatorName: string, managerEmail: string) => {
   const today = new Date().toLocaleDateString('pt-BR');
   const subject = `[AR CTVacinas] Novo Projeto Cadastrado: ${projectName}`;
   const body = `Prezado, membro do comitê gestor.\n\nUm novo projeto foi cadastrado no dia ${today} por ${creatorName}, o projeto em questão é o ${projectName}. Esse é apenas uma lembrete.\n\nAtenciosamente,\nEquipe Assuntos Regulatórios.`;
@@ -60,6 +61,13 @@ export const sendNewProjectEmail = (projectName: string, creatorName: string, ma
   console.log(`Assunto: ${subject}`);
   console.log(`Corpo:\n${body}`);
 
+  let sentReal = false;
+  try {
+    sentReal = await MicrosoftGraphService.sendEmail(managerEmail, subject, body);
+  } catch (error) {
+    console.error("Erro ao enviar e-mail real via Microsoft Graph:", error);
+  }
+
   // Create clean notification alert
   const notification = document.createElement('div');
   notification.className = 'fixed bottom-4 right-4 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl z-[200] animate-in slide-in-from-right duration-300 flex items-center gap-3 border border-slate-700';
@@ -68,13 +76,13 @@ export const sendNewProjectEmail = (projectName: string, creatorName: string, ma
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
     </div>
     <div>
-      <p class="text-[10px] font-black uppercase tracking-widest text-teal-400">Novo Projeto Cadastrado</p>
-      <p class="text-xs font-bold">Notificação enviada para ${managerEmail}</p>
+      <p class="text-[10px] font-black uppercase tracking-widest text-teal-400">${sentReal ? 'E-mail Real Enviado' : 'E-mail não Conectado'}</p>
+      <p class="text-xs font-bold">${sentReal ? `E-mail enviado para ${managerEmail}` : `Por favor, conecte à Nuvem Microsoft para disparar para ${managerEmail}`}</p>
     </div>
   `;
   document.body.appendChild(notification);
   setTimeout(() => {
     notification.classList.add('animate-out', 'fade-out', 'slide-out-to-right');
     setTimeout(() => notification.remove(), 300);
-  }, 5000);
+  }, 6000);
 };

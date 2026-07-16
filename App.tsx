@@ -105,7 +105,6 @@ const App: React.FC = () => {
   // Tabs
   const [dashboardView, setDashboardView] = useState<'activities' | 'projects'>('activities');
   const [taskViewTab, setTaskViewTab] = useState<'sector' | 'projects'>('sector');
-  const [projectManagerViewTab, setProjectManagerViewTab] = useState<'management' | 'visual'>('management');
   const [initialProjectId, setInitialProjectId] = useState<string | null>(null);
   const [targetMicroId, setTargetMicroId] = useState<string | null>(null);
   const [selectedProjectIdForView, setSelectedProjectIdForView] = useState<string | 'Todos' | null>(null);
@@ -981,14 +980,14 @@ const App: React.FC = () => {
   const handleNavigateToProject = (projectId: string) => {
     setInitialProjectId(projectId);
     setView('projects');
-    setProjectManagerViewTab('management');
+    setProjectSubView('management');
   };
 
   const handleNavigateToMicroActivity = (projectId: string, microId: string) => {
     setInitialProjectId(projectId);
     setTargetMicroId(microId);
     setView('projects');
-    setProjectManagerViewTab('management');
+    setProjectSubView('management');
   };
 
   useEffect(() => {

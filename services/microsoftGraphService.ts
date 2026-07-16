@@ -10,7 +10,7 @@ let msalInstance: msal.PublicClientApplication | null = null;
 let msalInstancePromise: Promise<msal.PublicClientApplication> | null = null;
 
 const loginRequest = {
-  scopes: ["User.Read", "Files.ReadWrite"]
+  scopes: ["User.Read", "Files.ReadWrite", "Mail.Send"]
 };
 
 const SHAREPOINT_HOST = "ctvacinas974.sharepoint.com";
@@ -273,6 +273,53 @@ export const MicrosoftGraphService = {
     } catch (error) {
       console.error("Erro ao verificar a versão do arquivo no SharePoint:", error);
       return null;
+    }
+  },
+
+  async sendEmail(to: string, subject: string, bodyContent: string) {
+    const token = await this.getToken();
+    if (!token) {
+      console.warn("Microsoft Graph: Não foi possível obter o token de acesso para enviar o e-mail.");
+      return false;
+    }
+
+    try {
+      const response = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: {
+            subject: subject,
+            body: {
+              contentType: "Text",
+              content: bodyContent
+            },
+            toRecipients: [
+              {
+                emailAddress: {
+                  address: to
+                }
+              }
+            ]
+          },
+          saveToSentItems: "true"
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Microsoft Graph: Erro ao enviar e-mail", errorData);
+        return false;
+      }
+
+      console.log(`Microsoft Graph: E-mail enviado com sucesso para ${to}`);
+      return true;
+    } catch (e) {
+      console.error("Microsoft Graph: Exceção ao enviar e-mail", e);
+      return false;
     }
   }
 };
