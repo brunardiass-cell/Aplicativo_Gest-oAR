@@ -95,6 +95,23 @@ export interface RegulatoryStandard {
   keyNotes?: string; // Principais notas sobre a norma
 }
 
+export interface ConceptStandardLink {
+  standardId: string;
+  relevantPassages: string;
+  page?: string;
+  section?: string;
+}
+
+export interface KnowledgeConcept {
+  id: string;
+  title: string;
+  centralIdea: string;
+  practicalApplication: string;
+  observations?: string;
+  linkedStandards: ConceptStandardLink[];
+  color?: string;
+}
+
 export interface RegulatoryBlockAssociation {
   standardId: string;
   importantNotes: string;
@@ -104,7 +121,8 @@ export interface RegulatoryBlockAssociation {
 export interface RegulatoryBlock {
   id: string;
   name: string;
-  associations: RegulatoryBlockAssociation[];
+  concepts?: KnowledgeConcept[];
+  associations?: RegulatoryBlockAssociation[];
 }
 
 export interface RegulatorySubject {

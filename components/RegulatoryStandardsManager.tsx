@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { RegulatoryStandard, RegulatoryStandardStatus, ActivityPlanTemplate, Project, RegulatorySubject, RegulatoryBlock } from '../types';
+import { RegulatoryStandard, RegulatoryStandardStatus, ActivityPlanTemplate, Project, RegulatorySubject, RegulatoryBlock, KnowledgeConcept, ConceptStandardLink } from '../types';
 import { 
   ShieldCheck, 
   Plus, 
@@ -27,7 +27,10 @@ import {
   HelpCircle,
   PlusCircle,
   Sliders,
-  Sparkles
+  Sparkles,
+  Pin,
+  Bookmark,
+  FileCheck
 } from 'lucide-react';
 
 interface RegulatoryStandardsManagerProps {
@@ -41,6 +44,88 @@ interface RegulatoryStandardsManagerProps {
   onUpdateSubjects?: (subjects: RegulatorySubject[]) => void;
 }
 
+const getBlockConcepts = (block: RegulatoryBlock, standardsList: RegulatoryStandard[] = []): KnowledgeConcept[] => {
+  if (block.concepts && block.concepts.length > 0) {
+    return block.concepts;
+  }
+  if (block.associations && block.associations.length > 0) {
+    return block.associations.map((assoc, idx) => {
+      const std = standardsList.find(s => s.id === assoc.standardId);
+      const notesList = assoc.importantNotes ? assoc.importantNotes.split('\n---\n').filter(Boolean) : [];
+      const firstNote = notesList[0] || assoc.importantNotes || 'Resumo consolidado do conceito.';
+      return {
+        id: `legacy_${block.id}_${assoc.standardId}_${idx}`,
+        title: std ? `Conceito: ${std.name}` : `Conceito #${idx + 1}`,
+        centralIdea: firstNote,
+        practicalApplication: 'Aplicação prática extraída do cumprimento técnico da norma.',
+        observations: notesList.length > 1 ? notesList.slice(1).join('\n') : '',
+        color: 'yellow',
+        linkedStandards: [
+          {
+            standardId: assoc.standardId,
+            relevantPassages: assoc.specificPassages || firstNote,
+            page: '',
+            section: ''
+          }
+        ]
+      };
+    });
+  }
+  return [];
+};
+
+const getPostItColorClasses = (color?: string) => {
+  switch (color) {
+    case 'blue':
+      return {
+        cardBg: 'bg-sky-50/90 hover:bg-sky-50/100 border-sky-200/90 shadow-sky-100',
+        headerBg: 'bg-sky-100/80 text-sky-900 border-sky-200',
+        badgeBg: 'bg-sky-100 text-sky-800 border-sky-200',
+        pinColor: 'text-sky-600',
+        accentText: 'text-sky-700',
+        borderColor: 'border-sky-300'
+      };
+    case 'green':
+      return {
+        cardBg: 'bg-emerald-50/90 hover:bg-emerald-50/100 border-emerald-200/90 shadow-emerald-100',
+        headerBg: 'bg-emerald-100/80 text-emerald-900 border-emerald-200',
+        badgeBg: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+        pinColor: 'text-emerald-600',
+        accentText: 'text-emerald-700',
+        borderColor: 'border-emerald-300'
+      };
+    case 'pink':
+      return {
+        cardBg: 'bg-rose-50/90 hover:bg-rose-50/100 border-rose-200/90 shadow-rose-100',
+        headerBg: 'bg-rose-100/80 text-rose-900 border-rose-200',
+        badgeBg: 'bg-rose-100 text-rose-800 border-rose-200',
+        pinColor: 'text-rose-600',
+        accentText: 'text-rose-700',
+        borderColor: 'border-rose-300'
+      };
+    case 'purple':
+      return {
+        cardBg: 'bg-purple-50/90 hover:bg-purple-50/100 border-purple-200/90 shadow-purple-100',
+        headerBg: 'bg-purple-100/80 text-purple-900 border-purple-200',
+        badgeBg: 'bg-purple-100 text-purple-800 border-purple-200',
+        pinColor: 'text-purple-600',
+        accentText: 'text-purple-700',
+        borderColor: 'border-purple-300'
+      };
+    case 'amber':
+    case 'yellow':
+    default:
+      return {
+        cardBg: 'bg-amber-50/90 hover:bg-amber-50/100 border-amber-200/90 shadow-amber-100',
+        headerBg: 'bg-amber-100/80 text-amber-900 border-amber-200',
+        badgeBg: 'bg-amber-100 text-amber-800 border-amber-200',
+        pinColor: 'text-amber-600',
+        accentText: 'text-amber-800',
+        borderColor: 'border-amber-300'
+      };
+  }
+};
+
 const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   standards,
   onAddStandard,
@@ -52,7 +137,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   onUpdateSubjects = () => {}
 }) => {
   // Tabs: 'lista' | 'assuntos'
-  const [activeTab, setActiveTab] = useState<'lista' | 'assuntos'>('lista');
+  const [activeTab, setActiveTab] = useState<'lista' | 'assuntos'>('assuntos');
 
   // original list states
   const [isAdding, setIsAdding] = useState(false);
@@ -85,29 +170,39 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   const [showStandardSuggestions, setShowStandardSuggestions] = useState(false);
 
   // Subject and block-specific state
-  const [expandedSubjectIds, setExpandedSubjectIds] = useState<Record<string, boolean>>({});
+  const [expandedSubjectIds, setExpandedSubjectIds] = useState<Record<string, boolean>>({
+    'subj_1': true
+  });
   const [subjectSearchTerm, setSubjectSearchTerm] = useState('');
-  
-  // Collapse states for standard associations
   const [collapsedBlockIds, setCollapsedBlockIds] = useState<Record<string, boolean>>({});
-  const [collapsedCards, setCollapsedCards] = useState<Record<string, boolean>>({});
-  const [collapsedNotesSections, setCollapsedNotesSections] = useState<Record<string, boolean>>({});
-  const [collapsedPassagesSections, setCollapsedPassagesSections] = useState<Record<string, boolean>>({});
-  
-  // Modals / forms states
+
+  // Modals / forms states for Subject & Block
   const [subjectModal, setSubjectModal] = useState<{ isOpen: boolean; subjectId?: string; name: string } | null>(null);
   const [blockModal, setBlockModal] = useState<{ isOpen: boolean; subjectId: string; blockId?: string; name: string } | null>(null);
-  const [linkModal, setLinkModal] = useState<{ 
-    isOpen: boolean; 
-    subjectId: string; 
-    blockId: string; 
-    standardId: string; 
-    importantNotes: string; 
-    specificPassages: string;
-    isEdit: boolean;
+
+  // Post-it Concept Modals State
+  const [conceptModal, setConceptModal] = useState<{
+    isOpen: boolean;
+    subjectId: string;
+    blockId: string;
+    conceptId?: string;
+    title: string;
+    centralIdea: string;
+    practicalApplication: string;
+    observations: string;
+    color: string;
+    linkedStandards: ConceptStandardLink[];
   } | null>(null);
 
-  // Detailed standard modal (from subject-specific view)
+  const [viewConceptModal, setViewConceptModal] = useState<{
+    concept: KnowledgeConcept;
+    subjectName: string;
+    blockName: string;
+    subjectId: string;
+    blockId: string;
+  } | null>(null);
+
+  // Detailed standard modal
   const [detailedStandard, setDetailedStandard] = useState<RegulatoryStandard | null>(null);
 
   const allSystemActivities = useMemo(() => {
@@ -149,26 +244,26 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   };
 
   const handleAddKeyword = () => {
-    const keyword = keywordInput.trim();
-    if (keyword && !formData.keywords?.includes(keyword)) {
+    const kw = keywordInput.trim();
+    if (kw && !formData.keywords?.includes(kw)) {
       setFormData({
         ...formData,
-        keywords: [...(formData.keywords || []), keyword]
+        keywords: [...(formData.keywords || []), kw]
       });
       setKeywordInput('');
     }
   };
 
-  const removeKeyword = (keyword: string) => {
+  const removeKeyword = (kw: string) => {
     setFormData({
       ...formData,
-      keywords: (formData.keywords || []).filter(k => k !== keyword)
+      keywords: formData.keywords?.filter(k => k !== kw)
     });
   };
 
-  const handleAddLinkedStandard = (name?: string) => {
-    const finalName = name || linkedStandardInput.trim();
-    if (finalName && !(formData.linkedStandards || []).includes(finalName)) {
+  const handleAddLinkedStandard = (stdName?: string) => {
+    const finalName = stdName || linkedStandardInput.trim();
+    if (finalName && !formData.linkedStandards?.includes(finalName)) {
       setFormData({
         ...formData,
         linkedStandards: [...(formData.linkedStandards || []), finalName]
@@ -178,11 +273,50 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     }
   };
 
-  const removeLinkedStandard = (name: string) => {
+  const removeLinkedStandard = (std: string) => {
     setFormData({
       ...formData,
-      linkedStandards: (formData.linkedStandards || []).filter(n => n !== name)
+      linkedStandards: formData.linkedStandards?.filter(s => s !== std)
     });
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingId) {
+      onUpdateStandard({
+        ...formData,
+        id: editingId
+      });
+      setEditingId(null);
+    } else {
+      onAddStandard({
+        ...formData,
+        id: `norma_${Date.now()}`
+      });
+    }
+    setIsAdding(false);
+    resetForm();
+  };
+
+  const startEdit = (standard: RegulatoryStandard) => {
+    setEditingId(standard.id);
+    setFormData({
+      name: standard.name,
+      type: standard.type || 'Manual',
+      theme: standard.theme,
+      phase: standard.phase || '',
+      relatedActivities: standard.relatedActivities,
+      version: standard.version,
+      status: standard.status,
+      summary: standard.summary,
+      documentLink: standard.documentLink || '',
+      notebookLMLink: standard.notebookLMLink || '',
+      keywords: standard.keywords || [],
+      appliesTo: standard.appliesTo || '',
+      linkedStandards: standard.linkedStandards || [],
+      keyNotes: standard.keyNotes || ''
+    });
+    setIsAdding(true);
   };
 
   const resetForm = () => {
@@ -207,95 +341,40 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     setLinkedStandardInput('');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingId) {
-      onUpdateStandard({ ...formData, id: editingId });
-      setEditingId(null);
-    } else {
-      onAddStandard({ ...formData, id: crypto.randomUUID() });
-      setIsAdding(false);
-    }
-    resetForm();
-  };
-
-  const startEdit = (standard: RegulatoryStandard) => {
-    setFormData({
-      name: standard.name,
-      type: standard.type || 'Manual',
-      theme: standard.theme,
-      phase: standard.phase,
-      relatedActivities: standard.relatedActivities,
-      version: standard.version,
-      status: standard.status,
-      summary: standard.summary,
-      documentLink: standard.documentLink,
-      notebookLMLink: standard.notebookLMLink,
-      keywords: standard.keywords || [],
-      appliesTo: standard.appliesTo || '',
-      linkedStandards: standard.linkedStandards || [],
-      keyNotes: standard.keyNotes || ''
-    });
-    setEditingId(standard.id);
-    setIsAdding(true);
-  };
-
   const filteredStandards = useMemo(() => {
-    let result = standards.filter(s => {
-      const matchesSearch = 
-        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.theme.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.summary.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (s.keywords && s.keywords.some(k => k.toLowerCase().includes(searchTerm.toLowerCase()))) ||
-        (s.appliesTo && s.appliesTo.toLowerCase().includes(searchTerm.toLowerCase()));
+    return standards.filter(std => {
+      const matchesSearch = std.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            std.theme.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            std.summary.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            (std.keywords && std.keywords.some(k => k.toLowerCase().includes(searchTerm.toLowerCase()))) ||
+                            (std.appliesTo && std.appliesTo.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                            (std.keyNotes && std.keyNotes.toLowerCase().includes(searchTerm.toLowerCase()));
       
-      const matchesType = selectedType === 'todos' || s.type === selectedType;
-      
+      const matchesType = selectedType === 'todos' || std.type === selectedType;
+
       return matchesSearch && matchesType;
-    });
-
-    return result.sort((a, b) => {
-      const getPriority = (type: string) => {
-        if (type === 'ICH') return 1;
-        if (type === 'RDC') return 2;
-        return 3;
-      };
-
-      const priorityA = getPriority(a.type);
-      const priorityB = getPriority(b.type);
-
-      if (priorityA !== priorityB) {
-        return priorityA - priorityB;
-      }
-
-      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
     });
   }, [standards, searchTerm, selectedType]);
 
-  const uniqueTypes = useMemo(() => {
-    const types = new Set<string>();
-    standards.forEach(s => { if (s.type) types.add(s.type); });
-    return Array.from(types).sort();
-  }, [standards]);
-
   const getStatusColor = (status: RegulatoryStandardStatus) => {
     switch (status) {
-      case 'vigente': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      case 'vigente com alteração': return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'Alterador': return 'bg-purple-100 text-purple-700 border-purple-200';
-      case 'À Entrar em Vigor': return 'bg-amber-100 text-amber-700 border-amber-200';
-      case 'obsoleto': return 'bg-slate-100 text-slate-700 border-slate-200';
-      default: return 'bg-slate-100 text-slate-700';
+      case 'vigente': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      case 'vigente com alteração': return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'Alterador': return 'bg-purple-50 text-purple-700 border-purple-200';
+      case 'À Entrar em Vigor': return 'bg-amber-50 text-amber-700 border-amber-200';
+      case 'obsoleto': return 'bg-slate-100 text-slate-600 border-slate-200';
+      default: return 'bg-slate-100 text-slate-600 border-slate-200';
     }
   };
 
   const getStatusIcon = (status: RegulatoryStandardStatus) => {
     switch (status) {
-      case 'vigente': return <CheckCircle2 size={12} />;
-      case 'vigente com alteração': return <Edit2 size={12} />;
-      case 'Alterador': return <Plus size={12} />;
-      case 'À Entrar em Vigor': return <Clock size={12} />;
-      case 'obsoleto': return <AlertCircle size={12} />;
+      case 'vigente': return <CheckCircle2 size={12} className="text-emerald-600" />;
+      case 'vigente com alteração': return <AlertCircle size={12} className="text-blue-600" />;
+      case 'Alterador': return <Clock size={12} className="text-purple-600" />;
+      case 'À Entrar em Vigor': return <Clock size={12} className="text-amber-600" />;
+      case 'obsoleto': return <AlertCircle size={12} className="text-slate-400" />;
+      default: return null;
     }
   };
 
@@ -305,17 +384,14 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     if (!subjectModal) return;
 
     if (subjectModal.subjectId) {
-      // Editing
       onUpdateSubjects(subjects.map(s => s.id === subjectModal.subjectId ? { ...s, name: subjectModal.name.trim() } : s));
     } else {
-      // Creating
       const newSubject: RegulatorySubject = {
-        id: crypto.randomUUID(),
+        id: `subj_${Date.now()}`,
         name: subjectModal.name.trim(),
         blocks: []
       };
       onUpdateSubjects([...subjects, newSubject]);
-      // Expand newly created subject by default
       setExpandedSubjectIds(prev => ({ ...prev, [newSubject.id]: true }));
     }
     setSubjectModal(null);
@@ -323,7 +399,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
 
   const handleDeleteSubject = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm('Tem certeza que deseja excluir este assunto? Todos os blocos e vínculos serão excluídos permanentemente.')) {
+    if (window.confirm('Tem certeza que deseja excluir este assunto? Todos os blocos e Post-its serão excluídos permanentemente.')) {
       onUpdateSubjects(subjects.filter(s => s.id !== id));
     }
   };
@@ -337,17 +413,15 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     onUpdateSubjects(subjects.map(s => {
       if (s.id === subjectId) {
         if (blockId) {
-          // Edit Block
           return {
             ...s,
             blocks: s.blocks.map(b => b.id === blockId ? { ...b, name: name.trim() } : b)
           };
         } else {
-          // Add Block
           const newBlock: RegulatoryBlock = {
-            id: crypto.randomUUID(),
+            id: `block_${Date.now()}`,
             name: name.trim(),
-            associations: []
+            concepts: []
           };
           return {
             ...s,
@@ -361,7 +435,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   };
 
   const handleDeleteBlock = (subjectId: string, blockId: string) => {
-    if (window.confirm('Tem certeza que deseja excluir este bloco? Todos os vínculos de normas deste bloco serão removidos.')) {
+    if (window.confirm('Tem certeza que deseja excluir este bloco? Todos os Post-its deste bloco serão removidos.')) {
       onUpdateSubjects(subjects.map(s => {
         if (s.id === subjectId) {
           return {
@@ -374,76 +448,117 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     }
   };
 
-  const handleSaveLink = (e: React.FormEvent) => {
+  // POST-IT CONCEPT HANDLERS
+  const handleSaveConcept = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!linkModal) return;
+    if (!conceptModal) return;
 
-    const { subjectId, blockId, standardId, importantNotes, specificPassages, isEdit } = linkModal;
-    if (!standardId) {
-      alert('Selecione uma norma para vincular.');
+    const { subjectId, blockId, conceptId, title, centralIdea, practicalApplication, observations, color, linkedStandards } = conceptModal;
+
+    if (!title.trim()) {
+      alert('Por favor, informe o título do conceito.');
       return;
     }
 
-    const sanitizedNotes = importantNotes
-      .split('\n---\n')
-      .map(note => note.trim())
-      .filter(Boolean)
-      .join('\n---\n');
+    const cleanedLinks = linkedStandards
+      .filter(link => link.standardId.trim() !== '')
+      .map(link => ({
+        standardId: link.standardId,
+        relevantPassages: link.relevantPassages.trim(),
+        page: link.page ? link.page.trim() : '',
+        section: link.section ? link.section.trim() : ''
+      }));
+
+    const newConcept: KnowledgeConcept = {
+      id: conceptId || `concept_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      title: title.trim(),
+      centralIdea: centralIdea.trim(),
+      practicalApplication: practicalApplication.trim(),
+      observations: observations.trim(),
+      color: color || 'yellow',
+      linkedStandards: cleanedLinks
+    };
 
     onUpdateSubjects(subjects.map(s => {
-      if (s.id === subjectId) {
+      if (s.id !== subjectId) return s;
+      return {
+        ...s,
+        blocks: s.blocks.map(b => {
+          if (b.id !== blockId) return b;
+          const currentConcepts = getBlockConcepts(b, standards);
+          let updated: KnowledgeConcept[];
+          if (conceptId) {
+            updated = currentConcepts.map(c => c.id === conceptId ? newConcept : c);
+          } else {
+            updated = [...currentConcepts, newConcept];
+          }
+          return {
+            ...b,
+            concepts: updated
+          };
+        })
+      };
+    }));
+
+    // If currently viewing this concept in modal, refresh view
+    if (viewConceptModal && viewConceptModal.concept.id === newConcept.id) {
+      setViewConceptModal({
+        ...viewConceptModal,
+        concept: newConcept
+      });
+    }
+
+    setConceptModal(null);
+  };
+
+  const handleDeleteConcept = (subjectId: string, blockId: string, conceptId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (window.confirm('Tem certeza que deseja excluir este Post-it de Conhecimento?')) {
+      onUpdateSubjects(subjects.map(s => {
+        if (s.id !== subjectId) return s;
         return {
           ...s,
           blocks: s.blocks.map(b => {
-            if (b.id === blockId) {
-              const existsIdx = b.associations.findIndex(a => a.standardId === standardId);
-              let updated = [...b.associations];
-
-              if (existsIdx >= 0) {
-                updated[existsIdx] = {
-                  standardId,
-                  importantNotes: sanitizedNotes,
-                  specificPassages: specificPassages.trim()
-                };
-              } else {
-                updated.push({
-                  standardId,
-                  importantNotes: sanitizedNotes,
-                  specificPassages: specificPassages.trim()
-                });
-              }
-
-              return { ...b, associations: updated };
-            }
-            return b;
+            if (b.id !== blockId) return b;
+            const currentConcepts = getBlockConcepts(b, standards);
+            return {
+              ...b,
+              concepts: currentConcepts.filter(c => c.id !== conceptId)
+            };
           })
         };
+      }));
+
+      if (viewConceptModal && viewConceptModal.concept.id === conceptId) {
+        setViewConceptModal(null);
       }
-      return s;
-    }));
-    setLinkModal(null);
+    }
   };
 
-  const handleUnlinkStandard = (subjectId: string, blockId: string, standardId: string) => {
-    if (window.confirm('Deseja realmente desvincular esta norma deste bloco?')) {
-      onUpdateSubjects(subjects.map(s => {
-        if (s.id === subjectId) {
-          return {
-            ...s,
-            blocks: s.blocks.map(b => {
-              if (b.id === blockId) {
-                return {
-                  ...b,
-                  associations: b.associations.filter(a => a.standardId !== standardId)
-                };
-              }
-              return b;
-            })
-          };
-        }
-        return s;
-      }));
-    }
+  const handleAddLinkToConcept = () => {
+    if (!conceptModal) return;
+    setConceptModal({
+      ...conceptModal,
+      linkedStandards: [
+        ...conceptModal.linkedStandards,
+        { standardId: '', relevantPassages: '', page: '', section: '' }
+      ]
+    });
+  };
+
+  const handleUpdateConceptLink = (index: number, field: keyof ConceptStandardLink, value: string) => {
+    if (!conceptModal) return;
+    const updated = [...conceptModal.linkedStandards];
+    updated[index] = { ...updated[index], [field]: value };
+    setConceptModal({ ...conceptModal, linkedStandards: updated });
+  };
+
+  const handleRemoveConceptLink = (index: number) => {
+    if (!conceptModal) return;
+    setConceptModal({
+      ...conceptModal,
+      linkedStandards: conceptModal.linkedStandards.filter((_, i) => i !== index)
+    });
   };
 
   const toggleSubjectExpanded = (id: string) => {
@@ -455,18 +570,27 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
 
   const filteredSubjects = useMemo(() => {
     if (!subjectSearchTerm.trim()) return subjects;
+    const term = subjectSearchTerm.toLowerCase();
+
     return subjects.filter(s => {
-      const matchSubject = s.name.toLowerCase().includes(subjectSearchTerm.toLowerCase());
-      const matchBlocks = s.blocks.some(b => 
-        b.name.toLowerCase().includes(subjectSearchTerm.toLowerCase()) ||
-        b.associations.some(a => {
-          const std = standards.find(st => st.id === a.standardId);
-          return std?.name.toLowerCase().includes(subjectSearchTerm.toLowerCase()) || 
-                 a.importantNotes.toLowerCase().includes(subjectSearchTerm.toLowerCase()) ||
-                 a.specificPassages.toLowerCase().includes(subjectSearchTerm.toLowerCase());
-        })
-      );
-      return matchSubject || matchBlocks;
+      if (s.name.toLowerCase().includes(term)) return true;
+      return s.blocks.some(b => {
+        if (b.name.toLowerCase().includes(term)) return true;
+        const concepts = getBlockConcepts(b, standards);
+        return concepts.some(c => {
+          if (c.title.toLowerCase().includes(term)) return true;
+          if (c.centralIdea.toLowerCase().includes(term)) return true;
+          if (c.practicalApplication.toLowerCase().includes(term)) return true;
+          if (c.observations && c.observations.toLowerCase().includes(term)) return true;
+          return c.linkedStandards.some(link => {
+            if (link.relevantPassages && link.relevantPassages.toLowerCase().includes(term)) return true;
+            if (link.page && link.page.toLowerCase().includes(term)) return true;
+            if (link.section && link.section.toLowerCase().includes(term)) return true;
+            const std = standards.find(st => st.id === link.standardId);
+            return std ? std.name.toLowerCase().includes(term) : false;
+          });
+        });
+      });
     });
   }, [subjects, subjectSearchTerm, standards]);
 
@@ -482,10 +606,12 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
             </div>
             Gestão de Normas Regulatórias
           </h1>
-          <p className="text-slate-500 text-sm font-medium mt-1">Configure o acervo de normas e associe-as a fases e plataformas.</p>
+          <p className="text-slate-500 text-sm font-medium mt-1">
+            Consulte o acervo normativo e explore os <strong className="text-teal-700 font-bold">Post-its de Conhecimento</strong> embasados em evidências regulatórias.
+          </p>
         </div>
         
-        {/* original Add button but conditionally shown depending on active tab or if editing */}
+        {/* Conditional Header Action Buttons */}
         {!isAdding && activeTab === 'lista' && (
           <button 
             onClick={() => setIsAdding(true)}
@@ -505,9 +631,19 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
         )}
       </div>
 
-      {/* Tab Switcher - only show if NOT in add/edit standard mode */}
+      {/* Tab Switcher */}
       {!isAdding && (
-        <div className="flex bg-white p-1 rounded-2xl border border-slate-200/80 shadow-sm w-fit">
+        <div className="flex bg-white p-1.5 rounded-2xl border border-slate-200/80 shadow-sm w-fit">
+          <button
+            onClick={() => setActiveTab('assuntos')}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-wider transition ${
+              activeTab === 'assuntos'
+                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/15'
+                : 'text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            <StickyNote size={15} /> Post-its de Conhecimento
+          </button>
           <button
             onClick={() => setActiveTab('lista')}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-wider transition ${
@@ -516,17 +652,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                 : 'text-slate-400 hover:text-slate-700'
             }`}
           >
-            <FileText size={14} /> Todas as Normas
-          </button>
-          <button
-            onClick={() => setActiveTab('assuntos')}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-wider transition ${
-              activeTab === 'assuntos'
-                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/10'
-                : 'text-slate-400 hover:text-slate-700'
-            }`}
-          >
-            <Layers size={14} /> Normas por Assunto
+            <FileText size={15} /> Acervo de Normas
           </button>
         </div>
       )}
@@ -560,423 +686,278 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tipo da Norma</label>
                 <select 
                   value={formData.type}
-                  onChange={e => setFormData({...formData, type: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium appearance-none bg-white"
+                  onChange={e => setFormData({...formData, type: e.target.value as any})}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
                 >
-                  <option value="Manual">Manual</option>
                   <option value="ICH">ICH</option>
-                  <option value="Guia">Guia</option>
                   <option value="RDC">RDC</option>
+                  <option value="Guia">Guia</option>
                   <option value="Instrução Normativa">Instrução Normativa</option>
-                  <option value="Portaria">Portaria</option>
-                  <option value="Lei">Lei</option>
-                  <option value="Outro">Outro</option>
+                  <option value="Farmacopeia">Farmacopeia</option>
+                  <option value="Manual">Manual / Outros</option>
                 </select>
               </div>
-              
+
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tema / Assunto</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tema / Assunto Geral</label>
                 <input 
                   required
                   value={formData.theme}
                   onChange={e => setFormData({...formData, theme: e.target.value})}
-                  placeholder="Ex: Boas Práticas de Fabricação"
+                  placeholder="Ex: Boas Práticas de Fabricação (BPF)"
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Fase do Projeto</label>
-                <input 
-                  value={formData.phase}
-                  onChange={e => setFormData({...formData, phase: e.target.value})}
-                  placeholder="Ex: Produção, Qualidade, etc."
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Status da Norma</label>
+                <select 
+                  value={formData.status}
+                  onChange={e => setFormData({...formData, status: e.target.value as any})}
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-                />
+                >
+                  <option value="vigente">Vigente</option>
+                  <option value="vigente com alteração">Vigente com Alteração</option>
+                  <option value="Alterador">Alterador</option>
+                  <option value="À Entrar em Vigor">À Entrar em Vigor</option>
+                  <option value="obsoleto">Obsoleto</option>
+                </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Versão</label>
-                  <input 
-                    value={formData.version}
-                    onChange={e => setFormData({...formData, version: e.target.value})}
-                    placeholder="1.0"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Status</label>
-                  <select 
-                    value={formData.status}
-                    onChange={e => setFormData({...formData, status: e.target.value as RegulatoryStandardStatus})}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium appearance-none bg-white"
-                  >
-                    <option value="vigente">Vigente</option>
-                    <option value="vigente com alteração">Vigente com alteração</option>
-                    <option value="Alterador">Alterador</option>
-                    <option value="À Entrar em Vigor">À Entrar em Vigor</option>
-                    <option value="obsoleto">Obsoleto</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Resumo / Descrição</label>
-                <textarea 
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Versão</label>
+                <input 
                   required
-                  value={formData.summary}
-                  onChange={e => setFormData({...formData, summary: e.target.value})}
-                  rows={3}
-                  placeholder="Breve descrição do conteúdo e aplicabilidade da norma..."
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium resize-none"
-                />
-              </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Se aplica a...</label>
-                <input 
-                  value={formData.appliesTo}
-                  onChange={e => setFormData({...formData, appliesTo: e.target.value})}
-                  placeholder="Ex: Laboratórios, Equipe de Qualidade, Processo de Fabricação X"
+                  value={formData.version}
+                  onChange={e => setFormData({...formData, version: e.target.value})}
+                  placeholder="Ex: 1.0 ou Rev. 2"
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
                 />
               </div>
 
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Principais Notas sobre a Norma</label>
-                <textarea 
-                  value={formData.keyNotes || ''}
-                  onChange={e => setFormData({...formData, keyNotes: e.target.value})}
-                  rows={3}
-                  placeholder="Insira as principais notas, observações importantes ou orientações específicas sobre esta norma..."
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium resize-none"
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Se Aplica A (Escopo)</label>
+                <input 
+                  value={formData.appliesTo || ''}
+                  onChange={e => setFormData({...formData, appliesTo: e.target.value})}
+                  placeholder="Ex: Biofármacos, Vacinas, Produtos Injetáveis..."
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Resumo das Diretrizes</label>
+              <textarea 
+                required
+                rows={3}
+                value={formData.summary}
+                onChange={e => setFormData({...formData, summary: e.target.value})}
+                placeholder="Descreva brevemente os principais pontos e requisitos da norma..."
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium resize-none"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Anotações / Notas Gerais</label>
+              <textarea 
+                rows={2}
+                value={formData.keyNotes || ''}
+                onChange={e => setFormData({...formData, keyNotes: e.target.value})}
+                placeholder="Anotações internas importantes sobre esta norma..."
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium resize-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Link para o Documento Oficial</label>
+                <input 
+                  type="url"
+                  value={formData.documentLink || ''}
+                  onChange={e => setFormData({...formData, documentLink: e.target.value})}
+                  placeholder="https://..."
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
                 />
               </div>
 
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Normas e Guias Vinculados</label>
-                <div className="relative">
-                  <div className="flex gap-2">
-                    <input 
-                      value={linkedStandardInput}
-                      onChange={e => {
-                        setLinkedStandardInput(e.target.value);
-                        setShowStandardSuggestions(true);
-                      }}
-                      onFocus={() => setShowStandardSuggestions(true)}
-                      onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), handleAddLinkedStandard())}
-                      placeholder="Busque ou digite o nome de outras normas ou guias vinculados..."
-                      className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-                    />
-                    <button 
-                      type="button"
-                      onClick={() => handleAddLinkedStandard()}
-                      className="px-4 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition"
-                    >
-                      Adicionar
-                    </button>
-                  </div>
-
-                  {showStandardSuggestions && linkedStandardInput && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 max-h-48 overflow-y-auto">
-                      {standards
-                        .filter(s => s.id !== editingId)
-                        .filter(s => s.name.toLowerCase().includes(linkedStandardInput.toLowerCase()))
-                        .filter(s => !(formData.linkedStandards || []).includes(s.name))
-                        .slice(0, 5)
-                        .map(suggestion => (
-                          <button
-                            key={suggestion.id}
-                            type="button"
-                            onClick={() => handleAddLinkedStandard(suggestion.name)}
-                            className="w-full px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 transition border-b border-slate-50 last:border-0 flex items-center justify-between"
-                          >
-                            <span className="flex items-center gap-2">
-                              <Plus size={14} className="text-slate-400" />
-                              {suggestion.name}
-                            </span>
-                            <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500 font-bold uppercase">{suggestion.type}</span>
-                          </button>
-                        ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {(formData.linkedStandards || []).map(linked => (
-                    <span key={linked} className="inline-flex items-center gap-2 px-3 py-1.5 bg-teal-50 text-teal-700 rounded-lg text-xs font-bold uppercase tracking-tight border border-teal-200">
-                      {linked}
-                      <button type="button" onClick={() => removeLinkedStandard(linked)} className="hover:text-red-500 transition">
-                        <X size={14} />
-                      </button>
-                    </span>
-                  ))}
-                  {(!formData.linkedStandards || formData.linkedStandards.length === 0) && (
-                    <p className="text-[10px] text-slate-400 italic">Nenhuma outra norma ou guia vinculada.</p>
-                  )}
-                </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Link do Caderno NotebookLM</label>
+                <input 
+                  type="url"
+                  value={formData.notebookLMLink || ''}
+                  onChange={e => setFormData({...formData, notebookLMLink: e.target.value})}
+                  placeholder="https://notebooklm.google.com/..."
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
+                />
               </div>
+            </div>
 
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Palavras Chaves (Facilitar Busca)</label>
+            {/* Atividades Relacionadas */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Atividades e Macroatividades Relacionadas</label>
+              <div className="relative">
                 <div className="flex gap-2">
                   <input 
-                    value={keywordInput}
-                    onChange={e => setKeywordInput(e.target.value)}
-                    onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), handleAddKeyword())}
-                    placeholder="Digite uma palavra chave..."
-                    className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
+                    value={activityInput}
+                    onChange={e => {
+                      setActivityInput(e.target.value);
+                      setShowSuggestions(true);
+                    }}
+                    onFocus={() => setShowSuggestions(true)}
+                    placeholder="Digite para buscar atividade do sistema..."
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
                   />
                   <button 
                     type="button"
-                    onClick={handleAddKeyword}
-                    className="px-4 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition"
+                    onClick={() => handleAddActivity()}
+                    className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold uppercase text-xs transition"
                   >
                     Adicionar
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {(formData.keywords || []).map(keyword => (
-                    <span key={keyword} className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold uppercase tracking-tight border border-slate-200">
-                      {keyword}
-                      <button type="button" onClick={() => removeKeyword(keyword)} className="hover:text-red-500 transition">
-                        <X size={14} />
+
+                {showSuggestions && activityInput.trim() && filteredSuggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-20 max-h-48 overflow-y-auto">
+                    {filteredSuggestions.map((suggestion, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => handleAddActivity(suggestion)}
+                        className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-xs font-bold text-slate-700 border-b border-slate-100 last:border-0 flex items-center justify-between"
+                      >
+                        <span>{suggestion}</span>
+                        <Plus size={14} className="text-brand-primary" />
                       </button>
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Link Documento Oficial</label>
-                <div className="relative">
-                  <FileText className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input 
-                    value={formData.documentLink}
-                    onChange={e => setFormData({...formData, documentLink: e.target.value})}
-                    placeholder="https://..."
-                    className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Link NotebookLM</label>
-                <div className="relative">
-                  <BookOpen className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input 
-                    value={formData.notebookLMLink}
-                    onChange={e => setFormData({...formData, notebookLMLink: e.target.value})}
-                    placeholder="https://notebooklm.google.com/..."
-                    className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Atividades Relacionadas (Vínculo Automático)</label>
-                <div className="relative">
-                  <div className="flex gap-2">
-                    <input 
-                      value={activityInput}
-                      onChange={e => {
-                        setActivityInput(e.target.value);
-                        setShowSuggestions(true);
-                      }}
-                      onFocus={() => setShowSuggestions(true)}
-                      onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), handleAddActivity())}
-                      placeholder="Digite o nome exato da atividade..."
-                      className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-                    />
-                    <button 
-                      type="button"
-                      onClick={() => handleAddActivity()}
-                      className="px-4 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition"
-                    >
-                      Adicionar
-                    </button>
+                    ))}
                   </div>
+                )}
+              </div>
 
-                  {showSuggestions && activityInput && filteredSuggestions.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                      {filteredSuggestions.map(suggestion => (
-                        <button
-                          key={suggestion}
-                          type="button"
-                          onClick={() => handleAddActivity(suggestion)}
-                          className="w-full px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 transition border-b border-slate-50 last:border-0 flex items-center gap-2"
-                        >
-                          <Plus size={14} className="text-slate-400" />
-                          {suggestion}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {formData.relatedActivities.map(activity => (
-                    <span key={activity} className="inline-flex items-center gap-2 px-3 py-1.5 bg-brand-primary/10 text-brand-primary rounded-lg text-xs font-bold uppercase tracking-tight border border-brand-primary/20">
-                      {activity}
-                      <button type="button" onClick={() => removeActivity(activity)} className="hover:text-red-500 transition">
-                        <X size={14} />
-                      </button>
-                    </span>
-                  ))}
-                  {formData.relatedActivities.length === 0 && (
-                    <p className="text-[10px] text-slate-400 italic">Nenhuma atividade vinculada. A norma não aparecerá automaticamente nos projetos.</p>
-                  )}
-                </div>
+              <div className="flex flex-wrap gap-2 mt-3">
+                {formData.relatedActivities.map(act => (
+                  <span key={act} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold border border-slate-200">
+                    {act}
+                    <button type="button" onClick={() => removeActivity(act)} className="text-slate-400 hover:text-red-500 transition">
+                      <X size={14} />
+                    </button>
+                  </span>
+                ))}
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4">
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
               <button 
                 type="button"
                 onClick={() => { setIsAdding(false); setEditingId(null); resetForm(); }}
-                className="px-6 py-3 text-slate-500 font-bold uppercase text-xs tracking-widest hover:bg-slate-100 rounded-xl transition"
+                className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl font-bold uppercase text-xs tracking-wider hover:bg-slate-50 transition"
               >
                 Cancelar
               </button>
               <button 
                 type="submit"
-                className="flex items-center gap-2 px-8 py-3 bg-emerald-500 text-white rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-emerald-500/20 hover:scale-105 transition-all active:scale-95"
+                className="flex items-center gap-2 px-8 py-2.5 bg-brand-primary text-white rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-brand-primary/20 hover:bg-brand-primary/90 transition"
               >
-                <Save size={18} /> {editingId ? 'Salvar Alterações' : 'Confirmar Cadastro'}
+                <Save size={16} /> Salvar Norma
               </button>
             </div>
           </form>
         </div>
       ) : (
-        /* TAB RENDERERS */
         <div>
-          {/* TAB 1: ORIGINAL ALL STANDARDS FLAT LIST */}
+          {/* TAB 1: TODAS AS NORMAS */}
           {activeTab === 'lista' && (
             <div className="space-y-6">
-              <div className="flex flex-col md:flex-row gap-4">
+              
+              {/* Filter and Search Bar */}
+              <div className="flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                   <input 
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
-                    placeholder="Buscar por nome, tema, resumo ou palavras chaves..."
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 shadow-sm focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
+                    placeholder="Buscar por nome, tema, resumo ou palavras-chave..."
+                    className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-slate-200 shadow-sm focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
                   />
                 </div>
-                
-                <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-2xl border border-slate-200 shadow-sm">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Filtrar por:</span>
-                  <select 
-                    value={selectedType}
-                    onChange={e => setSelectedType(e.target.value)}
-                    className="bg-transparent text-xs font-bold text-slate-600 outline-none cursor-pointer"
-                  >
-                    <option value="todos">Todos os Tipos</option>
-                    {uniqueTypes.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </div>
+
+                <select 
+                  value={selectedType}
+                  onChange={e => setSelectedType(e.target.value)}
+                  className="px-4 py-3.5 rounded-2xl border border-slate-200 shadow-sm focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-bold text-slate-700 bg-white"
+                >
+                  <option value="todos">Todos os Tipos</option>
+                  <option value="ICH">ICH</option>
+                  <option value="RDC">RDC</option>
+                  <option value="Guia">Guia</option>
+                  <option value="Instrução Normativa">Instrução Normativa</option>
+                  <option value="Farmacopeia">Farmacopeia</option>
+                  <option value="Manual">Manual / Outros</option>
+                </select>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Grid of Standards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredStandards.map(standard => {
                   const isExpanded = expandedId === standard.id;
+
                   return (
-                    <div key={standard.id} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-all group">
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="space-y-1 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${getStatusColor(standard.status)}`}>
-                              {getStatusIcon(standard.status)}
-                              {standard.status}
-                            </span>
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-500 border border-slate-200">
-                              <Tag size={10} />
-                              {standard.type || 'Manual'}
-                            </span>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Versão {standard.version}</span>
-                          </div>
-                          <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight leading-tight">{standard.name}</h3>
-                          <p className="text-brand-primary text-xs font-bold uppercase tracking-wider">{standard.theme}</p>
-                          
-                          {isExpanded && (
-                            <div className="mt-4 pt-4 border-t border-slate-100 space-y-4 animate-in slide-in-from-top-2 duration-200">
-                              {standard.appliesTo && (
-                                <div className="flex flex-col gap-1">
-                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Se aplica a:</span>
-                                  <span className="text-xs font-bold text-slate-700 leading-relaxed text-justify">{standard.appliesTo}</span>
-                                </div>
-                              )}
-
-                              {standard.keyNotes && (
-                                <div className="flex flex-col gap-1">
-                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Principais Notas:</span>
-                                  <div className="text-xs font-medium text-slate-700 leading-relaxed text-justify bg-amber-50/50 border border-amber-100 p-3 rounded-xl whitespace-pre-line">
-                                    {standard.keyNotes}
-                                  </div>
-                                </div>
-                              )}
-
-                              {standard.linkedStandards && standard.linkedStandards.length > 0 && (
-                                <div className="flex flex-col gap-2">
-                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Normas e Guias Vinculados:</span>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {standard.linkedStandards.map(linked => (
-                                      <span key={linked} className="px-2.5 py-1 bg-teal-50 text-teal-700 rounded-lg text-[9.5px] font-black uppercase tracking-tight border border-teal-200">
-                                        {linked}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {standard.keywords && standard.keywords.length > 0 && (
-                                <div className="flex flex-col gap-2">
-                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Palavras Chaves:</span>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {standard.keywords.map(kw => (
-                                      <span key={kw} className="px-2 py-1 bg-slate-100 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-tight border border-slate-200">
-                                        #{kw}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
+                    <div key={standard.id} className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group">
+                      <div>
+                        <div className="flex justify-between items-start gap-2 mb-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${getStatusColor(standard.status)}`}>
+                                {getStatusIcon(standard.status)}
+                                {standard.status}
+                              </span>
+                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">v{standard.version}</span>
                             </div>
-                          )}
+                            <h3 className="text-base font-black text-slate-800 uppercase tracking-tight group-hover:text-brand-primary transition-colors">
+                              {standard.name}
+                            </h3>
+                            <p className="text-brand-primary text-[10px] font-bold uppercase tracking-wider">{standard.theme}</p>
+                          </div>
+
+                          <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition">
+                            <button 
+                              onClick={() => setExpandedId(isExpanded ? null : standard.id)} 
+                              className={`p-2 rounded-lg transition-all ${isExpanded ? 'bg-brand-primary text-white shadow-md' : 'text-slate-400 hover:bg-white hover:text-brand-primary'}`}
+                              title={isExpanded ? "Recolher informações" : "Ver informações completas"}
+                            >
+                              <Eye size={16} />
+                            </button>
+                            <button onClick={() => startEdit(standard)} className="p-2 text-slate-400 hover:bg-white hover:text-brand-primary rounded-lg transition" title="Editar">
+                              <Edit2 size={16} />
+                            </button>
+                            <button onClick={() => onDeleteStandard(standard.id)} className="p-2 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition" title="Excluir">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
                         </div>
-                        
-                        <div className="flex gap-1 ml-4 shadow-sm rounded-lg border border-slate-100 p-1 bg-slate-50/50">
-                          <button 
-                            onClick={() => setExpandedId(isExpanded ? null : standard.id)} 
-                            className={`p-2 rounded-lg transition-all ${isExpanded ? 'bg-brand-primary text-white shadow-md' : 'text-slate-400 hover:bg-white hover:text-brand-primary'}`}
-                            title={isExpanded ? "Recolher informações" : "Ver informações completas"}
-                          >
-                            <Eye size={18} />
-                          </button>
-                          <button onClick={() => startEdit(standard)} className="p-2 text-slate-400 hover:bg-white hover:text-brand-primary rounded-lg transition" title="Editar">
-                            <Edit2 size={16} />
-                          </button>
-                          <button onClick={() => onDeleteStandard(standard.id)} className="p-2 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition" title="Excluir">
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
+
+                        <p className={`text-slate-600 text-xs mb-4 font-medium leading-relaxed text-justify ${isExpanded ? '' : 'line-clamp-3'}`}>
+                          {standard.summary}
+                        </p>
+
+                        {isExpanded && standard.keyNotes && (
+                          <div className="mt-3 p-3 bg-amber-50/60 border border-amber-100 rounded-xl text-xs text-slate-700 whitespace-pre-line">
+                            <span className="text-[9px] font-black text-amber-800 uppercase tracking-widest block mb-1">Anotações do Acervo:</span>
+                            {standard.keyNotes}
+                          </div>
+                        )}
                       </div>
 
-                      <p className={`text-slate-600 text-sm mb-6 font-medium leading-relaxed text-justify ${isExpanded ? '' : 'line-clamp-3'}`}>
-                        {standard.summary}
-                      </p>
-
-                      <div className="flex flex-wrap gap-4 items-center justify-between pt-4 border-t border-slate-50">
+                      <div className="flex flex-wrap gap-4 items-center justify-between pt-4 border-t border-slate-50 mt-4">
                         <div className="flex gap-3">
                           {standard.documentLink && (
                             <a 
                               href={standard.documentLink} 
                               target="_blank" 
                               rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-slate-500 hover:text-brand-primary text-xs font-bold uppercase tracking-tight transition"
+                              className="flex items-center gap-1.5 text-slate-500 hover:text-brand-primary text-[10px] font-bold uppercase tracking-tight transition"
                             >
-                              <FileText size={14} /> Documento <ExternalLink size={12} />
+                              <FileText size={12} /> Documento <ExternalLink size={10} />
                             </a>
                           )}
                           {standard.notebookLMLink && (
@@ -984,59 +965,44 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                               href={standard.notebookLMLink} 
                               target="_blank" 
                               rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-slate-500 hover:text-emerald-600 text-xs font-bold uppercase tracking-tight transition"
+                              className="flex items-center gap-1.5 text-slate-500 hover:text-emerald-600 text-[10px] font-bold uppercase tracking-tight transition"
                             >
-                              <BookOpen size={14} /> NotebookLM <ExternalLink size={12} />
+                              <BookOpen size={12} /> NotebookLM <ExternalLink size={10} />
                             </a>
                           )}
                         </div>
                         
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Vínculos:</span>
-                          <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-md text-[10px] font-bold">
-                            {standard.relatedActivities.length} Atividades
-                          </span>
-                        </div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded-md">
+                          {standard.relatedActivities.length} Atividades
+                        </span>
                       </div>
                     </div>
                   );
                 })}
-                
-                {filteredStandards.length === 0 && (
-                  <div className="col-span-full py-20 text-center space-y-4 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-                    <div className="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center mx-auto text-slate-400">
-                      <ShieldCheck size={32} />
-                    </div>
-                    <div>
-                      <h3 className="text-slate-800 font-black uppercase tracking-tight">Nenhuma norma encontrada</h3>
-                      <p className="text-slate-500 text-sm font-medium">Tente ajustar sua busca ou cadastre uma nova norma.</p>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           )}
 
-          {/* TAB 2: NORMAS POR ASSUNTO (SUBJECT HIERARCHICAL MANAGER) */}
+          {/* TAB 2: POST-ITS DE CONHECIMENTO (ORGANIZAÇÃO POR CONCEITOS) */}
           {activeTab === 'assuntos' && (
             <div className="space-y-6">
               
-              {/* Subject search bar */}
+              {/* Search Bar */}
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                 <input 
                   value={subjectSearchTerm}
                   onChange={e => setSubjectSearchTerm(e.target.value)}
-                  placeholder="Buscar por Assunto, Bloco/Fase, Norma associada ou termos em notas..."
-                  className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 shadow-sm focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
+                  placeholder="Buscar por Post-it/Conceito (ex: Dose, Biodistribuição, Potência), Assunto, Bloco ou Norma..."
+                  className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 shadow-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-medium"
                 />
               </div>
 
               {/* Subject list hierarchy rendering */}
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {filteredSubjects.map(subject => {
                   const isExpanded = !!expandedSubjectIds[subject.id];
-                  const totalStandardsCount = subject.blocks.reduce((acc, b) => acc + b.associations.length, 0);
+                  const totalConceptsCount = subject.blocks.reduce((acc, b) => acc + getBlockConcepts(b, standards).length, 0);
 
                   return (
                     <div key={subject.id} className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden transition-all">
@@ -1044,20 +1010,20 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                       {/* Subject Card Header */}
                       <div 
                         onClick={() => toggleSubjectExpanded(subject.id)}
-                        className="p-5 flex items-center justify-between cursor-pointer bg-slate-50/45 hover:bg-slate-50 transition border-b border-slate-100"
+                        className="p-5 flex items-center justify-between cursor-pointer bg-slate-50/50 hover:bg-slate-50 transition border-b border-slate-100"
                       >
                         <div className="flex items-center gap-4 flex-1 min-w-0">
-                          <div className="p-2.5 bg-teal-50 text-teal-600 rounded-xl">
-                            <Folder size={20} />
+                          <div className="p-3 bg-teal-50 text-teal-600 rounded-2xl border border-teal-100">
+                            <Folder size={22} />
                           </div>
                           <div className="truncate">
-                            <h3 className="text-sm sm:text-base font-black text-slate-800 uppercase tracking-tight">{subject.name}</h3>
+                            <h3 className="text-base sm:text-lg font-black text-slate-800 uppercase tracking-tight">{subject.name}</h3>
                             <div className="flex gap-2 items-center mt-1">
-                              <span className="text-[10px] font-black text-teal-600 uppercase bg-teal-50 px-2 py-0.5 rounded-md">
+                              <span className="text-[10px] font-black text-teal-700 uppercase bg-teal-50 px-2.5 py-0.5 rounded-md border border-teal-100/80">
                                 {subject.blocks.length} {subject.blocks.length === 1 ? 'Bloco' : 'Blocos'}
                               </span>
-                              <span className="text-[10px] font-black text-slate-500 uppercase bg-slate-100 px-2 py-0.5 rounded-md">
-                                {totalStandardsCount} {totalStandardsCount === 1 ? 'Norma' : 'Normas'}
+                              <span className="text-[10px] font-black text-amber-800 uppercase bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200/60 flex items-center gap-1">
+                                <StickyNote size={11} /> {totalConceptsCount} {totalConceptsCount === 1 ? 'Post-it de Conhecimento' : 'Post-its de Conhecimento'}
                               </span>
                             </div>
                           </div>
@@ -1067,253 +1033,217 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                         <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                           <button 
                             onClick={() => setSubjectModal({ isOpen: true, subjectId: subject.id, name: subject.name })}
-                            className="p-2 text-slate-400 hover:text-teal-600 hover:bg-white rounded-xl border border-transparent hover:border-slate-100 transition shadow-none hover:shadow-sm"
-                            title="Editar Assunto"
+                            className="p-2 text-slate-400 hover:text-teal-600 hover:bg-white rounded-xl border border-transparent hover:border-slate-200 transition"
+                            title="Editar Nome do Assunto"
                           >
-                            <Edit2 size={14} />
+                            <Edit2 size={15} />
                           </button>
                           <button 
                             onClick={(e) => handleDeleteSubject(subject.id, e)}
                             className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl border border-transparent hover:border-red-100 transition"
                             title="Excluir Assunto"
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={15} />
                           </button>
                           <button 
                             onClick={() => setBlockModal({ isOpen: true, subjectId: subject.id, name: '' })}
-                            className="flex items-center gap-1.5 px-3 py-2 text-teal-700 bg-teal-50 hover:bg-teal-100 rounded-xl text-[10px] font-black uppercase tracking-wider transition"
+                            className="flex items-center gap-1.5 px-3.5 py-2 text-teal-700 bg-teal-50 hover:bg-teal-100/80 rounded-xl text-[10px] font-black uppercase tracking-wider transition border border-teal-100"
                             title="Criar Bloco/Fase"
                           >
-                            <Plus size={12} /> Bloco
+                            <Plus size={13} /> Bloco
                           </button>
                           <div className="w-px h-6 bg-slate-200 mx-1"></div>
                           <button 
                             onClick={() => toggleSubjectExpanded(subject.id)}
-                            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-white rounded-xl border border-transparent hover:border-slate-100 transition"
+                            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-white rounded-xl border border-transparent hover:border-slate-200 transition"
                           >
-                            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                           </button>
                         </div>
                       </div>
 
                       {/* Subject Expanded Body */}
                       {isExpanded && (
-                        <div className="p-6 bg-white space-y-6">
+                        <div className="p-6 bg-slate-50/30 space-y-6">
                           
                           {/* Rendering blocks */}
                           {subject.blocks.length === 0 ? (
-                            <div className="text-center py-8 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-100">
-                              <Layers size={24} className="text-slate-300 mx-auto mb-2" />
-                              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhum bloco cadastrado</p>
-                              <p className="text-slate-500 text-xs mt-1">Crie blocos/fases clicando no botão "+ Bloco" acima.</p>
+                            <div className="text-center py-10 bg-white rounded-2xl border-2 border-dashed border-slate-200 p-6">
+                              <Layers size={28} className="text-slate-300 mx-auto mb-2" />
+                              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Nenhum bloco cadastrado</p>
+                              <p className="text-slate-400 text-xs mt-1">Crie blocos (ex: Estudo de Segurança, Estudo de Estabilidade, Qualidade) clicando em "+ Bloco".</p>
                             </div>
                           ) : (
                             <div className="space-y-6">
                               {subject.blocks.map(block => {
                                 const blockKey = `${subject.id}-${block.id}`;
                                 const isBlockCollapsed = !!collapsedBlockIds[blockKey];
+                                const concepts = getBlockConcepts(block, standards);
 
                                 return (
-                                  <div key={block.id} className="border border-slate-100 rounded-2xl bg-slate-50/20 shadow-sm overflow-hidden">
+                                  <div key={block.id} className="border border-slate-200/80 rounded-2xl bg-white shadow-xs overflow-hidden">
                                     
                                     {/* Block Header */}
                                     <div 
                                       onClick={() => setCollapsedBlockIds(prev => ({ ...prev, [blockKey]: !prev[blockKey] }))}
-                                      className="px-4 py-3 bg-slate-50/40 border-b border-slate-100 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition select-none"
+                                      className="px-5 py-3.5 bg-slate-100/60 border-b border-slate-200/80 flex items-center justify-between cursor-pointer hover:bg-slate-100 transition select-none"
                                     >
-                                      <div className="flex items-center gap-2">
-                                        <Layers size={14} className="text-teal-600" />
-                                        <h4 className="text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wide">{block.name}</h4>
-                                        <span className="text-[9px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-black uppercase">
-                                          {block.associations.length}
+                                      <div className="flex items-center gap-3">
+                                        <Layers size={16} className="text-teal-600" />
+                                        <h4 className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wide">{block.name}</h4>
+                                        <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200/80 px-2 py-0.5 rounded-full font-black flex items-center gap-1">
+                                          <StickyNote size={11} /> {concepts.length} {concepts.length === 1 ? 'Post-it' : 'Post-its'}
                                         </span>
                                         <div className="text-slate-400">
                                           {isBlockCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                                         </div>
                                       </div>
 
-                                      {/* Block actions */}
-                                      <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                      {/* Block Actions */}
+                                      <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
                                         <button 
                                           onClick={() => setBlockModal({ isOpen: true, subjectId: subject.id, blockId: block.id, name: block.name })}
-                                          className="p-1 text-slate-400 hover:text-teal-600 rounded-md hover:bg-white transition"
+                                          className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg hover:bg-white transition"
                                           title="Renomear Bloco"
                                         >
-                                          <Edit2 size={12} />
+                                          <Edit2 size={13} />
                                         </button>
                                         <button 
                                           onClick={() => handleDeleteBlock(subject.id, block.id)}
-                                          className="p-1 text-slate-400 hover:text-red-500 rounded-md hover:bg-white transition"
+                                          className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-white transition"
                                           title="Excluir Bloco"
                                         >
-                                          <Trash2 size={12} />
+                                          <Trash2 size={13} />
                                         </button>
-                                        <div className="w-px h-4 bg-slate-200 mx-1"></div>
+                                        <div className="w-px h-4 bg-slate-300 mx-1"></div>
                                         <button 
-                                          onClick={() => setLinkModal({ 
+                                          onClick={() => setConceptModal({ 
                                             isOpen: true, 
                                             subjectId: subject.id, 
                                             blockId: block.id, 
-                                            standardId: '', 
-                                            importantNotes: '', 
-                                            specificPassages: '',
-                                            isEdit: false
+                                            title: '', 
+                                            centralIdea: '', 
+                                            practicalApplication: '', 
+                                            observations: '', 
+                                            color: 'yellow',
+                                            linkedStandards: [{ standardId: '', relevantPassages: '', page: '', section: '' }]
                                           })}
-                                          className="flex items-center gap-1 px-2.5 py-1 text-teal-700 hover:text-teal-800 hover:bg-teal-100/50 rounded-lg text-[9px] font-black uppercase tracking-wider transition"
+                                          className="flex items-center gap-1.5 px-3 py-1.5 text-amber-900 bg-amber-100 hover:bg-amber-200/80 rounded-xl text-[10px] font-black uppercase tracking-wider transition border border-amber-200 shadow-xs"
                                         >
-                                          <Link2 size={11} /> Vincular Norma
+                                          <Plus size={12} /> Novo Post-it
                                         </button>
                                       </div>
                                     </div>
 
-                                    {/* Block associations body */}
+                                    {/* Block Concepts Body */}
                                     {!isBlockCollapsed && (
-                                      <div className="p-4 space-y-4">
-                                        {block.associations.length === 0 ? (
-                                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider text-center py-4 italic">Nenhuma norma vinculada a este bloco.</p>
+                                      <div className="p-5">
+                                        {concepts.length === 0 ? (
+                                          <div className="text-center py-8 bg-slate-50/50 rounded-xl border border-dashed border-slate-200 space-y-2">
+                                            <StickyNote size={24} className="text-slate-300 mx-auto" />
+                                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Nenhum Post-it cadastrado neste bloco</p>
+                                            <p className="text-[11px] text-slate-400">Clique em <strong className="text-amber-800">+ Novo Post-it</strong> para adicionar conceitos como Dose, Toxicidade, Potência, etc.</p>
+                                          </div>
                                         ) : (
-                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {block.associations.map(assoc => {
-                                          const std = standards.find(s => s.id === assoc.standardId);
-                                          const assocKey = `${subject.id}-${block.id}-${assoc.standardId}`;
-                                          const isCardCollapsed = collapsedCards[assocKey] !== undefined ? collapsedCards[assocKey] : true;
-                                          const isNotesSectionCollapsed = !!collapsedNotesSections[assocKey];
-                                          const isPassagesSectionCollapsed = !!collapsedPassagesSections[assocKey];
-                                          const notesList = assoc.importantNotes ? assoc.importantNotes.split('\n---\n').filter(Boolean) : [];
-                                          
-                                          return (
-                                            <div key={assoc.standardId} className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between group relative">
-                                              
-                                              <div>
-                                                {/* Header of Standard Block Card */}
-                                                <div className="flex justify-between items-start gap-2 mb-2">
-                                                  <div className="min-w-0">
-                                                    <h5 className="text-xs font-black text-slate-800 uppercase tracking-wide truncate">
-                                                      {std ? std.name : `Norma Desconhecida (${assoc.standardId})`}
+                                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                                            {concepts.map(concept => {
+                                              const theme = getPostItColorClasses(concept.color);
+
+                                              return (
+                                                <div 
+                                                  key={concept.id} 
+                                                  onClick={() => setViewConceptModal({
+                                                    concept,
+                                                    subjectName: subject.name,
+                                                    blockName: block.name,
+                                                    subjectId: subject.id,
+                                                    blockId: block.id
+                                                  })}
+                                                  className={`rounded-2xl border p-5 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group relative ${theme.cardBg}`}
+                                                >
+                                                  <div>
+                                                    {/* Post-it Tape / Header Accent */}
+                                                    <div className="flex items-center justify-between pb-3 border-b border-black/5 mb-3">
+                                                      <div className="flex items-center gap-2">
+                                                        <Pin size={14} className={theme.pinColor} />
+                                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Post-it de Conhecimento</span>
+                                                      </div>
+                                                      <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100" onClick={e => e.stopPropagation()}>
+                                                        <button 
+                                                          onClick={() => setConceptModal({
+                                                            isOpen: true,
+                                                            subjectId: subject.id,
+                                                            blockId: block.id,
+                                                            conceptId: concept.id,
+                                                            title: concept.title,
+                                                            centralIdea: concept.centralIdea,
+                                                            practicalApplication: concept.practicalApplication,
+                                                            observations: concept.observations || '',
+                                                            color: concept.color || 'yellow',
+                                                            linkedStandards: concept.linkedStandards && concept.linkedStandards.length > 0 
+                                                              ? concept.linkedStandards 
+                                                              : [{ standardId: '', relevantPassages: '', page: '', section: '' }]
+                                                          })}
+                                                          className="p-1 text-slate-400 hover:text-slate-800 hover:bg-white/80 rounded transition"
+                                                          title="Editar Post-it"
+                                                        >
+                                                          <Edit2 size={13} />
+                                                        </button>
+                                                        <button 
+                                                          onClick={(e) => handleDeleteConcept(subject.id, block.id, concept.id, e)}
+                                                          className="p-1 text-slate-400 hover:text-red-600 hover:bg-white/80 rounded transition"
+                                                          title="Excluir Post-it"
+                                                        >
+                                                          <Trash2 size={13} />
+                                                        </button>
+                                                      </div>
+                                                    </div>
+
+                                                    {/* Concept Title */}
+                                                    <h5 className="text-base font-black text-slate-900 uppercase tracking-tight mb-2 leading-snug">
+                                                      {concept.title}
                                                     </h5>
-                                                    <p className="text-[10px] text-teal-600 font-bold uppercase tracking-wide truncate mt-0.5">
-                                                      {std ? std.theme : 'Tema indisponível'}
-                                                    </p>
-                                                    
-                                                    {std && (
-                                                      <div className="flex flex-wrap gap-1 mt-1.5">
-                                                        <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold uppercase">
-                                                          {std.type}
-                                                        </span>
-                                                        <span className={`text-[8px] px-1.5 py-0.5 rounded font-bold uppercase border ${getStatusColor(std.status)}`}>
-                                                          {std.status}
-                                                        </span>
+
+                                                    {/* Central Idea Preview */}
+                                                    <div className="mb-3">
+                                                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-0.5">Ideia Central:</span>
+                                                      <p className="text-xs text-slate-700 font-medium leading-relaxed line-clamp-3 text-justify">
+                                                        {concept.centralIdea}
+                                                      </p>
+                                                    </div>
+
+                                                    {/* Practical Application Preview */}
+                                                    {concept.practicalApplication && (
+                                                      <div className="mb-3 pt-2 border-t border-black/5">
+                                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-0.5">Aplicação Prática:</span>
+                                                        <p className="text-xs text-slate-600 font-medium leading-relaxed line-clamp-2 text-justify">
+                                                          {concept.practicalApplication}
+                                                        </p>
                                                       </div>
                                                     )}
                                                   </div>
 
-                                                  {/* Icons Action Grid */}
-                                                  <div className="flex items-center gap-0.5 bg-slate-50 border border-slate-100 rounded-lg p-0.5">
-                                                    {std && (
-                                                      <button 
-                                                        onClick={() => setDetailedStandard(std)}
-                                                        className="p-1 text-slate-400 hover:text-teal-600 rounded-md hover:bg-white transition"
-                                                        title="Ver Detalhes Gerais da Norma"
-                                                      >
-                                                        <Eye size={12} />
-                                                      </button>
-                                                    )}
-                                                    <button 
-                                                      onClick={() => setLinkModal({ 
-                                                        isOpen: true, 
-                                                        subjectId: subject.id, 
-                                                        blockId: block.id, 
-                                                        standardId: assoc.standardId, 
-                                                        importantNotes: assoc.importantNotes, 
-                                                        specificPassages: assoc.specificPassages,
-                                                        isEdit: true
-                                                      })}
-                                                      className="p-1 text-slate-400 hover:text-teal-600 rounded-md hover:bg-white transition"
-                                                      title="Editar Notas"
-                                                    >
-                                                      <Edit2 size={12} />
-                                                    </button>
-                                                    <button 
-                                                      onClick={() => handleUnlinkStandard(subject.id, block.id, assoc.standardId)}
-                                                      className="p-1 text-slate-400 hover:text-red-500 rounded-md hover:bg-white transition"
-                                                      title="Desvincular Norma"
-                                                    >
-                                                      <Trash2 size={12} />
-                                                    </button>
-                                                    <button 
-                                                      onClick={() => setCollapsedCards(prev => ({ ...prev, [assocKey]: !prev[assocKey] }))}
-                                                      className={`p-1 rounded-md transition ${!isCardCollapsed ? 'text-teal-600 bg-teal-50' : 'text-slate-400 hover:text-teal-600 hover:bg-white'}`}
-                                                      title={isCardCollapsed ? "Visualizar Notas" : "Esconder Notas"}
-                                                    >
-                                                      <StickyNote size={12} className={!isCardCollapsed ? "fill-teal-600/20" : ""} />
-                                                    </button>
+                                                  {/* Footer Evidence Count Tag */}
+                                                  <div className="pt-3 border-t border-black/5 flex items-center justify-between mt-2">
+                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border ${theme.badgeBg}`}>
+                                                      <ShieldCheck size={12} />
+                                                      {concept.linkedStandards.length} {concept.linkedStandards.length === 1 ? 'Norma de Evidência' : 'Normas de Evidência'}
+                                                    </span>
+
+                                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider group-hover:text-slate-900 flex items-center gap-1 transition">
+                                                      Abrir <ChevronDown size={12} className="-rotate-90" />
+                                                    </span>
                                                   </div>
                                                 </div>
-
-                                                {/* Important Notes */}
-                                                {!isCardCollapsed && notesList.length > 0 && (
-                                                  <div className="mt-3 bg-amber-50/50 border-l-4 border-amber-300 p-2.5 rounded-r-xl">
-                                                    <div className="flex items-center justify-between gap-1 mb-1">
-                                                      <span className="text-[9px] font-black text-amber-700 uppercase tracking-widest flex items-center gap-1">
-                                                        <MessageSquare size={10} /> Notas Importantes ({notesList.length}):
-                                                      </span>
-                                                      <button 
-                                                        onClick={() => setCollapsedNotesSections(prev => ({ ...prev, [assocKey]: !prev[assocKey] }))}
-                                                        className="p-0.5 text-amber-600 hover:text-amber-800 hover:bg-amber-100/50 rounded transition"
-                                                        title={isNotesSectionCollapsed ? "Expandir Notas" : "Recolher Notas"}
-                                                      >
-                                                        {isNotesSectionCollapsed ? <ChevronDown size={10} /> : <ChevronUp size={10} />}
-                                                      </button>
-                                                    </div>
-                                                    {!isNotesSectionCollapsed && (
-                                                      <div className="space-y-1.5 mt-1.5">
-                                                        {notesList.map((note, nIdx) => (
-                                                          <div key={nIdx} className="bg-white/80 p-2 rounded-lg border border-amber-100 shadow-xs">
-                                                            <p className="text-[11px] text-slate-700 font-medium leading-relaxed text-justify whitespace-pre-line">
-                                                              {note}
-                                                            </p>
-                                                          </div>
-                                                        ))}
-                                                      </div>
-                                                    )}
-                                                  </div>
-                                                )}
-
-                                                {/* Specific Passages */}
-                                                {!isCardCollapsed && assoc.specificPassages && (
-                                                  <div className="mt-2.5 bg-slate-50 border border-slate-200/60 p-2.5 rounded-xl">
-                                                    <div className="flex items-center justify-between gap-1 mb-1">
-                                                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1">
-                                                        <FileText size={10} /> Seções Importantes do Documento:
-                                                      </span>
-                                                      <button 
-                                                        onClick={() => setCollapsedPassagesSections(prev => ({ ...prev, [assocKey]: !prev[assocKey] }))}
-                                                        className="p-0.5 text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 rounded transition"
-                                                        title={isPassagesSectionCollapsed ? "Expandir Seções" : "Recolher Seções"}
-                                                      >
-                                                        {isPassagesSectionCollapsed ? <ChevronDown size={10} /> : <ChevronUp size={10} />}
-                                                      </button>
-                                                    </div>
-                                                    {!isPassagesSectionCollapsed && (
-                                                      <p className="text-[11px] text-slate-600 font-medium leading-relaxed text-justify whitespace-pre-line mt-1">
-                                                        {assoc.specificPassages}
-                                                      </p>
-                                                    )}
-                                                  </div>
-                                                )}
-                                              </div>
-
-                                            </div>
-                                          );
-                                        })}
+                                              );
+                                            })}
+                                          </div>
+                                        )}
                                       </div>
                                     )}
                                   </div>
-                                )}
-
-                              </div>
-                            );
-                          })}
+                                );
+                              })}
                             </div>
                           )}
 
@@ -1331,7 +1261,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                     </div>
                     <div>
                       <h3 className="text-slate-800 font-black uppercase tracking-tight">Nenhum assunto correspondente</h3>
-                      <p className="text-slate-500 text-sm font-medium">Tente ajustar sua busca ou crie um novo assunto.</p>
+                      <p className="text-slate-500 text-sm font-medium">Tente ajustar sua busca por Post-it ou crie um novo assunto.</p>
                     </div>
                   </div>
                 )}
@@ -1343,7 +1273,418 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       )}
 
       {/* ======================================================== */}
-      {/* MODAL 1: SUBJECT MODAL (CREATE / EDIT NAME) */}
+      {/* MODAL VIEW: DETAILED POST-IT CONCEPT (ABRIR POST-IT) */}
+      {viewConceptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-3xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            
+            {/* Header Banner */}
+            <div className={`p-6 border-b flex items-center justify-between ${getPostItColorClasses(viewConceptModal.concept.color).headerBg}`}>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 bg-white/80 text-slate-800 rounded-md text-[9px] font-black uppercase tracking-widest border border-black/10 flex items-center gap-1">
+                    <Pin size={10} /> Post-it de Conhecimento
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">
+                    {viewConceptModal.subjectName} &bull; {viewConceptModal.blockName}
+                  </span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tight">
+                  {viewConceptModal.concept.title}
+                </h2>
+              </div>
+              <button 
+                onClick={() => setViewConceptModal(null)} 
+                className="p-2 text-slate-600 hover:bg-white/80 rounded-full transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Scrollable Modal Content */}
+            <div className="p-6 overflow-y-auto space-y-6 custom-scrollbar">
+              
+              {/* 1. Ideia Central */}
+              <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-5 space-y-2">
+                <span className="text-[10px] font-black text-amber-900 uppercase tracking-widest flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-amber-700" />
+                  Ideia Central (Resumo Consolidado)
+                </span>
+                <p className="text-sm text-slate-800 font-medium leading-relaxed text-justify whitespace-pre-line">
+                  {viewConceptModal.concept.centralIdea}
+                </p>
+              </div>
+
+              {/* 2. Aplicação Prática */}
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 space-y-2">
+                <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
+                  <Bookmark size={14} className="text-teal-600" />
+                  Aplicação Prática
+                </span>
+                <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed text-justify whitespace-pre-line">
+                  {viewConceptModal.concept.practicalApplication}
+                </p>
+              </div>
+
+              {/* 3. Observações */}
+              {viewConceptModal.concept.observations && (
+                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 space-y-2">
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                    <MessageSquare size={14} className="text-slate-500" />
+                    Observações
+                  </span>
+                  <p className="text-xs text-slate-700 font-medium leading-relaxed text-justify whitespace-pre-line">
+                    {viewConceptModal.concept.observations}
+                  </p>
+                </div>
+              )}
+
+              {/* 4. Lista de Normas Vinculadas */}
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                    <ShieldCheck size={18} className="text-teal-600" />
+                    Normas Vinculadas (Fontes de Evidência Regulatoria)
+                  </h3>
+                  <span className="text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200/60 px-2.5 py-0.5 rounded-full uppercase">
+                    {viewConceptModal.concept.linkedStandards.length} Vinculada(s)
+                  </span>
+                </div>
+
+                {viewConceptModal.concept.linkedStandards.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">Nenhuma norma vinculada a este conceito.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {viewConceptModal.concept.linkedStandards.map((link, idx) => {
+                      const std = standards.find(s => s.id === link.standardId);
+
+                      return (
+                        <div key={idx} className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-3">
+                          
+                          {/* Standard Info Banner */}
+                          <div className="flex justify-between items-start gap-3 border-b border-slate-100 pb-3">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                {std && (
+                                  <>
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold uppercase border ${getStatusColor(std.status)}`}>
+                                      {getStatusIcon(std.status)}
+                                      {std.status}
+                                    </span>
+                                    <span className="text-[9px] font-bold text-slate-500 uppercase bg-slate-100 px-2 py-0.5 rounded-md">
+                                      {std.type || 'Manual'}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                              <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight">
+                                {std ? std.name : `Norma Vinculada (${link.standardId})`}
+                              </h4>
+                              {std?.theme && (
+                                <p className="text-[10px] font-bold text-brand-primary uppercase tracking-wide">{std.theme}</p>
+                              )}
+                            </div>
+
+                            {std && (
+                              <button 
+                                onClick={() => setDetailedStandard(std)}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold uppercase transition"
+                                title="Ver Detalhes Gerais da Norma"
+                              >
+                                <Eye size={12} /> Ver Norma
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Passages, Page & Section */}
+                          <div className="space-y-2">
+                            {link.relevantPassages && (
+                              <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Trechos Relevantes:</span>
+                                <p className="text-xs text-slate-700 font-medium leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 text-justify whitespace-pre-line">
+                                  "{link.relevantPassages}"
+                                </p>
+                              </div>
+                            )}
+
+                            <div className="flex gap-4 items-center pt-1">
+                              {link.page && (
+                                <span className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg uppercase">
+                                  Página: <strong>{link.page}</strong>
+                                </span>
+                              )}
+                              {link.section && (
+                                <span className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg uppercase">
+                                  Seção: <strong>{link.section}</strong>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <button 
+                onClick={() => {
+                  const c = viewConceptModal.concept;
+                  const sId = viewConceptModal.subjectId;
+                  const bId = viewConceptModal.blockId;
+                  setViewConceptModal(null);
+                  setConceptModal({
+                    isOpen: true,
+                    subjectId: sId,
+                    blockId: bId,
+                    conceptId: c.id,
+                    title: c.title,
+                    centralIdea: c.centralIdea,
+                    practicalApplication: c.practicalApplication,
+                    observations: c.observations || '',
+                    color: c.color || 'yellow',
+                    linkedStandards: c.linkedStandards && c.linkedStandards.length > 0 ? c.linkedStandards : [{ standardId: '', relevantPassages: '', page: '', section: '' }]
+                  });
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold uppercase transition"
+              >
+                <Edit2 size={14} /> Editar Post-it
+              </button>
+
+              <button 
+                onClick={() => setViewConceptModal(null)}
+                className="px-6 py-2 bg-slate-800 text-white rounded-xl font-bold uppercase text-xs tracking-widest hover:bg-slate-700 transition"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL FORM: CREATE / EDIT POST-IT CONCEPT */}
+      {conceptModal?.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-3xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
+            
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-amber-50/60">
+              <h3 className="font-black text-amber-950 uppercase tracking-tight flex items-center gap-2">
+                <StickyNote size={18} className="text-amber-600" />
+                {conceptModal.conceptId ? 'Editar Post-it de Conhecimento' : 'Novo Post-it de Conhecimento'}
+              </h3>
+              <button onClick={() => setConceptModal(null)} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-full transition">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveConcept} className="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
+              
+              {/* Concept Title & Color Selector */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2 space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Título do Conceito</label>
+                  <input
+                    required
+                    autoFocus
+                    value={conceptModal.title}
+                    onChange={e => setConceptModal({ ...conceptModal, title: e.target.value })}
+                    placeholder="Ex: Dose, Biodistribuição, Toxicidade Local, Potência..."
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-bold uppercase"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Cor do Post-it</label>
+                  <div className="flex gap-2 items-center pt-1">
+                    {[
+                      { id: 'yellow', bg: 'bg-amber-300' },
+                      { id: 'blue', bg: 'bg-sky-300' },
+                      { id: 'green', bg: 'bg-emerald-300' },
+                      { id: 'pink', bg: 'bg-rose-300' },
+                      { id: 'purple', bg: 'bg-purple-300' }
+                    ].map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setConceptModal({ ...conceptModal, color: c.id })}
+                        className={`w-7 h-7 rounded-full ${c.bg} transition-all border-2 ${
+                          (conceptModal.color || 'yellow') === c.id ? 'border-slate-800 scale-110 shadow-md' : 'border-transparent opacity-80 hover:opacity-100'
+                        }`}
+                        title={`Cor ${c.id}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Central Idea */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Ideia Central (Resumo Consolidado)</label>
+                <textarea
+                  required
+                  rows={3}
+                  value={conceptModal.centralIdea}
+                  onChange={e => setConceptModal({ ...conceptModal, centralIdea: e.target.value })}
+                  placeholder="Descreva a ideia central do conceito de forma direta e consolidada..."
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-medium resize-none"
+                />
+              </div>
+
+              {/* Practical Application */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Aplicação Prática</label>
+                <textarea
+                  required
+                  rows={3}
+                  value={conceptModal.practicalApplication}
+                  onChange={e => setConceptModal({ ...conceptModal, practicalApplication: e.target.value })}
+                  placeholder="Descreva como este conceito se aplica na prática e nos ensaios..."
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-medium resize-none"
+                />
+              </div>
+
+              {/* Observations */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Observações (Opcional)</label>
+                <textarea
+                  rows={2}
+                  value={conceptModal.observations}
+                  onChange={e => setConceptModal({ ...conceptModal, observations: e.target.value })}
+                  placeholder="Adicione observações complementares relevantes..."
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-medium resize-none"
+                />
+              </div>
+
+              {/* Linked Standards Section */}
+              <div className="space-y-3 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                    <ShieldCheck size={14} className="text-teal-600" />
+                    Normas Vinculadas que Sustentam esse Conceito (Fontes de Evidência)
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={handleAddLinkToConcept}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-xl text-[10px] font-black uppercase tracking-wider transition border border-teal-200/80"
+                  >
+                    <Plus size={12} /> Vincular Norma
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {conceptModal.linkedStandards.map((link, idx) => (
+                    <div key={idx} className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3 relative group">
+                      
+                      <div className="flex justify-between items-center gap-2">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                          Norma #{idx + 1}
+                        </span>
+
+                        {conceptModal.linkedStandards.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveConceptLink(idx)}
+                            className="p-1 text-slate-400 hover:text-red-500 rounded-lg transition"
+                            title="Remover Norma Vinculada"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Select Standard */}
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Selecione a Norma</label>
+                        <select
+                          value={link.standardId}
+                          onChange={e => handleUpdateConceptLink(idx, 'standardId', e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
+                        >
+                          <option value="">Selecione uma norma cadastrada...</option>
+                          {standards.map(std => (
+                            <option key={std.id} value={std.id}>
+                              {std.name} ({std.type || 'Manual'}) - {std.theme}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Relevant Passages */}
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Trechos Relevantes da Norma</label>
+                        <textarea
+                          rows={2}
+                          value={link.relevantPassages}
+                          onChange={e => handleUpdateConceptLink(idx, 'relevantPassages', e.target.value)}
+                          placeholder="Informe os trechos específicos da norma que fundamentam este conceito..."
+                          className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium resize-none"
+                        />
+                      </div>
+
+                      {/* Page & Section Inputs */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Página</label>
+                          <input
+                            type="text"
+                            value={link.page || ''}
+                            onChange={e => handleUpdateConceptLink(idx, 'page', e.target.value)}
+                            placeholder="Ex: Página 14"
+                            className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Seção</label>
+                          <input
+                            type="text"
+                            value={link.section || ''}
+                            onChange={e => handleUpdateConceptLink(idx, 'section', e.target.value)}
+                            placeholder="Ex: Seção 4.3"
+                            className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
+                          />
+                        </div>
+                      </div>
+
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Submit Buttons */}
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setConceptModal(null)}
+                  className="px-5 py-2.5 text-xs font-bold text-slate-500 uppercase tracking-wider hover:bg-slate-50 rounded-xl transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-8 py-2.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 uppercase tracking-wider rounded-xl transition shadow-md shadow-amber-600/20 flex items-center gap-2"
+                >
+                  <Save size={14} /> Salvar Post-it
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: SUBJECT MODAL (CREATE / EDIT NAME) */}
       {subjectModal?.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
@@ -1388,7 +1729,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       )}
 
       {/* ======================================================== */}
-      {/* MODAL 2: BLOCK MODAL (CREATE / EDIT NAME) */}
+      {/* MODAL: BLOCK MODAL (CREATE / EDIT NAME) */}
       {blockModal?.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
@@ -1408,7 +1749,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                   autoFocus
                   value={blockModal.name}
                   onChange={e => setBlockModal({ ...blockModal, name: e.target.value })}
-                  placeholder="Ex: Fase Pré-clínica ou Prova de Conceito"
+                  placeholder="Ex: Estudo de Segurança, Estudo de Estabilidade, Qualidade..."
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-medium"
                 />
               </div>
@@ -1433,144 +1774,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       )}
 
       {/* ======================================================== */}
-      {/* MODAL 3: LINK STANDARD MODAL (LINK OR EDIT VINCULATED STANDARD) */}
-      {linkModal?.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-2xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <h3 className="font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
-                <Link2 size={18} className="text-teal-600" />
-                {linkModal.isEdit ? 'Editar Vínculo da Norma' : 'Vincular Norma ao Bloco'}
-              </h3>
-              <button onClick={() => setLinkModal(null)} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-full transition">
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleSaveLink} className="p-6 space-y-5">
-              
-              {/* Select Standard */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Selecione a Norma</label>
-                {linkModal.isEdit ? (
-                  // Disabled select on edit
-                  <div className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-sm font-bold uppercase tracking-tight">
-                    {standards.find(s => s.id === linkModal.standardId)?.name || 'Norma Desconhecida'}
-                  </div>
-                ) : (
-                  <select
-                    required
-                    value={linkModal.standardId}
-                    onChange={e => setLinkModal({ ...linkModal, standardId: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-medium appearance-none bg-white"
-                  >
-                    <option value="">Selecione uma norma cadastrada...</option>
-                    {standards.map(std => {
-                      // We can let them associate even if already exists, but filtering out is nicer if not editing
-                      return (
-                        <option key={std.id} value={std.id}>
-                          {std.name} ({std.type || 'Manual'}) - {std.theme}
-                        </option>
-                      );
-                    })}
-                  </select>
-                )}
-              </div>
-
-              {/* Notes of standard */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
-                    Notas Importantes (Notas Rápidas / Post-its)
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const currentNotes = linkModal.importantNotes ? linkModal.importantNotes.split('\n---\n') : [];
-                      setLinkModal({
-                        ...linkModal,
-                        importantNotes: [...currentNotes, ''].join('\n---\n')
-                      });
-                    }}
-                    className="flex items-center gap-1 px-2.5 py-1 text-teal-700 hover:text-teal-800 bg-teal-50 hover:bg-teal-100 rounded-lg text-[9px] font-black uppercase tracking-wider transition font-mono"
-                  >
-                    <Plus size={10} /> Adicionar Nota / Post-it
-                  </button>
-                </div>
-                
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                  {(linkModal.importantNotes ? linkModal.importantNotes.split('\n---\n') : ['']).map((note, idx, arr) => (
-                    <div key={idx} className="flex gap-2 items-start bg-amber-50/20 p-2.5 rounded-xl border border-amber-100 shadow-xs">
-                      <textarea
-                        required
-                        rows={2}
-                        value={note}
-                        onChange={e => {
-                          const currentNotes = [...arr];
-                          currentNotes[idx] = e.target.value;
-                          setLinkModal({
-                            ...linkModal,
-                            importantNotes: currentNotes.join('\n---\n')
-                          });
-                        }}
-                        placeholder={`Insira a nota #${idx + 1}...`}
-                        className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium resize-none bg-white"
-                      />
-                      {arr.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const currentNotes = arr.filter((_, nIdx) => nIdx !== idx);
-                            setLinkModal({
-                              ...linkModal,
-                              importantNotes: currentNotes.join('\n---\n')
-                            });
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition self-center"
-                          title="Remover Nota"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Passages addressed */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Seções Importantes do Documento</label>
-                <textarea
-                  rows={3}
-                  value={linkModal.specificPassages}
-                  onChange={e => setLinkModal({ ...linkModal, specificPassages: e.target.value })}
-                  placeholder="Informe as seções importantes do documento dessa norma aplicadas a este bloco..."
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-medium resize-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-50">
-                <button
-                  type="button"
-                  onClick={() => setLinkModal(null)}
-                  className="px-5 py-2.5 text-xs font-bold text-slate-500 uppercase tracking-wider hover:bg-slate-50 rounded-xl transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-8 py-2.5 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 uppercase tracking-wider rounded-xl transition shadow-md shadow-teal-600/15 flex items-center gap-2"
-                >
-                  <Save size={14} />
-                  {linkModal.isEdit ? 'Salvar Vínculo' : 'Confirmar Vínculo'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* MODAL 4: DETAILED VIEW MODAL FOR ASSOCIATED STANDARD (FOR EXPOSING HIDDEN DETAILS) */}
+      {/* MODAL: DETAILED VIEW MODAL FOR ASSOCIATED STANDARD */}
       {detailedStandard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-2xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
@@ -1633,44 +1837,16 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                 </div>
               )}
 
-              {/* Linked Standards */}
-              {detailedStandard.linkedStandards && detailedStandard.linkedStandards.length > 0 && (
-                <div>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Normas e Guias Vinculados:</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {detailedStandard.linkedStandards.map(linked => (
-                      <span key={linked} className="px-2.5 py-1 bg-teal-50/60 text-teal-700 rounded-lg text-[9.5px] font-bold uppercase border border-teal-200/50">
-                        {linked}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Keywords */}
-              {detailedStandard.keywords && detailedStandard.keywords.length > 0 && (
-                <div>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Palavras Chaves:</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {detailedStandard.keywords.map(kw => (
-                      <span key={kw} className="px-2 py-1 bg-slate-100 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-tight border border-slate-200">
-                        #{kw}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* Links */}
-              <div className="flex flex-wrap gap-4 pt-4 border-t border-slate-100">
+              <div className="flex gap-4 pt-2 border-t border-slate-100">
                 {detailedStandard.documentLink && (
                   <a 
                     href={detailedStandard.documentLink} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-slate-600 hover:text-brand-primary text-xs font-bold uppercase tracking-tight transition bg-slate-100 hover:bg-brand-primary/10 px-4 py-2.5 rounded-xl border border-slate-200/50"
+                    className="flex items-center gap-2 text-slate-600 hover:text-brand-primary text-xs font-bold uppercase tracking-tight transition"
                   >
-                    <FileText size={14} /> Documento Oficial <ExternalLink size={12} />
+                    <FileText size={14} /> Documento <ExternalLink size={12} />
                   </a>
                 )}
                 {detailedStandard.notebookLMLink && (
@@ -1678,24 +1854,23 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                     href={detailedStandard.notebookLMLink} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-slate-600 hover:text-emerald-600 text-xs font-bold uppercase tracking-tight transition bg-slate-100 hover:bg-emerald-50 px-4 py-2.5 rounded-xl border border-slate-200/50"
+                    className="flex items-center gap-2 text-slate-600 hover:text-emerald-600 text-xs font-bold uppercase tracking-tight transition"
                   >
                     <BookOpen size={14} /> NotebookLM <ExternalLink size={12} />
                   </a>
                 )}
               </div>
+
             </div>
 
-            {/* Footer */}
-            <div className="p-4 border-t border-slate-100 flex justify-end bg-slate-50/50">
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
               <button 
                 onClick={() => setDetailedStandard(null)}
-                className="px-6 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-slate-900 transition"
+                className="px-6 py-2 bg-slate-800 text-white rounded-xl font-bold uppercase text-xs tracking-widest hover:bg-slate-700 transition"
               >
                 Fechar
               </button>
             </div>
-
           </div>
         </div>
       )}

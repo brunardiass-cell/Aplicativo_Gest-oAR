@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
 import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject } from './types';
-import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS } from './constants';
+import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS } from './constants';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
 import Sidebar from './components/Sidebar';
@@ -313,7 +313,7 @@ const App: React.FC = () => {
       logs: cloudData.logs || [],
       appUsers: cloudData.appUsers || DEFAULT_APP_USERS,
       regulatoryStandards: cloudData.regulatoryStandards || [],
-      regulatorySubjects: cloudData.regulatorySubjects || [],
+      regulatorySubjects: (cloudData.regulatorySubjects && cloudData.regulatorySubjects.length > 0) ? cloudData.regulatorySubjects : DEFAULT_REGULATORY_SUBJECTS,
       managerEmail: cloudData.managerEmail || 'brunadias@ctvacinas.org',
     };
 
@@ -678,6 +678,12 @@ const App: React.FC = () => {
     if (comiteImpersonatingFrom) {
       setSelectedProfile(comiteImpersonatingFrom);
       setComiteImpersonatingFrom(null);
+      if (comiteImpersonatingFrom.isComiteGestor) {
+        setProjectSubView('visual');
+        setProjectVisualizationMode('phases');
+      } else {
+        setProjectSubView('management');
+      }
     }
   };
 
@@ -685,6 +691,12 @@ const App: React.FC = () => {
     setComiteImpersonatingFrom(selectedProfile);
     setSelectedProfile(member);
     setIsPasswordAuthenticated(true);
+    if (member.isComiteGestor) {
+      setProjectSubView('visual');
+      setProjectVisualizationMode('phases');
+    } else {
+      setProjectSubView('management');
+    }
   };
 
   const mergeArrays = (serverArr: any[], localArr: any[], baseArr: any[]) => {
