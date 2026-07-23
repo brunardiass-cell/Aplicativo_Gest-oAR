@@ -109,8 +109,10 @@ export const DEFAULT_REGULATORY_SUBJECTS = [
           {
             id: 'concept_1',
             title: 'Toxicidade Local',
-            centralIdea: 'Avaliação do potencial de irritação e tolerabilidade tecidual no sítio de administração em modelos pré-clínicos.',
-            practicalApplication: 'Definição da via de administração segura, determinação do tampão de formulação e observação de reações inflamatórias no local de injeção.',
+            centralIdeas: [
+              'Avaliação do potencial de irritação e tolerabilidade tecidual no sítio de administração em modelos pré-clínicos.',
+              'Definição da via de administração segura e determinação do tampão de formulação ideal.'
+            ],
             observations: 'Recomenda-se utilizar a formulação e concentração idênticas às pretendidas para uso humano.',
             color: 'yellow',
             linkedStandards: [
@@ -125,14 +127,16 @@ export const DEFAULT_REGULATORY_SUBJECTS = [
           {
             id: 'concept_2',
             title: 'Estudos de Dose Repetida',
-            centralIdea: 'Análise dos efeitos tóxicos decorrentes da administração continuada do biofármaco para identificação de órgãos-alvo.',
-            practicalApplication: 'Determinação do NOAEL (No Observed Adverse Effect Level) para cálculo da dose inicial em ensaios humanos (FIH).',
+            centralIdeas: [
+              'Análise dos efeitos tóxicos decorrentes da administração continuada do biofármaco para identificação de órgãos-alvo.',
+              'Determinação do NOAEL para cálculo da dose inicial em ensaios humanos (FIH).'
+            ],
             observations: 'A duração dos estudos pré-clínicos deve refletir a duração prevista do tratamento clínico humano.',
             color: 'blue',
             linkedStandards: [
               {
                 standardId: 'std_1',
-                relevantPassages: 'Doses repetidas devem ser administradas em espécies relevantes com monitoramento de perfil imunogênico e parâmetros laboratoriais.',
+                relevantPassages: 'Doses repetidas devem ser administradas em espécies relevantes com monitoramento de perfil imunogênico.',
                 page: 'Página 18',
                 section: 'Seção 5.2'
               }
@@ -147,8 +151,10 @@ export const DEFAULT_REGULATORY_SUBJECTS = [
           {
             id: 'concept_3',
             title: 'Potência',
-            centralIdea: 'Quantificação da atividade biológica específica da molécula com base no mecanismo de ação pretendido.',
-            practicalApplication: 'Controle de qualidade de liberação de lote e ensaios in vitro/in vivo de ligação a receptores ou atividade funcional ao longo do tempo de prateleira.',
+            centralIdeas: [
+              'Quantificação da atividade biológica específica da molécula com base no mecanismo de ação pretendido.',
+              'Controle de qualidade essencial para liberação de lote e monitoramento da estabilidade.'
+            ],
             observations: 'Deve ser estabelecido um padrão de referência devidamente caracterizado para calibração do ensaio.',
             color: 'green',
             linkedStandards: [
@@ -163,8 +169,9 @@ export const DEFAULT_REGULATORY_SUBJECTS = [
           {
             id: 'concept_4',
             title: 'Solventes e Impurezas Residuais',
-            centralIdea: 'Limites aceitáveis para impurezas do processo e reagentes remanescentes após as etapas de purificação.',
-            practicalApplication: 'Monitoramento analítico por cromatografia com especificação de aceitação em conformidade com os guias de segurança.',
+            centralIdeas: [
+              'Limites aceitáveis para impurezas do processo e reagentes remanescentes após as etapas de purificação.'
+            ],
             observations: 'Impurezas relacionadas ao processo (ex.: DNA da célula hospedeira, HCP) devem ser quantificadas em validação.',
             color: 'pink',
             linkedStandards: [

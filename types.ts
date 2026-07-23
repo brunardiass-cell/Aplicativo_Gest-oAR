@@ -97,17 +97,19 @@ export interface RegulatoryStandard {
 
 export interface ConceptStandardLink {
   standardId: string;
-  relevantPassages: string;
-  page?: string;
-  section?: string;
+  relevantPassages?: string;
+  page?: string; // Páginas Importantes
+  section?: string; // Seção ou Seções Relevantes
+  sections?: string[]; // Múltiplas Seções Relevantes (opcional)
 }
 
 export interface KnowledgeConcept {
   id: string;
   title: string;
-  centralIdea: string;
-  practicalApplication: string;
-  observations?: string;
+  centralIdeas?: string[]; // Múltiplas ideias centrais (Ideia Central 1, 2, etc.)
+  centralIdea?: string; // Mantido para compatibilidade retroativa
+  practicalApplication?: string; // Mantido como opcional para compatibilidade
+  observations?: string; // Opcional
   linkedStandards: ConceptStandardLink[];
   color?: string;
 }

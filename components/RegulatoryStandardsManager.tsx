@@ -56,8 +56,7 @@ const getBlockConcepts = (block: RegulatoryBlock, standardsList: RegulatoryStand
       return {
         id: `legacy_${block.id}_${assoc.standardId}_${idx}`,
         title: std ? `Conceito: ${std.name}` : `Conceito #${idx + 1}`,
-        centralIdea: firstNote,
-        practicalApplication: 'Aplicação prática extraída do cumprimento técnico da norma.',
+        centralIdeas: [firstNote],
         observations: notesList.length > 1 ? notesList.slice(1).join('\n') : '',
         color: 'yellow',
         linkedStandards: [
@@ -72,6 +71,17 @@ const getBlockConcepts = (block: RegulatoryBlock, standardsList: RegulatoryStand
     });
   }
   return [];
+};
+
+const getConceptCentralIdeas = (concept: KnowledgeConcept): string[] => {
+  if (concept.centralIdeas && concept.centralIdeas.length > 0) {
+    const valid = concept.centralIdeas.filter(i => i && i.trim() !== '');
+    if (valid.length > 0) return valid;
+  }
+  if (concept.centralIdea && concept.centralIdea.trim() !== '') {
+    return [concept.centralIdea.trim()];
+  }
+  return ['Ideia central não informada.'];
 };
 
 const getPostItColorClasses = (color?: string) => {
@@ -187,8 +197,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     blockId: string;
     conceptId?: string;
     title: string;
-    centralIdea: string;
-    practicalApplication: string;
+    centralIdeas: string[];
     observations: string;
     color: string;
     linkedStandards: ConceptStandardLink[];
@@ -449,14 +458,46 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   };
 
   // POST-IT CONCEPT HANDLERS
+  const handleAddCentralIdea = () => {
+    if (!conceptModal) return;
+    setConceptModal({
+      ...conceptModal,
+      centralIdeas: [...conceptModal.centralIdeas, '']
+    });
+  };
+
+  const handleUpdateCentralIdea = (index: number, value: string) => {
+    if (!conceptModal) return;
+    const updated = [...conceptModal.centralIdeas];
+    updated[index] = value;
+    setConceptModal({
+      ...conceptModal,
+      centralIdeas: updated
+    });
+  };
+
+  const handleRemoveCentralIdea = (index: number) => {
+    if (!conceptModal || conceptModal.centralIdeas.length <= 1) return;
+    setConceptModal({
+      ...conceptModal,
+      centralIdeas: conceptModal.centralIdeas.filter((_, i) => i !== index)
+    });
+  };
+
   const handleSaveConcept = (e: React.FormEvent) => {
     e.preventDefault();
     if (!conceptModal) return;
 
-    const { subjectId, blockId, conceptId, title, centralIdea, practicalApplication, observations, color, linkedStandards } = conceptModal;
+    const { subjectId, blockId, conceptId, title, centralIdeas, observations, color, linkedStandards } = conceptModal;
 
     if (!title.trim()) {
       alert('Por favor, informe o título do conceito.');
+      return;
+    }
+
+    const cleanedIdeas = centralIdeas.map(i => i.trim()).filter(Boolean);
+    if (cleanedIdeas.length === 0) {
+      alert('Por favor, informe ao menos uma Ideia Central.');
       return;
     }
 
@@ -464,7 +505,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       .filter(link => link.standardId.trim() !== '')
       .map(link => ({
         standardId: link.standardId,
-        relevantPassages: link.relevantPassages.trim(),
+        relevantPassages: link.relevantPassages ? link.relevantPassages.trim() : '',
         page: link.page ? link.page.trim() : '',
         section: link.section ? link.section.trim() : ''
       }));
@@ -472,8 +513,8 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     const newConcept: KnowledgeConcept = {
       id: conceptId || `concept_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       title: title.trim(),
-      centralIdea: centralIdea.trim(),
-      practicalApplication: practicalApplication.trim(),
+      centralIdeas: cleanedIdeas,
+      centralIdea: cleanedIdeas[0],
       observations: observations.trim(),
       color: color || 'yellow',
       linkedStandards: cleanedLinks
@@ -579,8 +620,8 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
         const concepts = getBlockConcepts(b, standards);
         return concepts.some(c => {
           if (c.title.toLowerCase().includes(term)) return true;
-          if (c.centralIdea.toLowerCase().includes(term)) return true;
-          if (c.practicalApplication.toLowerCase().includes(term)) return true;
+          const ideas = getConceptCentralIdeas(c);
+          if (ideas.some(i => i.toLowerCase().includes(term))) return true;
           if (c.observations && c.observations.toLowerCase().includes(term)) return true;
           return c.linkedStandards.some(link => {
             if (link.relevantPassages && link.relevantPassages.toLowerCase().includes(term)) return true;
@@ -1122,8 +1163,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                                             subjectId: subject.id, 
                                             blockId: block.id, 
                                             title: '', 
-                                            centralIdea: '', 
-                                            practicalApplication: '', 
+                                            centralIdeas: [''], 
                                             observations: '', 
                                             color: 'yellow',
                                             linkedStandards: [{ standardId: '', relevantPassages: '', page: '', section: '' }]
@@ -1176,8 +1216,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                                                             blockId: block.id,
                                                             conceptId: concept.id,
                                                             title: concept.title,
-                                                            centralIdea: concept.centralIdea,
-                                                            practicalApplication: concept.practicalApplication,
+                                                            centralIdeas: getConceptCentralIdeas(concept),
                                                             observations: concept.observations || '',
                                                             color: concept.color || 'yellow',
                                                             linkedStandards: concept.linkedStandards && concept.linkedStandards.length > 0 
@@ -1204,7 +1243,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                                                       {concept.title}
                                                     </h5>
 
-                                                    {/* Central Idea Preview */}
+                                                    {/* Central Ideas Preview */}
                                                     <div className="mb-3">
                                                       <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-0.5">Ideia Central:</span>
                                                       <p className="text-xs text-slate-700 font-medium leading-relaxed line-clamp-3 text-justify">
@@ -1304,29 +1343,25 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
             {/* Scrollable Modal Content */}
             <div className="p-6 overflow-y-auto space-y-6 custom-scrollbar">
               
-              {/* 1. Ideia Central */}
-              <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-5 space-y-2">
+              {/* 1. Ideias Centrais */}
+              <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-5 space-y-3">
                 <span className="text-[10px] font-black text-amber-900 uppercase tracking-widest flex items-center gap-1.5">
                   <Sparkles size={14} className="text-amber-700" />
-                  Ideia Central (Resumo Consolidado)
+                  {getConceptCentralIdeas(viewConceptModal.concept).length > 1 ? 'Ideias Centrais' : 'Ideia Central'}
                 </span>
-                <p className="text-sm text-slate-800 font-medium leading-relaxed text-justify whitespace-pre-line">
-                  {viewConceptModal.concept.centralIdea}
-                </p>
+                <div className="space-y-2">
+                  {getConceptCentralIdeas(viewConceptModal.concept).map((idea, idx) => (
+                    <div key={idx} className="text-sm text-slate-800 font-medium leading-relaxed text-justify bg-white/80 p-3 rounded-xl border border-amber-200/50">
+                      {getConceptCentralIdeas(viewConceptModal.concept).length > 1 && (
+                        <strong className="text-amber-900 font-bold mr-1.5">Ideia Central #{idx + 1}:</strong>
+                      )}
+                      {idea}
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              {/* 2. Aplicação Prática */}
-              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 space-y-2">
-                <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
-                  <Bookmark size={14} className="text-teal-600" />
-                  Aplicação Prática
-                </span>
-                <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed text-justify whitespace-pre-line">
-                  {viewConceptModal.concept.practicalApplication}
-                </p>
-              </div>
-
-              {/* 3. Observações */}
+              {/* 2. Observações (Opcional) */}
               {viewConceptModal.concept.observations && (
                 <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 space-y-2">
                   <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
@@ -1339,12 +1374,12 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                 </div>
               )}
 
-              {/* 4. Lista de Normas Vinculadas */}
+              {/* 3. Lista de Normas Vinculadas */}
               <div className="space-y-4 pt-2">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
                     <ShieldCheck size={18} className="text-teal-600" />
-                    Normas Vinculadas (Fontes de Evidência Regulatoria)
+                    Normas Vinculadas & Páginas Importantes
                   </h3>
                   <span className="text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200/60 px-2.5 py-0.5 rounded-full uppercase">
                     {viewConceptModal.concept.linkedStandards.length} Vinculada(s)
@@ -1361,8 +1396,8 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                       return (
                         <div key={idx} className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-3">
                           
-                          {/* Standard Info Banner */}
-                          <div className="flex justify-between items-start gap-3 border-b border-slate-100 pb-3">
+                          {/* Standard Info Banner & Direct Links */}
+                          <div className="flex justify-between items-start gap-3 border-b border-slate-100 pb-3 flex-wrap">
                             <div>
                               <div className="flex items-center gap-2 flex-wrap mb-1">
                                 {std && (
@@ -1385,37 +1420,61 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                               )}
                             </div>
 
-                            {std && (
-                              <button 
-                                onClick={() => setDetailedStandard(std)}
-                                className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold uppercase transition"
-                                title="Ver Detalhes Gerais da Norma"
-                              >
-                                <Eye size={12} /> Ver Norma
-                              </button>
-                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {std?.documentLink && (
+                                <a 
+                                  href={std.documentLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 px-3 py-1.5 bg-brand-primary hover:bg-brand-secondary text-white rounded-xl text-[10px] font-bold uppercase transition"
+                                  title="Acessar Documento Oficial da Norma"
+                                >
+                                  <FileText size={12} /> Documento <ExternalLink size={10} />
+                                </a>
+                              )}
+                              {std?.notebookLMLink && (
+                                <a 
+                                  href={std.notebookLMLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-bold uppercase transition"
+                                  title="Acessar NotebookLM da Norma"
+                                >
+                                  <BookOpen size={12} /> NotebookLM <ExternalLink size={10} />
+                                </a>
+                              )}
+                              {std && (
+                                <button 
+                                  onClick={() => setDetailedStandard(std)}
+                                  className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold uppercase transition"
+                                  title="Ver Detalhes Gerais da Norma"
+                                >
+                                  <Eye size={12} /> Ver Norma
+                                </button>
+                              )}
+                            </div>
                           </div>
 
                           {/* Passages, Page & Section */}
                           <div className="space-y-2">
                             {link.relevantPassages && (
                               <div>
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Trechos Relevantes:</span>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Seções / Trechos Relevantes:</span>
                                 <p className="text-xs text-slate-700 font-medium leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 text-justify whitespace-pre-line">
                                   "{link.relevantPassages}"
                                 </p>
                               </div>
                             )}
 
-                            <div className="flex gap-4 items-center pt-1">
+                            <div className="flex gap-2 items-center flex-wrap pt-1">
                               {link.page && (
-                                <span className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg uppercase">
-                                  Página: <strong>{link.page}</strong>
+                                <span className="text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg uppercase flex items-center gap-1">
+                                  Página(s) Relevante(s): <strong>{link.page}</strong>
                                 </span>
                               )}
                               {link.section && (
-                                <span className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg uppercase">
-                                  Seção: <strong>{link.section}</strong>
+                                <span className="text-[10px] font-bold text-teal-900 bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-lg uppercase flex items-center gap-1">
+                                  Seção(ões): <strong>{link.section}</strong>
                                 </span>
                               )}
                             </div>
@@ -1445,8 +1504,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                     blockId: bId,
                     conceptId: c.id,
                     title: c.title,
-                    centralIdea: c.centralIdea,
-                    practicalApplication: c.practicalApplication,
+                    centralIdeas: getConceptCentralIdeas(c),
                     observations: c.observations || '',
                     color: c.color || 'yellow',
                     linkedStandards: c.linkedStandards && c.linkedStandards.length > 0 ? c.linkedStandards : [{ standardId: '', relevantPassages: '', page: '', section: '' }]
@@ -1526,41 +1584,64 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                 </div>
               </div>
 
-              {/* Central Idea */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Ideia Central (Resumo Consolidado)</label>
-                <textarea
-                  required
-                  rows={3}
-                  value={conceptModal.centralIdea}
-                  onChange={e => setConceptModal({ ...conceptModal, centralIdea: e.target.value })}
-                  placeholder="Descreva a ideia central do conceito de forma direta e consolidada..."
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-medium resize-none"
-                />
+              {/* Central Ideas Section */}
+              <div className="space-y-3 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                    <Sparkles size={14} className="text-amber-600" />
+                    Ideias Centrais do Conceito (Adicione quantas desejar)
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={handleAddCentralIdea}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider transition border border-amber-200/80"
+                  >
+                    <Plus size={12} /> Adicionar Ideia Central
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {(conceptModal.centralIdeas || ['']).map((idea, idx) => (
+                    <div key={idx} className="flex gap-2 items-start bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
+                      <div className="flex-1 space-y-1">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                          Ideia Central #{idx + 1}
+                        </label>
+                        <textarea
+                          required
+                          rows={2}
+                          value={idea}
+                          onChange={e => handleUpdateCentralIdea(idx, e.target.value)}
+                          placeholder="Descreva a ideia central do conceito..."
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 transition outline-none text-xs font-medium resize-none"
+                        />
+                      </div>
+
+                      {(conceptModal.centralIdeas?.length || 0) > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCentralIdea(idx)}
+                          className="p-2 text-slate-400 hover:text-red-500 rounded-lg transition mt-5"
+                          title="Remover esta ideia central"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              {/* Practical Application */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Aplicação Prática</label>
-                <textarea
-                  required
-                  rows={3}
-                  value={conceptModal.practicalApplication}
-                  onChange={e => setConceptModal({ ...conceptModal, practicalApplication: e.target.value })}
-                  placeholder="Descreva como este conceito se aplica na prática e nos ensaios..."
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-medium resize-none"
-                />
-              </div>
-
-              {/* Observations */}
+              {/* Observations (Opcional) */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Observações (Opcional)</label>
                 <textarea
                   rows={2}
                   value={conceptModal.observations}
                   onChange={e => setConceptModal({ ...conceptModal, observations: e.target.value })}
-                  placeholder="Adicione observações complementares relevantes..."
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-medium resize-none"
+                  placeholder="Adicione observações complementares opcionais..."
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium resize-none"
                 />
               </div>
 
