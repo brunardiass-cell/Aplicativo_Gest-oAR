@@ -326,3 +326,101 @@ export interface AppConfig {
   notificationEmail: string;
   projectsData: ProjectData[];
 }
+
+// Módulo de Vacinas e Componentes
+export type VaccinePlatform = 
+  | 'Proteína Recombinante' 
+  | 'Vetor Viral' 
+  | 'RNA/mRNA' 
+  | 'DNA' 
+  | 'Inativada' 
+  | 'Atenuada' 
+  | 'Subunidade / VLP';
+
+export type VaccinePhase = 
+  | 'Pesquisa Básica'
+  | 'Desenvolvimento Inicial' 
+  | 'Prova de Conceito' 
+  | 'Pré-clínico In Vitro' 
+  | 'Pré-clínico In Vivo' 
+  | 'Ensaio Clínico Fase 1' 
+  | 'Ensaio Clínico Fase 2' 
+  | 'Ensaio Clínico Fase 3' 
+  | 'Registro / Produção';
+
+export type VaccineStatus = 
+  | 'Em Desenvolvimento' 
+  | 'Em Ensaio' 
+  | 'Aprovado' 
+  | 'Pausado' 
+  | 'Descontinuado';
+
+export type ComponentCategory = 
+  | 'Antígeno' 
+  | 'Adjuvante' 
+  | 'Vetor de Expressão' 
+  | 'Linhagem Celular'
+  | 'Tampão / Estabilizante' 
+  | 'Conservante' 
+  | 'Solvente / Diluente';
+
+export type ComponentGrade = 
+  | 'GMP / Grau Clínico' 
+  | 'Pre-GMP' 
+  | 'Grau Científico / Pesquisa' 
+  | 'Farmacopéico USP/EP';
+
+export interface VaccineCandidate {
+  id: string;
+  name: string;
+  codeName: string;
+  platform: VaccinePlatform;
+  targetPathogen: string;
+  phase: VaccinePhase;
+  status: VaccineStatus;
+  leadResearcher: string;
+  description: string;
+  associatedComponentIds: string[];
+  associatedProjectId?: string;
+  anvisaStatus?: string;
+  technicalNotes?: string;
+  createdDate: string;
+  updatedDate: string;
+}
+
+export interface VaccineComponent {
+  id: string;
+  name: string;
+  code: string;
+  category: ComponentCategory;
+  originHostSystem?: string;
+  grade: ComponentGrade;
+  storageTemperature: string;
+  batchNumber: string;
+  expiryDate?: string;
+  stockQuantity: string;
+  unit: string;
+  description: string;
+  supplier?: string;
+  coaUrl?: string;
+  safetyDataSheetLink?: string;
+}
+
+export interface FormulationBatchComponentUsage {
+  componentId: string;
+  quantityUsed: string;
+}
+
+export interface FormulationBatch {
+  id: string;
+  batchCode: string;
+  vaccineId: string;
+  preparationDate: string;
+  expiryDate: string;
+  componentsUsed: FormulationBatchComponentUsage[];
+  qualityControlStatus: 'Em Análise' | 'Conforme' | 'Não Conforme' | 'Quarentena';
+  sterilityStatus?: string;
+  potencyResult?: string;
+  responsibleTechnician: string;
+  notes?: string;
+}

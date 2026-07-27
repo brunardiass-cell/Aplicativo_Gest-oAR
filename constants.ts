@@ -188,3 +188,141 @@ export const DEFAULT_REGULATORY_SUBJECTS = [
     ]
   }
 ];
+
+export const DEFAULT_VACCINE_CANDIDATES = [
+  {
+    id: 'cand_spin_utg',
+    name: 'SpiN-UTG (Vacina COVID-19 / Pan-coronavírus)',
+    codeName: 'CTV-SPIN-01',
+    platform: 'Proteína Recombinante' as const,
+    targetPathogen: 'SARS-CoV-2 / Coronavírus',
+    phase: 'Ensaio Clínico Fase 1' as const,
+    status: 'Em Ensaio' as const,
+    leadResearcher: 'Dr. Ricardo Gazzinelli / Dra. Ana Paula Salles',
+    description: 'Vacina brasileira desenvolvida com proteína quimérica recombinante fundindo a proteína SpiN do SARS-CoV-2 com o nucleocapsídeo.',
+    associatedComponentIds: ['comp_spin_prot', 'comp_adj_mpla'],
+    anvisaStatus: 'DDCM Aprovado - Fase 1/2',
+    technicalNotes: 'Estudos de imunogenicidade e neutralização em andamento.',
+    createdDate: '2025-01-15',
+    updatedDate: '2026-03-10'
+  },
+  {
+    id: 'cand_leishtec',
+    name: 'Leishtec (Vacina Leishmaniose Visceral)',
+    codeName: 'CTV-LEISH-02',
+    platform: 'Proteína Recombinante' as const,
+    targetPathogen: 'Leishmania infantum',
+    phase: 'Registro / Produção' as const,
+    status: 'Aprovado' as const,
+    leadResearcher: 'Dr. Alexandre Machado',
+    description: 'Vacina de proteína recombinante A2 para prevenção e controle da leishmaniose visceral.',
+    associatedComponentIds: ['comp_a2_prot', 'comp_adj_sap'],
+    anvisaStatus: 'Registro MAPA / ANVISA Aprovado',
+    technicalNotes: 'Produto em comercialização e uso veterinário/humano.',
+    createdDate: '2024-06-10',
+    updatedDate: '2026-01-20'
+  },
+  {
+    id: 'cand_chagasvac',
+    name: 'ChagasVac (Candidato a Vacina Doença de Chagas)',
+    codeName: 'CTV-CHAGAS-03',
+    platform: 'Vetor Viral' as const,
+    targetPathogen: 'Trypanosoma cruzi',
+    phase: 'Pré-clínico In Vivo' as const,
+    status: 'Em Desenvolvimento' as const,
+    leadResearcher: 'Dra. Bruna Dias / Dr. Santuza Teixeira',
+    description: 'Candidato vacinal baseado em vetor viral recombinante expressando antígenos Tc24 e TS para Doença de Chagas.',
+    associatedComponentIds: ['comp_ad5_vetor'],
+    anvisaStatus: 'Estudo Pré-Clínico de Eficácia e Tolerabilidade',
+    technicalNotes: 'Resultados promissores de redução de carga parasitária.',
+    createdDate: '2025-08-01',
+    updatedDate: '2026-04-12'
+  }
+];
+
+export const DEFAULT_VACCINE_COMPONENTS = [
+  {
+    id: 'comp_spin_prot',
+    name: 'Proteína Quimérica SpiN-UTG Recombinante',
+    code: 'PROT-SPIN-01',
+    category: 'Antígeno' as const,
+    originHostSystem: 'Pichia pastoris',
+    grade: 'GMP / Grau Clínico' as const,
+    storageTemperature: '-80°C',
+    batchNumber: 'LOTE-SPIN-2026-01',
+    stockQuantity: '15.000',
+    unit: 'doses',
+    description: 'Antígeno recombinante purificado com elevado grau de pureza para formulação vacinal.'
+  },
+  {
+    id: 'comp_adj_mpla',
+    name: 'Adjuvante Alumínio + MPLA',
+    code: 'ADJ-MPLA-004',
+    category: 'Adjuvante' as const,
+    originHostSystem: 'Sintético / Purificado',
+    grade: 'Pre-GMP' as const,
+    storageTemperature: '2-8°C',
+    batchNumber: 'ADJ-2025-11',
+    stockQuantity: '800',
+    unit: 'mL',
+    description: 'Sistema adjuvante imunoestimulante para indução de resposta celular Th1.'
+  },
+  {
+    id: 'comp_a2_prot',
+    name: 'Proteína Recombinante A2',
+    code: 'PROT-A2-02',
+    category: 'Antígeno' as const,
+    originHostSystem: 'E. coli',
+    grade: 'GMP / Grau Clínico' as const,
+    storageTemperature: '-20°C',
+    batchNumber: 'LOTE-A2-2025-09',
+    stockQuantity: '25.000',
+    unit: 'doses',
+    description: 'Antígeno recombinante específico de Leishmania.'
+  },
+  {
+    id: 'comp_adj_sap',
+    name: 'Adjuvante Saponina QA-21',
+    code: 'ADJ-QA21-02',
+    category: 'Adjuvante' as const,
+    originHostSystem: 'Extrato Vegetal Purificado',
+    grade: 'Grau Científico / Pesquisa' as const,
+    storageTemperature: '-20°C',
+    batchNumber: 'SAP-QA21-02',
+    stockQuantity: '150',
+    unit: 'mL',
+    description: 'Adjuvante natural purificado.'
+  },
+  {
+    id: 'comp_ad5_vetor',
+    name: 'Vetor Adenovírus Ad5-T.cruzi',
+    code: 'VET-AD5-TC24',
+    category: 'Vetor de Expressão' as const,
+    originHostSystem: 'HEK293',
+    grade: 'Pre-GMP' as const,
+    storageTemperature: '-80°C',
+    batchNumber: 'VET-AD5-03',
+    stockQuantity: '120',
+    unit: 'frascos',
+    description: 'Vetor viral não replicativo expressando Tc24.'
+  }
+];
+
+export const DEFAULT_FORMULATION_BATCHES = [
+  {
+    id: 'batch_01',
+    batchCode: 'LOTE-FORM-SPIN-2026-A',
+    vaccineId: 'cand_spin_utg',
+    preparationDate: '2026-02-15',
+    expiryDate: '2027-02-15',
+    componentsUsed: [
+      { componentId: 'comp_spin_prot', quantityUsed: '5.000 doses' },
+      { componentId: 'comp_adj_mpla', quantityUsed: '250 mL' }
+    ],
+    qualityControlStatus: 'Conforme' as const,
+    sterilityStatus: 'Aprovado (Esterilidade ok)',
+    potencyResult: 'Potência 98% de acordo com o padrão',
+    responsibleTechnician: 'Dra. Bruna Dias / Garantia da Qualidade',
+    notes: 'Lote liberado para início da Fase 1 de ensaios clínicos.'
+  }
+];

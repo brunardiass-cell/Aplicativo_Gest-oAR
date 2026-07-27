@@ -3,8 +3,8 @@
 // Versão corrigida para sincronização
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject } from './types';
-import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS } from './constants';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch } from './types';
+import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES } from './constants';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
 import Sidebar from './components/Sidebar';
@@ -21,8 +21,9 @@ import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
 import RegulatoryStandardsManager from './components/RegulatoryStandardsManager';
 import RegulatoryStandardsModal from './components/RegulatoryStandardsModal';
+import VaccinesComponentsManager from './components/VaccinesComponentsManager';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
-import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft, LayoutGrid, Kanban, Clock, Briefcase, Map as MapIcon } from 'lucide-react';
+import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft, LayoutGrid, Kanban, Clock, Briefcase, Map as MapIcon, Syringe } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
 import ProjectFlowView from './components/ProjectFlowView';
 import ProjectKanbanView from './components/ProjectKanbanView';
@@ -62,6 +63,10 @@ const App: React.FC = () => {
   const [managerEmail, setManagerEmail] = useState<string>('brunadias@ctvacinas.org');
   const [regulatoryStandards, setRegulatoryStandards] = useState<RegulatoryStandard[]>([]);
   const [regulatorySubjects, setRegulatorySubjects] = useState<RegulatorySubject[]>([]);
+  const [currentModule, setCurrentModule] = useState<'activities_projects' | 'regulatory_standards' | 'vaccines_components'>('activities_projects');
+  const [vaccineCandidates, setVaccineCandidates] = useState<VaccineCandidate[]>(DEFAULT_VACCINE_CANDIDATES);
+  const [vaccineComponents, setVaccineComponents] = useState<VaccineComponent[]>(DEFAULT_VACCINE_COMPONENTS);
+  const [formulationBatches, setFormulationBatches] = useState<FormulationBatch[]>(DEFAULT_FORMULATION_BATCHES);
   const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
   const [dataVersion, setDataVersion] = useState<string | null>(null);
   const [isDataDirty, setIsDataDirty] = useState(false);
@@ -314,6 +319,9 @@ const App: React.FC = () => {
       appUsers: cloudData.appUsers || DEFAULT_APP_USERS,
       regulatoryStandards: cloudData.regulatoryStandards || [],
       regulatorySubjects: (cloudData.regulatorySubjects && cloudData.regulatorySubjects.length > 0) ? cloudData.regulatorySubjects : DEFAULT_REGULATORY_SUBJECTS,
+      vaccineCandidates: cloudData.vaccineCandidates || DEFAULT_VACCINE_CANDIDATES,
+      vaccineComponents: cloudData.vaccineComponents || DEFAULT_VACCINE_COMPONENTS,
+      formulationBatches: cloudData.formulationBatches || DEFAULT_FORMULATION_BATCHES,
       managerEmail: cloudData.managerEmail || 'brunadias@ctvacinas.org',
     };
 
@@ -327,6 +335,9 @@ const App: React.FC = () => {
     setManagerEmail(fullData.managerEmail);
     setRegulatoryStandards(fullData.regulatoryStandards);
     setRegulatorySubjects(fullData.regulatorySubjects);
+    setVaccineCandidates(fullData.vaccineCandidates);
+    setVaccineComponents(fullData.vaccineComponents);
+    setFormulationBatches(fullData.formulationBatches);
     setBaseData(JSON.parse(JSON.stringify(fullData)));
     setDataVersion(version);
     setIsDataDirty(false);
@@ -499,6 +510,9 @@ const App: React.FC = () => {
         appUsers,
         regulatoryStandards,
         regulatorySubjects,
+        vaccineCandidates,
+        vaccineComponents,
+        formulationBatches,
         managerEmail,
         lastEditor: selectedProfile?.name
       };
@@ -534,7 +548,7 @@ const App: React.FC = () => {
 
     saveDataTimeout.current = window.setTimeout(handleSaveChanges, 2000);
 
-  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, regulatoryStandards, regulatorySubjects, managerEmail, dataVersion, isDataDirty]);
+  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, regulatoryStandards, regulatorySubjects, vaccineCandidates, vaccineComponents, formulationBatches, managerEmail, dataVersion, isDataDirty]);
 
   // Polling removed in favor of WebSockets
   /*
@@ -592,7 +606,20 @@ const App: React.FC = () => {
   };
   
   const handleSaveLocalBackup = () => {
-    const dataToSave = { tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers };
+    const dataToSave = { 
+      tasks, 
+      projects, 
+      teamMembers, 
+      activityPlans, 
+      notifications, 
+      logs, 
+      appUsers,
+      regulatoryStandards,
+      regulatorySubjects,
+      vaccineCandidates,
+      vaccineComponents,
+      formulationBatches 
+    };
     const blob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -620,6 +647,11 @@ const App: React.FC = () => {
             setNotifications(data.notifications || []);
             setLogs(data.logs || []);
             setAppUsers(data.appUsers || []);
+            if (data.regulatoryStandards) setRegulatoryStandards(data.regulatoryStandards);
+            if (data.regulatorySubjects) setRegulatorySubjects(data.regulatorySubjects);
+            if (data.vaccineCandidates) setVaccineCandidates(data.vaccineCandidates);
+            if (data.vaccineComponents) setVaccineComponents(data.vaccineComponents);
+            if (data.formulationBatches) setFormulationBatches(data.formulationBatches);
             setDataDirty();
             alert("Backup local carregado com sucesso! Os dados serão sincronizados com a nuvem.");
           }
@@ -1198,6 +1230,58 @@ const App: React.FC = () => {
       <input type="file" ref={fileInputRef} onChange={handleLoadLocalBackup} accept=".json" className="hidden" />
 
       <main className={`flex-1 overflow-y-auto transition-all duration-300 ${isDesktop ? 'ml-64 p-10' : 'ml-0 p-4 pt-24'}`}>
+        {/* Module Switcher Bar */}
+        <div className="mb-6 bg-slate-900 text-white p-3.5 rounded-2xl sm:rounded-3xl shadow-xl border border-slate-700/80 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 pl-1">
+            <div className="w-10 h-10 rounded-2xl bg-brand-primary flex items-center justify-center font-black text-sm text-white shadow-md shrink-0">
+              CTV
+            </div>
+            <div>
+              <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest block">Módulos do Sistema CTVacinas</span>
+              <h2 className="text-sm sm:text-base font-black text-white uppercase tracking-tight">
+                {currentModule === 'activities_projects' && 'Gestão de Atividades e Projetos'}
+                {currentModule === 'regulatory_standards' && 'Módulo de Normas Regulatórias'}
+                {currentModule === 'vaccines_components' && 'Módulo de Vacinas e Componentes'}
+              </h2>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 bg-slate-800/90 p-1.5 rounded-2xl overflow-x-auto w-full lg:w-auto">
+            <button
+              onClick={() => { setCurrentModule('activities_projects'); if (view === 'regulatory') setView('dashboard'); }}
+              className={`px-4 py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shrink-0 ${
+                currentModule === 'activities_projects'
+                  ? 'bg-brand-primary text-white shadow-lg'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700/60'
+              }`}
+            >
+              <FolderKanban size={15} /> Gestão de Atividades e Projetos
+            </button>
+
+            <button
+              onClick={() => { setCurrentModule('regulatory_standards'); setView('regulatory'); }}
+              className={`px-4 py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shrink-0 ${
+                currentModule === 'regulatory_standards'
+                  ? 'bg-emerald-600 text-white shadow-lg'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700/60'
+              }`}
+            >
+              <ShieldCheck size={15} /> Normas
+            </button>
+
+            <button
+              onClick={() => { setCurrentModule('vaccines_components'); }}
+              className={`px-4 py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shrink-0 ${
+                currentModule === 'vaccines_components'
+                  ? 'bg-teal-600 text-white shadow-lg'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700/60'
+              }`}
+            >
+              <Syringe size={15} /> Vacinas e Componentes
+            </button>
+          </div>
+        </div>
+
         {comiteImpersonatingFrom && (
           <div className="mb-6 bg-teal-50 border border-teal-200 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-in fade-in duration-300">
             <div className="flex items-center gap-3">
@@ -1218,7 +1302,30 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <header className={`flex justify-between items-center mb-8 ${isDesktop ? '' : 'fixed top-0 left-0 right-0 bg-slate-100/80 backdrop-blur-md z-40 p-4 border-b border-slate-200'}`}>
+        {currentModule === 'vaccines_components' ? (
+          <VaccinesComponentsManager
+            candidates={vaccineCandidates}
+            onUpdateCandidates={(c) => { setVaccineCandidates(c); setDataDirty(); }}
+            components={vaccineComponents}
+            onUpdateComponents={(comp) => { setVaccineComponents(comp); setDataDirty(); }}
+            formulationBatches={formulationBatches}
+            onUpdateBatches={(b) => { setFormulationBatches(b); setDataDirty(); }}
+            projects={activeProjects}
+          />
+        ) : currentModule === 'regulatory_standards' ? (
+          <RegulatoryStandardsManager 
+            standards={regulatoryStandards} 
+            onAddStandard={handleAddStandard} 
+            onUpdateStandard={handleUpdateStandard} 
+            onDeleteStandard={handleDeleteStandard} 
+            activityPlans={activityPlans}
+            projects={activeProjects}
+            subjects={regulatorySubjects}
+            onUpdateSubjects={(newSubjects) => { setRegulatorySubjects(newSubjects); setDataDirty(); }}
+          />
+        ) : (
+          <>
+            <header className={`flex justify-between items-center mb-8 ${isDesktop ? '' : 'fixed top-0 left-0 right-0 bg-slate-100/80 backdrop-blur-md z-40 p-4 border-b border-slate-200'}`}>
             <div className="flex items-center gap-4">
               {!isDesktop && (
                 <button 
@@ -1564,6 +1671,8 @@ const App: React.FC = () => {
             subjects={regulatorySubjects}
             onUpdateSubjects={(newSubjects) => { setRegulatorySubjects(newSubjects); setDataDirty(); }}
           />
+        )}
+          </>
         )}
       </main>
       
