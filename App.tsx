@@ -1268,15 +1268,15 @@ const App: React.FC = () => {
       <input type="file" ref={fileInputRef} onChange={handleLoadLocalBackup} accept=".json" className="hidden" />
 
       <main className={`flex-1 overflow-y-auto transition-all duration-300 ${isDesktop ? 'ml-64 p-10' : 'ml-0 p-4 pt-24'}`}>
-        {/* Module Switcher Bar */}
-        <div className="mb-6 bg-slate-900 text-white p-3.5 rounded-2xl sm:rounded-3xl shadow-xl border border-slate-700/80 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 pl-1">
-            <div className="w-10 h-10 rounded-2xl bg-brand-primary flex items-center justify-center font-black text-sm text-white shadow-md shrink-0">
+        {/* Indicador do Módulo Ativo com Troca de Módulo Independentes */}
+        <div className="mb-6 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-sm flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-700 border border-teal-100 flex items-center justify-center font-black text-xs shadow-xs shrink-0">
               CTV
             </div>
             <div>
-              <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest block">Módulos do Sistema CTVacinas</span>
-              <h2 className="text-sm sm:text-base font-black text-white uppercase tracking-tight">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">Módulo do Sistema CTVacinas</span>
+              <h2 className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-tight">
                 {currentModule === 'activities_projects' && 'Gestão de Atividades e Projetos'}
                 {currentModule === 'regulatory_standards' && 'Módulo de Normas Regulatórias'}
                 {currentModule === 'vaccines_components' && 'Módulo de Vacinas e Componentes'}
@@ -1284,48 +1284,14 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-slate-800/90 p-1.5 rounded-2xl overflow-x-auto w-full lg:w-auto">
-            <button
-              onClick={() => { setHasChosenModule(false); }}
-              className="px-3 py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 shrink-0 text-slate-400 hover:text-white hover:bg-slate-700/60 border border-slate-700/60"
-              title="Voltar para a Seleção de Módulos"
-            >
-              <Layers size={14} /> Módulos
-            </button>
-
-            <button
-              onClick={() => { setCurrentModule('activities_projects'); if (view === 'regulatory') setView('dashboard'); }}
-              className={`px-4 py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shrink-0 ${
-                currentModule === 'activities_projects'
-                  ? 'bg-brand-primary text-white shadow-lg'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700/60'
-              }`}
-            >
-              <FolderKanban size={15} /> Gestão de Atividades e Projetos
-            </button>
-
-            <button
-              onClick={() => { setCurrentModule('regulatory_standards'); setView('regulatory'); }}
-              className={`px-4 py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shrink-0 ${
-                currentModule === 'regulatory_standards'
-                  ? 'bg-emerald-600 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700/60'
-              }`}
-            >
-              <ShieldCheck size={15} /> Normas
-            </button>
-
-            <button
-              onClick={() => { setCurrentModule('vaccines_components'); }}
-              className={`px-4 py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shrink-0 ${
-                currentModule === 'vaccines_components'
-                  ? 'bg-teal-600 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700/60'
-              }`}
-            >
-              <Syringe size={15} /> Vacinas e Componentes
-            </button>
-          </div>
+          <button
+            onClick={() => { setHasChosenModule(false); }}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-600 hover:text-teal-700 bg-slate-100 hover:bg-teal-50 transition flex items-center gap-2 border border-slate-200/80 shrink-0"
+            title="Voltar para a Seleção de Módulos"
+          >
+            <Layers size={15} />
+            <span className="hidden sm:inline">Trocar Módulo</span>
+          </button>
         </div>
 
         {comiteImpersonatingFrom && (
