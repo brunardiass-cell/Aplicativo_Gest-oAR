@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { TeamMember, AppUser, AppUserRole } from '../types';
-import { Crown, LogOut, Users, Eye, Briefcase } from 'lucide-react';
+import { Crown, LogOut, Users, Eye, Briefcase, ArrowLeft } from 'lucide-react';
 
 interface UserSelectionViewProps {
   teamMembers: TeamMember[];
@@ -9,6 +9,7 @@ interface UserSelectionViewProps {
   onSelectTeamView: () => void;
   onLogout: () => void;
   currentUserRole: AppUserRole | null;
+  onBackToModules?: () => void;
 }
 
 const getInitials = (name: string): string => {
@@ -28,9 +29,16 @@ const ROLE_TO_MEMBER_ID_MAP: Record<string, string> = {
 };
 
 
-const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSelectUser, onSelectTeamView, onLogout, currentUserRole }) => {
+const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSelectUser, onSelectTeamView, onLogout, currentUserRole, onBackToModules }) => {
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative">
+      {onBackToModules && (
+        <div className="absolute top-6 left-6">
+          <button onClick={onBackToModules} className="flex items-center gap-2 text-slate-500 hover:text-brand-primary text-xs font-bold uppercase tracking-widest transition">
+            <ArrowLeft size={16}/> Trocar Módulo
+          </button>
+        </div>
+      )}
       <div className="absolute top-6 right-6">
         <button onClick={onLogout} className="flex items-center gap-2 text-slate-400 hover:text-red-500 text-xs font-bold uppercase tracking-widest transition">
           <LogOut size={16}/> Sair

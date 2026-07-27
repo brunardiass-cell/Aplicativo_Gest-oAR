@@ -22,8 +22,9 @@ import AccessControl from './components/AccessControl';
 import RegulatoryStandardsManager from './components/RegulatoryStandardsManager';
 import RegulatoryStandardsModal from './components/RegulatoryStandardsModal';
 import VaccinesComponentsManager from './components/VaccinesComponentsManager';
+import ModuleSelectionView from './components/ModuleSelectionView';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
-import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft, LayoutGrid, Kanban, Clock, Briefcase, Map as MapIcon, Syringe } from 'lucide-react';
+import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft, LayoutGrid, Kanban, Clock, Briefcase, Map as MapIcon, Syringe, Layers } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
 import ProjectFlowView from './components/ProjectFlowView';
 import ProjectKanbanView from './components/ProjectKanbanView';
@@ -64,6 +65,7 @@ const App: React.FC = () => {
   const [regulatoryStandards, setRegulatoryStandards] = useState<RegulatoryStandard[]>([]);
   const [regulatorySubjects, setRegulatorySubjects] = useState<RegulatorySubject[]>([]);
   const [currentModule, setCurrentModule] = useState<'activities_projects' | 'regulatory_standards' | 'vaccines_components'>('activities_projects');
+  const [hasChosenModule, setHasChosenModule] = useState<boolean>(false);
   const [vaccineCandidates, setVaccineCandidates] = useState<VaccineCandidate[]>(DEFAULT_VACCINE_CANDIDATES);
   const [vaccineComponents, setVaccineComponents] = useState<VaccineComponent[]>(DEFAULT_VACCINE_COMPONENTS);
   const [formulationBatches, setFormulationBatches] = useState<FormulationBatch[]>(DEFAULT_FORMULATION_BATCHES);
@@ -599,6 +601,7 @@ const App: React.FC = () => {
   const handleLogout = async () => {
     await MicrosoftGraphService.logout();
     setIsMsalAuthenticated(false);
+    setHasChosenModule(false);
     setSelectedProfile(null);
     setIsPasswordAuthenticated(false);
     setAccount(null);
@@ -1193,9 +1196,44 @@ const App: React.FC = () => {
     );
   }
   
+  if (!hasChosenModule) {
+    return (
+      <ModuleSelectionView
+        onSelectModule={(mod) => {
+          setCurrentModule(mod);
+          setHasChosenModule(true);
+          if (mod === 'regulatory_standards') {
+            setView('regulatory');
+            if (!selectedProfile) {
+              setSelectedProfile(DEFAULT_TEAM_MEMBERS[0]);
+              setIsPasswordAuthenticated(true);
+            }
+          } else if (mod === 'vaccines_components') {
+            if (!selectedProfile) {
+              setSelectedProfile(DEFAULT_TEAM_MEMBERS[0]);
+              setIsPasswordAuthenticated(true);
+            }
+          }
+        }}
+        onLogout={handleLogout}
+        accountName={account?.name}
+        accountEmail={account?.username}
+      />
+    );
+  }
+
   if (!selectedProfile || !isPasswordAuthenticated) {
     if (!selectedProfile) {
-      return (<UserSelectionView teamMembers={teamMembers} onSelectUser={handleProfileSelect} onSelectTeamView={handleTeamViewSelect} onLogout={handleLogout} currentUserRole={currentUserRole}/>);
+      return (
+        <UserSelectionView 
+          teamMembers={teamMembers} 
+          onSelectUser={handleProfileSelect} 
+          onSelectTeamView={handleTeamViewSelect} 
+          onLogout={handleLogout} 
+          currentUserRole={currentUserRole}
+          onBackToModules={() => setHasChosenModule(false)}
+        />
+      );
     }
     if (selectedProfile && !isPasswordAuthenticated) {
       return (<PasswordModal isOpen={true} onClose={handleSwitchProfile} onConfirm={handlePasswordConfirm} userName={selectedProfile.name} error={passwordError}/>);
@@ -1248,8 +1286,16 @@ const App: React.FC = () => {
 
           <div className="flex items-center gap-2 bg-slate-800/90 p-1.5 rounded-2xl overflow-x-auto w-full lg:w-auto">
             <button
+              onClick={() => { setHasChosenModule(false); }}
+              className="px-3 py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 shrink-0 text-slate-400 hover:text-white hover:bg-slate-700/60 border border-slate-700/60"
+              title="Voltar para a Seleção de Módulos"
+            >
+              <Layers size={14} /> Módulos
+            </button>
+
+            <button
               onClick={() => { setCurrentModule('activities_projects'); if (view === 'regulatory') setView('dashboard'); }}
-              className={`px-4 py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shrink-0 ${
+              className={`px-4 py-2 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shrink-0 ${
                 currentModule === 'activities_projects'
                   ? 'bg-brand-primary text-white shadow-lg'
                   : 'text-slate-400 hover:text-white hover:bg-slate-700/60'
