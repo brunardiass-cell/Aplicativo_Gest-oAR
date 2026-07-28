@@ -108,79 +108,106 @@ const ModuleSelectionView: React.FC<ModuleSelectionViewProps> = ({
         {/* Grid de 3 Cards dos Módulos */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           
-          {/* Card 1: Gestão de Projetos */}
+          {/* Card 1: Gestão de Projetos (Dark Slate Card as in reference image) */}
           <div 
             onClick={() => onSelectModule('activities_projects')}
-            className="group bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs hover:shadow-md hover:border-emerald-500/50 transition-all duration-200 flex flex-col justify-between cursor-pointer"
+            className="group relative bg-[#1e293b] hover:bg-[#1e2638] rounded-3xl p-7 shadow-lg border border-slate-700/50 transition-all duration-300 flex flex-col justify-between cursor-pointer overflow-hidden min-h-[340px]"
           >
-            <div>
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-5 group-hover:scale-105 transition-transform">
+            {/* Watermark Illustration: Bar Chart */}
+            <div className="absolute right-0 bottom-0 opacity-15 pointer-events-none text-slate-400 transform translate-x-3 translate-y-3">
+              <svg width="160" height="160" viewBox="0 0 100 100" fill="currentColor">
+                <rect x="10" y="50" width="16" height="40" rx="3" />
+                <rect x="32" y="30" width="16" height="60" rx="3" />
+                <rect x="54" y="15" width="16" height="75" rx="3" />
+                <rect x="76" y="38" width="16" height="52" rx="3" />
+              </svg>
+            </div>
+
+            <div className="relative z-10">
+              <div className="w-12 h-12 rounded-2xl bg-slate-800/90 border border-slate-700 text-white flex items-center justify-center mb-6 shadow-sm group-hover:scale-105 transition-transform">
                 <FolderKanban size={22} />
               </div>
 
-              <h2 className="text-lg font-bold text-slate-900 mb-2 group-hover:text-emerald-700 transition">
+              <h2 className="text-xl font-black text-white mb-3 tracking-tight">
                 Gestão de Projetos
               </h2>
 
-              <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-medium">
                 Gerencie projetos, tarefas, prazos, equipes e responsabilidades.
               </p>
             </div>
 
-            <div className="pt-6 mt-6 border-t border-slate-100 flex items-center text-xs font-bold text-emerald-600 group-hover:text-emerald-700">
-              <span className="flex items-center gap-1.5 group-hover:gap-2.5 transition-all">
+            <div className="relative z-10 pt-6 mt-6 border-t border-slate-700/60 flex items-center text-xs font-bold text-white group-hover:text-slate-200">
+              <span className="flex items-center gap-2 group-hover:gap-3 transition-all">
                 Entrar no módulo <ArrowRight size={15} />
               </span>
             </div>
           </div>
 
-          {/* Card 2: Normas Regulatórias */}
+          {/* Card 2: Normas Regulatórias (Clean White Card as in reference image) */}
           <div 
             onClick={() => onSelectModule('regulatory_standards')}
-            className="group bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs hover:shadow-md hover:border-emerald-500/50 transition-all duration-200 flex flex-col justify-between cursor-pointer"
+            className="group relative bg-white hover:bg-slate-50/80 rounded-3xl p-7 shadow-sm hover:shadow-md border border-slate-200/90 transition-all duration-300 flex flex-col justify-between cursor-pointer overflow-hidden min-h-[340px]"
           >
-            <div>
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-5 group-hover:scale-105 transition-transform">
+            {/* Watermark Illustration: Shield */}
+            <div className="absolute right-[-10px] bottom-[-10px] opacity-5 pointer-events-none text-slate-900">
+              <Shield size={180} strokeWidth={1} />
+            </div>
+
+            <div className="relative z-10">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 text-slate-800 flex items-center justify-center mb-6 shadow-2xs group-hover:scale-105 transition-transform">
                 <Shield size={22} />
               </div>
 
-              <h2 className="text-lg font-bold text-slate-900 mb-2 group-hover:text-emerald-700 transition">
+              <h2 className="text-xl font-black text-slate-900 mb-3 tracking-tight">
                 Normas Regulatórias
               </h2>
 
-              <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-500 leading-relaxed font-medium">
                 Consulte e acompanhe RDCs, Instruções Normativas, ISO e diretrizes técnicas.
               </p>
             </div>
 
-            <div className="pt-6 mt-6 border-t border-slate-100 flex items-center text-xs font-bold text-emerald-600 group-hover:text-emerald-700">
-              <span className="flex items-center gap-1.5 group-hover:gap-2.5 transition-all">
+            <div className="relative z-10 pt-6 mt-6 border-t border-slate-100 flex items-center text-xs font-bold text-slate-800 group-hover:text-slate-900">
+              <span className="flex items-center gap-2 group-hover:gap-3 transition-all">
                 Entrar no módulo <ArrowRight size={15} />
               </span>
             </div>
           </div>
 
-          {/* Card 3: Vacinas e Componentes */}
+          {/* Card 3: Vacinas e Componentes (Light Green Tint Card as in reference image) */}
           <div 
             onClick={() => onSelectModule('vaccines_components')}
-            className="group bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs hover:shadow-md hover:border-emerald-500/50 transition-all duration-200 flex flex-col justify-between cursor-pointer"
+            className="group relative bg-[#f1fcf6] hover:bg-[#ebfaf2] rounded-3xl p-7 shadow-xs hover:shadow-md border-2 border-emerald-300/80 transition-all duration-300 flex flex-col justify-between cursor-pointer overflow-hidden min-h-[340px]"
           >
-            <div>
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-5 group-hover:scale-105 transition-transform">
+            {/* Watermark Illustration: DNA Strand */}
+            <div className="absolute right-[-20px] bottom-[-20px] opacity-10 pointer-events-none text-emerald-700">
+              <svg width="200" height="200" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20,10 Q50,50 80,90 M80,10 Q50,50 20,90" />
+                <line x1="30" y1="23" x2="70" y2="23" />
+                <line x1="38" y1="35" x2="62" y2="35" />
+                <line x1="45" y1="46" x2="55" y2="46" />
+                <line x1="38" y1="65" x2="62" y2="65" />
+                <line x1="30" y1="77" x2="70" y2="77" />
+              </svg>
+            </div>
+
+            <div className="relative z-10">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-100/80 border border-emerald-200 text-emerald-600 flex items-center justify-center mb-6 shadow-2xs group-hover:scale-105 transition-transform">
                 <Syringe size={22} />
               </div>
 
-              <h2 className="text-lg font-bold text-slate-900 mb-2 group-hover:text-emerald-700 transition">
+              <h2 className="text-xl font-black text-emerald-700 mb-3 tracking-tight">
                 Vacinas e Componentes
               </h2>
 
-              <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium">
                 Gerencie candidatos vacinais, antígenos, adjuvantes, vetores e lotes de formulação.
               </p>
             </div>
 
-            <div className="pt-6 mt-6 border-t border-slate-100 flex items-center text-xs font-bold text-emerald-600 group-hover:text-emerald-700">
-              <span className="flex items-center gap-1.5 group-hover:gap-2.5 transition-all">
+            <div className="relative z-10 pt-6 mt-6 border-t border-emerald-200/60 flex items-center text-xs font-bold text-emerald-600 group-hover:text-emerald-700">
+              <span className="flex items-center gap-2 group-hover:gap-3 transition-all">
                 Entrar no módulo <ArrowRight size={15} />
               </span>
             </div>

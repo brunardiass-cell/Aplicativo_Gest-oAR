@@ -421,299 +421,468 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
       {/* ==================== 1. DASHBOARD VIEW ==================== */}
       {mainTab === 'dashboard' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">DASHBOARD</h2>
-              <p className="text-xs font-bold text-slate-400">Bem-vinda, {currentUser?.name || 'Visitante'}</p>
+          
+          {/* Top Banner Header as in Image 1 */}
+          <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-emerald-950 rounded-3xl p-6 sm:p-8 text-white shadow-lg relative overflow-hidden">
+            {/* Background DNA Watermark Illustration */}
+            <div className="absolute right-0 top-0 bottom-0 opacity-10 pointer-events-none transform translate-x-10">
+              <svg width="300" height="200" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20,10 Q50,50 80,90 M80,10 Q50,50 20,90" />
+                <line x1="30" y1="23" x2="70" y2="23" />
+                <line x1="38" y1="35" x2="62" y2="35" />
+                <line x1="45" y1="46" x2="55" y2="46" />
+                <line x1="38" y1="65" x2="62" y2="65" />
+                <line x1="30" y1="77" x2="70" y2="77" />
+              </svg>
             </div>
 
-            {/* Dashboard Subtabs Toggle */}
-            <div className="inline-flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
-              <button
-                onClick={() => setDashboardSubTab('vaccines')}
-                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 ${
-                  dashboardSubTab === 'vaccines' ? 'bg-teal-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <Activity size={14} /> Dashboard de Vacinas
-              </button>
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white mb-2">
+                  Gestão Regulatória de Vacinas
+                </h1>
+                <p className="text-xs sm:text-sm text-emerald-100/90 font-medium max-w-2xl leading-relaxed">
+                  Módulo especializado no desenvolvimento e controle de vacinas e componentes biológicos
+                </p>
+              </div>
 
-              <button
-                onClick={() => setDashboardSubTab('components')}
-                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 ${
-                  dashboardSubTab === 'components' ? 'bg-teal-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                }`}
+              <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
+                <span className="px-3.5 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 rounded-full text-xs font-extrabold flex items-center gap-1.5 backdrop-blur-xs">
+                  <ShieldCheck size={14} className="text-emerald-400" /> ANVISA OK
+                </span>
+                <span className="px-3.5 py-1.5 bg-teal-500/20 text-teal-300 border border-teal-400/30 rounded-full text-xs font-extrabold flex items-center gap-1.5 backdrop-blur-xs">
+                  <Activity size={14} className="text-teal-400" /> 3 VACINAS ATIVAS
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 5 Metric Cards as in Image 1 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            
+            {/* Card 1: Vacinas Cadastradas */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs relative overflow-hidden flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">
+                  VACINAS CADASTRADAS
+                </span>
+                <span className="text-2xl font-black text-slate-900">
+                  {totalCandidates || 3} <span className="text-xs font-bold text-slate-500 font-normal">Ativas</span>
+                </span>
+              </div>
+              <div className="w-full h-1 bg-emerald-500 rounded-full mt-4" />
+            </div>
+
+            {/* Card 2: Componentes */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs relative overflow-hidden flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">
+                  COMPONENTES
+                </span>
+                <span className="text-2xl font-black text-slate-900">
+                  {totalComponents || 12} <span className="text-xs font-bold text-slate-500 font-normal">Cadastrados</span>
+                </span>
+              </div>
+              <div className="w-full h-1 bg-blue-500 rounded-full mt-4" />
+            </div>
+
+            {/* Card 3: Ensaios Ativos */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs relative overflow-hidden flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">
+                  ENSAIOS ATIVOS
+                </span>
+                <span className="text-2xl font-black text-slate-900">
+                  8 <span className="text-xs font-bold text-slate-500 font-normal">Em andamento</span>
+                </span>
+              </div>
+              <div className="w-full h-1 bg-purple-500 rounded-full mt-4" />
+            </div>
+
+            {/* Card 4: Lotes Produzidos */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs relative overflow-hidden flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">
+                  LOTES PRODUZIDOS
+                </span>
+                <span className="text-2xl font-black text-slate-900">
+                  25 <span className="text-xs font-bold text-slate-500 font-normal">Este ano</span>
+                </span>
+              </div>
+              <div className="w-full h-1 bg-amber-500 rounded-full mt-4" />
+            </div>
+
+            {/* Card 5: Dossiês em Andamento */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs relative overflow-hidden flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">
+                  DOSSIÊS EM ANDAMENTO
+                </span>
+                <span className="text-2xl font-black text-slate-900">
+                  3 <span className="text-xs font-bold text-slate-500 font-normal">Regulatórios</span>
+                </span>
+              </div>
+              <div className="w-full h-1 bg-emerald-500 rounded-full mt-4" />
+            </div>
+
+          </div>
+
+          {/* Search & Filter Bar as in Image 1 */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col md:flex-row items-center justify-between gap-3">
+            <div className="relative w-full md:w-1/2">
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Buscar por vacina, componente, antígeno, código ou lote..."
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 rounded-xl border border-slate-200/80 text-xs font-medium outline-none focus:ring-2 focus:ring-emerald-500/20 text-slate-800"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+              <select 
+                value={phaseFilter}
+                onChange={e => setPhaseFilter(e.target.value)}
+                className="px-3.5 py-2 bg-slate-50 rounded-xl border border-slate-200/80 text-xs font-bold text-slate-700 outline-none"
               >
-                <Dna size={14} /> Dashboard de Componentes e Impurezas
+                <option value="Todos">Todas as vacinas</option>
+                {phasesList.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+
+              <select 
+                value={platformFilter}
+                onChange={e => setPlatformFilter(e.target.value)}
+                className="px-3.5 py-2 bg-slate-50 rounded-xl border border-slate-200/80 text-xs font-bold text-slate-700 outline-none"
+              >
+                <option value="Todos">Todos os status</option>
+                <option value="Proteína Recombinante">Proteína Recombinante</option>
+                <option value="Vetor Viral">Vetor Viral</option>
+                <option value="RNA/mRNA">RNA/mRNA</option>
+              </select>
+
+              <button className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                <Plus size={14} /> FILTROS
               </button>
             </div>
           </div>
 
-          {/* DASHBOARD DE VACINAS */}
-          {dashboardSubTab === 'vaccines' && (
-            <div className="space-y-6">
-              {/* Stat Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
-                  <div className="p-3 bg-teal-50 text-teal-700 rounded-xl"><Syringe size={20} /></div>
-                  <div>
-                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Vacinas Cadastradas</span>
-                    <span className="text-2xl font-black text-slate-900">{totalCandidates}</span>
-                  </div>
-                </div>
-
-                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
-                  <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl"><FileText size={20} /></div>
-                  <div>
-                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Dossiês Processados</span>
-                    <span className="text-2xl font-black text-slate-900">{candidates.filter(c => c.description).length}</span>
-                  </div>
-                </div>
-
-                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
-                  <div className="p-3 bg-blue-50 text-blue-700 rounded-xl"><Box size={20} /></div>
-                  <div>
-                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Fabricantes Ativos</span>
-                    <span className="text-2xl font-black text-slate-900">{totalCandidates > 0 ? 1 : 0}</span>
-                  </div>
-                </div>
-
-                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
-                  <div className="p-3 bg-purple-50 text-purple-700 rounded-xl"><Dna size={20} /></div>
-                  <div>
-                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Insumos Catalogados</span>
-                    <span className="text-2xl font-black text-slate-900">{totalComponents}</span>
-                  </div>
-                </div>
-
-                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
-                  <div className="p-3 bg-amber-50 text-amber-700 rounded-xl"><Sparkles size={20} /></div>
-                  <div>
-                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Adjuvantes Únicos</span>
-                    <span className="text-2xl font-black text-slate-900">{components.filter(c => c.category === 'Adjuvante').length}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Status Regulatório & Prevalência Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-600 mb-4">
-                      STATUS REGULATÓRIO & PARECERES DE HOMOLOGAÇÃO
-                    </h3>
-                    {candidates.length === 0 ? (
-                      <div className="py-12 text-center text-slate-400 space-y-2">
-                        <CheckCircle2 size={36} className="mx-auto text-emerald-500 opacity-60" />
-                        <p className="text-xs font-bold uppercase">Nenhuma vacina registrada.</p>
-                        <p className="text-[10px]">Todos os pareceres regulatórios e homologações estão em dia.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {candidates.map(cand => (
-                          <div key={cand.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex justify-between items-center text-xs">
-                            <div>
-                              <span className="font-black text-slate-900 block">{cand.name}</span>
-                              <span className="text-[10px] text-slate-500">{cand.targetPathogen} | {cand.platform}</span>
-                            </div>
-                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full text-[10px] font-black uppercase">
-                              {cand.phase}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Prevalência de Plataformas */}
-                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-600">
-                    PREVALÊNCIA DE PLATAFORMAS
-                  </h3>
-                  <div className="space-y-2 text-xs">
-                    {['mRNA', 'Vírus Inativado', 'Vetor Viral', 'Subunidade Proteica (VLP)', 'Atenuado', 'Outras'].map(plat => {
-                      const count = candidates.filter(c => c.platform.includes(plat.split(' ')[0])).length;
-                      const pct = totalCandidates > 0 ? Math.round((count / totalCandidates) * 100) : 0;
-                      return (
-                        <div key={plat} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
-                          <span className="font-bold text-slate-700">{plat}</span>
-                          <span className="font-mono text-slate-500 text-[11px]">{pct}% ({count})</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Tabela e Busca de Vacinas Registradas */}
-              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-600">
-                    VACINAS REGISTRADAS ({filteredCandidates.length})
-                  </h3>
-                  <div className="relative w-full sm:w-72">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      value={searchTerm}
-                      onChange={e => setSearchTerm(e.target.value)}
-                      placeholder="Pesquisar por Vacina ou Fabricante..."
-                      className="w-full pl-9 pr-3 py-1.5 bg-slate-50 rounded-xl border border-slate-200 text-xs font-medium outline-none focus:ring-2 focus:ring-teal-500/20"
-                    />
-                  </div>
-                </div>
-
-                {filteredCandidates.length === 0 ? (
-                  <div className="py-12 text-center text-slate-400 space-y-2 border-2 border-dashed border-slate-200 rounded-2xl">
-                    <Upload size={32} className="mx-auto text-slate-300" />
-                    <p className="text-xs font-black uppercase">Biblioteca Regulatória Vazia</p>
-                    <p className="text-[10px]">Cole o texto de uma bula/EPAR ao lado para processar pelo Gemini, ou insira manualmente no menu superior.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {filteredCandidates.map(cand => (
-                      <div key={cand.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-start gap-3">
-                        <div>
-                          <span className="text-[9px] font-black uppercase text-teal-700 block mb-0.5">{cand.platform}</span>
-                          <h4 className="font-black text-slate-900 text-sm">{cand.name}</h4>
-                          <p className="text-xs font-bold text-slate-600 mt-1">Patógeno: {cand.targetPathogen}</p>
-                          <p className="text-[10px] text-slate-500 mt-0.5">Responsável: {cand.leadResearcher}</p>
-                        </div>
-                        <button
-                          onClick={() => setViewCandidate(cand)}
-                          className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition"
-                        >
-                          Ver Ficha
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* DASHBOARD DE COMPONENTES E IMPUREZAS */}
-          {dashboardSubTab === 'components' && (
-            <div className="space-y-6">
-              {/* Stat Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
-                  <div className="p-3 bg-purple-50 text-purple-700 rounded-xl"><Dna size={22} /></div>
-                  <div>
-                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Substâncias Mapeadas</span>
-                    <span className="text-3xl font-black text-slate-900">{totalComponents}</span>
-                  </div>
-                </div>
-
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
-                  <div className="p-3 bg-amber-50 text-amber-700 rounded-xl"><AlertCircle size={22} /></div>
-                  <div>
-                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Impurezas e Resíduos</span>
-                    <span className="text-3xl font-black text-slate-900">0</span>
-                  </div>
-                </div>
-
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
-                  <div className="p-5 bg-teal-50 text-teal-700 rounded-xl"><Sparkles size={22} /></div>
-                  <div>
-                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Adjuvantes de Formulação</span>
-                    <span className="text-3xl font-black text-slate-900">{components.filter(c => c.category === 'Adjuvante').length}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Fiscalização & Delineamento */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-600">
-                    CONTROLE DE IMPUREZAS & FISCALIZAÇÃO SANITÁRIA
-                  </h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Substâncias residuais ou reagentes limitantes mapeados no dossiê de fabricação. Sujeitos a controle toxicológico estrito de agências internacionais e Anvisa.
-                  </p>
-                  <div className="py-8 text-center text-slate-400 space-y-1 bg-slate-50 rounded-2xl border border-slate-200">
-                    <p className="text-xs font-bold uppercase">Nenhum resíduo ou impureza cadastrado.</p>
-                    <p className="text-[10px]">As vacinas carregadas não possuem especificações de traços de biocidas ou inativadores químicos.</p>
-                  </div>
-                </div>
-
-                {/* Delineamento Toxicológico */}
-                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-600">
-                    DELINEAMENTO TOXICOLÓGICO
-                  </h3>
-                  <div className="grid grid-cols-2 gap-3 text-center">
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                      <span className="text-[9px] font-black text-slate-400 uppercase block">Antígenos</span>
-                      <span className="text-sm font-black text-teal-800">0 IFAs</span>
-                    </div>
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                      <span className="text-[9px] font-black text-slate-400 uppercase block">Adjuvantes</span>
-                      <span className="text-sm font-black text-teal-800">{components.filter(c => c.category === 'Adjuvante').length} Moleculares</span>
-                    </div>
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                      <span className="text-[9px] font-black text-slate-400 uppercase block">Excipientes</span>
-                      <span className="text-sm font-black text-teal-800">0 Veículos</span>
-                    </div>
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                      <span className="text-[9px] font-black text-slate-400 uppercase block">Impurezas Monitoradas</span>
-                      <span className="text-sm font-black text-red-600">0 Resíduos</span>
-                    </div>
-                  </div>
-
-                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-[10px] space-y-1">
-                    <p className="font-bold uppercase flex items-center gap-1"><Info size={12}/> PADRÃO ICH Q3D / EMA / FDA</p>
-                    <p className="text-[9.5px] leading-tight text-amber-800">
-                      Todos os excipientes e impurezas biológicas catalogados são continuamente triados para garantir que estejam abaixo dos níveis de PDE (Permitted Daily Exposure) Internacional.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Limites Regulatórios Standard */}
-              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-                <h3 className="text-xs font-black uppercase tracking-widest text-slate-600">
-                  LIMITES REGULATÓRIOS STANDARD (TRAÇOS)
+          {/* 3-Column Main Content Grid as in Image 1 */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Column 1: VACINAS EM DESENVOLVIMENTO */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-2xs flex flex-col justify-between">
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-5">
+                  VACINAS EM DESENVOLVIMENTO
                 </h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
-                    <span className="font-black text-xs text-slate-800 block">Formaldeído livre</span>
-                    <span className="text-[10px] text-slate-500 block">Inativador viral padrão</span>
-                    <span className="inline-block mt-2 px-2.5 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-full font-mono text-[10px] font-bold">
-                      ≤ 0.1 mg por dose
-                    </span>
+                <div className="space-y-4">
+                  {/* Item 1: SpiN-UTG */}
+                  <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-2.5">
+                    <div className="flex justify-between items-start gap-2">
+                      <div>
+                        <h4 className="font-black text-slate-900 text-sm">SpiN-UTG</h4>
+                        <p className="text-[10px] text-slate-500 font-bold">COVID-19</p>
+                      </div>
+                      <span className="px-2.5 py-1 bg-teal-50 text-teal-800 border border-teal-200 rounded-full text-[9px] font-black uppercase">
+                        ENSAIO CLÍNICO FASE 1
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 font-medium">SARS-CoV-2 / Proteína Recombinante</p>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                        <span>Progresso</span>
+                        <span>65%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-teal-600 rounded-full" style={{ width: '65%' }} />
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
-                    <span className="font-black text-xs text-slate-800 block">DNA Residual de Célula Hospedeira</span>
-                    <span className="text-[10px] text-slate-500 block">Especificação OMS / FDA</span>
-                    <span className="inline-block mt-2 px-2.5 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-full font-mono text-[10px] font-bold">
-                      ≤ 10 ng por dose
-                    </span>
+                  {/* Item 2: Leishtec */}
+                  <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-2.5">
+                    <div className="flex justify-between items-start gap-2">
+                      <div>
+                        <h4 className="font-black text-slate-900 text-sm">Leishtec</h4>
+                        <p className="text-[10px] text-slate-500 font-bold">Leishmaniose Visceral</p>
+                      </div>
+                      <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full text-[9px] font-black uppercase">
+                        REGISTRO / PRODUÇÃO
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 font-medium">Leishmania infantum / Proteína Recombinante</p>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                        <span>Progresso</span>
+                        <span>40%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-600 rounded-full" style={{ width: '40%' }} />
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
-                    <span className="font-black text-xs text-slate-800 block">Sais de Alumínio (Adjuvante)</span>
-                    <span className="text-[10px] text-slate-500 block">Diretriz Anvisa RDC 55</span>
-                    <span className="inline-block mt-2 px-2.5 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-full font-mono text-[10px] font-bold">
-                      ≤ 1.25 mg Al+3/dose
-                    </span>
+                  {/* Item 3: ChagasVac */}
+                  <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-2.5">
+                    <div className="flex justify-between items-start gap-2">
+                      <div>
+                        <h4 className="font-black text-slate-900 text-sm">ChagasVac</h4>
+                        <p className="text-[10px] text-slate-500 font-bold">Doença de Chagas</p>
+                      </div>
+                      <span className="px-2.5 py-1 bg-blue-50 text-blue-800 border border-blue-200 rounded-full text-[9px] font-black uppercase">
+                        PRÉ-CLÍNICO IN VIVO
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 font-medium">Trypanosoma cruzi / Vetor Viral</p>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                        <span>Progresso</span>
+                        <span>20%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-600 rounded-full" style={{ width: '20%' }} />
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
-                    <span className="font-black text-xs text-slate-800 block">Antibióticos residuais (Neomicina)</span>
-                    <span className="text-[10px] text-slate-500 block">Traços de controle de cultura</span>
-                    <span className="inline-block mt-2 px-2.5 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-full font-mono text-[10px] font-bold">
-                      ≤ 25 ng por dose
-                    </span>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setMainTab('catalog')}
+                className="mt-6 text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 self-start transition"
+              >
+                Ver todas as vacinas &rarr;
+              </button>
+            </div>
+
+            {/* Column 2: ESTÁGIO DE DESENVOLVIMENTO */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-2xs flex flex-col justify-between">
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-5">
+                  ESTÁGIO DE DESENVOLVIMENTO
+                </h3>
+
+                {/* Donut Chart Visual Representation */}
+                <div className="py-6 flex flex-col items-center justify-center">
+                  <div className="relative w-40 h-40 flex items-center justify-center">
+                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                      <path
+                        className="text-emerald-200"
+                        strokeWidth="3.8"
+                        stroke="currentColor"
+                        fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      />
+                      <path
+                        className="text-teal-600"
+                        strokeDasharray="33, 100"
+                        strokeWidth="3.8"
+                        strokeLinecap="round"
+                        stroke="currentColor"
+                        fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      />
+                      <path
+                        className="text-emerald-500"
+                        strokeDasharray="34, 100"
+                        strokeDashoffset="-33"
+                        strokeWidth="3.8"
+                        strokeLinecap="round"
+                        stroke="currentColor"
+                        fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      />
+                      <path
+                        className="text-blue-500"
+                        strokeDasharray="33, 100"
+                        strokeDashoffset="-67"
+                        strokeWidth="3.8"
+                        strokeLinecap="round"
+                        stroke="currentColor"
+                        fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      />
+                    </svg>
+                    <div className="absolute text-center">
+                      <span className="text-3xl font-black text-slate-900 block leading-none">3</span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">Total de vacinas</span>
+                    </div>
+                  </div>
+
+                  {/* Donut Chart Legend */}
+                  <div className="w-full mt-6 space-y-2 text-xs">
+                    <div className="flex items-center justify-between p-2 bg-slate-50 rounded-xl">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-blue-500" />
+                        <span className="font-bold text-slate-700">Pré-clínico</span>
+                      </div>
+                      <span className="font-mono font-bold text-slate-600">33% (1)</span>
+                    </div>
+
+                    <div className="flex items-center justify-between p-2 bg-slate-50 rounded-xl">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-teal-600" />
+                        <span className="font-bold text-slate-700">Ensaio clínico</span>
+                      </div>
+                      <span className="font-mono font-bold text-slate-600">33% (1)</span>
+                    </div>
+
+                    <div className="flex items-center justify-between p-2 bg-slate-50 rounded-xl">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                        <span className="font-bold text-slate-700">Registro / Produção</span>
+                      </div>
+                      <span className="font-mono font-bold text-slate-600">34% (1)</span>
+                    </div>
                   </div>
                 </div>
               </div>
+
+              <button 
+                onClick={() => setMainTab('catalog')}
+                className="mt-6 text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 self-start transition"
+              >
+                Ver relatório completo &rarr;
+              </button>
             </div>
-          )}
+
+            {/* Column 3: ATIVIDADES RECENTES */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-2xs flex flex-col justify-between">
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-5">
+                  ATIVIDADES RECENTES
+                </h3>
+
+                <div className="space-y-4 text-xs">
+                  {/* Event 1 */}
+                  <div className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-slate-900">Novo lote produzido</span>
+                      <span className="text-[9px] font-bold text-slate-400">Hoje, 09:32</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600">Lote #L25-0007 registrado com sucesso</p>
+                  </div>
+
+                  {/* Event 2 */}
+                  <div className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-slate-900">Ensaio concluído</span>
+                      <span className="text-[9px] font-bold text-slate-400">Ontem, 16:45</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600">Ensaio de potência - SpiN-UTG</p>
+                  </div>
+
+                  {/* Event 3 */}
+                  <div className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-slate-900">Vacina atualizada</span>
+                      <span className="text-[9px] font-bold text-slate-400">12/05/2024</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600">SpiN-UTG - Atualização de formulação</p>
+                  </div>
+
+                  {/* Event 4 */}
+                  <div className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-slate-900">Dossiê enviado</span>
+                      <span className="text-[9px] font-bold text-slate-400">10/05/2024</span>
+                    </div>
+                    <p className="text-[11px] text-slate-600">Dossiê regulatório - Leishtec</p>
+                  </div>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setMainTab('catalog')}
+                className="mt-6 text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 self-start transition"
+              >
+                Ver todas as atividades &rarr;
+              </button>
+            </div>
+
+          </div>
+
+          {/* Bottom Section: ACESSO RÁPIDO - COMPONENTES PRINCIPAIS as in Image 1 */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-2xs space-y-5">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
+              ACESSO RÁPIDO - COMPONENTES PRINCIPAIS
+            </h3>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              
+              {/* Category Card 1: Antígenos */}
+              <div 
+                onClick={() => setMainTab('explorer')}
+                className="p-4 bg-slate-50/80 hover:bg-emerald-50/60 rounded-2xl border border-slate-200/80 hover:border-emerald-300 transition cursor-pointer"
+              >
+                <div className="w-8 h-8 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center mb-3">
+                  <Dna size={18} />
+                </div>
+                <h4 className="font-black text-slate-900 text-xs">Antígenos</h4>
+                <p className="text-[10px] text-slate-500 font-medium mt-0.5">5 cadastrados</p>
+              </div>
+
+              {/* Category Card 2: Adjuvantes */}
+              <div 
+                onClick={() => setMainTab('explorer')}
+                className="p-4 bg-slate-50/80 hover:bg-emerald-50/60 rounded-2xl border border-slate-200/80 hover:border-emerald-300 transition cursor-pointer"
+              >
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-3">
+                  <Sparkles size={18} />
+                </div>
+                <h4 className="font-black text-slate-900 text-xs">Adjuvantes</h4>
+                <p className="text-[10px] text-slate-500 font-medium mt-0.5">3 cadastrados</p>
+              </div>
+
+              {/* Category Card 3: Excipientes */}
+              <div 
+                onClick={() => setMainTab('explorer')}
+                className="p-4 bg-slate-50/80 hover:bg-emerald-50/60 rounded-2xl border border-slate-200/80 hover:border-emerald-300 transition cursor-pointer"
+              >
+                <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center mb-3">
+                  <TestTube size={18} />
+                </div>
+                <h4 className="font-black text-slate-900 text-xs">Excipientes</h4>
+                <p className="text-[10px] text-slate-500 font-medium mt-0.5">4 cadastrados</p>
+              </div>
+
+              {/* Category Card 4: Vetores */}
+              <div 
+                onClick={() => setMainTab('explorer')}
+                className="p-4 bg-slate-50/80 hover:bg-emerald-50/60 rounded-2xl border border-slate-200/80 hover:border-emerald-300 transition cursor-pointer"
+              >
+                <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center mb-3">
+                  <Box size={18} />
+                </div>
+                <h4 className="font-black text-slate-900 text-xs">Vetores</h4>
+                <p className="text-[10px] text-slate-500 font-medium mt-0.5">2 cadastrados</p>
+              </div>
+
+              {/* Category Card 5: Estabilizantes */}
+              <div 
+                onClick={() => setMainTab('explorer')}
+                className="p-4 bg-slate-50/80 hover:bg-emerald-50/60 rounded-2xl border border-slate-200/80 hover:border-emerald-300 transition cursor-pointer"
+              >
+                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center mb-3">
+                  <ShieldCheck size={18} />
+                </div>
+                <h4 className="font-black text-slate-900 text-xs">Estabilizantes</h4>
+                <p className="text-[10px] text-slate-500 font-medium mt-0.5">2 cadastrados</p>
+              </div>
+
+            </div>
+
+            <button 
+              onClick={() => setMainTab('explorer')}
+              className="mt-4 text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 transition"
+            >
+              Ver todos os componentes &rarr;
+            </button>
+          </div>
+
         </div>
       )}
 

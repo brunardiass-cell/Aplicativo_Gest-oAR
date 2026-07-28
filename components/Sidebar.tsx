@@ -87,9 +87,11 @@ const Sidebar: React.FC<SidebarProps> = ({
     return new Date(timestamp).toLocaleTimeString('pt-BR');
   };
 
+  const isVaccinesModule = currentModule === 'vaccines_components';
+
   const sidebarClasses = isMobile 
-    ? `fixed inset-y-0 left-0 w-64 bg-slate-800 text-white z-[100] transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`
-    : `w-64 bg-slate-800 text-white fixed h-full flex flex-col z-50`;
+    ? `fixed inset-y-0 left-0 w-64 ${isVaccinesModule ? 'bg-[#064e3b]' : 'bg-slate-800'} text-white z-[100] transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`
+    : `w-64 ${isVaccinesModule ? 'bg-[#064e3b]' : 'bg-slate-800'} text-white fixed h-full flex flex-col z-50 overflow-y-auto shadow-xl`;
 
   return (
     <>
@@ -100,60 +102,116 @@ const Sidebar: React.FC<SidebarProps> = ({
         />
       )}
       <aside className={sidebarClasses}>
-      <div className="p-4 sm:p-6">
-        <div className="flex items-center gap-3 mb-8 sm:mb-12 cursor-pointer group" onClick={onGoHome}>
-          <div className="w-10 h-10 bg-brand-primary rounded-full flex items-center justify-center text-white font-black text-sm shadow-lg transition-transform group-hover:scale-105">
-            {getInitials(selectedProfile?.name)}
+      <div className="p-4 sm:p-5 flex-1 flex flex-col">
+        {/* Sidebar Header */}
+        <div className="flex items-center justify-between mb-6 cursor-pointer group" onClick={onGoHome}>
+          <div className="flex items-center gap-2.5">
+            <div className={`w-9 h-9 ${isVaccinesModule ? 'bg-[#022c22] text-emerald-400 border border-emerald-700/60' : 'bg-brand-primary text-white'} rounded-xl flex items-center justify-center font-black text-sm shadow-md transition-transform group-hover:scale-105 shrink-0`}>
+              {isVaccinesModule ? <Syringe size={18} /> : getInitials(selectedProfile?.name)}
+            </div>
+            <div>
+              <h2 className="text-white font-black text-sm leading-tight tracking-tight">CTVacinas</h2>
+              <span className={`inline-block text-[8px] font-black uppercase tracking-widest px-1.5 py-0.2 rounded-md ${isVaccinesModule ? 'bg-emerald-800/80 text-emerald-200' : 'text-slate-400'}`}>
+                {isVaccinesModule ? 'VACINAS' : 'Regulatória'}
+              </span>
+            </div>
           </div>
-          <div>
-            <h2 className="text-white font-black text-sm leading-tight uppercase">GESTÃO</h2>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-              {currentModule === 'vaccines_components' ? 'Vacinas & Insumos' : 'Regulatória'}
-            </p>
-          </div>
+          {isMobile && (
+            <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
+              &laquo;
+            </button>
+          )}
         </div>
 
-        {currentModule === 'vaccines_components' ? (
-          <nav className="space-y-2">
-            <SidebarButton 
-              active={vaccineTab === 'dashboard'} 
-              onClick={() => { onVaccineTabChange?.('dashboard'); onClose?.(); }} 
-              icon={<LayoutDashboard size={18} />} 
-              label="Dashboard" 
-            />
-            <SidebarButton 
-              active={vaccineTab === 'manual_inclusion'} 
-              onClick={() => { onVaccineTabChange?.('manual_inclusion'); onClose?.(); }} 
-              icon={<FileText size={18} />} 
-              label="Inclusão Manual" 
-            />
-            <SidebarButton 
-              active={vaccineTab === 'import_spreadsheet'} 
-              onClick={() => { onVaccineTabChange?.('import_spreadsheet'); onClose?.(); }} 
-              icon={<FileSpreadsheet size={18} />} 
-              label="Importar Planilha" 
-            />
-            <SidebarButton 
-              active={vaccineTab === 'import_pdf'} 
-              onClick={() => { onVaccineTabChange?.('import_pdf'); onClose?.(); }} 
-              icon={<FileUp size={18} />} 
-              label="Importar PDF" 
-            />
-            <SidebarButton 
-              active={vaccineTab === 'explorer'} 
-              onClick={() => { onVaccineTabChange?.('explorer'); onClose?.(); }} 
-              icon={<Compass size={18} />} 
-              label="Explorador" 
-            />
-            <SidebarButton 
-              active={vaccineTab === 'catalog'} 
-              onClick={() => { onVaccineTabChange?.('catalog'); onClose?.(); }} 
-              icon={<Syringe size={18} />} 
-              label="Catálogo & Lotes" 
-            />
-          </nav>
+        {/* Navigation Menu */}
+        {isVaccinesModule ? (
+          <div className="space-y-6 flex-1">
+            <nav className="space-y-1">
+              <SidebarButton 
+                active={vaccineTab === 'dashboard'} 
+                onClick={() => { onVaccineTabChange?.('dashboard'); onClose?.(); }} 
+                icon={<LayoutDashboard size={16} />} 
+                label="Visão Geral" 
+                isVaccine
+              />
+              <SidebarButton 
+                active={vaccineTab === 'catalog'} 
+                onClick={() => { onVaccineTabChange?.('catalog'); onClose?.(); }} 
+                icon={<Syringe size={16} />} 
+                label="Vacinas" 
+                isVaccine
+              />
+              <SidebarButton 
+                active={vaccineTab === 'explorer'} 
+                onClick={() => { onVaccineTabChange?.('explorer'); onClose?.(); }} 
+                icon={<Compass size={16} />} 
+                label="Componentes" 
+                isVaccine
+              />
+              <SidebarButton 
+                active={vaccineTab === 'manual_inclusion'} 
+                onClick={() => { onVaccineTabChange?.('manual_inclusion'); onClose?.(); }} 
+                icon={<FileText size={16} />} 
+                label="Formulações" 
+                isVaccine
+              />
+              <SidebarButton 
+                active={false} 
+                onClick={() => { onVaccineTabChange?.('catalog'); onClose?.(); }} 
+                icon={<Clock size={16} />} 
+                label="Ensaios" 
+                isVaccine
+              />
+              <SidebarButton 
+                active={false} 
+                onClick={() => { onVaccineTabChange?.('catalog'); onClose?.(); }} 
+                icon={<Database size={16} />} 
+                label="Lotes" 
+                isVaccine
+              />
+              <SidebarButton 
+                active={vaccineTab === 'import_spreadsheet'} 
+                onClick={() => { onVaccineTabChange?.('import_spreadsheet'); onClose?.(); }} 
+                icon={<FileSpreadsheet size={16} />} 
+                label="Catálogo & Bancos" 
+                isVaccine
+              />
+              <SidebarButton 
+                active={vaccineTab === 'import_pdf'} 
+                onClick={() => { onVaccineTabChange?.('import_pdf'); onClose?.(); }} 
+                icon={<FileUp size={16} />} 
+                label="Documentos" 
+                isVaccine
+              />
+            </nav>
+
+            {/* ATALHOS Section (as in reference image) */}
+            <div className="pt-3 border-t border-emerald-800/60 space-y-2">
+              <p className="text-[9px] font-black text-emerald-300/80 uppercase tracking-widest px-2">
+                ATALHOS
+              </p>
+              <button 
+                onClick={() => { onVaccineTabChange?.('manual_inclusion'); onClose?.(); }}
+                className="w-full text-left px-3 py-1.5 rounded-lg text-emerald-100 hover:bg-emerald-800/50 text-xs font-semibold flex items-center gap-2 transition"
+              >
+                <span className="text-emerald-400 font-bold text-sm">+</span> Nova Vacina
+              </button>
+              <button 
+                onClick={() => { onVaccineTabChange?.('catalog'); onClose?.(); }}
+                className="w-full text-left px-3 py-1.5 rounded-lg text-emerald-100 hover:bg-emerald-800/50 text-xs font-semibold flex items-center gap-2 transition"
+              >
+                <span className="text-emerald-400 font-bold text-sm">+</span> Novo Lote
+              </button>
+              <button 
+                onClick={() => { onVaccineTabChange?.('catalog'); onClose?.(); }}
+                className="w-full text-left px-3 py-1.5 rounded-lg text-emerald-100 hover:bg-emerald-800/50 text-xs font-semibold flex items-center gap-2 transition"
+              >
+                <span className="text-emerald-400 font-bold text-sm">+</span> Novo Ensaio
+              </button>
+            </div>
+          </div>
         ) : (
-          <nav className="space-y-2">
+          <nav className="space-y-2 flex-1">
             <SidebarButton active={currentView === 'dashboard'} onClick={() => { onViewChange('dashboard'); onClose?.(); }} icon={<LayoutDashboard size={18} />} label="Dashboard" />
             {!selectedProfile?.isComiteGestor && (
               <SidebarButton active={currentView === 'tasks'} onClick={() => { onViewChange('tasks'); onClose?.(); }} icon={<ListTodo size={18} />} label="Atividades" />
@@ -184,50 +242,58 @@ const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      <div className="mt-auto p-4 sm:p-6 space-y-3 sm:space-y-4">
-        <div className="p-3 sm:p-4 rounded-xl bg-slate-900/50 border border-slate-700 space-y-3 sm:space-y-4">
-            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <Database size={12}/> Backup Local
+      {/* Sidebar Footer (Sync, Backup, User Profile) */}
+      <div className="mt-auto p-4 space-y-3 border-t border-slate-700/50 bg-black/10">
+        <div className={`p-3 rounded-xl border transition-all ${
+          isVaccinesModule ? 'bg-emerald-950/40 border-emerald-800/60' : 'bg-slate-900/50 border-slate-700'
+        }`}>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-[8px] font-black text-emerald-300 uppercase tracking-widest flex items-center gap-1.5">
+              <Database size={11}/> Backup Local
             </p>
-            <div className="grid grid-cols-2 gap-2">
-                <button onClick={onSaveBackup} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 text-[9px] font-bold uppercase flex items-center justify-center gap-2 transition"><Download size={12}/> Salvar</button>
-                <button onClick={onLoadBackup} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 text-[9px] font-bold uppercase flex items-center justify-center gap-2 transition"><Upload size={12}/> Subir</button>
-            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button onClick={onSaveBackup} className={`px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase flex items-center justify-center gap-1.5 transition ${isVaccinesModule ? 'bg-emerald-800/60 hover:bg-emerald-800 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}><Download size={11}/> Salvar</button>
+            <button onClick={onLoadBackup} className={`px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase flex items-center justify-center gap-1.5 transition ${isVaccinesModule ? 'bg-emerald-800/60 hover:bg-emerald-800 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}><Upload size={11}/> Subir</button>
+          </div>
         </div>
         
-        <div className={`p-3 sm:p-4 rounded-xl border transition-all ${
-          lastSync?.status === 'error' ? 'bg-red-500/10 border-red-500/20' : 'bg-slate-900/50 border-slate-700'
+        <div className={`p-2.5 rounded-xl border transition-all ${
+          lastSync?.status === 'error' ? 'bg-red-500/10 border-red-500/20' : (isVaccinesModule ? 'bg-emerald-950/40 border-emerald-800/60' : 'bg-slate-900/50 border-slate-700')
         }`}>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Status Cloud</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              {lastSync?.status === 'error' ? <CloudOff size={11} className="text-red-400" /> : <Cloud size={11} className="text-emerald-400" />}
+              <span className="text-[9px] font-black uppercase text-slate-200">
+                {lastSync?.status === 'syncing' ? 'Sincronizando...' : lastSync?.status === 'error' ? 'Erro' : 'Nuvem OK'}
+              </span>
+            </div>
             <div className={`w-2 h-2 rounded-full ${
               lastSync?.status === 'syncing' ? 'bg-amber-400 animate-pulse' : 
-              lastSync?.status === 'error' ? 'bg-red-500' : 'bg-emerald-500'
+              lastSync?.status === 'error' ? 'bg-red-500' : 'bg-emerald-400'
             }`} />
-          </div>
-          <div className="flex items-center gap-2 mb-2">
-             {lastSync?.status === 'error' ? <CloudOff size={12} className="text-red-400" /> : <Cloud size={12} className="text-emerald-400" />}
-             <span className={`text-[9px] font-black uppercase truncate ${
-                lastSync?.status === 'error' ? 'text-red-400' : 'text-slate-300'
-             }`}>
-               {lastSync?.status === 'syncing' ? 'Sincronizando...' : lastSync?.status === 'error' ? 'Erro de Conexão' : 'SharePoint OK'}
-             </span>
-          </div>
-          <div className="flex items-center gap-2 text-slate-400">
-             <Clock size={12}/>
-             <span className="text-[9px] font-bold">
-                {lastSync?.status === 'synced' ? formatSyncTime(lastSync.timestamp) : '--:--:--'}
-             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-            <button onClick={onSwitchProfile} className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 sm:px-4 sm:py-3 rounded-lg bg-slate-700 hover:bg-slate-600 transition text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-300">
-                <Users size={14} /> Trocar Perfil
+        {/* User Profile Bar at Bottom as in Reference Image */}
+        <div className="pt-2 flex items-center justify-between">
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <div className="w-8 h-8 rounded-full bg-white text-emerald-900 font-black text-xs flex items-center justify-center shrink-0 shadow-sm">
+              {getInitials(selectedProfile?.name)}
+            </div>
+            <div className="truncate text-left">
+              <p className="text-xs font-bold text-white truncate leading-tight">{selectedProfile?.name || 'Grazielle'}</p>
+              <p className="text-[9px] text-emerald-200/80 truncate">Gestão Regulatória</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={onSwitchProfile} title="Trocar Perfil" className="p-1.5 hover:bg-emerald-800/60 text-emerald-200 rounded-lg transition">
+              <Users size={14} />
             </button>
-            <button onClick={onLogout} title="Sair" className="p-2.5 sm:p-3 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/40 transition">
-                <LogOut size={14} />
+            <button onClick={onLogout} title="Sair" className="p-1.5 hover:bg-red-500/30 text-red-300 rounded-lg transition">
+              <LogOut size={14} />
             </button>
+          </div>
         </div>
       </div>
       </aside>
@@ -235,12 +301,16 @@ const Sidebar: React.FC<SidebarProps> = ({
   );
 };
 
-const SidebarButton = ({ active, onClick, icon, label }: any) => (
+const SidebarButton = ({ active, onClick, icon, label, isVaccine }: any) => (
   <button 
     onClick={onClick}
-    className={`w-full flex items-center text-left gap-4 px-4 py-3 rounded-lg transition-all duration-200 font-bold text-xs uppercase tracking-wider ${active ? 'bg-brand-primary/80 text-white' : `text-slate-400 hover:bg-slate-700 hover:text-white`}`}
+    className={`w-full flex items-center text-left gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-200 font-bold text-xs uppercase tracking-wider ${
+      active 
+        ? (isVaccine ? 'bg-[#0d9488] text-white shadow-sm font-black' : 'bg-brand-primary/80 text-white')
+        : (isVaccine ? 'text-emerald-100/80 hover:bg-emerald-800/50 hover:text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white')
+    }`}
   >
-    {React.cloneElement(icon, { strokeWidth: active ? 3 : 2 })}
+    {React.cloneElement(icon, { strokeWidth: active ? 2.5 : 2 })}
     {label}
   </button>
 );
