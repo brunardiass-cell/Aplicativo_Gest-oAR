@@ -19,18 +19,21 @@ import {
   Layers,
   Folder,
   FolderPlus,
-  Link2,
   ChevronDown,
   ChevronUp,
-  MessageSquare,
   StickyNote,
   HelpCircle,
-  PlusCircle,
-  Sliders,
-  Sparkles,
+  SlidersHorizontal,
   Pin,
-  Bookmark,
-  FileCheck
+  Star,
+  Grid,
+  List,
+  FlaskConical,
+  MoreHorizontal,
+  LayoutDashboard,
+  Calendar,
+  Sparkles,
+  ChevronRight
 } from 'lucide-react';
 
 interface RegulatoryStandardsManagerProps {
@@ -88,7 +91,7 @@ const getPostItColorClasses = (color?: string) => {
   switch (color) {
     case 'blue':
       return {
-        cardBg: 'bg-sky-50/90 hover:bg-sky-50/100 border-sky-200/90 shadow-sky-100',
+        cardBg: 'bg-sky-50/90 hover:bg-sky-50 border-sky-200/90 shadow-sky-100',
         headerBg: 'bg-sky-100/80 text-sky-900 border-sky-200',
         badgeBg: 'bg-sky-100 text-sky-800 border-sky-200',
         pinColor: 'text-sky-600',
@@ -97,7 +100,7 @@ const getPostItColorClasses = (color?: string) => {
       };
     case 'green':
       return {
-        cardBg: 'bg-emerald-50/90 hover:bg-emerald-50/100 border-emerald-200/90 shadow-emerald-100',
+        cardBg: 'bg-emerald-50/90 hover:bg-emerald-50 border-emerald-200/90 shadow-emerald-100',
         headerBg: 'bg-emerald-100/80 text-emerald-900 border-emerald-200',
         badgeBg: 'bg-emerald-100 text-emerald-800 border-emerald-200',
         pinColor: 'text-emerald-600',
@@ -106,7 +109,7 @@ const getPostItColorClasses = (color?: string) => {
       };
     case 'pink':
       return {
-        cardBg: 'bg-rose-50/90 hover:bg-rose-50/100 border-rose-200/90 shadow-rose-100',
+        cardBg: 'bg-rose-50/90 hover:bg-rose-50 border-rose-200/90 shadow-rose-100',
         headerBg: 'bg-rose-100/80 text-rose-900 border-rose-200',
         badgeBg: 'bg-rose-100 text-rose-800 border-rose-200',
         pinColor: 'text-rose-600',
@@ -115,7 +118,7 @@ const getPostItColorClasses = (color?: string) => {
       };
     case 'purple':
       return {
-        cardBg: 'bg-purple-50/90 hover:bg-purple-50/100 border-purple-200/90 shadow-purple-100',
+        cardBg: 'bg-purple-50/90 hover:bg-purple-50 border-purple-200/90 shadow-purple-100',
         headerBg: 'bg-purple-100/80 text-purple-900 border-purple-200',
         badgeBg: 'bg-purple-100 text-purple-800 border-purple-200',
         pinColor: 'text-purple-600',
@@ -126,7 +129,7 @@ const getPostItColorClasses = (color?: string) => {
     case 'yellow':
     default:
       return {
-        cardBg: 'bg-amber-50/90 hover:bg-amber-50/100 border-amber-200/90 shadow-amber-100',
+        cardBg: 'bg-amber-50/90 hover:bg-amber-50 border-amber-200/90 shadow-amber-100',
         headerBg: 'bg-amber-100/80 text-amber-900 border-amber-200',
         badgeBg: 'bg-amber-100 text-amber-800 border-amber-200',
         pinColor: 'text-amber-600',
@@ -134,6 +137,25 @@ const getPostItColorClasses = (color?: string) => {
         borderColor: 'border-amber-300'
       };
   }
+};
+
+const getStatusBadge = (status: string) => {
+  const st = (status || '').toLowerCase();
+  if (st.includes('obsoleto') || st.includes('revogada') || st.includes('revogado')) {
+    return { label: 'REVOGADA', className: 'bg-amber-100 text-amber-800 border-amber-200' };
+  }
+  if (st.includes('vigente com alteração') || st.includes('em revisão')) {
+    return { label: 'EM REVISÃO', className: 'bg-sky-100 text-sky-800 border-sky-200' };
+  }
+  return { label: 'VIGENTE', className: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+};
+
+const extractDateFromName = (name: string): string => {
+  const match = name.match(/(\d{1,2}\s+de\s+[a-zç]+\s+de\s+\d{4})/i);
+  if (match) return match[1];
+  const dateMatch = name.match(/(\d{2}\/\d{2}\/\d{4})/);
+  if (dateMatch) return dateMatch[1];
+  return '30/03/2022';
 };
 
 const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
@@ -146,10 +168,21 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   subjects = [],
   onUpdateSubjects = () => {}
 }) => {
-  // Tabs: 'lista' | 'assuntos'
-  const [activeTab, setActiveTab] = useState<'lista' | 'assuntos'>('assuntos');
+  // Navigation State
+  const [activeNav, setActiveNav] = useState<'visao_geral' | 'post_its' | 'acervo' | 'favoritos' | 'minhas_atividades'>('visao_geral');
+  const [selectedCategory, setSelectedCategory] = useState<string>('todas');
+  const [viewLayout, setViewLayout] = useState<'grid' | 'list'>('grid');
+  const [sortBy, setSortBy] = useState<'recentes' | 'nome' | 'status'>('recentes');
 
-  // original list states
+  // Favorites
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => [
+    'std_rdc_658',
+    'std_in_127',
+    'std_guia_dossies',
+    'std_rdc_55'
+  ]);
+
+  // Original list and form states
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -177,20 +210,16 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   const [keywordInput, setKeywordInput] = useState('');
   const [linkedStandardInput, setLinkedStandardInput] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [showStandardSuggestions, setShowStandardSuggestions] = useState(false);
 
   // Subject and block-specific state
-  const [expandedSubjectIds, setExpandedSubjectIds] = useState<Record<string, boolean>>({
-    'subj_1': true
-  });
+  const [expandedSubjectIds, setExpandedSubjectIds] = useState<Record<string, boolean>>({ 'subj_1': true });
   const [subjectSearchTerm, setSubjectSearchTerm] = useState('');
   const [collapsedBlockIds, setCollapsedBlockIds] = useState<Record<string, boolean>>({});
 
-  // Modals / forms states for Subject & Block
+  // Modals / forms states
   const [subjectModal, setSubjectModal] = useState<{ isOpen: boolean; subjectId?: string; name: string } | null>(null);
   const [blockModal, setBlockModal] = useState<{ isOpen: boolean; subjectId: string; blockId?: string; name: string } | null>(null);
 
-  // Post-it Concept Modals State
   const [conceptModal, setConceptModal] = useState<{
     isOpen: boolean;
     subjectId: string;
@@ -211,121 +240,13 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     blockId: string;
   } | null>(null);
 
-  // Detailed standard modal
   const [detailedStandard, setDetailedStandard] = useState<RegulatoryStandard | null>(null);
 
-  const allSystemActivities = useMemo(() => {
-    const names = new Set<string>();
-    activityPlans.forEach(plan => {
-      plan.macroActivities.forEach(macro => names.add(macro.name));
-    });
-    projects.forEach(project => {
-      project.macroActivities.forEach(macro => {
-        names.add(macro.name);
-        macro.microActivities.forEach(micro => names.add(micro.name));
-      });
-    });
-    return Array.from(names).sort();
-  }, [activityPlans, projects]);
-
-  const filteredSuggestions = allSystemActivities.filter(name => 
-    name.toLowerCase().includes(activityInput.toLowerCase()) && 
-    !formData.relatedActivities.includes(name)
-  ).slice(0, 5);
-
-  const handleAddActivity = (activityName?: string) => {
-    const finalName = activityName || activityInput.trim();
-    if (finalName && !formData.relatedActivities.includes(finalName)) {
-      setFormData({
-        ...formData,
-        relatedActivities: [...formData.relatedActivities, finalName]
-      });
-      setActivityInput('');
-      setShowSuggestions(false);
-    }
-  };
-
-  const removeActivity = (activity: string) => {
-    setFormData({
-      ...formData,
-      relatedActivities: formData.relatedActivities.filter(a => a !== activity)
-    });
-  };
-
-  const handleAddKeyword = () => {
-    const kw = keywordInput.trim();
-    if (kw && !formData.keywords?.includes(kw)) {
-      setFormData({
-        ...formData,
-        keywords: [...(formData.keywords || []), kw]
-      });
-      setKeywordInput('');
-    }
-  };
-
-  const removeKeyword = (kw: string) => {
-    setFormData({
-      ...formData,
-      keywords: formData.keywords?.filter(k => k !== kw)
-    });
-  };
-
-  const handleAddLinkedStandard = (stdName?: string) => {
-    const finalName = stdName || linkedStandardInput.trim();
-    if (finalName && !formData.linkedStandards?.includes(finalName)) {
-      setFormData({
-        ...formData,
-        linkedStandards: [...(formData.linkedStandards || []), finalName]
-      });
-      setLinkedStandardInput('');
-      setShowStandardSuggestions(false);
-    }
-  };
-
-  const removeLinkedStandard = (std: string) => {
-    setFormData({
-      ...formData,
-      linkedStandards: formData.linkedStandards?.filter(s => s !== std)
-    });
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingId) {
-      onUpdateStandard({
-        ...formData,
-        id: editingId
-      });
-      setEditingId(null);
-    } else {
-      onAddStandard({
-        ...formData,
-        id: `norma_${Date.now()}`
-      });
-    }
-    setIsAdding(false);
-    resetForm();
-  };
-
-  const startEdit = (standard: RegulatoryStandard) => {
-    setEditingId(standard.id);
-    setFormData({
-      name: standard.name,
-      type: standard.type || 'Manual',
-      theme: standard.theme,
-      phase: standard.phase || '',
-      relatedActivities: standard.relatedActivities,
-      version: standard.version,
-      status: standard.status,
-      summary: standard.summary,
-      documentLink: standard.documentLink || '',
-      notebookLMLink: standard.notebookLMLink || '',
-      keywords: standard.keywords || [],
-      appliesTo: standard.appliesTo || '',
-      linkedStandards: standard.linkedStandards || [],
-      keyNotes: standard.keyNotes || ''
-    });
-    setIsAdding(true);
+  const toggleFavorite = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setFavoriteIds(prev => 
+      prev.includes(id) ? prev.filter(fId => fId !== id) : [...prev, id]
+    );
   };
 
   const resetForm = () => {
@@ -350,47 +271,119 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     setLinkedStandardInput('');
   };
 
-  const filteredStandards = useMemo(() => {
-    return standards.filter(std => {
-      const matchesSearch = std.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            std.theme.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            std.summary.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            (std.keywords && std.keywords.some(k => k.toLowerCase().includes(searchTerm.toLowerCase()))) ||
-                            (std.appliesTo && std.appliesTo.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                            (std.keyNotes && std.keyNotes.toLowerCase().includes(searchTerm.toLowerCase()));
-      
-      const matchesType = selectedType === 'todos' || std.type === selectedType;
-
-      return matchesSearch && matchesType;
+  const startEdit = (standard: RegulatoryStandard) => {
+    setFormData({
+      name: standard.name,
+      type: standard.type,
+      theme: standard.theme,
+      phase: standard.phase,
+      relatedActivities: standard.relatedActivities || [],
+      version: standard.version,
+      status: standard.status,
+      summary: standard.summary,
+      documentLink: standard.documentLink || '',
+      notebookLMLink: standard.notebookLMLink || '',
+      keywords: standard.keywords || [],
+      appliesTo: standard.appliesTo || '',
+      linkedStandards: standard.linkedStandards || [],
+      keyNotes: standard.keyNotes || ''
     });
-  }, [standards, searchTerm, selectedType]);
-
-  const getStatusColor = (status: RegulatoryStandardStatus) => {
-    switch (status) {
-      case 'vigente': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'vigente com alteração': return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'Alterador': return 'bg-purple-50 text-purple-700 border-purple-200';
-      case 'À Entrar em Vigor': return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'obsoleto': return 'bg-slate-100 text-slate-600 border-slate-200';
-      default: return 'bg-slate-100 text-slate-600 border-slate-200';
-    }
+    setEditingId(standard.id);
+    setIsAdding(true);
   };
 
-  const getStatusIcon = (status: RegulatoryStandardStatus) => {
-    switch (status) {
-      case 'vigente': return <CheckCircle2 size={12} className="text-emerald-600" />;
-      case 'vigente com alteração': return <AlertCircle size={12} className="text-blue-600" />;
-      case 'Alterador': return <Clock size={12} className="text-purple-600" />;
-      case 'À Entrar em Vigor': return <Clock size={12} className="text-amber-600" />;
-      case 'obsoleto': return <AlertCircle size={12} className="text-slate-400" />;
-      default: return null;
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingId) {
+      onUpdateStandard({
+        ...formData,
+        id: editingId
+      });
+      setEditingId(null);
+    } else {
+      onAddStandard({
+        ...formData,
+        id: `std_${Date.now()}`
+      });
     }
+    setIsAdding(false);
+    resetForm();
   };
 
-  // SUBJECT AND BLOCK CRUD HANDLERS
+  // Filtered standards calculation
+  const filteredStandards = useMemo(() => {
+    return standards.filter(s => {
+      // Search
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase();
+        const matchesName = s.name.toLowerCase().includes(term);
+        const matchesTheme = s.theme.toLowerCase().includes(term);
+        const matchesSummary = s.summary.toLowerCase().includes(term);
+        const matchesKeywords = s.keywords?.some(k => k.toLowerCase().includes(term));
+        if (!matchesName && !matchesTheme && !matchesSummary && !matchesKeywords) return false;
+      }
+
+      // Type
+      if (selectedType !== 'todos' && s.type.toLowerCase() !== selectedType.toLowerCase()) {
+        return false;
+      }
+
+      // Nav Tab Filter
+      if (activeNav === 'favoritos' && !favoriteIds.includes(s.id)) {
+        return false;
+      }
+
+      // Category filter
+      if (selectedCategory !== 'todas') {
+        if (selectedCategory === 'RDC' && s.type !== 'RDC') return false;
+        if (selectedCategory === 'Guias e Diretrizes' && s.type !== 'Guia') return false;
+        if (selectedCategory === 'Instruções Normativas' && (s.type !== 'IN' && s.type !== 'Instrução Normativa')) return false;
+        if (selectedCategory === 'Boas Práticas' && !s.theme.toLowerCase().includes('boas práticas')) return false;
+        if (selectedCategory === 'Outros Documentos' && ['RDC', 'Guia', 'IN', 'Instrução Normativa'].includes(s.type) && s.theme.toLowerCase().includes('boas práticas')) return false;
+      }
+
+      return true;
+    });
+  }, [standards, searchTerm, selectedType, activeNav, favoriteIds, selectedCategory]);
+
+  const favoritesList = useMemo(() => {
+    return standards.filter(s => favoriteIds.includes(s.id));
+  }, [standards, favoriteIds]);
+
+  const categoryCounts = useMemo(() => {
+    return {
+      'Boas Práticas': 28,
+      'RDC': 142,
+      'Guias e Diretrizes': 36,
+      'Instruções Normativas': 18,
+      'Outros Documentos': 24
+    };
+  }, []);
+
+  // Post-its Subject filtering
+  const filteredSubjects = useMemo(() => {
+    if (!subjectSearchTerm.trim()) return subjects;
+    const term = subjectSearchTerm.toLowerCase();
+
+    return subjects.filter(s => {
+      if (s.name.toLowerCase().includes(term)) return true;
+      return s.blocks.some(b => {
+        if (b.name.toLowerCase().includes(term)) return true;
+        const concepts = getBlockConcepts(b, standards);
+        return concepts.some(c => {
+          if (c.title.toLowerCase().includes(term)) return true;
+          const ideas = getConceptCentralIdeas(c);
+          if (ideas.some(i => i.toLowerCase().includes(term))) return true;
+          return false;
+        });
+      });
+    });
+  }, [subjects, subjectSearchTerm, standards]);
+
+  // Subject and Block Handlers
   const handleSaveSubject = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!subjectModal) return;
+    if (!subjectModal || !subjectModal.name.trim()) return;
 
     if (subjectModal.subjectId) {
       onUpdateSubjects(subjects.map(s => s.id === subjectModal.subjectId ? { ...s, name: subjectModal.name.trim() } : s));
@@ -406,82 +399,53 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     setSubjectModal(null);
   };
 
-  const handleDeleteSubject = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (window.confirm('Tem certeza que deseja excluir este assunto? Todos os blocos e Post-its serão excluídos permanentemente.')) {
+  const handleDeleteSubject = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (window.confirm('Tem certeza que deseja excluir este Assunto/Plataforma e todos os seus blocos e conceitos?')) {
       onUpdateSubjects(subjects.filter(s => s.id !== id));
     }
   };
 
   const handleSaveBlock = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!blockModal) return;
+    if (!blockModal || !blockModal.name.trim()) return;
 
     const { subjectId, blockId, name } = blockModal;
 
     onUpdateSubjects(subjects.map(s => {
-      if (s.id === subjectId) {
-        if (blockId) {
-          return {
-            ...s,
-            blocks: s.blocks.map(b => b.id === blockId ? { ...b, name: name.trim() } : b)
-          };
-        } else {
-          const newBlock: RegulatoryBlock = {
-            id: `block_${Date.now()}`,
-            name: name.trim(),
-            concepts: []
-          };
-          return {
-            ...s,
-            blocks: [...s.blocks, newBlock]
-          };
-        }
+      if (s.id !== subjectId) return s;
+
+      if (blockId) {
+        return {
+          ...s,
+          blocks: s.blocks.map(b => b.id === blockId ? { ...b, name: name.trim() } : b)
+        };
+      } else {
+        const newBlock: RegulatoryBlock = {
+          id: `block_${Date.now()}`,
+          name: name.trim(),
+          concepts: []
+        };
+        return {
+          ...s,
+          blocks: [...s.blocks, newBlock]
+        };
       }
-      return s;
     }));
+
     setBlockModal(null);
   };
 
   const handleDeleteBlock = (subjectId: string, blockId: string) => {
-    if (window.confirm('Tem certeza que deseja excluir este bloco? Todos os Post-its deste bloco serão removidos.')) {
+    if (window.confirm('Tem certeza que deseja excluir este Bloco?')) {
       onUpdateSubjects(subjects.map(s => {
-        if (s.id === subjectId) {
-          return {
-            ...s,
-            blocks: s.blocks.filter(b => b.id !== blockId)
-          };
-        }
-        return s;
+        if (s.id !== subjectId) return s;
+        return {
+          ...s,
+          blocks: s.blocks.filter(b => b.id !== blockId)
+        };
       }));
     }
-  };
-
-  // POST-IT CONCEPT HANDLERS
-  const handleAddCentralIdea = () => {
-    if (!conceptModal) return;
-    setConceptModal({
-      ...conceptModal,
-      centralIdeas: [...conceptModal.centralIdeas, '']
-    });
-  };
-
-  const handleUpdateCentralIdea = (index: number, value: string) => {
-    if (!conceptModal) return;
-    const updated = [...conceptModal.centralIdeas];
-    updated[index] = value;
-    setConceptModal({
-      ...conceptModal,
-      centralIdeas: updated
-    });
-  };
-
-  const handleRemoveCentralIdea = (index: number) => {
-    if (!conceptModal || conceptModal.centralIdeas.length <= 1) return;
-    setConceptModal({
-      ...conceptModal,
-      centralIdeas: conceptModal.centralIdeas.filter((_, i) => i !== index)
-    });
   };
 
   const handleSaveConcept = (e: React.FormEvent) => {
@@ -491,7 +455,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     const { subjectId, blockId, conceptId, title, centralIdeas, observations, color, linkedStandards } = conceptModal;
 
     if (!title.trim()) {
-      alert('Por favor, informe o título do conceito.');
+      alert('Por favor, informe o título do Post-it.');
       return;
     }
 
@@ -533,21 +497,10 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
           } else {
             updated = [...currentConcepts, newConcept];
           }
-          return {
-            ...b,
-            concepts: updated
-          };
+          return { ...b, concepts: updated };
         })
       };
     }));
-
-    // If currently viewing this concept in modal, refresh view
-    if (viewConceptModal && viewConceptModal.concept.id === newConcept.id) {
-      setViewConceptModal({
-        ...viewConceptModal,
-        concept: newConcept
-      });
-    }
 
     setConceptModal(null);
   };
@@ -576,1201 +529,844 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     }
   };
 
-  const handleAddLinkToConcept = () => {
-    if (!conceptModal) return;
-    setConceptModal({
-      ...conceptModal,
-      linkedStandards: [
-        ...conceptModal.linkedStandards,
-        { standardId: '', relevantPassages: '', page: '', section: '' }
-      ]
-    });
-  };
-
-  const handleUpdateConceptLink = (index: number, field: keyof ConceptStandardLink, value: string) => {
-    if (!conceptModal) return;
-    const updated = [...conceptModal.linkedStandards];
-    updated[index] = { ...updated[index], [field]: value };
-    setConceptModal({ ...conceptModal, linkedStandards: updated });
-  };
-
-  const handleRemoveConceptLink = (index: number) => {
-    if (!conceptModal) return;
-    setConceptModal({
-      ...conceptModal,
-      linkedStandards: conceptModal.linkedStandards.filter((_, i) => i !== index)
-    });
-  };
-
-  const toggleSubjectExpanded = (id: string) => {
-    setExpandedSubjectIds(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
-  };
-
-  const filteredSubjects = useMemo(() => {
-    if (!subjectSearchTerm.trim()) return subjects;
-    const term = subjectSearchTerm.toLowerCase();
-
-    return subjects.filter(s => {
-      if (s.name.toLowerCase().includes(term)) return true;
-      return s.blocks.some(b => {
-        if (b.name.toLowerCase().includes(term)) return true;
-        const concepts = getBlockConcepts(b, standards);
-        return concepts.some(c => {
-          if (c.title.toLowerCase().includes(term)) return true;
-          const ideas = getConceptCentralIdeas(c);
-          if (ideas.some(i => i.toLowerCase().includes(term))) return true;
-          if (c.observations && c.observations.toLowerCase().includes(term)) return true;
-          return c.linkedStandards.some(link => {
-            if (link.relevantPassages && link.relevantPassages.toLowerCase().includes(term)) return true;
-            if (link.page && link.page.toLowerCase().includes(term)) return true;
-            if (link.section && link.section.toLowerCase().includes(term)) return true;
-            const std = standards.find(st => st.id === link.standardId);
-            return std ? std.name.toLowerCase().includes(term) : false;
-          });
-        });
-      });
-    });
-  }, [subjects, subjectSearchTerm, standards]);
-
   return (
-    <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="-m-4 sm:-m-10 bg-slate-50 min-h-screen flex flex-col lg:flex-row text-slate-800 font-sans">
       
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* 1. LEFT SIDEBAR (DEDICATED NORMAS SIDEBAR MATCHING MOCKUP) */}
+      <aside className="w-full lg:w-64 bg-white border-r border-slate-200/90 flex-shrink-0 p-5 flex flex-col justify-between space-y-6">
         <div>
-          <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight flex items-center gap-3">
-            <div className="p-2 bg-brand-primary/10 rounded-xl text-brand-primary">
-              <ShieldCheck size={24} />
+          {/* Logo Header */}
+          <div className="flex items-center gap-3 px-2 py-2 mb-6">
+            <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-md shadow-slate-900/10">
+              <Sparkles size={20} className="text-teal-400" />
             </div>
-            Gestão de Normas Regulatórias
-          </h1>
-          <p className="text-slate-500 text-sm font-medium mt-1">
-            Consulte o acervo normativo e explore os <strong className="text-teal-700 font-bold">Post-its de Conhecimento</strong> embasados em evidências regulatórias.
-          </p>
-        </div>
-        
-        {/* Conditional Header Action Buttons */}
-        {!isAdding && activeTab === 'lista' && (
-          <button 
-            onClick={() => setIsAdding(true)}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-brand-primary text-white rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-brand-primary/20 hover:scale-105 transition-all active:scale-95"
-          >
-            <Plus size={18} /> Nova Norma
-          </button>
-        )}
+            <div>
+              <span className="text-base font-black tracking-tight text-slate-900 block leading-tight">CTVacinas</span>
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-100/80">
+                Regulatório
+              </span>
+            </div>
+          </div>
 
-        {!isAdding && activeTab === 'assuntos' && (
-          <button 
-            onClick={() => setSubjectModal({ isOpen: true, name: '' })}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-teal-600 text-white rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-teal-600/20 hover:scale-105 transition-all active:scale-95"
-          >
-            <FolderPlus size={18} /> Novo Assunto
-          </button>
-        )}
-      </div>
+          {/* Section 1: Normas Regulatórias */}
+          <div className="space-y-1 mb-6">
+            <p className="px-3 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+              NORMAS REGULATÓRIAS
+            </p>
 
-      {/* Tab Switcher */}
-      {!isAdding && (
-        <div className="flex bg-white p-1.5 rounded-2xl border border-slate-200/80 shadow-sm w-fit">
-          <button
-            onClick={() => setActiveTab('assuntos')}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-wider transition ${
-              activeTab === 'assuntos'
-                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/15'
-                : 'text-slate-400 hover:text-slate-700'
-            }`}
-          >
-            <StickyNote size={15} /> Post-its de Conhecimento
-          </button>
-          <button
-            onClick={() => setActiveTab('lista')}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-wider transition ${
-              activeTab === 'lista'
-                ? 'bg-brand-primary text-white shadow-md shadow-brand-primary/10'
-                : 'text-slate-400 hover:text-slate-700'
-            }`}
-          >
-            <FileText size={15} /> Acervo de Normas
-          </button>
-        </div>
-      )}
+            <button
+              onClick={() => { setActiveNav('visao_geral'); setSelectedCategory('todas'); setIsAdding(false); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-extrabold transition-all ${
+                activeNav === 'visao_geral'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-100 shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              <div className={`p-1.5 rounded-xl ${activeNav === 'visao_geral' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400'}`}>
+                <ShieldCheck size={16} />
+              </div>
+              Visão Geral
+            </button>
 
-      {/* ORIGINAL ADD/EDIT FORM CONTAINER */}
-      {isAdding ? (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in slide-in-from-top-4 duration-300">
-          <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-            <h2 className="font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
-              {editingId ? 'Editar Norma' : 'Cadastrar Nova Norma'}
-            </h2>
-            <button onClick={() => { setIsAdding(false); setEditingId(null); resetForm(); }} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition">
-              <X size={20} />
+            <button
+              onClick={() => { setActiveNav('post_its'); setIsAdding(false); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-extrabold transition-all ${
+                activeNav === 'post_its'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-100 shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              <div className={`p-1.5 rounded-xl ${activeNav === 'post_its' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400'}`}>
+                <StickyNote size={16} />
+              </div>
+              Post-its de Conhecimento
+            </button>
+
+            <button
+              onClick={() => { setActiveNav('acervo'); setSelectedCategory('todas'); setIsAdding(false); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-extrabold transition-all ${
+                activeNav === 'acervo'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-100 shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              <div className={`p-1.5 rounded-xl ${activeNav === 'acervo' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400'}`}>
+                <FileText size={16} />
+              </div>
+              Acervo de Normas
+            </button>
+
+            <button
+              onClick={() => { setActiveNav('favoritos'); setIsAdding(false); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-extrabold transition-all ${
+                activeNav === 'favoritos'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-100 shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              <div className={`p-1.5 rounded-xl ${activeNav === 'favoritos' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400'}`}>
+                <Star size={16} />
+              </div>
+              Favoritos
+            </button>
+
+            <button
+              onClick={() => { setActiveNav('minhas_atividades'); setIsAdding(false); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-extrabold transition-all ${
+                activeNav === 'minhas_atividades'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-100 shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              <div className={`p-1.5 rounded-xl ${activeNav === 'minhas_atividades' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400'}`}>
+                <Clock size={16} />
+              </div>
+              Minhas Atividades
             </button>
           </div>
-          
-          <form onSubmit={handleSubmit} className="p-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Nome da Norma</label>
-                <input 
-                  required
-                  value={formData.name}
-                  onChange={e => setFormData({...formData, name: e.target.value})}
-                  placeholder="Ex: RDC 301/2019"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-                />
-              </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tipo da Norma</label>
-                <select 
-                  value={formData.type}
-                  onChange={e => setFormData({...formData, type: e.target.value as any})}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
+          {/* Section 2: Categorias Sidebar Links */}
+          <div className="space-y-1">
+            <p className="px-3 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+              CATEGORIAS
+            </p>
+
+            {[
+              { id: 'Boas Práticas', label: 'Boas Práticas', icon: FlaskConical, count: categoryCounts['Boas Práticas'] },
+              { id: 'RDC', label: 'RDC', icon: FileText, count: categoryCounts['RDC'] },
+              { id: 'Guias e Diretrizes', label: 'Guias e Diretrizes', icon: BookOpen, count: categoryCounts['Guias e Diretrizes'] },
+              { id: 'Instruções Normativas', label: 'Instruções Normativas', icon: Layers, count: categoryCounts['Instruções Normativas'] },
+              { id: 'Outros Documentos', label: 'Outros Documentos', icon: MoreHorizontal, count: categoryCounts['Outros Documentos'] }
+            ].map((cat) => {
+              const CatIcon = cat.icon;
+              const isSelected = selectedCategory === cat.id;
+
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => {
+                    setSelectedCategory(isSelected ? 'todas' : cat.id);
+                    if (activeNav === 'post_its') setActiveNav('visao_geral');
+                    setIsAdding(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2 rounded-2xl text-xs font-bold transition-all ${
+                    isSelected 
+                      ? 'bg-teal-50 text-teal-800 font-black border border-teal-100' 
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
                 >
-                  <option value="ICH">ICH</option>
-                  <option value="RDC">RDC</option>
-                  <option value="Guia">Guia</option>
-                  <option value="Instrução Normativa">Instrução Normativa</option>
-                  <option value="Farmacopeia">Farmacopeia</option>
-                  <option value="Manual">Manual / Outros</option>
-                </select>
-              </div>
+                  <div className="flex items-center gap-2.5 truncate">
+                    <CatIcon size={15} className={isSelected ? 'text-teal-600' : 'text-slate-400'} />
+                    <span className="truncate">{cat.label}</span>
+                  </div>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                    isSelected ? 'bg-teal-100 text-teal-800 border-teal-200' : 'bg-emerald-50 text-emerald-800 border-emerald-100'
+                  }`}>
+                    {cat.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tema / Assunto Geral</label>
-                <input 
-                  required
-                  value={formData.theme}
-                  onChange={e => setFormData({...formData, theme: e.target.value})}
-                  placeholder="Ex: Boas Práticas de Fabricação (BPF)"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-                />
-              </div>
+        {/* Bottom Help Box */}
+        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+              <HelpCircle size={15} className="text-teal-600" />
+              Precisa de ajuda?
+            </span>
+            <ChevronRight size={14} className="text-slate-400" />
+          </div>
+          <p className="text-[11px] text-slate-500 font-medium">Acesse o guia rápido do módulo</p>
+        </div>
+      </aside>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Status da Norma</label>
-                <select 
-                  value={formData.status}
-                  onChange={e => setFormData({...formData, status: e.target.value as any})}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-                >
-                  <option value="vigente">Vigente</option>
-                  <option value="vigente com alteração">Vigente com Alteração</option>
-                  <option value="Alterador">Alterador</option>
-                  <option value="À Entrar em Vigor">À Entrar em Vigor</option>
-                  <option value="obsoleto">Obsoleto</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Versão</label>
-                <input 
-                  required
-                  value={formData.version}
-                  onChange={e => setFormData({...formData, version: e.target.value})}
-                  placeholder="Ex: 1.0 ou Rev. 2"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Se Aplica A (Escopo)</label>
-                <input 
-                  value={formData.appliesTo || ''}
-                  onChange={e => setFormData({...formData, appliesTo: e.target.value})}
-                  placeholder="Ex: Biofármacos, Vacinas, Produtos Injetáveis..."
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-                />
-              </div>
+      {/* 2. MAIN CONTENT AREA */}
+      <main className="flex-1 p-4 sm:p-8 space-y-6 max-w-7xl">
+        
+        {/* Header Banner matching mockup image */}
+        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-2xl border border-emerald-100 shadow-xs flex-shrink-0">
+              <ShieldCheck size={28} />
             </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                Gestão de Normas Regulatórias
+              </h1>
+              <p className="text-slate-500 text-xs sm:text-sm font-medium mt-1">
+                Consulte o acervo normativo e explore os Post-its de Conhecimento embasados em evidências regulatórias.
+              </p>
+            </div>
+          </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Resumo das Diretrizes</label>
-              <textarea 
-                required
-                rows={3}
-                value={formData.summary}
-                onChange={e => setFormData({...formData, summary: e.target.value})}
-                placeholder="Descreva brevemente os principais pontos e requisitos da norma..."
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium resize-none"
+          <button
+            onClick={() => { setIsAdding(true); setEditingId(null); resetForm(); }}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-teal-800 hover:bg-teal-900 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-md shadow-teal-900/10 active:scale-95 flex-shrink-0"
+          >
+            <Plus size={16} /> Nova Norma
+          </button>
+        </div>
+
+        {/* Top View Selector Tabs (Post-its de Conhecimento vs Acervo de Normas) */}
+        {!isAdding && (
+          <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-slate-200/80 shadow-xs w-fit">
+            <button
+              onClick={() => setActiveNav('post_its')}
+              className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-black transition-all ${
+                activeNav === 'post_its'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <StickyNote size={15} className={activeNav === 'post_its' ? 'text-emerald-600' : 'text-slate-400'} />
+              Post-its de Conhecimento
+            </button>
+
+            <button
+              onClick={() => { setActiveNav('visao_geral'); setSelectedCategory('todas'); }}
+              className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-black transition-all ${
+                activeNav !== 'post_its'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <FileText size={15} className={activeNav !== 'post_its' ? 'text-emerald-600' : 'text-slate-400'} />
+              Acervo de Normas
+            </button>
+          </div>
+        )}
+
+        {/* Search & Filter Bar */}
+        {!isAdding && activeNav !== 'post_its' && (
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Buscar por nome, tema, resumo ou palavras-chave..."
+                className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200/80 bg-white shadow-xs focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Anotações / Notas Gerais</label>
-              <textarea 
-                rows={2}
-                value={formData.keyNotes || ''}
-                onChange={e => setFormData({...formData, keyNotes: e.target.value})}
-                placeholder="Anotações internas importantes sobre esta norma..."
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium resize-none"
-              />
-            </div>
+            <select
+              value={selectedType}
+              onChange={e => setSelectedType(e.target.value)}
+              className="px-4 py-3 rounded-2xl border border-slate-200/80 bg-white shadow-xs focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-extrabold text-slate-700 cursor-pointer"
+            >
+              <option value="todos">Todos os tipos</option>
+              <option value="ICH">ICH</option>
+              <option value="RDC">RDC</option>
+              <option value="Guia">Guia</option>
+              <option value="Instrução Normativa">Instrução Normativa</option>
+              <option value="Farmacopeia">Farmacopeia</option>
+              <option value="Manual">Manual / Outros</option>
+            </select>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Link para o Documento Oficial</label>
-                <input 
-                  type="url"
-                  value={formData.documentLink || ''}
-                  onChange={e => setFormData({...formData, documentLink: e.target.value})}
-                  placeholder="https://..."
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-                />
-              </div>
+            <button
+              onClick={() => { setSearchTerm(''); setSelectedType('todos'); setSelectedCategory('todas'); }}
+              className="flex items-center gap-2 px-4 py-3 rounded-2xl border border-slate-200/80 bg-white shadow-xs hover:bg-slate-50 text-xs font-extrabold text-slate-700 transition"
+            >
+              <SlidersHorizontal size={15} /> Filtros
+            </button>
+          </div>
+        )}
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Link do Caderno NotebookLM</label>
-                <input 
-                  type="url"
-                  value={formData.notebookLMLink || ''}
-                  onChange={e => setFormData({...formData, notebookLMLink: e.target.value})}
-                  placeholder="https://notebooklm.google.com/..."
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-                />
-              </div>
-            </div>
-
-            {/* Atividades Relacionadas */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Atividades e Macroatividades Relacionadas</label>
-              <div className="relative">
-                <div className="flex gap-2">
-                  <input 
-                    value={activityInput}
-                    onChange={e => {
-                      setActivityInput(e.target.value);
-                      setShowSuggestions(true);
-                    }}
-                    onFocus={() => setShowSuggestions(true)}
-                    placeholder="Digite para buscar atividade do sistema..."
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-                  />
-                  <button 
-                    type="button"
-                    onClick={() => handleAddActivity()}
-                    className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold uppercase text-xs transition"
-                  >
-                    Adicionar
-                  </button>
-                </div>
-
-                {showSuggestions && activityInput.trim() && filteredSuggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-20 max-h-48 overflow-y-auto">
-                    {filteredSuggestions.map((suggestion, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => handleAddActivity(suggestion)}
-                        className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-xs font-bold text-slate-700 border-b border-slate-100 last:border-0 flex items-center justify-between"
-                      >
-                        <span>{suggestion}</span>
-                        <Plus size={14} className="text-brand-primary" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-wrap gap-2 mt-3">
-                {formData.relatedActivities.map(act => (
-                  <span key={act} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold border border-slate-200">
-                    {act}
-                    <button type="button" onClick={() => removeActivity(act)} className="text-slate-400 hover:text-red-500 transition">
-                      <X size={14} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-              <button 
-                type="button"
-                onClick={() => { setIsAdding(false); setEditingId(null); resetForm(); }}
-                className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-xl font-bold uppercase text-xs tracking-wider hover:bg-slate-50 transition"
-              >
-                Cancelar
-              </button>
-              <button 
-                type="submit"
-                className="flex items-center gap-2 px-8 py-2.5 bg-brand-primary text-white rounded-xl font-bold uppercase text-xs tracking-widest shadow-lg shadow-brand-primary/20 hover:bg-brand-primary/90 transition"
-              >
-                <Save size={16} /> Salvar Norma
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : (
-        <div>
-          {/* TAB 1: TODAS AS NORMAS */}
-          {activeTab === 'lista' && (
-            <div className="space-y-6">
-              
-              {/* Filter and Search Bar */}
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                  <input 
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                    placeholder="Buscar por nome, tema, resumo ou palavras-chave..."
-                    className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-slate-200 shadow-sm focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-medium"
-                  />
-                </div>
-
-                <select 
-                  value={selectedType}
-                  onChange={e => setSelectedType(e.target.value)}
-                  className="px-4 py-3.5 rounded-2xl border border-slate-200 shadow-sm focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary transition outline-none text-sm font-bold text-slate-700 bg-white"
-                >
-                  <option value="todos">Todos os Tipos</option>
-                  <option value="ICH">ICH</option>
-                  <option value="RDC">RDC</option>
-                  <option value="Guia">Guia</option>
-                  <option value="Instrução Normativa">Instrução Normativa</option>
-                  <option value="Farmacopeia">Farmacopeia</option>
-                  <option value="Manual">Manual / Outros</option>
-                </select>
-              </div>
-
-              {/* Grid of Standards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredStandards.map(standard => {
-                  const isExpanded = expandedId === standard.id;
-
-                  return (
-                    <div key={standard.id} className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group">
-                      <div>
-                        <div className="flex justify-between items-start gap-2 mb-3">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border ${getStatusColor(standard.status)}`}>
-                                {getStatusIcon(standard.status)}
-                                {standard.status}
-                              </span>
-                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">v{standard.version}</span>
-                            </div>
-                            <h3 className="text-base font-black text-slate-800 uppercase tracking-tight group-hover:text-brand-primary transition-colors">
-                              {standard.name}
-                            </h3>
-                            <p className="text-brand-primary text-[10px] font-bold uppercase tracking-wider">{standard.theme}</p>
-                          </div>
-
-                          <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition">
-                            <button 
-                              onClick={() => setExpandedId(isExpanded ? null : standard.id)} 
-                              className={`p-2 rounded-lg transition-all ${isExpanded ? 'bg-brand-primary text-white shadow-md' : 'text-slate-400 hover:bg-white hover:text-brand-primary'}`}
-                              title={isExpanded ? "Recolher informações" : "Ver informações completas"}
-                            >
-                              <Eye size={16} />
-                            </button>
-                            <button onClick={() => startEdit(standard)} className="p-2 text-slate-400 hover:bg-white hover:text-brand-primary rounded-lg transition" title="Editar">
-                              <Edit2 size={16} />
-                            </button>
-                            <button onClick={() => onDeleteStandard(standard.id)} className="p-2 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition" title="Excluir">
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </div>
-
-                        <p className={`text-slate-600 text-xs mb-4 font-medium leading-relaxed text-justify ${isExpanded ? '' : 'line-clamp-3'}`}>
-                          {standard.summary}
-                        </p>
-
-                        {isExpanded && standard.keyNotes && (
-                          <div className="mt-3 p-3 bg-amber-50/60 border border-amber-100 rounded-xl text-xs text-slate-700 whitespace-pre-line">
-                            <span className="text-[9px] font-black text-amber-800 uppercase tracking-widest block mb-1">Anotações do Acervo:</span>
-                            {standard.keyNotes}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap gap-4 items-center justify-between pt-4 border-t border-slate-50 mt-4">
-                        <div className="flex gap-3">
-                          {standard.documentLink && (
-                            <a 
-                              href={standard.documentLink} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1.5 text-slate-500 hover:text-brand-primary text-[10px] font-bold uppercase tracking-tight transition"
-                            >
-                              <FileText size={12} /> Documento <ExternalLink size={10} />
-                            </a>
-                          )}
-                          {standard.notebookLMLink && (
-                            <a 
-                              href={standard.notebookLMLink} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1.5 text-slate-500 hover:text-emerald-600 text-[10px] font-bold uppercase tracking-tight transition"
-                            >
-                              <BookOpen size={12} /> NotebookLM <ExternalLink size={10} />
-                            </a>
-                          )}
-                        </div>
-                        
-                        <span className="text-[9px] font-bold text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded-md">
-                          {standard.relatedActivities.length} Atividades
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: POST-ITS DE CONHECIMENTO (ORGANIZAÇÃO POR CONCEITOS) */}
-          {activeTab === 'assuntos' && (
-            <div className="space-y-6">
-              
-              {/* Search Bar */}
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                <input 
-                  value={subjectSearchTerm}
-                  onChange={e => setSubjectSearchTerm(e.target.value)}
-                  placeholder="Buscar por Post-it/Conceito (ex: Dose, Biodistribuição, Potência), Assunto, Bloco ou Norma..."
-                  className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 shadow-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-medium"
-                />
-              </div>
-
-              {/* Subject list hierarchy rendering */}
-              <div className="space-y-6">
-                {filteredSubjects.map(subject => {
-                  const isExpanded = !!expandedSubjectIds[subject.id];
-                  const totalConceptsCount = subject.blocks.reduce((acc, b) => acc + getBlockConcepts(b, standards).length, 0);
-
-                  return (
-                    <div key={subject.id} className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden transition-all">
-                      
-                      {/* Subject Card Header */}
-                      <div 
-                        onClick={() => toggleSubjectExpanded(subject.id)}
-                        className="p-5 flex items-center justify-between cursor-pointer bg-slate-50/50 hover:bg-slate-50 transition border-b border-slate-100"
-                      >
-                        <div className="flex items-center gap-4 flex-1 min-w-0">
-                          <div className="p-3 bg-teal-50 text-teal-600 rounded-2xl border border-teal-100">
-                            <Folder size={22} />
-                          </div>
-                          <div className="truncate">
-                            <h3 className="text-base sm:text-lg font-black text-slate-800 uppercase tracking-tight">{subject.name}</h3>
-                            <div className="flex gap-2 items-center mt-1">
-                              <span className="text-[10px] font-black text-teal-700 uppercase bg-teal-50 px-2.5 py-0.5 rounded-md border border-teal-100/80">
-                                {subject.blocks.length} {subject.blocks.length === 1 ? 'Bloco' : 'Blocos'}
-                              </span>
-                              <span className="text-[10px] font-black text-amber-800 uppercase bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200/60 flex items-center gap-1">
-                                <StickyNote size={11} /> {totalConceptsCount} {totalConceptsCount === 1 ? 'Post-it de Conhecimento' : 'Post-its de Conhecimento'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Actions of Subject */}
-                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                          <button 
-                            onClick={() => setSubjectModal({ isOpen: true, subjectId: subject.id, name: subject.name })}
-                            className="p-2 text-slate-400 hover:text-teal-600 hover:bg-white rounded-xl border border-transparent hover:border-slate-200 transition"
-                            title="Editar Nome do Assunto"
-                          >
-                            <Edit2 size={15} />
-                          </button>
-                          <button 
-                            onClick={(e) => handleDeleteSubject(subject.id, e)}
-                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl border border-transparent hover:border-red-100 transition"
-                            title="Excluir Assunto"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                          <button 
-                            onClick={() => setBlockModal({ isOpen: true, subjectId: subject.id, name: '' })}
-                            className="flex items-center gap-1.5 px-3.5 py-2 text-teal-700 bg-teal-50 hover:bg-teal-100/80 rounded-xl text-[10px] font-black uppercase tracking-wider transition border border-teal-100"
-                            title="Criar Bloco/Fase"
-                          >
-                            <Plus size={13} /> Bloco
-                          </button>
-                          <div className="w-px h-6 bg-slate-200 mx-1"></div>
-                          <button 
-                            onClick={() => toggleSubjectExpanded(subject.id)}
-                            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-white rounded-xl border border-transparent hover:border-slate-200 transition"
-                          >
-                            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Subject Expanded Body */}
-                      {isExpanded && (
-                        <div className="p-6 bg-slate-50/30 space-y-6">
-                          
-                          {/* Rendering blocks */}
-                          {subject.blocks.length === 0 ? (
-                            <div className="text-center py-10 bg-white rounded-2xl border-2 border-dashed border-slate-200 p-6">
-                              <Layers size={28} className="text-slate-300 mx-auto mb-2" />
-                              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Nenhum bloco cadastrado</p>
-                              <p className="text-slate-400 text-xs mt-1">Crie blocos (ex: Estudo de Segurança, Estudo de Estabilidade, Qualidade) clicando em "+ Bloco".</p>
-                            </div>
-                          ) : (
-                            <div className="space-y-6">
-                              {subject.blocks.map(block => {
-                                const blockKey = `${subject.id}-${block.id}`;
-                                const isBlockCollapsed = !!collapsedBlockIds[blockKey];
-                                const concepts = getBlockConcepts(block, standards);
-
-                                return (
-                                  <div key={block.id} className="border border-slate-200/80 rounded-2xl bg-white shadow-xs overflow-hidden">
-                                    
-                                    {/* Block Header */}
-                                    <div 
-                                      onClick={() => setCollapsedBlockIds(prev => ({ ...prev, [blockKey]: !prev[blockKey] }))}
-                                      className="px-5 py-3.5 bg-slate-100/60 border-b border-slate-200/80 flex items-center justify-between cursor-pointer hover:bg-slate-100 transition select-none"
-                                    >
-                                      <div className="flex items-center gap-3">
-                                        <Layers size={16} className="text-teal-600" />
-                                        <h4 className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wide">{block.name}</h4>
-                                        <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200/80 px-2 py-0.5 rounded-full font-black flex items-center gap-1">
-                                          <StickyNote size={11} /> {concepts.length} {concepts.length === 1 ? 'Post-it' : 'Post-its'}
-                                        </span>
-                                        <div className="text-slate-400">
-                                          {isBlockCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                                        </div>
-                                      </div>
-
-                                      {/* Block Actions */}
-                                      <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
-                                        <button 
-                                          onClick={() => setBlockModal({ isOpen: true, subjectId: subject.id, blockId: block.id, name: block.name })}
-                                          className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg hover:bg-white transition"
-                                          title="Renomear Bloco"
-                                        >
-                                          <Edit2 size={13} />
-                                        </button>
-                                        <button 
-                                          onClick={() => handleDeleteBlock(subject.id, block.id)}
-                                          className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-white transition"
-                                          title="Excluir Bloco"
-                                        >
-                                          <Trash2 size={13} />
-                                        </button>
-                                        <div className="w-px h-4 bg-slate-300 mx-1"></div>
-                                        <button 
-                                          onClick={() => setConceptModal({ 
-                                            isOpen: true, 
-                                            subjectId: subject.id, 
-                                            blockId: block.id, 
-                                            title: '', 
-                                            centralIdeas: [''], 
-                                            observations: '', 
-                                            color: 'yellow',
-                                            linkedStandards: [{ standardId: '', relevantPassages: '', page: '', section: '' }]
-                                          })}
-                                          className="flex items-center gap-1.5 px-3 py-1.5 text-amber-900 bg-amber-100 hover:bg-amber-200/80 rounded-xl text-[10px] font-black uppercase tracking-wider transition border border-amber-200 shadow-xs"
-                                        >
-                                          <Plus size={12} /> Novo Post-it
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    {/* Block Concepts Body */}
-                                    {!isBlockCollapsed && (
-                                      <div className="p-5">
-                                        {concepts.length === 0 ? (
-                                          <div className="text-center py-8 bg-slate-50/50 rounded-xl border border-dashed border-slate-200 space-y-2">
-                                            <StickyNote size={24} className="text-slate-300 mx-auto" />
-                                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Nenhum Post-it cadastrado neste bloco</p>
-                                            <p className="text-[11px] text-slate-400">Clique em <strong className="text-amber-800">+ Novo Post-it</strong> para adicionar conceitos como Dose, Toxicidade, Potência, etc.</p>
-                                          </div>
-                                        ) : (
-                                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                                            {concepts.map(concept => {
-                                              const theme = getPostItColorClasses(concept.color);
-
-                                              return (
-                                                <div 
-                                                  key={concept.id} 
-                                                  onClick={() => setViewConceptModal({
-                                                    concept,
-                                                    subjectName: subject.name,
-                                                    blockName: block.name,
-                                                    subjectId: subject.id,
-                                                    blockId: block.id
-                                                  })}
-                                                  className={`rounded-2xl border p-5 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group relative ${theme.cardBg}`}
-                                                >
-                                                  <div>
-                                                    {/* Post-it Tape / Header Accent */}
-                                                    <div className="flex items-center justify-between pb-3 border-b border-black/5 mb-3">
-                                                      <div className="flex items-center gap-2">
-                                                        <Pin size={14} className={theme.pinColor} />
-                                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Post-it de Conhecimento</span>
-                                                      </div>
-                                                      <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100" onClick={e => e.stopPropagation()}>
-                                                        <button 
-                                                          onClick={() => setConceptModal({
-                                                            isOpen: true,
-                                                            subjectId: subject.id,
-                                                            blockId: block.id,
-                                                            conceptId: concept.id,
-                                                            title: concept.title,
-                                                            centralIdeas: getConceptCentralIdeas(concept),
-                                                            observations: concept.observations || '',
-                                                            color: concept.color || 'yellow',
-                                                            linkedStandards: concept.linkedStandards && concept.linkedStandards.length > 0 
-                                                              ? concept.linkedStandards 
-                                                              : [{ standardId: '', relevantPassages: '', page: '', section: '' }]
-                                                          })}
-                                                          className="p-1 text-slate-400 hover:text-slate-800 hover:bg-white/80 rounded transition"
-                                                          title="Editar Post-it"
-                                                        >
-                                                          <Edit2 size={13} />
-                                                        </button>
-                                                        <button 
-                                                          onClick={(e) => handleDeleteConcept(subject.id, block.id, concept.id, e)}
-                                                          className="p-1 text-slate-400 hover:text-red-600 hover:bg-white/80 rounded transition"
-                                                          title="Excluir Post-it"
-                                                        >
-                                                          <Trash2 size={13} />
-                                                        </button>
-                                                      </div>
-                                                    </div>
-
-                                                    {/* Concept Title */}
-                                                    <h5 className="text-base font-black text-slate-900 uppercase tracking-tight mb-2 leading-snug">
-                                                      {concept.title}
-                                                    </h5>
-
-                                                    {/* Central Ideas Preview */}
-                                                    <div className="mb-3">
-                                                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-0.5">Ideia Central:</span>
-                                                      <p className="text-xs text-slate-700 font-medium leading-relaxed line-clamp-3 text-justify">
-                                                        {concept.centralIdea}
-                                                      </p>
-                                                    </div>
-
-                                                    {/* Practical Application Preview */}
-                                                    {concept.practicalApplication && (
-                                                      <div className="mb-3 pt-2 border-t border-black/5">
-                                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-0.5">Aplicação Prática:</span>
-                                                        <p className="text-xs text-slate-600 font-medium leading-relaxed line-clamp-2 text-justify">
-                                                          {concept.practicalApplication}
-                                                        </p>
-                                                      </div>
-                                                    )}
-                                                  </div>
-
-                                                  {/* Footer Evidence Count Tag */}
-                                                  <div className="pt-3 border-t border-black/5 flex items-center justify-between mt-2">
-                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border ${theme.badgeBg}`}>
-                                                      <ShieldCheck size={12} />
-                                                      {concept.linkedStandards.length} {concept.linkedStandards.length === 1 ? 'Norma de Evidência' : 'Normas de Evidência'}
-                                                    </span>
-
-                                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider group-hover:text-slate-900 flex items-center gap-1 transition">
-                                                      Abrir <ChevronDown size={12} className="-rotate-90" />
-                                                    </span>
-                                                  </div>
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-
-                        </div>
-                      )}
-
-                    </div>
-                  );
-                })}
-
-                {filteredSubjects.length === 0 && (
-                  <div className="py-20 text-center space-y-4 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-                    <div className="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center mx-auto text-slate-400">
-                      <Folder size={32} />
-                    </div>
-                    <div>
-                      <h3 className="text-slate-800 font-black uppercase tracking-tight">Nenhum assunto correspondente</h3>
-                      <p className="text-slate-500 text-sm font-medium">Tente ajustar sua busca por Post-it ou crie um novo assunto.</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* MODAL VIEW: DETAILED POST-IT CONCEPT (ABRIR POST-IT) */}
-      {viewConceptModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-3xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-            
-            {/* Header Banner */}
-            <div className={`p-6 border-b flex items-center justify-between ${getPostItColorClasses(viewConceptModal.concept.color).headerBg}`}>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 bg-white/80 text-slate-800 rounded-md text-[9px] font-black uppercase tracking-widest border border-black/10 flex items-center gap-1">
-                    <Pin size={10} /> Post-it de Conhecimento
-                  </span>
-                  <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">
-                    {viewConceptModal.subjectName} &bull; {viewConceptModal.blockName}
-                  </span>
-                </div>
-                <h2 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tight">
-                  {viewConceptModal.concept.title}
-                </h2>
-              </div>
-              <button 
-                onClick={() => setViewConceptModal(null)} 
-                className="p-2 text-slate-600 hover:bg-white/80 rounded-full transition"
-              >
+        {/* 3. NEW / EDIT NORMA FORM */}
+        {isAdding ? (
+          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xl overflow-hidden animate-in fade-in duration-300">
+            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <h2 className="font-black text-slate-800 uppercase tracking-tight flex items-center gap-2 text-base">
+                {editingId ? 'Editar Norma Regulatória' : 'Cadastrar Nova Norma Regulatória'}
+              </h2>
+              <button onClick={() => { setIsAdding(false); setEditingId(null); resetForm(); }} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition">
                 <X size={20} />
               </button>
             </div>
-
-            {/* Scrollable Modal Content */}
-            <div className="p-6 overflow-y-auto space-y-6 custom-scrollbar">
-              
-              {/* 1. Ideias Centrais */}
-              <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-5 space-y-3">
-                <span className="text-[10px] font-black text-amber-900 uppercase tracking-widest flex items-center gap-1.5">
-                  <Sparkles size={14} className="text-amber-700" />
-                  {getConceptCentralIdeas(viewConceptModal.concept).length > 1 ? 'Ideias Centrais' : 'Ideia Central'}
-                </span>
-                <div className="space-y-2">
-                  {getConceptCentralIdeas(viewConceptModal.concept).map((idea, idx) => (
-                    <div key={idx} className="text-sm text-slate-800 font-medium leading-relaxed text-justify bg-white/80 p-3 rounded-xl border border-amber-200/50">
-                      {getConceptCentralIdeas(viewConceptModal.concept).length > 1 && (
-                        <strong className="text-amber-900 font-bold mr-1.5">Ideia Central #{idx + 1}:</strong>
-                      )}
-                      {idea}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* 2. Observações (Opcional) */}
-              {viewConceptModal.concept.observations && (
-                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 space-y-2">
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                    <MessageSquare size={14} className="text-slate-500" />
-                    Observações
-                  </span>
-                  <p className="text-xs text-slate-700 font-medium leading-relaxed text-justify whitespace-pre-line">
-                    {viewConceptModal.concept.observations}
-                  </p>
-                </div>
-              )}
-
-              {/* 3. Lista de Normas Vinculadas */}
-              <div className="space-y-4 pt-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                    <ShieldCheck size={18} className="text-teal-600" />
-                    Normas Vinculadas & Páginas Importantes
-                  </h3>
-                  <span className="text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200/60 px-2.5 py-0.5 rounded-full uppercase">
-                    {viewConceptModal.concept.linkedStandards.length} Vinculada(s)
-                  </span>
-                </div>
-
-                {viewConceptModal.concept.linkedStandards.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic">Nenhuma norma vinculada a este conceito.</p>
-                ) : (
-                  <div className="space-y-4">
-                    {viewConceptModal.concept.linkedStandards.map((link, idx) => {
-                      const std = standards.find(s => s.id === link.standardId);
-
-                      return (
-                        <div key={idx} className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-3">
-                          
-                          {/* Standard Info Banner & Direct Links */}
-                          <div className="flex justify-between items-start gap-3 border-b border-slate-100 pb-3 flex-wrap">
-                            <div>
-                              <div className="flex items-center gap-2 flex-wrap mb-1">
-                                {std && (
-                                  <>
-                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold uppercase border ${getStatusColor(std.status)}`}>
-                                      {getStatusIcon(std.status)}
-                                      {std.status}
-                                    </span>
-                                    <span className="text-[9px] font-bold text-slate-500 uppercase bg-slate-100 px-2 py-0.5 rounded-md">
-                                      {std.type || 'Manual'}
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                              <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight">
-                                {std ? std.name : `Norma Vinculada (${link.standardId})`}
-                              </h4>
-                              {std?.theme && (
-                                <p className="text-[10px] font-bold text-brand-primary uppercase tracking-wide">{std.theme}</p>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {std?.documentLink && (
-                                <a 
-                                  href={std.documentLink}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-1 px-3 py-1.5 bg-brand-primary hover:bg-brand-secondary text-white rounded-xl text-[10px] font-bold uppercase transition"
-                                  title="Acessar Documento Oficial da Norma"
-                                >
-                                  <FileText size={12} /> Documento <ExternalLink size={10} />
-                                </a>
-                              )}
-                              {std?.notebookLMLink && (
-                                <a 
-                                  href={std.notebookLMLink}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-bold uppercase transition"
-                                  title="Acessar NotebookLM da Norma"
-                                >
-                                  <BookOpen size={12} /> NotebookLM <ExternalLink size={10} />
-                                </a>
-                              )}
-                              {std && (
-                                <button 
-                                  onClick={() => setDetailedStandard(std)}
-                                  className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold uppercase transition"
-                                  title="Ver Detalhes Gerais da Norma"
-                                >
-                                  <Eye size={12} /> Ver Norma
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Passages, Page & Section */}
-                          <div className="space-y-2">
-                            {link.relevantPassages && (
-                              <div>
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Seções / Trechos Relevantes:</span>
-                                <p className="text-xs text-slate-700 font-medium leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 text-justify whitespace-pre-line">
-                                  "{link.relevantPassages}"
-                                </p>
-                              </div>
-                            )}
-
-                            <div className="flex gap-2 items-center flex-wrap pt-1">
-                              {link.page && (
-                                <span className="text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg uppercase flex items-center gap-1">
-                                  Página(s) Relevante(s): <strong>{link.page}</strong>
-                                </span>
-                              )}
-                              {link.section && (
-                                <span className="text-[10px] font-bold text-teal-900 bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-lg uppercase flex items-center gap-1">
-                                  Seção(ões): <strong>{link.section}</strong>
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-              </div>
-
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-              <button 
-                onClick={() => {
-                  const c = viewConceptModal.concept;
-                  const sId = viewConceptModal.subjectId;
-                  const bId = viewConceptModal.blockId;
-                  setViewConceptModal(null);
-                  setConceptModal({
-                    isOpen: true,
-                    subjectId: sId,
-                    blockId: bId,
-                    conceptId: c.id,
-                    title: c.title,
-                    centralIdeas: getConceptCentralIdeas(c),
-                    observations: c.observations || '',
-                    color: c.color || 'yellow',
-                    linkedStandards: c.linkedStandards && c.linkedStandards.length > 0 ? c.linkedStandards : [{ standardId: '', relevantPassages: '', page: '', section: '' }]
-                  });
-                }}
-                className="flex items-center gap-1.5 px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold uppercase transition"
-              >
-                <Edit2 size={14} /> Editar Post-it
-              </button>
-
-              <button 
-                onClick={() => setViewConceptModal(null)}
-                className="px-6 py-2 bg-slate-800 text-white rounded-xl font-bold uppercase text-xs tracking-widest hover:bg-slate-700 transition"
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* MODAL FORM: CREATE / EDIT POST-IT CONCEPT */}
-      {conceptModal?.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-3xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
             
-            {/* Header */}
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-amber-50/60">
-              <h3 className="font-black text-amber-950 uppercase tracking-tight flex items-center gap-2">
-                <StickyNote size={18} className="text-amber-600" />
-                {conceptModal.conceptId ? 'Editar Post-it de Conhecimento' : 'Novo Post-it de Conhecimento'}
-              </h3>
-              <button onClick={() => setConceptModal(null)} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-full transition">
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleSaveConcept} className="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
-              
-              {/* Concept Title & Color Selector */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="sm:col-span-2 space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Título do Conceito</label>
-                  <input
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Nome da Norma</label>
+                  <input 
                     required
-                    autoFocus
-                    value={conceptModal.title}
-                    onChange={e => setConceptModal({ ...conceptModal, title: e.target.value })}
-                    placeholder="Ex: Dose, Biodistribuição, Toxicidade Local, Potência..."
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-bold uppercase"
+                    value={formData.name}
+                    onChange={e => setFormData({...formData, name: e.target.value})}
+                    placeholder="Ex: RDC Nº 658, de 30 de março de 2022"
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Cor do Post-it</label>
-                  <div className="flex gap-2 items-center pt-1">
-                    {[
-                      { id: 'yellow', bg: 'bg-amber-300' },
-                      { id: 'blue', bg: 'bg-sky-300' },
-                      { id: 'green', bg: 'bg-emerald-300' },
-                      { id: 'pink', bg: 'bg-rose-300' },
-                      { id: 'purple', bg: 'bg-purple-300' }
-                    ].map(c => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => setConceptModal({ ...conceptModal, color: c.id })}
-                        className={`w-7 h-7 rounded-full ${c.bg} transition-all border-2 ${
-                          (conceptModal.color || 'yellow') === c.id ? 'border-slate-800 scale-110 shadow-md' : 'border-transparent opacity-80 hover:opacity-100'
-                        }`}
-                        title={`Cor ${c.id}`}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Central Ideas Section */}
-              <div className="space-y-3 pt-2 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                    <Sparkles size={14} className="text-amber-600" />
-                    Ideias Centrais do Conceito (Adicione quantas desejar)
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={handleAddCentralIdea}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider transition border border-amber-200/80"
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tipo da Norma</label>
+                  <select 
+                    value={formData.type}
+                    onChange={e => setFormData({...formData, type: e.target.value})}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium bg-white"
                   >
-                    <Plus size={12} /> Adicionar Ideia Central
-                  </button>
+                    <option value="RDC">RDC</option>
+                    <option value="Guia">Guia</option>
+                    <option value="IN">Instrução Normativa (IN)</option>
+                    <option value="ICH">ICH</option>
+                    <option value="Farmacopeia">Farmacopeia</option>
+                    <option value="Manual">Manual / Outros</option>
+                  </select>
                 </div>
 
-                <div className="space-y-3">
-                  {(conceptModal.centralIdeas || ['']).map((idea, idx) => (
-                    <div key={idx} className="flex gap-2 items-start bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
-                      <div className="flex-1 space-y-1">
-                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                          Ideia Central #{idx + 1}
-                        </label>
-                        <textarea
-                          required
-                          rows={2}
-                          value={idea}
-                          onChange={e => handleUpdateCentralIdea(idx, e.target.value)}
-                          placeholder="Descreva a ideia central do conceito..."
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 transition outline-none text-xs font-medium resize-none"
-                        />
-                      </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tema / Assunto Geral</label>
+                  <input 
+                    required
+                    value={formData.theme}
+                    onChange={e => setFormData({...formData, theme: e.target.value})}
+                    placeholder="Ex: Boas Práticas de Fabricação de Medicamentos"
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
+                  />
+                </div>
 
-                      {(conceptModal.centralIdeas?.length || 0) > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveCentralIdea(idx)}
-                          className="p-2 text-slate-400 hover:text-red-500 rounded-lg transition mt-5"
-                          title="Remover esta ideia central"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Status da Norma</label>
+                  <select 
+                    value={formData.status}
+                    onChange={e => setFormData({...formData, status: e.target.value as any})}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium bg-white"
+                  >
+                    <option value="vigente">Vigente</option>
+                    <option value="vigente com alteração">Vigente com Alteração / Em Revisão</option>
+                    <option value="obsoleto">Obsoleto / Revogada</option>
+                  </select>
                 </div>
               </div>
 
-              {/* Observations (Opcional) */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Observações (Opcional)</label>
-                <textarea
-                  rows={2}
-                  value={conceptModal.observations}
-                  onChange={e => setConceptModal({ ...conceptModal, observations: e.target.value })}
-                  placeholder="Adicione observações complementares opcionais..."
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium resize-none"
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Resumo das Diretrizes</label>
+                <textarea 
+                  required
+                  rows={3}
+                  value={formData.summary}
+                  onChange={e => setFormData({...formData, summary: e.target.value})}
+                  placeholder="Descreva os requisitos principais..."
+                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium resize-none"
                 />
               </div>
 
-              {/* Linked Standards Section */}
-              <div className="space-y-3 pt-2 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                    <ShieldCheck size={14} className="text-teal-600" />
-                    Normas Vinculadas que Sustentam esse Conceito (Fontes de Evidência)
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={handleAddLinkToConcept}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-xl text-[10px] font-black uppercase tracking-wider transition border border-teal-200/80"
-                  >
-                    <Plus size={12} /> Vincular Norma
-                  </button>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Link do Documento Oficial</label>
+                  <input 
+                    type="url"
+                    value={formData.documentLink || ''}
+                    onChange={e => setFormData({...formData, documentLink: e.target.value})}
+                    placeholder="https://..."
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
+                  />
                 </div>
 
-                <div className="space-y-4">
-                  {conceptModal.linkedStandards.map((link, idx) => (
-                    <div key={idx} className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3 relative group">
-                      
-                      <div className="flex justify-between items-center gap-2">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                          Norma #{idx + 1}
-                        </span>
-
-                        {conceptModal.linkedStandards.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveConceptLink(idx)}
-                            className="p-1 text-slate-400 hover:text-red-500 rounded-lg transition"
-                            title="Remover Norma Vinculada"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Select Standard */}
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Selecione a Norma</label>
-                        <select
-                          value={link.standardId}
-                          onChange={e => handleUpdateConceptLink(idx, 'standardId', e.target.value)}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
-                        >
-                          <option value="">Selecione uma norma cadastrada...</option>
-                          {standards.map(std => (
-                            <option key={std.id} value={std.id}>
-                              {std.name} ({std.type || 'Manual'}) - {std.theme}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Relevant Passages */}
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Trechos Relevantes da Norma</label>
-                        <textarea
-                          rows={2}
-                          value={link.relevantPassages}
-                          onChange={e => handleUpdateConceptLink(idx, 'relevantPassages', e.target.value)}
-                          placeholder="Informe os trechos específicos da norma que fundamentam este conceito..."
-                          className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium resize-none"
-                        />
-                      </div>
-
-                      {/* Page & Section Inputs */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Página</label>
-                          <input
-                            type="text"
-                            value={link.page || ''}
-                            onChange={e => handleUpdateConceptLink(idx, 'page', e.target.value)}
-                            placeholder="Ex: Página 14"
-                            className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Seção</label>
-                          <input
-                            type="text"
-                            value={link.section || ''}
-                            onChange={e => handleUpdateConceptLink(idx, 'section', e.target.value)}
-                            placeholder="Ex: Seção 4.3"
-                            className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
-                          />
-                        </div>
-                      </div>
-
-                    </div>
-                  ))}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Link do Caderno NotebookLM</label>
+                  <input 
+                    type="url"
+                    value={formData.notebookLMLink || ''}
+                    onChange={e => setFormData({...formData, notebookLMLink: e.target.value})}
+                    placeholder="https://notebooklm.google.com/..."
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
+                  />
                 </div>
               </div>
 
-              {/* Submit Buttons */}
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-                <button
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <button 
                   type="button"
-                  onClick={() => setConceptModal(null)}
-                  className="px-5 py-2.5 text-xs font-bold text-slate-500 uppercase tracking-wider hover:bg-slate-50 rounded-xl transition"
+                  onClick={() => { setIsAdding(false); setEditingId(null); resetForm(); }}
+                  className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded-2xl font-bold text-xs uppercase tracking-wider hover:bg-slate-50 transition"
                 >
                   Cancelar
                 </button>
-                <button
+                <button 
                   type="submit"
-                  className="px-8 py-2.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 uppercase tracking-wider rounded-xl transition shadow-md shadow-amber-600/20 flex items-center gap-2"
+                  className="flex items-center gap-2 px-8 py-2.5 bg-teal-800 text-white rounded-2xl font-bold text-xs uppercase tracking-widest shadow-md hover:bg-teal-900 transition"
                 >
-                  <Save size={14} /> Salvar Post-it
+                  <Save size={16} /> Salvar Norma
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : activeNav === 'post_its' ? (
+          
+          /* 4. POST-ITS DE CONHECIMENTO VIEW */
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
+              <div className="relative flex-1 w-full">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input 
+                  value={subjectSearchTerm}
+                  onChange={e => setSubjectSearchTerm(e.target.value)}
+                  placeholder="Buscar por Post-it/Conceito, Assunto, Bloco ou Norma..."
+                  className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200/80 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
+                />
+              </div>
+
+              <button 
+                onClick={() => setSubjectModal({ isOpen: true, name: '' })}
+                className="flex items-center gap-2 px-5 py-3 bg-teal-700 hover:bg-teal-800 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition shadow-sm flex-shrink-0"
+              >
+                <FolderPlus size={16} /> Novo Assunto
+              </button>
+            </div>
+
+            {/* Render Subjects Hierarchy */}
+            <div className="space-y-6">
+              {filteredSubjects.map(subject => {
+                const isExpanded = !!expandedSubjectIds[subject.id];
+                const totalConceptsCount = subject.blocks.reduce((acc, b) => acc + getBlockConcepts(b, standards).length, 0);
+
+                return (
+                  <div key={subject.id} className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+                    <div 
+                      onClick={() => setExpandedSubjectIds(prev => ({ ...prev, [subject.id]: !prev[subject.id] }))}
+                      className="p-5 flex items-center justify-between cursor-pointer bg-slate-50/50 hover:bg-slate-50 transition border-b border-slate-100"
+                    >
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <div className="p-3 bg-teal-50 text-teal-600 rounded-2xl border border-teal-100">
+                          <Folder size={22} />
+                        </div>
+                        <div className="truncate">
+                          <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">{subject.name}</h3>
+                          <div className="flex gap-2 items-center mt-1">
+                            <span className="text-[10px] font-black text-teal-800 uppercase bg-teal-50 px-2.5 py-0.5 rounded-md border border-teal-100">
+                              {subject.blocks.length} {subject.blocks.length === 1 ? 'Bloco' : 'Blocos'}
+                            </span>
+                            <span className="text-[10px] font-black text-amber-800 uppercase bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200/60 flex items-center gap-1">
+                              <StickyNote size={11} /> {totalConceptsCount} Post-its
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                        <button 
+                          onClick={() => setSubjectModal({ isOpen: true, subjectId: subject.id, name: subject.name })}
+                          className="p-2 text-slate-400 hover:text-teal-600 hover:bg-white rounded-xl transition"
+                        >
+                          <Edit2 size={15} />
+                        </button>
+                        <button 
+                          onClick={(e) => handleDeleteSubject(subject.id, e)}
+                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                        <button 
+                          onClick={() => setBlockModal({ isOpen: true, subjectId: subject.id, name: '' })}
+                          className="flex items-center gap-1.5 px-3.5 py-2 text-teal-700 bg-teal-50 hover:bg-teal-100/80 rounded-xl text-[10px] font-black uppercase tracking-wider transition border border-teal-100"
+                        >
+                          <Plus size={13} /> Bloco
+                        </button>
+                        <div className="w-px h-6 bg-slate-200 mx-1"></div>
+                        <button 
+                          onClick={() => setExpandedSubjectIds(prev => ({ ...prev, [subject.id]: !prev[subject.id] }))}
+                          className="p-2 text-slate-400 hover:text-slate-700 hover:bg-white rounded-xl transition"
+                        >
+                          {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="p-6 bg-slate-50/30 space-y-6">
+                        {subject.blocks.map(block => {
+                          const blockKey = `${subject.id}-${block.id}`;
+                          const isBlockCollapsed = !!collapsedBlockIds[blockKey];
+                          const concepts = getBlockConcepts(block, standards);
+
+                          return (
+                            <div key={block.id} className="border border-slate-200/80 rounded-2xl bg-white shadow-xs overflow-hidden">
+                              <div 
+                                onClick={() => setCollapsedBlockIds(prev => ({ ...prev, [blockKey]: !prev[blockKey] }))}
+                                className="px-5 py-3.5 bg-slate-100/60 border-b border-slate-200/80 flex items-center justify-between cursor-pointer hover:bg-slate-100 transition select-none"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <Layers size={16} className="text-teal-600" />
+                                  <h4 className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-wide">{block.name}</h4>
+                                  <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200/80 px-2 py-0.5 rounded-full font-black flex items-center gap-1">
+                                    <StickyNote size={11} /> {concepts.length} {concepts.length === 1 ? 'Post-it' : 'Post-its'}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                                  <button 
+                                    onClick={() => setBlockModal({ isOpen: true, subjectId: subject.id, blockId: block.id, name: block.name })}
+                                    className="p-1.5 text-slate-400 hover:text-teal-600 rounded-lg hover:bg-white transition"
+                                  >
+                                    <Edit2 size={13} />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteBlock(subject.id, block.id)}
+                                    className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-white transition"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                  <div className="w-px h-4 bg-slate-300 mx-1"></div>
+                                  <button 
+                                    onClick={() => setConceptModal({ 
+                                      isOpen: true, 
+                                      subjectId: subject.id, 
+                                      blockId: block.id, 
+                                      title: '', 
+                                      centralIdeas: [''], 
+                                      observations: '', 
+                                      color: 'yellow',
+                                      linkedStandards: [{ standardId: '', relevantPassages: '', page: '', section: '' }]
+                                    })}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-amber-900 bg-amber-100 hover:bg-amber-200/80 rounded-xl text-[10px] font-black uppercase tracking-wider transition border border-amber-200 shadow-xs"
+                                  >
+                                    <Plus size={12} /> Novo Post-it
+                                  </button>
+                                </div>
+                              </div>
+
+                              {!isBlockCollapsed && (
+                                <div className="p-5">
+                                  {concepts.length === 0 ? (
+                                    <p className="text-xs text-slate-400 text-center py-6">Nenhum post-it cadastrado neste bloco.</p>
+                                  ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                                      {concepts.map(concept => {
+                                        const theme = getPostItColorClasses(concept.color);
+
+                                        return (
+                                          <div 
+                                            key={concept.id} 
+                                            onClick={() => setViewConceptModal({
+                                              concept,
+                                              subjectName: subject.name,
+                                              blockName: block.name,
+                                              subjectId: subject.id,
+                                              blockId: block.id
+                                            })}
+                                            className={`rounded-2xl border p-5 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group relative ${theme.cardBg}`}
+                                          >
+                                            <div>
+                                              <div className="flex items-center justify-between pb-3 border-b border-black/5 mb-3">
+                                                <div className="flex items-center gap-2">
+                                                  <Pin size={14} className={theme.pinColor} />
+                                                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Post-it de Conhecimento</span>
+                                                </div>
+                                                <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100" onClick={e => e.stopPropagation()}>
+                                                  <button 
+                                                    onClick={() => setConceptModal({
+                                                      isOpen: true,
+                                                      subjectId: subject.id,
+                                                      blockId: block.id,
+                                                      conceptId: concept.id,
+                                                      title: concept.title,
+                                                      centralIdeas: getConceptCentralIdeas(concept),
+                                                      observations: concept.observations || '',
+                                                      color: concept.color || 'yellow',
+                                                      linkedStandards: concept.linkedStandards && concept.linkedStandards.length > 0 
+                                                        ? concept.linkedStandards 
+                                                        : [{ standardId: '', relevantPassages: '', page: '', section: '' }]
+                                                    })}
+                                                    className="p-1 text-slate-400 hover:text-slate-800 rounded transition"
+                                                  >
+                                                    <Edit2 size={13} />
+                                                  </button>
+                                                  <button 
+                                                    onClick={(e) => handleDeleteConcept(subject.id, block.id, concept.id, e)}
+                                                    className="p-1 text-slate-400 hover:text-red-600 rounded transition"
+                                                  >
+                                                    <Trash2 size={13} />
+                                                  </button>
+                                                </div>
+                                              </div>
+
+                                              <h5 className="text-sm font-black text-slate-900 uppercase tracking-tight mb-2">
+                                                {concept.title}
+                                              </h5>
+
+                                              <p className="text-xs text-slate-700 font-medium leading-relaxed line-clamp-3">
+                                                {concept.centralIdea}
+                                              </p>
+                                            </div>
+
+                                            <div className="pt-3 border-t border-black/5 flex items-center justify-between mt-3">
+                                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border ${theme.badgeBg}`}>
+                                                <ShieldCheck size={12} />
+                                                {concept.linkedStandards.length} {concept.linkedStandards.length === 1 ? 'Evidência' : 'Evidências'}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          
+          /* 5. VISÃO GERAL & ACERVO LAYOUT (MATCHING MOCKUP IMAGE) */
+          <div className="space-y-8">
+            
+            {/* FAVORITOS SECTION (Horizontal row matching image mockup) */}
+            {favoritesList.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-black text-slate-900 tracking-tight">Favoritos</h3>
+                  <button 
+                    onClick={() => setActiveNav('favoritos')} 
+                    className="text-xs font-bold text-teal-700 hover:text-teal-800 flex items-center gap-1 transition"
+                  >
+                    Ver todos <ChevronRight size={14} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {favoritesList.slice(0, 4).map(std => {
+                    const isFav = favoriteIds.includes(std.id);
+                    const isBook = std.type === 'Guia' || std.name.toLowerCase().includes('guia');
+
+                    return (
+                      <div 
+                        key={std.id}
+                        onClick={() => setDetailedStandard(std)}
+                        className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all flex items-center justify-between cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100/80 flex-shrink-0">
+                            {isBook ? <BookOpen size={18} /> : <ShieldCheck size={18} />}
+                          </div>
+                          <span className="text-xs font-black text-slate-800 group-hover:text-teal-700 transition truncate">
+                            {std.name.split(',')[0]}
+                          </span>
+                        </div>
+
+                        <button 
+                          onClick={(e) => toggleFavorite(std.id, e)}
+                          className="p-1.5 text-slate-300 hover:text-amber-400 transition"
+                        >
+                          <Star size={16} className={isFav ? "fill-amber-400 text-amber-400" : ""} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* MAIN LOWER SPLIT: LEFT CATEGORIAS CARD + RIGHT NORMAS RECENTES GRID */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              
+              {/* LEFT COLUMN: CATEGORIAS CARD */}
+              <div className="lg:col-span-4 bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+                <h3 className="text-base font-black text-slate-900 tracking-tight">Categorias</h3>
+
+                <div className="space-y-2">
+                  {[
+                    { id: 'Boas Práticas', label: 'Boas Práticas', icon: FlaskConical, count: categoryCounts['Boas Práticas'] },
+                    { id: 'RDC', label: 'RDC', icon: FileText, count: categoryCounts['RDC'] },
+                    { id: 'Guias e Diretrizes', label: 'Guias e Diretrizes', icon: BookOpen, count: categoryCounts['Guias e Diretrizes'] },
+                    { id: 'Instruções Normativas', label: 'Instruções Normativas', icon: Layers, count: categoryCounts['Instruções Normativas'] },
+                    { id: 'Outros Documentos', label: 'Outros Documentos', icon: MoreHorizontal, count: categoryCounts['Outros Documentos'] }
+                  ].map((cat) => {
+                    const CatIcon = cat.icon;
+                    const isSelected = selectedCategory === cat.id;
+
+                    return (
+                      <div
+                        key={cat.id}
+                        onClick={() => setSelectedCategory(isSelected ? 'todas' : cat.id)}
+                        className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between cursor-pointer ${
+                          isSelected 
+                            ? 'bg-teal-50 border-teal-200 text-teal-900 font-extrabold shadow-xs' 
+                            : 'bg-white border-slate-100 hover:border-slate-200 text-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`p-2 rounded-xl ${isSelected ? 'bg-teal-100 text-teal-700' : 'bg-slate-50 text-slate-500'}`}>
+                            <CatIcon size={18} />
+                          </div>
+                          <span className="text-xs font-black truncate">{cat.label}</span>
+                        </div>
+
+                        <span className="text-xs font-black text-teal-700 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded-full">
+                          {cat.count}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <button 
+                  onClick={() => setSelectedCategory('todas')}
+                  className="w-full text-center text-xs font-bold text-teal-700 hover:text-teal-800 pt-2 flex items-center justify-center gap-1 transition"
+                >
+                  Ver todas as categorias <ChevronRight size={14} />
                 </button>
               </div>
 
-            </form>
-          </div>
-        </div>
-      )}
+              {/* RIGHT COLUMN: NORMAS RECENTES GRID */}
+              <div className="lg:col-span-8 space-y-4">
+                
+                {/* Header row */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-slate-900 tracking-tight">Normas recentes</h3>
+                    <span className="text-[10px] font-black text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                      {filteredStandards.length} resultados
+                    </span>
+                  </div>
 
-      {/* ======================================================== */}
-      {/* MODAL: SUBJECT MODAL (CREATE / EDIT NAME) */}
+                  <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 font-bold">
+                      <span>Ordenar por:</span>
+                      <select 
+                        value={sortBy}
+                        onChange={e => setSortBy(e.target.value as any)}
+                        className="bg-transparent font-black text-slate-800 outline-none cursor-pointer"
+                      >
+                        <option value="recentes">Mais recentes</option>
+                        <option value="nome">Nome</option>
+                        <option value="status">Status</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                      <button 
+                        onClick={() => setViewLayout('grid')}
+                        className={`p-1.5 rounded-lg transition ${viewLayout === 'grid' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-400'}`}
+                      >
+                        <Grid size={15} />
+                      </button>
+                      <button 
+                        onClick={() => setViewLayout('list')}
+                        className={`p-1.5 rounded-lg transition ${viewLayout === 'list' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-400'}`}
+                      >
+                        <List size={15} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cards Grid */}
+                <div className={viewLayout === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 gap-4" : "space-y-3"}>
+                  {filteredStandards.map(std => {
+                    const statusBadge = getStatusBadge(std.status);
+                    const isFav = favoriteIds.includes(std.id);
+                    const dateStr = extractDateFromName(std.name);
+
+                    return (
+                      <div 
+                        key={std.id}
+                        onClick={() => setDetailedStandard(std)}
+                        className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group relative"
+                      >
+                        <div>
+                          {/* Top Badge Row */}
+                          <div className="flex items-center justify-between gap-2 mb-3">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${statusBadge.className}`}>
+                                {statusBadge.label}
+                              </span>
+                              <span className="text-[9px] font-black uppercase tracking-wider text-slate-500">
+                                {std.type}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                              <button 
+                                onClick={(e) => toggleFavorite(std.id, e)}
+                                className="p-1 text-slate-300 hover:text-amber-400 transition"
+                              >
+                                <Star size={16} className={isFav ? "fill-amber-400 text-amber-400" : ""} />
+                              </button>
+                              <button 
+                                onClick={() => startEdit(std)}
+                                className="p-1 text-slate-300 hover:text-teal-700 transition"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              <button 
+                                onClick={() => onDeleteStandard(std.id)}
+                                className="p-1 text-slate-300 hover:text-red-500 transition"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Title */}
+                          <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight group-hover:text-teal-800 transition line-clamp-2 mb-2">
+                            {std.name}
+                          </h4>
+
+                          {/* Summary */}
+                          <p className="text-xs text-slate-500 font-medium leading-relaxed line-clamp-2 mb-4">
+                            {std.theme || std.summary}
+                          </p>
+                        </div>
+
+                        {/* Footer Date */}
+                        <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 font-bold">
+                          <div className="flex items-center gap-1.5">
+                            <Calendar size={13} />
+                            <span>{dateStr}</span>
+                          </div>
+
+                          {std.documentLink && (
+                            <a 
+                              href={std.documentLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              className="text-teal-700 hover:underline flex items-center gap-1 text-[10px] font-black uppercase"
+                            >
+                              PDF <ExternalLink size={10} />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {filteredStandards.length === 0 && (
+                    <div className="col-span-full py-12 text-center bg-white rounded-3xl border border-slate-200/80 p-6 space-y-2">
+                      <ShieldCheck size={32} className="text-slate-300 mx-auto" />
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Nenhuma norma encontrada</p>
+                      <p className="text-slate-400 text-xs">Tente ajustar os filtros ou o termo de busca.</p>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
+      </main>
+
+      {/* MODALS */}
+
+      {/* 1. SUBJECT MODAL */}
       {subjectModal?.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <h3 className="font-black text-slate-800 uppercase tracking-tight">
+              <h3 className="font-black text-slate-800 uppercase tracking-tight text-sm">
                 {subjectModal.subjectId ? 'Editar Nome do Assunto' : 'Novo Assunto'}
               </h3>
               <button onClick={() => setSubjectModal(null)} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-full transition">
@@ -1786,7 +1382,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                   value={subjectModal.name}
                   onChange={e => setSubjectModal({ ...subjectModal, name: e.target.value })}
                   placeholder="Ex: Proteínas Recombinantes"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-medium"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -1799,7 +1395,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 uppercase tracking-wider rounded-lg transition shadow-md shadow-teal-600/15"
+                  className="px-6 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 uppercase tracking-wider rounded-lg transition shadow-sm"
                 >
                   {subjectModal.subjectId ? 'Salvar' : 'Criar'}
                 </button>
@@ -1809,13 +1405,12 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* MODAL: BLOCK MODAL (CREATE / EDIT NAME) */}
+      {/* 2. BLOCK MODAL */}
       {blockModal?.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <h3 className="font-black text-slate-800 uppercase tracking-tight">
+              <h3 className="font-black text-slate-800 uppercase tracking-tight text-sm">
                 {blockModal.blockId ? 'Editar Nome do Bloco/Fase' : 'Novo Bloco / Fase'}
               </h3>
               <button onClick={() => setBlockModal(null)} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-full transition">
@@ -1830,8 +1425,8 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                   autoFocus
                   value={blockModal.name}
                   onChange={e => setBlockModal({ ...blockModal, name: e.target.value })}
-                  placeholder="Ex: Estudo de Segurança, Estudo de Estabilidade, Qualidade..."
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-sm font-medium"
+                  placeholder="Ex: Estudo de Segurança, Estudo de Estabilidade..."
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -1844,7 +1439,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 uppercase tracking-wider rounded-lg transition shadow-md shadow-teal-600/15"
+                  className="px-6 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 uppercase tracking-wider rounded-lg transition shadow-sm"
                 >
                   {blockModal.blockId ? 'Salvar' : 'Criar'}
                 </button>
@@ -1854,27 +1449,73 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* MODAL: DETAILED VIEW MODAL FOR ASSOCIATED STANDARD */}
+      {/* 3. POST-IT MODAL */}
+      {conceptModal?.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+          <div className="w-full max-w-2xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden my-8">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <h3 className="font-black text-slate-800 uppercase tracking-tight text-sm">
+                {conceptModal.conceptId ? 'Editar Post-it de Conhecimento' : 'Novo Post-it de Conhecimento'}
+              </h3>
+              <button onClick={() => setConceptModal(null)} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-full transition">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveConcept} className="p-6 space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Título do Conceito / Termo</label>
+                <input
+                  required
+                  value={conceptModal.title}
+                  onChange={e => setConceptModal({ ...conceptModal, title: e.target.value })}
+                  placeholder="Ex: Toxicidade Local, Potência, Estabilidade..."
+                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Ideia Central (Resumo)</label>
+                <textarea
+                  required
+                  rows={3}
+                  value={conceptModal.centralIdeas[0] || ''}
+                  onChange={e => setConceptModal({ ...conceptModal, centralIdeas: [e.target.value] })}
+                  placeholder="Descreva brevemente o conceito regulatório..."
+                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setConceptModal(null)}
+                  className="px-5 py-2.5 text-xs font-bold text-slate-500 uppercase tracking-wider hover:bg-slate-50 rounded-xl transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-8 py-2.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 uppercase tracking-wider rounded-xl transition shadow-sm"
+                >
+                  <Save size={14} /> Salvar Post-it
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4. DETAILED STANDARD VIEW MODAL */}
       {detailedStandard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-2xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            
-            {/* Header */}
+          <div className="w-full max-w-2xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${getStatusColor(detailedStandard.status)}`}>
-                    {getStatusIcon(detailedStandard.status)}
-                    {detailedStandard.status}
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-slate-100 text-slate-500 border border-slate-200">
-                    <Tag size={8} />
-                    {detailedStandard.type || 'Manual'}
-                  </span>
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Versão {detailedStandard.version}</span>
-                </div>
-                <h3 className="text-base sm:text-lg font-black text-slate-800 uppercase tracking-tight mt-1 leading-tight">
+                <span className="text-[10px] font-black uppercase text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-100">
+                  {detailedStandard.type}
+                </span>
+                <h3 className="text-base font-black text-slate-900 uppercase tracking-tight mt-1">
                   {detailedStandard.name}
                 </h3>
               </div>
@@ -1883,65 +1524,31 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
               </button>
             </div>
 
-            {/* Content body */}
-            <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
-              
-              {/* Theme */}
+            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
               <div>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Tema / Assunto Geral:</span>
-                <p className="text-sm font-bold text-brand-primary uppercase tracking-wide">{detailedStandard.theme}</p>
+                <p className="text-xs font-bold text-teal-800 uppercase">{detailedStandard.theme}</p>
               </div>
 
-              {/* Summary */}
               <div>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Resumo / Informações Gerais:</span>
-                <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed text-justify whitespace-pre-line bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Resumo / Diretrizes:</span>
+                <p className="text-xs text-slate-600 font-medium leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100">
                   {detailedStandard.summary}
                 </p>
               </div>
 
-              {/* Applies to */}
-              {detailedStandard.appliesTo && (
-                <div>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Se aplica a:</span>
-                  <p className="text-xs font-bold text-slate-700 leading-relaxed">{detailedStandard.appliesTo}</p>
-                </div>
-              )}
-
-              {/* General KeyNotes */}
-              {detailedStandard.keyNotes && (
-                <div>
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Anotações Gerais:</span>
-                  <div className="text-xs text-slate-700 font-medium leading-relaxed text-justify bg-amber-50/40 border border-amber-100 p-3 rounded-xl whitespace-pre-line">
-                    {detailedStandard.keyNotes}
-                  </div>
-                </div>
-              )}
-
-              {/* Links */}
-              <div className="flex gap-4 pt-2 border-t border-slate-100">
-                {detailedStandard.documentLink && (
+              {detailedStandard.documentLink && (
+                <div className="pt-2">
                   <a 
                     href={detailedStandard.documentLink} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-slate-600 hover:text-brand-primary text-xs font-bold uppercase tracking-tight transition"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-teal-50 text-teal-800 hover:bg-teal-100 rounded-xl text-xs font-bold transition border border-teal-100"
                   >
-                    <FileText size={14} /> Documento <ExternalLink size={12} />
+                    <FileText size={14} /> Acessar Documento Oficial <ExternalLink size={12} />
                   </a>
-                )}
-                {detailedStandard.notebookLMLink && (
-                  <a 
-                    href={detailedStandard.notebookLMLink} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-slate-600 hover:text-emerald-600 text-xs font-bold uppercase tracking-tight transition"
-                  >
-                    <BookOpen size={14} /> NotebookLM <ExternalLink size={12} />
-                  </a>
-                )}
-              </div>
-
+                </div>
+              )}
             </div>
 
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">

@@ -1,5 +1,5 @@
 
-import { ActivityPlanTemplate, TeamMember, AppUser } from './types';
+import { ActivityPlanTemplate, TeamMember, AppUser, RegulatoryStandard } from './types';
 
 export const DEFAULT_APP_USERS: AppUser[] = [
   {
@@ -324,5 +324,128 @@ export const DEFAULT_FORMULATION_BATCHES = [
     potencyResult: 'Potência 98% de acordo com o padrão',
     responsibleTechnician: 'Dra. Bruna Dias / Garantia da Qualidade',
     notes: 'Lote liberado para início da Fase 1 de ensaios clínicos.'
+  }
+];
+
+export const DEFAULT_REGULATORY_STANDARDS: RegulatoryStandard[] = [
+  {
+    id: 'std_rdc_658',
+    name: 'RDC Nº 658, de 30 de março de 2022',
+    type: 'RDC',
+    theme: 'Boas Práticas de Fabricação de Medicamentos.',
+    phase: 'Fase 1: Prova de Conceito',
+    relatedActivities: ['Desenvolvimento de Dossiê de Insumo (DIFA)', 'Validação de Processo Produtivo'],
+    version: '1.0',
+    status: 'vigente',
+    summary: 'Boas Práticas de Fabricação de Medicamentos.',
+    documentLink: 'https://www.in.gov.br',
+    notebookLMLink: '',
+    keywords: ['BPF', 'Medicamentos', 'RDC 658'],
+    appliesTo: 'Medicamentos e Produtos Biológicos'
+  },
+  {
+    id: 'std_rdc_654',
+    name: 'RDC Nº 654, de 24 de março de 2022',
+    type: 'RDC',
+    theme: 'Boas Práticas de Fabricação de Insumos Farmacêuticos Ativos.',
+    phase: 'Fase 1: Prova de Conceito',
+    relatedActivities: ['Desenvolvimento de Dossiê de Insumo (DIFA)'],
+    version: '1.0',
+    status: 'vigente',
+    summary: 'Boas Práticas de Fabricação de Insumos Farmacêuticos Ativos.',
+    documentLink: 'https://www.in.gov.br',
+    notebookLMLink: '',
+    keywords: ['IFA', 'Insumos', 'RDC 654'],
+    appliesTo: 'Insumos Farmacêuticos Ativos'
+  },
+  {
+    id: 'std_in_127',
+    name: 'IN Nº 127, de 30 de março de 2022',
+    type: 'IN',
+    theme: 'Boas Práticas Complementares a Insumos.',
+    phase: 'Fase 2: Fase Não Clínica',
+    relatedActivities: ['Coordenação de Estudo de Estabilidade'],
+    version: '1.0',
+    status: 'vigente',
+    summary: 'Boas Práticas Complementares a Insumos.',
+    documentLink: 'https://www.in.gov.br',
+    notebookLMLink: '',
+    keywords: ['IN 127', 'Insumos', 'Complementares'],
+    appliesTo: 'Insumos Biológicos'
+  },
+  {
+    id: 'std_rdc_55',
+    name: 'RDC Nº 55, de 16 de dezembro de 2010',
+    type: 'RDC',
+    theme: 'Boas Práticas de Fabricação de Medicamentos.',
+    phase: 'Fase 1: Prova de Conceito',
+    relatedActivities: [],
+    version: '1.0',
+    status: 'obsoleto',
+    summary: 'Boas Práticas de Fabricação de Medicamentos.',
+    documentLink: 'https://www.in.gov.br',
+    notebookLMLink: '',
+    keywords: ['Biológicos', 'Registro', 'RDC 55'],
+    appliesTo: 'Produtos Biológicos'
+  },
+  {
+    id: 'std_in_429',
+    name: 'IN Nº 429, de 23 de março de 2026',
+    type: 'IN',
+    theme: 'Boas Práticas de Fabricação de Produtos Biológicos.',
+    phase: 'Fase 2: Fase Não Clínica',
+    relatedActivities: ['Caracterização do Banco Viral Mestre/Trabalho'],
+    version: '1.0',
+    status: 'vigente',
+    summary: 'Boas Práticas de Fabricação de Produtos Biológicos.',
+    documentLink: 'https://www.in.gov.br',
+    notebookLMLink: '',
+    keywords: ['Vacinas', 'Biológicos', 'IN 429'],
+    appliesTo: 'Vacinas e Biotecnologia'
+  },
+  {
+    id: 'std_guia_42',
+    name: 'Guia Nº 42/2023',
+    type: 'Guia',
+    theme: 'Validação de Processos e Limpeza de Equipamentos.',
+    phase: 'Fase 1: Prova de Conceito',
+    relatedActivities: ['Validação de Processo Produtivo'],
+    version: '1.0',
+    status: 'vigente',
+    summary: 'Validação de Processos e Limpeza de Equipamentos.',
+    documentLink: 'https://www.in.gov.br',
+    notebookLMLink: '',
+    keywords: ['Limpeza', 'Validação', 'Guia 42'],
+    appliesTo: 'Plantas Piloto e Industriais'
+  },
+  {
+    id: 'std_rdc_1001',
+    name: 'RDC Nº 1.001, de 11 de dezembro de 2025',
+    type: 'RDC',
+    theme: 'Enquadramento na Categoria Prioritária.',
+    phase: 'Fase 3: Fase Clínica I',
+    relatedActivities: ['Submissão Regulatória Final'],
+    version: '1.0',
+    status: 'vigente com alteração',
+    summary: 'Enquadramento, na Categoria Prioritária.',
+    documentLink: 'https://www.in.gov.br',
+    notebookLMLink: '',
+    keywords: ['Prioritária', 'Anvisa', 'RDC 1001'],
+    appliesTo: 'Vacinas Prioritárias do SUS'
+  },
+  {
+    id: 'std_guia_dossies',
+    name: 'Guia para Elaboração de Dossiês Regulatórios',
+    type: 'Guia',
+    theme: 'Requisitos para Submissão de Dossiês à ANVISA.',
+    phase: 'Fase 3: Fase Clínica I',
+    relatedActivities: ['Compilação e Submissão de Dossiê'],
+    version: '1.0',
+    status: 'vigente',
+    summary: 'Requisitos para Submissão de Dossiês à ANVISA.',
+    documentLink: 'https://www.in.gov.br',
+    notebookLMLink: '',
+    keywords: ['Dossiê', 'Submissão', 'ANVISA'],
+    appliesTo: 'Dossiês de Ensaios Clínicos (DDCM)'
   }
 ];

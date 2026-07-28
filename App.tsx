@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
 import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch } from './types';
-import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES } from './constants';
+import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES } from './constants';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
 import Sidebar from './components/Sidebar';
@@ -320,7 +320,7 @@ const App: React.FC = () => {
       notifications: cloudData.notifications || [],
       logs: cloudData.logs || [],
       appUsers: cloudData.appUsers || DEFAULT_APP_USERS,
-      regulatoryStandards: cloudData.regulatoryStandards || [],
+      regulatoryStandards: (cloudData.regulatoryStandards && cloudData.regulatoryStandards.length > 0) ? cloudData.regulatoryStandards : DEFAULT_REGULATORY_STANDARDS,
       regulatorySubjects: (cloudData.regulatorySubjects && cloudData.regulatorySubjects.length > 0) ? cloudData.regulatorySubjects : DEFAULT_REGULATORY_SUBJECTS,
       vaccineCandidates: cloudData.vaccineCandidates || DEFAULT_VACCINE_CANDIDATES,
       vaccineComponents: cloudData.vaccineComponents || DEFAULT_VACCINE_COMPONENTS,
