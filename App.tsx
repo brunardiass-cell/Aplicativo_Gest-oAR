@@ -1286,30 +1286,31 @@ const App: React.FC = () => {
           : (isDesktop ? 'ml-64 p-10' : 'ml-0 p-4 pt-24')
       }`}>
         {/* Indicador do Módulo Ativo com Troca de Módulo Independentes */}
-        <div className="mb-6 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-sm flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-700 border border-teal-100 flex items-center justify-center font-black text-xs shadow-xs shrink-0">
-              CTV
+        {currentModule !== 'regulatory_standards' && (
+          <div className="mb-6 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-sm flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-700 border border-teal-100 flex items-center justify-center font-black text-xs shadow-xs shrink-0">
+                CTV
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">Módulo do Sistema CTVacinas</span>
+                <h2 className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-tight">
+                  {currentModule === 'activities_projects' && 'Gestão de Atividades e Projetos'}
+                  {currentModule === 'vaccines_components' && 'Módulo de Vacinas e Componentes'}
+                </h2>
+              </div>
             </div>
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">Módulo do Sistema CTVacinas</span>
-              <h2 className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-tight">
-                {currentModule === 'activities_projects' && 'Gestão de Atividades e Projetos'}
-                {currentModule === 'regulatory_standards' && 'Módulo de Normas Regulatórias'}
-                {currentModule === 'vaccines_components' && 'Módulo de Vacinas e Componentes'}
-              </h2>
-            </div>
-          </div>
 
-          <button
-            onClick={() => { setHasChosenModule(false); }}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-600 hover:text-teal-700 bg-slate-100 hover:bg-teal-50 transition flex items-center gap-2 border border-slate-200/80 shrink-0"
-            title="Voltar para a Seleção de Módulos"
-          >
-            <Layers size={15} />
-            <span className="hidden sm:inline">Trocar Módulo</span>
-          </button>
-        </div>
+            <button
+              onClick={() => { setHasChosenModule(false); }}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-600 hover:text-teal-700 bg-slate-100 hover:bg-teal-50 transition flex items-center gap-2 border border-slate-200/80 shrink-0"
+              title="Voltar para a Seleção de Módulos"
+            >
+              <Layers size={15} />
+              <span className="hidden sm:inline">Trocar Módulo</span>
+            </button>
+          </div>
+        )}
 
         {comiteImpersonatingFrom && (
           <div className="mb-6 bg-teal-50 border border-teal-200 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-in fade-in duration-300">
@@ -1369,6 +1370,7 @@ const App: React.FC = () => {
             projects={activeProjects}
             subjects={regulatorySubjects}
             onUpdateSubjects={(newSubjects) => { setRegulatorySubjects(newSubjects); setDataDirty(); }}
+            onSwitchModule={() => setHasChosenModule(false)}
           />
         ) : (
           <>

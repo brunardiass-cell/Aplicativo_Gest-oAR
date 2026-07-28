@@ -48,7 +48,29 @@ interface RegulatoryStandardsManagerProps {
   projects: Project[];
   subjects?: RegulatorySubject[];
   onUpdateSubjects?: (subjects: RegulatorySubject[]) => void;
+  onSwitchModule?: () => void;
 }
+
+const matchCategory = (s: RegulatoryStandard, category: string): boolean => {
+  if (category === 'todas') return true;
+  const typeLower = (s.type || '').toLowerCase();
+  const themeLower = (s.theme || '').toLowerCase();
+  const nameLower = (s.name || '').toLowerCase();
+  const summaryLower = (s.summary || '').toLowerCase();
+
+  const isRDC = typeLower === 'rdc' || nameLower.includes('rdc');
+  const isGuia = typeLower === 'guia' || typeLower.includes('guia') || typeLower.includes('diretriz');
+  const isIN = typeLower === 'in' || typeLower === 'instrução normativa' || typeLower.includes('instrução') || typeLower.includes('normativa');
+  const isBP = themeLower.includes('boas práticas') || summaryLower.includes('boas práticas') || nameLower.includes('boas práticas') || typeLower.includes('boas práticas');
+
+  if (category === 'RDC') return isRDC;
+  if (category === 'Guias e Diretrizes') return isGuia;
+  if (category === 'Instruções Normativas') return isIN;
+  if (category === 'Boas Práticas') return isBP;
+  if (category === 'Outros Documentos') return !isRDC && !isGuia && !isIN && !isBP;
+
+  return true;
+};
 
 const getBlockConcepts = (block: RegulatoryBlock, standardsList: RegulatoryStandard[] = []): KnowledgeConcept[] => {
   if (block.concepts && block.concepts.length > 0) {
@@ -169,7 +191,8 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   activityPlans,
   projects,
   subjects = [],
-  onUpdateSubjects = () => {}
+  onUpdateSubjects = () => {},
+  onSwitchModule
 }) => {
   // Navigation State
   const [activeNav, setActiveNav] = useState<'post_its' | 'acervo' | 'favoritos'>('acervo');
@@ -339,11 +362,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
 
       // Category filter
       if (selectedCategory !== 'todas') {
-        if (selectedCategory === 'RDC' && s.type !== 'RDC') return false;
-        if (selectedCategory === 'Guias e Diretrizes' && s.type !== 'Guia') return false;
-        if (selectedCategory === 'Instruções Normativas' && (s.type !== 'IN' && s.type !== 'Instrução Normativa')) return false;
-        if (selectedCategory === 'Boas Práticas' && !s.theme.toLowerCase().includes('boas práticas')) return false;
-        if (selectedCategory === 'Outros Documentos' && ['RDC', 'Guia', 'IN', 'Instrução Normativa'].includes(s.type) && s.theme.toLowerCase().includes('boas práticas')) return false;
+        if (!matchCategory(s, selectedCategory)) return false;
       }
 
       return true;
@@ -355,14 +374,24 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   }, [standards, favoriteIds]);
 
   const categoryCounts = useMemo(() => {
-    return {
-      'Boas Práticas': 28,
-      'RDC': 142,
-      'Guias e Diretrizes': 36,
-      'Instruções Normativas': 18,
-      'Outros Documentos': 24
+    const counts: Record<string, number> = {
+      'Boas Práticas': 0,
+      'RDC': 0,
+      'Guias e Diretrizes': 0,
+      'Instruções Normativas': 0,
+      'Outros Documentos': 0
     };
-  }, []);
+
+    standards.forEach(s => {
+      if (matchCategory(s, 'Boas Práticas')) counts['Boas Práticas']++;
+      if (matchCategory(s, 'RDC')) counts['RDC']++;
+      if (matchCategory(s, 'Guias e Diretrizes')) counts['Guias e Diretrizes']++;
+      if (matchCategory(s, 'Instruções Normativas')) counts['Instruções Normativas']++;
+      if (matchCategory(s, 'Outros Documentos')) counts['Outros Documentos']++;
+    });
+
+    return counts;
+  }, [standards]);
 
   // Post-its Subject filtering
   const filteredSubjects = useMemo(() => {
@@ -575,46 +604,46 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
             <button
               onClick={() => { setActiveNav('post_its'); setIsAdding(false); }}
               title="Post-its de Conhecimento"
-              className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3.5 py-2.5'} rounded-2xl text-xs font-extrabold transition-all ${
+              className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3.5 py-2.5'} rounded-2xl text-xs font-extrabold transition-all text-left ${
                 activeNav === 'post_its'
                   ? 'bg-emerald-50 text-emerald-800 border border-emerald-100 shadow-xs'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
-              <div className={`p-1.5 rounded-xl ${activeNav === 'post_its' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400'}`}>
+              <div className={`p-1.5 rounded-xl ${activeNav === 'post_its' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400'} flex-shrink-0`}>
                 <StickyNote size={16} />
               </div>
-              {!isSidebarCollapsed && <span>Post-its de Conhecimento</span>}
+              {!isSidebarCollapsed && <span className="text-left flex-1 leading-tight">Post-its de Conhecimento</span>}
             </button>
 
             <button
               onClick={() => { setActiveNav('acervo'); setSelectedCategory('todas'); setIsAdding(false); }}
               title="Acervo de Normas"
-              className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3.5 py-2.5'} rounded-2xl text-xs font-extrabold transition-all ${
+              className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3.5 py-2.5'} rounded-2xl text-xs font-extrabold transition-all text-left ${
                 activeNav === 'acervo'
                   ? 'bg-emerald-50 text-emerald-800 border border-emerald-100 shadow-xs'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
-              <div className={`p-1.5 rounded-xl ${activeNav === 'acervo' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400'}`}>
+              <div className={`p-1.5 rounded-xl ${activeNav === 'acervo' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400'} flex-shrink-0`}>
                 <FileText size={16} />
               </div>
-              {!isSidebarCollapsed && <span>Acervo de Normas</span>}
+              {!isSidebarCollapsed && <span className="text-left flex-1 leading-tight">Acervo de Normas</span>}
             </button>
 
             <button
               onClick={() => { setActiveNav('favoritos'); setIsAdding(false); }}
               title="Favoritos"
-              className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3.5 py-2.5'} rounded-2xl text-xs font-extrabold transition-all ${
+              className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3.5 py-2.5'} rounded-2xl text-xs font-extrabold transition-all text-left ${
                 activeNav === 'favoritos'
                   ? 'bg-emerald-50 text-emerald-800 border border-emerald-100 shadow-xs'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
-              <div className={`p-1.5 rounded-xl ${activeNav === 'favoritos' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400'}`}>
+              <div className={`p-1.5 rounded-xl ${activeNav === 'favoritos' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400'} flex-shrink-0`}>
                 <Star size={16} />
               </div>
-              {!isSidebarCollapsed && <span>Favoritos</span>}
+              {!isSidebarCollapsed && <span className="text-left flex-1 leading-tight">Favoritos</span>}
             </button>
           </div>
 
@@ -645,18 +674,18 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                     if (activeNav === 'post_its') setActiveNav('acervo');
                     setIsAdding(false);
                   }}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'justify-between px-3.5 py-2'} rounded-2xl text-xs font-bold transition-all ${
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'justify-between px-3.5 py-2'} rounded-2xl text-xs font-bold transition-all text-left ${
                     isSelected 
                       ? 'bg-teal-50 text-teal-800 font-black border border-teal-100' 
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5 truncate">
-                    <CatIcon size={15} className={isSelected ? 'text-teal-600' : 'text-slate-400'} />
-                    {!isSidebarCollapsed && <span className="truncate">{cat.label}</span>}
+                  <div className="flex items-center gap-2.5 truncate min-w-0 flex-1">
+                    <CatIcon size={15} className={`flex-shrink-0 ${isSelected ? 'text-teal-600' : 'text-slate-400'}`} />
+                    {!isSidebarCollapsed && <span className="truncate text-left flex-1">{cat.label}</span>}
                   </div>
                   {!isSidebarCollapsed && (
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border flex-shrink-0 ml-1 ${
                       isSelected ? 'bg-teal-100 text-teal-800 border-teal-200' : 'bg-emerald-50 text-emerald-800 border-emerald-100'
                     }`}>
                       {cat.count}
@@ -689,6 +718,32 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
 
       {/* 2. MAIN CONTENT AREA */}
       <main className="flex-1 p-4 sm:p-8 space-y-6 max-w-7xl">
+        
+        {/* Indicador do Módulo Ativo */}
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-700 border border-teal-100 flex items-center justify-center font-black text-xs shadow-xs shrink-0">
+              CTV
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">Módulo do Sistema CTVacinas</span>
+              <h2 className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-tight">
+                MÓDULO DE NORMAS REGULATÓRIAS
+              </h2>
+            </div>
+          </div>
+
+          {onSwitchModule && (
+            <button
+              onClick={onSwitchModule}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-600 hover:text-teal-700 bg-slate-100 hover:bg-teal-50 transition flex items-center gap-2 border border-slate-200/80 shrink-0"
+              title="Voltar para a Seleção de Módulos"
+            >
+              <Layers size={15} />
+              <span className="hidden sm:inline">Trocar Módulo</span>
+            </button>
+          )}
+        </div>
         
         {/* Header Banner matching mockup image */}
         <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
