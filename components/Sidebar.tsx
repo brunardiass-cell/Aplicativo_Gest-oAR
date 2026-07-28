@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 interface SidebarProps {
+  currentModule?: 'activities_projects' | 'regulatory_standards' | 'vaccines_components';
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
   onGoHome: () => void;
@@ -49,6 +50,7 @@ const getInitials = (name?: string): string => {
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ 
+  currentModule,
   currentView, 
   onViewChange, 
   onGoHome,
@@ -120,7 +122,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             label="Projetos" 
           />
           
-          {!selectedProfile?.isComiteGestor && (
+          {currentModule !== 'activities_projects' && !selectedProfile?.isComiteGestor && (
             <SidebarButton active={currentView === 'regulatory'} onClick={() => onViewChange('regulatory')} icon={<ShieldCheck size={18} />} label="Normas" />
           )}
           {hasFullAccess && !selectedProfile?.isComiteGestor && (

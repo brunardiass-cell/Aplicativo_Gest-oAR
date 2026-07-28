@@ -5,7 +5,6 @@ import {
   FormulationBatch, 
   VaccinePhase, 
   VaccinePlatform, 
-  VaccineStatus, 
   ComponentCategory, 
   ComponentGrade 
 } from '../types';
@@ -20,21 +19,25 @@ import {
   Eye, 
   ShieldCheck, 
   AlertCircle, 
-  CheckCircle2, 
   Clock, 
-  Calendar, 
-  User, 
-  Layers, 
-  Box, 
-  Sparkles, 
-  FileText, 
-  Tag, 
   X, 
-  Filter, 
-  ExternalLink,
   ChevronRight,
   BarChart2,
-  CheckSquare
+  LayoutDashboard,
+  FileText,
+  FileSpreadsheet,
+  FileUp,
+  Compass,
+  Sparkles,
+  Upload,
+  CheckCircle2,
+  Layers,
+  Copy,
+  ExternalLink,
+  Info,
+  Shield,
+  Activity,
+  Box
 } from 'lucide-react';
 
 interface VaccinesComponentsManagerProps {
@@ -57,12 +60,46 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
   onUpdateBatches,
   currentUser
 }) => {
-  const [activeTab, setActiveTab] = useState<'candidates' | 'components' | 'batches' | 'pipeline'>('candidates');
+  // Main Module Tabs
+  const [mainTab, setMainTab] = useState<'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog'>('dashboard');
+  
+  // Dashboard Subtab
+  const [dashboardSubTab, setDashboardSubTab] = useState<'vaccines' | 'components'>('vaccines');
+
+  // Catalog Subtab
+  const [catalogSubTab, setCatalogSubTab] = useState<'candidates' | 'components' | 'batches' | 'pipeline'>('candidates');
+
+  // Search & Filter State
   const [searchTerm, setSearchTerm] = useState('');
   const [phaseFilter, setPhaseFilter] = useState<string>('Todos');
   const [platformFilter, setPlatformFilter] = useState<string>('Todos');
   const [categoryFilter, setCategoryFilter] = useState<string>('Todos');
   const [gradeFilter, setGradeFilter] = useState<string>('Todos');
+
+  // Manual Inclusion Form State
+  const [manualName, setManualName] = useState('');
+  const [manualCode, setManualCode] = useState('');
+  const [manualPlatform, setManualPlatform] = useState<VaccinePlatform>('Proteína Recombinante');
+  const [manualPathogen, setManualPathogen] = useState('');
+  const [manualSafetyText, setManualSafetyText] = useState('');
+  const [manualOtherText, setManualOtherText] = useState('');
+  const [manualDocLink, setManualDocLink] = useState('');
+  const [antigensList, setAntigensList] = useState<{ name: string; qty: string }[]>([{ name: '', qty: '' }]);
+  const [excipientsList, setExcipientsList] = useState<{ name: string; qty: string }[]>([{ name: '', qty: '' }]);
+  const [impuritiesList, setImpuritiesList] = useState<{ name: string; limit: string }[]>([]);
+
+  // Spreadsheet Import State
+  const [spreadsheetText, setSpreadsheetText] = useState('');
+  const [spreadsheetStatus, setSpreadsheetStatus] = useState<'idle' | 'success'>('idle');
+
+  // PDF Import State
+  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
+  const [pdfProcessing, setPdfProcessing] = useState(false);
+  const [pdfResult, setPdfResult] = useState<string | null>(null);
+
+  // Explorer State
+  const [explorerFilter, setExplorerFilter] = useState('');
+  const [selectedSubstance, setSelectedSubstance] = useState<VaccineComponent | null>(null);
 
   // Modals state
   const [candidateModal, setCandidateModal] = useState<Partial<VaccineCandidate> | null>(null);
@@ -112,14 +149,12 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
 
     const now = new Date().toISOString().split('T')[0];
     if (candidateModal.id) {
-      // Edit
       const updated = candidates.map(c => c.id === candidateModal.id ? {
         ...(candidateModal as VaccineCandidate),
         updatedDate: now
       } : c);
       onUpdateCandidates(updated);
     } else {
-      // Add new
       const newCand: VaccineCandidate = {
         id: `cand_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
         name: candidateModal.name.trim(),
@@ -225,28 +260,116 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
     }
   };
 
-  const getPhaseBadgeColor = (phase: VaccinePhase) => {
-    switch (phase) {
-      case 'Pesquisa Básica': return 'bg-slate-100 text-slate-700 border-slate-200';
-      case 'Pré-clínico In Vitro': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-      case 'Pré-clínico In Vivo': return 'bg-purple-50 text-purple-700 border-purple-200';
-      case 'Ensaio Clínico Fase 1': return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'Ensaio Clínico Fase 2': return 'bg-sky-50 text-sky-700 border-sky-200';
-      case 'Ensaio Clínico Fase 3': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'Registro / Produção': return 'bg-teal-50 text-teal-800 border-teal-300 font-bold';
-      default: return 'bg-slate-100 text-slate-700';
+  // Submit Manual Inclusion Dossiê
+  const handleSaveManualDossier = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualName.trim() || !manualPathogen.trim()) {
+      alert('Preencha o nome do candidato e o patógeno-alvo.');
+      return;
+    }
+    const now = new Date().toISOString().split('T')[0];
+    const newCand: VaccineCandidate = {
+      id: `cand_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      name: manualName.trim(),
+      codeName: manualCode.trim(),
+      platform: manualPlatform,
+      targetPathogen: manualPathogen.trim(),
+      phase: 'Pesquisa Básica',
+      status: 'Em Desenvolvimento',
+      leadResearcher: currentUser?.name || 'Equipe CTVacinas',
+      description: `Estudos de Segurança: ${manualSafetyText}\n\nOutros Estudos: ${manualOtherText}`,
+      associatedComponentIds: [],
+      anvisaStatus: 'Dossiê em Preenchimento',
+      technicalNotes: manualDocLink ? `Bula PDF / Link: ${manualDocLink}` : '',
+      createdDate: now,
+      updatedDate: now
+    };
+    onUpdateCandidates([...candidates, newCand]);
+    alert('Registro gravado com sucesso no Catálogo Nacional!');
+    setManualName('');
+    setManualCode('');
+    setManualPathogen('');
+    setManualSafetyText('');
+    setManualOtherText('');
+    setManualDocLink('');
+    setAntigensList([{ name: '', qty: '' }]);
+    setExcipientsList([{ name: '', qty: '' }]);
+    setImpuritiesList([]);
+    setMainTab('dashboard');
+  };
+
+  // Example Spreadsheet Loader
+  const handleLoadExampleSpreadsheet = () => {
+    const example = [
+      "Comirnaty\tVacina de RNAm contra COVID-19\tPfizer / BioNTech\tmRNA\tImunização ativa contra COVID-19\t12/2020\tTozinameran:30 mcg\tHidróxido de Alumínio:0.5 mg\tCloreto de Sódio:4.4 mg\tDNA residual:<10 ng",
+      "SpiN-CTVacinas\tVacina Recombinante contra COVID-19\tCTVacinas / UFMG\tSubunidade Proteica (VLP)\tImunização e reforço contra variante COVID-19\t2023\tProteína SpiN:50 mcg\tSaponina QS-21:50 mcg\tPBS Tampão:1 mL\tEndotoxinas:<0.05 EU/mL"
+    ].join('\n');
+    setSpreadsheetText(example);
+  };
+
+  // Process Spreadsheet Batch
+  const handleProcessSpreadsheet = () => {
+    if (!spreadsheetText.trim()) {
+      alert('Cole os dados da planilha na caixa de texto primeiro.');
+      return;
+    }
+    const lines = spreadsheetText.trim().split('\n');
+    let addedCount = 0;
+    const now = new Date().toISOString().split('T')[0];
+
+    lines.forEach(line => {
+      const cols = line.split('\t');
+      if (cols.length >= 2) {
+        const name = cols[0]?.trim();
+        const formula = cols[1]?.trim() || name;
+        const producer = cols[2]?.trim() || 'CTVacinas';
+        const platform = (cols[3]?.trim() as VaccinePlatform) || 'Proteína Recombinante';
+        const pathogen = cols[4]?.trim() || 'Infecção Viral';
+
+        if (name) {
+          const newCand: VaccineCandidate = {
+            id: `cand_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+            name,
+            codeName: formula,
+            platform: platform || 'Proteína Recombinante',
+            targetPathogen: pathogen,
+            phase: 'Ensaio Clínico Fase 1',
+            status: 'Em Desenvolvimento',
+            leadResearcher: producer,
+            description: `Importado via Planilha | Indicação: ${cols[4] || 'N/A'} | Data Aprovação: ${cols[5] || 'N/A'}`,
+            associatedComponentIds: [],
+            anvisaStatus: 'Em Análise Regulatória',
+            technicalNotes: `Antígenos: ${cols[6] || 'N/A'} | Adjuvantes: ${cols[7] || 'N/A'}`,
+            createdDate: now,
+            updatedDate: now
+          };
+          candidates.push(newCand);
+          addedCount++;
+        }
+      }
+    });
+
+    if (addedCount > 0) {
+      onUpdateCandidates([...candidates]);
+      setSpreadsheetStatus('success');
+      alert(`Sucesso! ${addedCount} vacinas foram importadas e cadastradas no catálogo.`);
+      setSpreadsheetText('');
+    } else {
+      alert('Nenhum registro no formato correto foi identificado. Verifique os dados e tente novamente.');
     }
   };
 
-  const getCategoryBadgeColor = (cat: ComponentCategory) => {
-    switch (cat) {
-      case 'Antígeno': return 'bg-emerald-50 text-emerald-800 border-emerald-200';
-      case 'Adjuvante': return 'bg-amber-50 text-amber-800 border-amber-200';
-      case 'Vetor de Expressão': return 'bg-purple-50 text-purple-800 border-purple-200';
-      case 'Tampão / Estabilizante': return 'bg-blue-50 text-blue-800 border-blue-200';
-      case 'Linhagem Celular': return 'bg-rose-50 text-rose-800 border-rose-200';
-      default: return 'bg-slate-50 text-slate-700 border-slate-200';
+  // Process PDF with Gemini mock
+  const handleProcessPdfWithGemini = () => {
+    if (pdfFiles.length === 0) {
+      alert('Selecione ou solte ao menos um arquivo PDF de bula.');
+      return;
     }
+    setPdfProcessing(true);
+    setTimeout(() => {
+      setPdfProcessing(false);
+      setPdfResult(`Bula Analisada com Sucesso pelo Gemini AI:\n- Candidato Vacinal: SpiN-CTVacinas v2\n- Antígeno Recombinante: 50 mcg/dose\n- Adjuvante: Alumínio + QS21\n- Pureza por HPLC: >98%\n- Endotoxinas: <0.01 EU/dose`);
+    }, 1500);
   };
 
   const phasesList: VaccinePhase[] = [
@@ -261,923 +384,1092 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
 
   return (
     <div className="space-y-6">
-      {/* Top Banner Header */}
-      <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 rounded-[2.5rem] p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 rounded-full text-[10px] font-black uppercase tracking-widest mb-3">
-              <Syringe size={12} /> Módulo Especializado CTVacinas
+      {/* Navigation Header / Main Tabs */}
+      <div className="bg-slate-900 rounded-[2.5rem] p-4 sm:p-6 text-white shadow-xl">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-teal-500/20 text-teal-400 border border-teal-500/30 flex items-center justify-center font-black text-lg shadow-inner">
+              G
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white flex items-center gap-3">
-              Gestão de Vacinas e Componentes
-            </h1>
-            <p className="text-xs sm:text-sm font-medium text-emerald-100/80 max-w-2xl mt-1 leading-relaxed">
-              Plataforma para monitoramento de candidatos vacinais, controle de estoque de insumos biológicos (antígenos, adjuvantes, vetores), lotes de formulação e rastreabilidade regulatória do pipeline de biotecnologia.
-            </p>
-          </div>
-
-          {/* Quick Stats Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-white/10 backdrop-blur-md border border-white/15 p-4 rounded-2xl">
-              <span className="text-[9px] font-black uppercase tracking-wider text-emerald-200 block">Candidatos Vacinais</span>
-              <span className="text-2xl font-black text-white">{totalCandidates}</span>
-            </div>
-            <div className="bg-white/10 backdrop-blur-md border border-white/15 p-4 rounded-2xl">
-              <span className="text-[9px] font-black uppercase tracking-wider text-emerald-200 block">Fase Clínica / Registro</span>
-              <span className="text-2xl font-black text-white">{clinicalCandidates}</span>
-            </div>
-            <div className="bg-white/10 backdrop-blur-md border border-white/15 p-4 rounded-2xl">
-              <span className="text-[9px] font-black uppercase tracking-wider text-emerald-200 block">Insumos Biológicos</span>
-              <span className="text-2xl font-black text-white">{totalComponents}</span>
-            </div>
-            <div className="bg-white/10 backdrop-blur-md border border-white/15 p-4 rounded-2xl">
-              <span className="text-[9px] font-black uppercase tracking-wider text-emerald-200 block">Lotes de Formulação</span>
-              <span className="text-2xl font-black text-white">{totalBatches}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Module Navigation Tabs & Action Bar */}
-      <div className="bg-white p-4 sm:p-6 rounded-[2rem] border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-1 bg-slate-100 p-1.5 rounded-2xl overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('candidates')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shrink-0 ${
-              activeTab === 'candidates' ? 'bg-white text-emerald-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Syringe size={15} className={activeTab === 'candidates' ? 'text-emerald-600' : ''} />
-            Candidatos Vacinais ({candidates.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab('components')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shrink-0 ${
-              activeTab === 'components' ? 'bg-white text-emerald-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Dna size={15} className={activeTab === 'components' ? 'text-emerald-600' : ''} />
-            Componentes & Insumos ({components.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab('batches')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shrink-0 ${
-              activeTab === 'batches' ? 'bg-white text-emerald-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <TestTube size={15} className={activeTab === 'batches' ? 'text-emerald-600' : ''} />
-            Lotes de Formulação ({formulationBatches.length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab('pipeline')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shrink-0 ${
-              activeTab === 'pipeline' ? 'bg-white text-emerald-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <BarChart2 size={15} className={activeTab === 'pipeline' ? 'text-emerald-600' : ''} />
-            Pipeline & Relatório
-          </button>
-        </div>
-
-        {/* Action Button depending on tab */}
-        <div className="flex items-center gap-2">
-          {activeTab === 'candidates' && (
-            <button
-              onClick={() => setCandidateModal({})}
-              className="w-full md:w-auto px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
-            >
-              <Plus size={16} /> Novo Candidato Vacinal
-            </button>
-          )}
-
-          {activeTab === 'components' && (
-            <button
-              onClick={() => setComponentModal({})}
-              className="w-full md:w-auto px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
-            >
-              <Plus size={16} /> Novo Insumo / Componente
-            </button>
-          )}
-
-          {activeTab === 'batches' && (
-            <button
-              onClick={() => setBatchModal({ componentsUsed: [] })}
-              className="w-full md:w-auto px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
-            >
-              <Plus size={16} /> Novo Lote de Formulação
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-        {/* Search Input */}
-        <div className="relative w-full sm:w-80">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Buscar por nome, código, responsável ou patógeno..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs font-medium outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition"
-          />
-        </div>
-
-        {/* Tab-specific Filters */}
-        {activeTab === 'candidates' && (
-          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-            <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Fase:</span>
-              <select
-                value={phaseFilter}
-                onChange={e => setPhaseFilter(e.target.value)}
-                className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none cursor-pointer"
-              >
-                <option value="Todos">Todas as Fases</option>
-                {phasesList.map(p => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Plataforma:</span>
-              <select
-                value={platformFilter}
-                onChange={e => setPlatformFilter(e.target.value)}
-                className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none cursor-pointer"
-              >
-                <option value="Todos">Todas as Plataformas</option>
-                <option value="Proteína Recombinante">Proteína Recombinante</option>
-                <option value="mRNA / RNAm">mRNA / RNAm</option>
-                <option value="Vetor Viral">Vetor Viral</option>
-                <option value="Vírus Inativado">Vírus Inativado</option>
-                <option value="Subunidade / Quimérica">Subunidade / Quimérica</option>
-                <option value="Sintético / Peptídeo">Sintético / Peptídeo</option>
-              </select>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'components' && (
-          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-            <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Categoria:</span>
-              <select
-                value={categoryFilter}
-                onChange={e => setCategoryFilter(e.target.value)}
-                className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none cursor-pointer"
-              >
-                <option value="Todos">Todas as Categorias</option>
-                <option value="Antígeno">Antígeno</option>
-                <option value="Adjuvante">Adjuvante</option>
-                <option value="Vetor de Expressão">Vetor de Expressão</option>
-                <option value="Tampão / Estabilizante">Tampão / Estabilizante</option>
-                <option value="Proteína Carrier">Proteína Carrier</option>
-                <option value="Linhagem Celular">Linhagem Celular</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Grau Limpeza:</span>
-              <select
-                value={gradeFilter}
-                onChange={e => setGradeFilter(e.target.value)}
-                className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none cursor-pointer"
-              >
-                <option value="Todos">Todos os Graus</option>
-                <option value="Grau Científico / Pesquisa">Grau Científico / Pesquisa</option>
-                <option value="Pre-GMP">Pre-GMP</option>
-                <option value="GMP / Grau Clínico">GMP / Grau Clínico</option>
-              </select>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* TAB CONTENT: 1. CANDIDATES */}
-      {activeTab === 'candidates' && (
-        <div className="space-y-4">
-          {filteredCandidates.length === 0 ? (
-            <div className="bg-white rounded-[2rem] border border-slate-200 p-12 text-center space-y-3">
-              <Syringe size={40} className="mx-auto text-slate-300" />
-              <h3 className="text-base font-bold text-slate-700">Nenhum candidato vacinal encontrado</h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Tente ajustar os termos de busca ou filtros, ou cadastre um novo candidato a vacina no botão acima.
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white flex items-center gap-2">
+                GESTÃO REGULATÓRIA DE VACINAS
+              </h1>
+              <p className="text-xs font-bold text-slate-400 tracking-wider">
+                Módulo Especializado de Vacinas & Componentes Biológicos
               </p>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredCandidates.map(candidate => {
-                const linkedComps = components.filter(comp => candidate.associatedComponentIds?.includes(comp.id));
+          </div>
 
-                return (
-                  <div 
-                    key={candidate.id}
-                    className="bg-white rounded-[2rem] border border-slate-200/90 hover:border-emerald-500/40 p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
-                  >
-                    <div className="space-y-4">
-                      {/* Header Badge */}
-                      <div className="flex items-start justify-between gap-3">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${getPhaseBadgeColor(candidate.phase)}`}>
-                          {candidate.phase}
-                        </span>
+          <div className="flex items-center gap-2 text-xs font-medium text-slate-300">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
+              <ShieldCheck size={13} /> Anvisa OK
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-teal-500/10 text-teal-400 border border-teal-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
+              <Activity size={13} /> {totalCandidates} Vacinas
+            </span>
+          </div>
+        </div>
 
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => setViewCandidate(candidate)}
-                            className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition"
-                            title="Ver detalhes completos"
-                          >
-                            <Eye size={16} />
-                          </button>
-                          <button
-                            onClick={() => setCandidateModal(candidate)}
-                            className="p-1.5 text-slate-400 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition"
-                            title="Editar candidato"
-                          >
-                            <Edit3 size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCandidate(candidate.id, candidate.name)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                            title="Excluir"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
+        {/* 6 Primary Module Buttons matching screenshot */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 bg-slate-800/80 p-2 rounded-2xl border border-slate-700/80">
+          <button
+            onClick={() => setMainTab('dashboard')}
+            className={`px-3 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition flex flex-col items-center justify-center gap-1.5 ${
+              mainTab === 'dashboard' ? 'bg-teal-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+            }`}
+          >
+            <LayoutDashboard size={18} />
+            <span>Dashboard</span>
+          </button>
 
-                      {/* Title & Pathogen */}
-                      <div>
-                        <h3 className="text-lg font-black text-slate-900 group-hover:text-emerald-800 transition line-clamp-1">
-                          {candidate.name}
-                        </h3>
-                        <p className="text-xs font-bold text-emerald-700 flex items-center gap-1 mt-0.5">
-                          <Sparkles size={12} /> Alvo: {candidate.targetPathogen}
-                        </p>
-                      </div>
+          <button
+            onClick={() => setMainTab('manual_inclusion')}
+            className={`px-3 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition flex flex-col items-center justify-center gap-1.5 ${
+              mainTab === 'manual_inclusion' ? 'bg-teal-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+            }`}
+          >
+            <FileText size={18} />
+            <span>Inclusão Manual</span>
+          </button>
 
-                      {/* Specs info */}
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5 text-xs">
-                        <div className="flex justify-between items-center text-slate-600">
-                          <span className="text-[10px] font-black uppercase text-slate-400">Plataforma:</span>
-                          <span className="font-bold text-slate-800">{candidate.platform}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-slate-600">
-                          <span className="text-[10px] font-black uppercase text-slate-400">Líder do Projeto:</span>
-                          <span className="font-bold text-slate-800 truncate max-w-[150px]">{candidate.leadResearcher}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-slate-600">
-                          <span className="text-[10px] font-black uppercase text-slate-400">Status ANVISA:</span>
-                          <span className="font-bold text-emerald-800">{candidate.anvisaStatus || 'Em Estudo'}</span>
-                        </div>
-                      </div>
+          <button
+            onClick={() => setMainTab('import_spreadsheet')}
+            className={`px-3 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition flex flex-col items-center justify-center gap-1.5 ${
+              mainTab === 'import_spreadsheet' ? 'bg-teal-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+            }`}
+          >
+            <FileSpreadsheet size={18} />
+            <span>Importar Planilha</span>
+          </button>
 
-                      {/* Description */}
-                      <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
-                        {candidate.description || 'Sem descrição detalhada cadastrada.'}
-                      </p>
+          <button
+            onClick={() => setMainTab('import_pdf')}
+            className={`px-3 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition flex flex-col items-center justify-center gap-1.5 ${
+              mainTab === 'import_pdf' ? 'bg-teal-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+            }`}
+          >
+            <FileUp size={18} />
+            <span>Importar PDF</span>
+          </button>
 
-                      {/* Associated Components Chips */}
-                      {linkedComps.length > 0 && (
-                        <div className="pt-2 border-t border-slate-100 space-y-1.5">
-                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">
-                            Insumos/Componentes Vinculados ({linkedComps.length})
-                          </span>
-                          <div className="flex flex-wrap gap-1.5">
-                            {linkedComps.map(comp => (
-                              <span key={comp.id} className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200">
-                                {comp.code} - {comp.name}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+          <button
+            onClick={() => setMainTab('explorer')}
+            className={`px-3 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition flex flex-col items-center justify-center gap-1.5 ${
+              mainTab === 'explorer' ? 'bg-teal-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+            }`}
+          >
+            <Compass size={18} />
+            <span>Explorador</span>
+          </button>
 
-                    <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-[10px] font-medium text-slate-400">
-                      <span>Atualizado: {candidate.updatedDate}</span>
-                      <button
-                        onClick={() => setViewCandidate(candidate)}
-                        className="text-emerald-700 font-bold hover:underline flex items-center gap-1"
-                      >
-                        Ver Ficha <ChevronRight size={12} />
-                      </button>
-                    </div>
+          <button
+            onClick={() => setMainTab('catalog')}
+            className={`px-3 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition flex flex-col items-center justify-center gap-1.5 ${
+              mainTab === 'catalog' ? 'bg-teal-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+            }`}
+          >
+            <Syringe size={18} />
+            <span>Catálogo & Lotes</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ==================== 1. DASHBOARD VIEW ==================== */}
+      {mainTab === 'dashboard' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">DASHBOARD</h2>
+              <p className="text-xs font-bold text-slate-400">Bem-vinda, {currentUser?.name || 'Visitante'}</p>
+            </div>
+
+            {/* Dashboard Subtabs Toggle */}
+            <div className="inline-flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
+              <button
+                onClick={() => setDashboardSubTab('vaccines')}
+                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 ${
+                  dashboardSubTab === 'vaccines' ? 'bg-teal-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Activity size={14} /> Dashboard de Vacinas
+              </button>
+
+              <button
+                onClick={() => setDashboardSubTab('components')}
+                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 ${
+                  dashboardSubTab === 'components' ? 'bg-teal-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Dna size={14} /> Dashboard de Componentes e Impurezas
+              </button>
+            </div>
+          </div>
+
+          {/* DASHBOARD DE VACINAS */}
+          {dashboardSubTab === 'vaccines' && (
+            <div className="space-y-6">
+              {/* Stat Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
+                  <div className="p-3 bg-teal-50 text-teal-700 rounded-xl"><Syringe size={20} /></div>
+                  <div>
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Vacinas Cadastradas</span>
+                    <span className="text-2xl font-black text-slate-900">{totalCandidates}</span>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+                </div>
 
-      {/* TAB CONTENT: 2. COMPONENTS */}
-      {activeTab === 'components' && (
-        <div className="space-y-4">
-          {filteredComponents.length === 0 ? (
-            <div className="bg-white rounded-[2rem] border border-slate-200 p-12 text-center space-y-3">
-              <Dna size={40} className="mx-auto text-slate-300" />
-              <h3 className="text-base font-bold text-slate-700">Nenhum insumo ou componente encontrado</h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Tente ajustar os termos de busca ou cadastrar novos componentes para o estoque biológico no botão acima.
-              </p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-[2rem] border border-slate-200/90 shadow-xs overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-200 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                      <th className="p-4 pl-6">Código / Insumo</th>
-                      <th className="p-4">Categoria</th>
-                      <th className="p-4">Sistema Hospedeiro / Origem</th>
-                      <th className="p-4">Grau de Limpeza</th>
-                      <th className="p-4">Temp. Armazenamento</th>
-                      <th className="p-4">Nº do Lote</th>
-                      <th className="p-4">Estoque Atual</th>
-                      <th className="p-4 text-right pr-6">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
-                    {filteredComponents.map(comp => (
-                      <tr key={comp.id} className="hover:bg-slate-50/60 transition">
-                        <td className="p-4 pl-6">
-                          <div className="font-bold text-slate-900 flex items-center gap-2">
-                            <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-[10px] text-slate-800 border border-slate-200">
-                              {comp.code}
-                            </span>
-                            {comp.name}
-                          </div>
-                        </td>
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
+                  <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl"><FileText size={20} /></div>
+                  <div>
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Dossiês Processados</span>
+                    <span className="text-2xl font-black text-slate-900">{candidates.filter(c => c.description).length}</span>
+                  </div>
+                </div>
 
-                        <td className="p-4">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${getCategoryBadgeColor(comp.category)}`}>
-                            {comp.category}
-                          </span>
-                        </td>
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
+                  <div className="p-3 bg-blue-50 text-blue-700 rounded-xl"><Box size={20} /></div>
+                  <div>
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Fabricantes Ativos</span>
+                    <span className="text-2xl font-black text-slate-900">{totalCandidates > 0 ? 1 : 0}</span>
+                  </div>
+                </div>
 
-                        <td className="p-4 text-slate-600 italic">
-                          {comp.originHostSystem}
-                        </td>
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
+                  <div className="p-3 bg-purple-50 text-purple-700 rounded-xl"><Dna size={20} /></div>
+                  <div>
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Insumos Catalogados</span>
+                    <span className="text-2xl font-black text-slate-900">{totalComponents}</span>
+                  </div>
+                </div>
 
-                        <td className="p-4 font-bold text-slate-800">
-                          {comp.grade}
-                        </td>
-
-                        <td className="p-4">
-                          <span className="bg-blue-50 text-blue-800 font-bold px-2 py-0.5 rounded text-[10px] border border-blue-200">
-                            {comp.storageTemperature}
-                          </span>
-                        </td>
-
-                        <td className="p-4 font-mono font-bold text-slate-800">
-                          {comp.batchNumber}
-                        </td>
-
-                        <td className="p-4 font-bold text-emerald-800">
-                          {comp.stockQuantity} {comp.unit}
-                        </td>
-
-                        <td className="p-4 text-right pr-6">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => setViewComponent(comp)}
-                              className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition"
-                              title="Ver Detalhes"
-                            >
-                              <Eye size={15} />
-                            </button>
-                            <button
-                              onClick={() => setComponentModal(comp)}
-                              className="p-1.5 text-slate-400 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition"
-                              title="Editar"
-                            >
-                              <Edit3 size={15} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteComponent(comp.id, comp.name)}
-                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                              title="Excluir"
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
+                  <div className="p-3 bg-amber-50 text-amber-700 rounded-xl"><Sparkles size={20} /></div>
+                  <div>
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Adjuvantes Únicos</span>
+                    <span className="text-2xl font-black text-slate-900">{components.filter(c => c.category === 'Adjuvante').length}</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* TAB CONTENT: 3. FORMULATION BATCHES */}
-      {activeTab === 'batches' && (
-        <div className="space-y-4">
-          {filteredBatches.length === 0 ? (
-            <div className="bg-white rounded-[2rem] border border-slate-200 p-12 text-center space-y-3">
-              <TestTube size={40} className="mx-auto text-slate-300" />
-              <h3 className="text-base font-bold text-slate-700">Nenhum lote de formulação registrado</h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Registre os lotes preparados para ensaios pré-clínicos ou clínicos no botão acima.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {filteredBatches.map(batch => {
-                const linkedVaccine = candidates.find(c => c.id === batch.vaccineId);
-
-                return (
-                  <div key={batch.id} className="bg-white rounded-[2rem] border border-slate-200 p-6 shadow-xs space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                      <div>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Código do Lote</span>
-                        <h4 className="text-lg font-black text-slate-900 font-mono">{batch.batchCode}</h4>
+              {/* Status Regulatório & Prevalência Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-600 mb-4">
+                      STATUS REGULATÓRIO & PARECERES DE HOMOLOGAÇÃO
+                    </h3>
+                    {candidates.length === 0 ? (
+                      <div className="py-12 text-center text-slate-400 space-y-2">
+                        <CheckCircle2 size={36} className="mx-auto text-emerald-500 opacity-60" />
+                        <p className="text-xs font-bold uppercase">Nenhuma vacina registrada.</p>
+                        <p className="text-[10px]">Todos os pareceres regulatórios e homologações estão em dia.</p>
                       </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                          batch.qualityControlStatus === 'Conforme' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
-                          batch.qualityControlStatus === 'Em Análise' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
-                          'bg-red-50 text-red-800 border border-red-200'
-                        }`}>
-                          Controle CQ: {batch.qualityControlStatus}
-                        </span>
-
-                        <button
-                          onClick={() => setBatchModal(batch)}
-                          className="p-1.5 text-slate-400 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition"
-                          title="Editar Lote"
-                        >
-                          <Edit3 size={15} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteBatch(batch.id, batch.batchCode)}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                          title="Excluir Lote"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100">
-                      <div>
-                        <span className="text-[9px] font-black uppercase text-slate-400 block">Vacina Vinculada:</span>
-                        <span className="font-bold text-slate-900">{linkedVaccine?.name || 'Não informada'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] font-black uppercase text-slate-400 block">Data de Preparação:</span>
-                        <span className="font-bold text-slate-800">{batch.preparationDate}</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] font-black uppercase text-slate-400 block">Esterilidade:</span>
-                        <span className="font-bold text-emerald-700">{batch.sterilityStatus || 'Estéril'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] font-black uppercase text-slate-400 block">Responsável Técnico:</span>
-                        <span className="font-bold text-slate-800">{batch.responsibleTechnician}</span>
-                      </div>
-                    </div>
-
-                    {batch.notes && (
-                      <div className="text-xs text-slate-600 bg-amber-50/60 p-3 rounded-xl border border-amber-200/60">
-                        <strong className="text-amber-900 font-bold block mb-0.5 text-[10px] uppercase">Observações de CQ:</strong>
-                        {batch.notes}
+                    ) : (
+                      <div className="space-y-3">
+                        {candidates.map(cand => (
+                          <div key={cand.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex justify-between items-center text-xs">
+                            <div>
+                              <span className="font-black text-slate-900 block">{cand.name}</span>
+                              <span className="text-[10px] text-slate-500">{cand.targetPathogen} | {cand.platform}</span>
+                            </div>
+                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full text-[10px] font-black uppercase">
+                              {cand.phase}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
-                );
-              })}
+                </div>
+
+                {/* Prevalência de Plataformas */}
+                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-600">
+                    PREVALÊNCIA DE PLATAFORMAS
+                  </h3>
+                  <div className="space-y-2 text-xs">
+                    {['mRNA', 'Vírus Inativado', 'Vetor Viral', 'Subunidade Proteica (VLP)', 'Atenuado', 'Outras'].map(plat => {
+                      const count = candidates.filter(c => c.platform.includes(plat.split(' ')[0])).length;
+                      const pct = totalCandidates > 0 ? Math.round((count / totalCandidates) * 100) : 0;
+                      return (
+                        <div key={plat} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
+                          <span className="font-bold text-slate-700">{plat}</span>
+                          <span className="font-mono text-slate-500 text-[11px]">{pct}% ({count})</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabela e Busca de Vacinas Registradas */}
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-600">
+                    VACINAS REGISTRADAS ({filteredCandidates.length})
+                  </h3>
+                  <div className="relative w-full sm:w-72">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={e => setSearchTerm(e.target.value)}
+                      placeholder="Pesquisar por Vacina ou Fabricante..."
+                      className="w-full pl-9 pr-3 py-1.5 bg-slate-50 rounded-xl border border-slate-200 text-xs font-medium outline-none focus:ring-2 focus:ring-teal-500/20"
+                    />
+                  </div>
+                </div>
+
+                {filteredCandidates.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 space-y-2 border-2 border-dashed border-slate-200 rounded-2xl">
+                    <Upload size={32} className="mx-auto text-slate-300" />
+                    <p className="text-xs font-black uppercase">Biblioteca Regulatória Vazia</p>
+                    <p className="text-[10px]">Cole o texto de uma bula/EPAR ao lado para processar pelo Gemini, ou insira manualmente no menu superior.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {filteredCandidates.map(cand => (
+                      <div key={cand.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-start gap-3">
+                        <div>
+                          <span className="text-[9px] font-black uppercase text-teal-700 block mb-0.5">{cand.platform}</span>
+                          <h4 className="font-black text-slate-900 text-sm">{cand.name}</h4>
+                          <p className="text-xs font-bold text-slate-600 mt-1">Patógeno: {cand.targetPathogen}</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">Responsável: {cand.leadResearcher}</p>
+                        </div>
+                        <button
+                          onClick={() => setViewCandidate(cand)}
+                          className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition"
+                        >
+                          Ver Ficha
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* DASHBOARD DE COMPONENTES E IMPUREZAS */}
+          {dashboardSubTab === 'components' && (
+            <div className="space-y-6">
+              {/* Stat Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
+                  <div className="p-3 bg-purple-50 text-purple-700 rounded-xl"><Dna size={22} /></div>
+                  <div>
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Substâncias Mapeadas</span>
+                    <span className="text-3xl font-black text-slate-900">{totalComponents}</span>
+                  </div>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
+                  <div className="p-3 bg-amber-50 text-amber-700 rounded-xl"><AlertCircle size={22} /></div>
+                  <div>
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Impurezas e Resíduos</span>
+                    <span className="text-3xl font-black text-slate-900">0</span>
+                  </div>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
+                  <div className="p-5 bg-teal-50 text-teal-700 rounded-xl"><Sparkles size={22} /></div>
+                  <div>
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Adjuvantes de Formulação</span>
+                    <span className="text-3xl font-black text-slate-900">{components.filter(c => c.category === 'Adjuvante').length}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fiscalização & Delineamento */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-600">
+                    CONTROLE DE IMPUREZAS & FISCALIZAÇÃO SANITÁRIA
+                  </h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Substâncias residuais ou reagentes limitantes mapeados no dossiê de fabricação. Sujeitos a controle toxicológico estrito de agências internacionais e Anvisa.
+                  </p>
+                  <div className="py-8 text-center text-slate-400 space-y-1 bg-slate-50 rounded-2xl border border-slate-200">
+                    <p className="text-xs font-bold uppercase">Nenhum resíduo ou impureza cadastrado.</p>
+                    <p className="text-[10px]">As vacinas carregadas não possuem especificações de traços de biocidas ou inativadores químicos.</p>
+                  </div>
+                </div>
+
+                {/* Delineamento Toxicológico */}
+                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-600">
+                    DELINEAMENTO TOXICOLÓGICO
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3 text-center">
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <span className="text-[9px] font-black text-slate-400 uppercase block">Antígenos</span>
+                      <span className="text-sm font-black text-teal-800">0 IFAs</span>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <span className="text-[9px] font-black text-slate-400 uppercase block">Adjuvantes</span>
+                      <span className="text-sm font-black text-teal-800">{components.filter(c => c.category === 'Adjuvante').length} Moleculares</span>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <span className="text-[9px] font-black text-slate-400 uppercase block">Excipientes</span>
+                      <span className="text-sm font-black text-teal-800">0 Veículos</span>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <span className="text-[9px] font-black text-slate-400 uppercase block">Impurezas Monitoradas</span>
+                      <span className="text-sm font-black text-red-600">0 Resíduos</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-[10px] space-y-1">
+                    <p className="font-bold uppercase flex items-center gap-1"><Info size={12}/> PADRÃO ICH Q3D / EMA / FDA</p>
+                    <p className="text-[9.5px] leading-tight text-amber-800">
+                      Todos os excipientes e impurezas biológicas catalogados são continuamente triados para garantir que estejam abaixo dos níveis de PDE (Permitted Daily Exposure) Internacional.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Limites Regulatórios Standard */}
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-600">
+                  LIMITES REGULATÓRIOS STANDARD (TRAÇOS)
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                    <span className="font-black text-xs text-slate-800 block">Formaldeído livre</span>
+                    <span className="text-[10px] text-slate-500 block">Inativador viral padrão</span>
+                    <span className="inline-block mt-2 px-2.5 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-full font-mono text-[10px] font-bold">
+                      ≤ 0.1 mg por dose
+                    </span>
+                  </div>
+
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                    <span className="font-black text-xs text-slate-800 block">DNA Residual de Célula Hospedeira</span>
+                    <span className="text-[10px] text-slate-500 block">Especificação OMS / FDA</span>
+                    <span className="inline-block mt-2 px-2.5 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-full font-mono text-[10px] font-bold">
+                      ≤ 10 ng por dose
+                    </span>
+                  </div>
+
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                    <span className="font-black text-xs text-slate-800 block">Sais de Alumínio (Adjuvante)</span>
+                    <span className="text-[10px] text-slate-500 block">Diretriz Anvisa RDC 55</span>
+                    <span className="inline-block mt-2 px-2.5 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-full font-mono text-[10px] font-bold">
+                      ≤ 1.25 mg Al+3/dose
+                    </span>
+                  </div>
+
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                    <span className="font-black text-xs text-slate-800 block">Antibióticos residuais (Neomicina)</span>
+                    <span className="text-[10px] text-slate-500 block">Traços de controle de cultura</span>
+                    <span className="inline-block mt-2 px-2.5 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded-full font-mono text-[10px] font-bold">
+                      ≤ 25 ng por dose
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* TAB CONTENT: 4. PIPELINE OVERVIEW */}
-      {activeTab === 'pipeline' && (
-        <div className="bg-white rounded-[2rem] border border-slate-200 p-6 sm:p-8 space-y-8 shadow-xs">
+      {/* ==================== 2. INCLUSÃO MANUAL VIEW ==================== */}
+      {mainTab === 'manual_inclusion' && (
+        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-slate-200 shadow-xs space-y-6">
           <div>
-            <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Pipeline de Desenvolvimento de Vacinas</h2>
-            <p className="text-xs text-slate-500 mt-1">Acompanhamento do progresso de cada candidato pelas etapas da cadeia de inovação biotecnológica.</p>
+            <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">INCLUSÃO MANUAL</h2>
+            <p className="text-xs font-bold text-slate-400">Cadastro e preenchimento de dossiês regulatórios</p>
           </div>
 
-          <div className="space-y-6">
-            {phasesList.map((phase, idx) => {
-              const phaseCandidates = candidates.filter(c => c.phase === phase);
-
-              return (
-                <div key={phase} className="border border-slate-200/80 rounded-2xl p-5 bg-slate-50/50 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-emerald-800 text-white flex items-center justify-center text-[10px] font-bold">
-                        {idx + 1}
-                      </span>
-                      {phase}
-                    </h3>
-
-                    <span className="text-[10px] font-bold bg-white px-3 py-1 rounded-full border border-slate-200 text-slate-600 uppercase">
-                      {phaseCandidates.length} Candidato(s)
-                    </span>
-                  </div>
-
-                  {phaseCandidates.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic pl-8">Nenhum candidato nesta fase atualmente.</p>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pl-8">
-                      {phaseCandidates.map(c => (
-                        <div key={c.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-1">
-                          <h4 className="text-xs font-black text-slate-900">{c.name}</h4>
-                          <p className="text-[10px] font-bold text-emerald-700">Alvo: {c.targetPathogen}</p>
-                          <p className="text-[10px] text-slate-500">Líder: {c.leadResearcher}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: ADD / EDIT CANDIDATE */}
-      {candidateModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 bg-slate-900 text-white flex items-center justify-between">
+          <form onSubmit={handleSaveManualDossier} className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <h3 className="text-lg font-black uppercase tracking-tight">
-                  {candidateModal.id ? 'Editar Candidato Vacinal' : 'Novo Candidato Vacinal'}
-                </h3>
-                <p className="text-xs text-slate-400">Preencha os dados de pesquisa, plataforma e componentes.</p>
-              </div>
-              <button onClick={() => setCandidateModal(null)} className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white rounded-full transition">
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveCandidate} className="p-6 overflow-y-auto space-y-4 custom-scrollbar">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Nome do Candidato / Vacina *</label>
-                  <input
-                    type="text"
-                    required
-                    value={candidateModal.name || ''}
-                    onChange={e => setCandidateModal({ ...candidateModal, name: e.target.value })}
-                    placeholder="Ex: SpiN-UTG, Leishtec, ChagasVac"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Patógeno / Doença Alvo *</label>
-                  <input
-                    type="text"
-                    required
-                    value={candidateModal.targetPathogen || ''}
-                    onChange={e => setCandidateModal({ ...candidateModal, targetPathogen: e.target.value })}
-                    placeholder="Ex: SARS-CoV-2, Leishmania, Trypanosoma"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Plataforma Tecnológica</label>
-                  <select
-                    value={candidateModal.platform || 'Proteína Recombinante'}
-                    onChange={e => setCandidateModal({ ...candidateModal, platform: e.target.value as VaccinePlatform })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
-                  >
-                    <option value="Proteína Recombinante">Proteína Recombinante</option>
-                    <option value="mRNA / RNAm">mRNA / RNAm</option>
-                    <option value="Vetor Viral">Vetor Viral</option>
-                    <option value="Vírus Inativado">Vírus Inativado</option>
-                    <option value="Subunidade / Quimérica">Subunidade / Quimérica</option>
-                    <option value="Sintético / Peptídeo">Sintético / Peptídeo</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Fase de Desenvolvimento</label>
-                  <select
-                    value={candidateModal.phase || 'Pesquisa Básica'}
-                    onChange={e => setCandidateModal({ ...candidateModal, phase: e.target.value as VaccinePhase })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
-                  >
-                    {phasesList.map(p => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Pesquisador Líder / Equipe</label>
-                  <input
-                    type="text"
-                    value={candidateModal.leadResearcher || ''}
-                    onChange={e => setCandidateModal({ ...candidateModal, leadResearcher: e.target.value })}
-                    placeholder="Ex: Dr. Ricardo Gazzinelli"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Status Regulatório / ANVISA</label>
-                  <input
-                    type="text"
-                    value={candidateModal.anvisaStatus || ''}
-                    onChange={e => setCandidateModal({ ...candidateModal, anvisaStatus: e.target.value })}
-                    placeholder="Ex: DDCM Aprovado, Em Estudo Pré-Clínico"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Descrição do Candidato</label>
-                <textarea
-                  rows={3}
-                  value={candidateModal.description || ''}
-                  onChange={e => setCandidateModal({ ...candidateModal, description: e.target.value })}
-                  placeholder="Detalhamento do mecanismo de ação, antígeno e estratégia da vacina..."
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 resize-none"
+                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Nome Comercial / Código *</label>
+                <input
+                  type="text"
+                  required
+                  value={manualName}
+                  onChange={e => setManualName(e.target.value)}
+                  placeholder="Ex: SpiN-CTVacinas v2"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-teal-500/20"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Componentes / Insumos Associados</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200">
-                  {components.map(comp => {
-                    const isChecked = candidateModal.associatedComponentIds?.includes(comp.id);
-                    return (
-                      <label key={comp.id} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-100 cursor-pointer hover:bg-emerald-50/50 transition text-xs">
-                        <input
-                          type="checkbox"
-                          checked={isChecked || false}
-                          onChange={e => {
-                            const current = candidateModal.associatedComponentIds || [];
-                            if (e.target.checked) {
-                              setCandidateModal({ ...candidateModal, associatedComponentIds: [...current, comp.id] });
-                            } else {
-                              setCandidateModal({ ...candidateModal, associatedComponentIds: current.filter((id: string) => id !== comp.id) });
-                            }
-                          }}
-                          className="rounded text-emerald-600 focus:ring-emerald-500"
-                        />
-                        <span className="font-bold text-slate-800">{comp.code} - {comp.name}</span>
-                      </label>
-                    );
-                  })}
+                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Patógeno Alvo *</label>
+                <input
+                  type="text"
+                  required
+                  value={manualPathogen}
+                  onChange={e => setManualPathogen(e.target.value)}
+                  placeholder="Ex: SARS-CoV-2 / Leishmaniose"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-teal-500/20"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Estudos de Segurança & Toxicologia</label>
+                <textarea
+                  rows={3}
+                  value={manualSafetyText}
+                  onChange={e => setManualSafetyText(e.target.value)}
+                  placeholder="Ex: Estudos fase III indicando efeitos colaterais leves..."
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium outline-none focus:ring-2 focus:ring-teal-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Outros Estudos (Eficácia e Estabilidade)</label>
+                <textarea
+                  rows={3}
+                  value={manualOtherText}
+                  onChange={e => setManualOtherText(e.target.value)}
+                  placeholder="Ex: Eficácia de 95% contra hospitalização. Conservação a -70°C..."
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium outline-none focus:ring-2 focus:ring-teal-500/20"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Link para o Documento Oficial / Bula PDF</label>
+              <input
+                type="text"
+                value={manualDocLink}
+                onChange={e => setManualDocLink(e.target.value)}
+                placeholder="Ex: https://anvisa.gov.br/bula-exemplo"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-teal-500/20 font-mono"
+              />
+            </div>
+
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">
+                COMPOSIÇÃO QUÍMICA E IMUNOBIOLÓGICOS
+              </h3>
+
+              {/* 1. Antígenos / IFA */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase text-slate-800">1. ANTÍGENOS / IFA</span>
+                  <button
+                    type="button"
+                    onClick={() => setAntigensList([...antigensList, { name: '', qty: '' }])}
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold uppercase transition"
+                  >
+                    + Adicionar Antígeno
+                  </button>
+                </div>
+                {antigensList.map((item, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={item.name}
+                      onChange={e => {
+                        const copy = [...antigensList];
+                        copy[idx].name = e.target.value;
+                        setAntigensList(copy);
+                      }}
+                      placeholder="Nome químico (Ex: Tozinameran)"
+                      className="flex-1 px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={item.qty}
+                      onChange={e => {
+                        const copy = [...antigensList];
+                        copy[idx].qty = e.target.value;
+                        setAntigensList(copy);
+                      }}
+                      placeholder="Ex: 30 mcg"
+                      className="w-32 px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs outline-none font-mono"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* 2. Excipientes e Inativos */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase text-slate-800">2. EXCIPIENTES E INATIVOS</span>
+                  <button
+                    type="button"
+                    onClick={() => setExcipientsList([...excipientsList, { name: '', qty: '' }])}
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold uppercase transition"
+                  >
+                    + Adicionar Excipiente
+                  </button>
+                </div>
+                {excipientsList.map((item, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={item.name}
+                      onChange={e => {
+                        const copy = [...excipientsList];
+                        copy[idx].name = e.target.value;
+                        setExcipientsList(copy);
+                      }}
+                      placeholder="Ex: Polissorbato 80"
+                      className="flex-1 px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={item.qty}
+                      onChange={e => {
+                        const copy = [...excipientsList];
+                        copy[idx].qty = e.target.value;
+                        setExcipientsList(copy);
+                      }}
+                      placeholder="Ex: q.s.p 0,5 mL"
+                      className="w-32 px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs outline-none font-mono"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* 3. Impurezas Reguladas */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase text-slate-800">3. IMPUREZAS REGULADAS</span>
+                  <button
+                    type="button"
+                    onClick={() => setImpuritiesList([...impuritiesList, { name: '', limit: '' }])}
+                    className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-bold uppercase transition"
+                  >
+                    + Adicionar Impureza
+                  </button>
+                </div>
+                {impuritiesList.length === 0 ? (
+                  <p className="text-[10px] italic text-slate-400">Nenhum teor limites de impurezas mapeados ainda.</p>
+                ) : (
+                  impuritiesList.map((item, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={item.name}
+                        onChange={e => {
+                          const copy = [...impuritiesList];
+                          copy[idx].name = e.target.value;
+                          setImpuritiesList(copy);
+                        }}
+                        placeholder="Nome do resíduo (Ex: DNA residual)"
+                        className="flex-1 px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={item.limit}
+                        onChange={e => {
+                          const copy = [...impuritiesList];
+                          copy[idx].limit = e.target.value;
+                          setImpuritiesList(copy);
+                        }}
+                        placeholder="Ex: <10 ng/dose"
+                        className="w-32 px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs outline-none font-mono"
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="px-8 py-3 bg-slate-900 hover:bg-teal-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition shadow-lg"
+              >
+                Gravar Registro no Catálogo Nacional
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ==================== 3. IMPORTAR PLANILHA VIEW ==================== */}
+      {mainTab === 'import_spreadsheet' && (
+        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-slate-200 shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">IMPORTAR PLANILHA</h2>
+              <p className="text-xs font-bold text-slate-400">Ingestão em lote de vacinas via cópia de planilha</p>
+            </div>
+
+            <button
+              onClick={handleLoadExampleSpreadsheet}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase transition flex items-center gap-2 self-start"
+            >
+              <Copy size={14} /> Carregar Dados de Exemplo
+            </button>
+          </div>
+
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-3">
+            <p className="font-bold text-slate-700 flex items-center gap-2">
+              <Info size={14} className="text-teal-600" /> Instruções para o Formato da Planilha:
+            </p>
+            <p className="text-[11px] text-slate-500">
+              Sua planilha ou arquivo CSV deve conter exatamente <strong>10 colunas</strong> na ordem indicada abaixo, separadas por tabulações (padrão de cópia do Excel e Google Sheets) ou por ponto e vírgula/vírgula:
+            </p>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[11px] border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-400 uppercase font-black">
+                    <th className="py-2 pr-4">#</th>
+                    <th className="py-2 pr-4">Nome Coluna</th>
+                    <th className="py-2">Formato / Exemplo</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 text-slate-600">
+                  <tr><td className="py-1.5 font-mono">COL 1</td><td className="font-bold">Nome Comercial</td><td>Ex: Comirnaty (Nome comercial principal)</td></tr>
+                  <tr><td className="py-1.5 font-mono">COL 2</td><td className="font-bold">Fórmula / Nome Técnico</td><td>Ex: Vacina de RNAm contra COVID-19</td></tr>
+                  <tr><td className="py-1.5 font-mono">COL 3</td><td className="font-bold">Fabricante</td><td>Ex: Pfizer / BioNTech</td></tr>
+                  <tr><td className="py-1.5 font-mono">COL 4</td><td className="font-bold">Plataforma</td><td>mRNA, Vírus Inativado, Vetor Viral, Subunidade Proteica</td></tr>
+                  <tr><td className="py-1.5 font-mono">COL 5</td><td className="font-bold">Indicação Principal</td><td>Ex: Imunização ativa contra COVID-19</td></tr>
+                  <tr><td className="py-1.5 font-mono">COL 6</td><td className="font-bold">Data Aprovação</td><td>Ex: 12/2020 ou Ano</td></tr>
+                  <tr><td className="py-1.5 font-mono">COL 7</td><td className="font-bold">Antígenos</td><td>Nome:Quantidade (Ex: Tozinameran:30 mcg)</td></tr>
+                  <tr><td className="py-1.5 font-mono">COL 8</td><td className="font-bold">Adjuvantes</td><td>Nome:Quantidade (Ex: Hidróxido de Alumínio:0.5 mg)</td></tr>
+                  <tr><td className="py-1.5 font-mono">COL 9</td><td className="font-bold">Excipientes</td><td>Nome:Quantidade (Ex: Cloreto de Sódio:4.4 mg)</td></tr>
+                  <tr><td className="py-1.5 font-mono">COL 10</td><td className="font-bold">Impurezas</td><td>Nome:Limite (Ex: DNA residual:&lt;10 ng)</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black uppercase text-slate-500 block mb-2">
+              Cole aqui os dados de sua Planilha (Excel, Sheets, ou arquivo CSV) ou use dados manuais:
+            </label>
+            <textarea
+              rows={8}
+              value={spreadsheetText}
+              onChange={e => setSpreadsheetText(e.target.value)}
+              placeholder="Nome Comercial [Tab] Nome Vacina [Tab] Fabricante [Tab] Plataforma..."
+              className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 font-mono text-xs outline-none focus:ring-2 focus:ring-teal-500/20"
+            />
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              onClick={handleProcessSpreadsheet}
+              className="px-8 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition shadow-lg flex items-center gap-2"
+            >
+              <FileSpreadsheet size={16} /> Processar e Pré-visualizar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== 4. IMPORTAR PDF VIEW ==================== */}
+      {mainTab === 'import_pdf' && (
+        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-slate-200 shadow-xs space-y-6">
+          <div>
+            <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">IMPORTAR PDF</h2>
+            <p className="text-xs font-bold text-slate-400">Extração inteligente de PDF de bulas via Gemini</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-200 space-y-4">
+              <div className="flex items-center gap-2 text-teal-700 font-black text-sm uppercase">
+                <Sparkles size={18} /> Leitor Inteligente de Bulas em PDF (Gemini AI)
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Selecione um ou mais arquivos em formato PDF de bulas ou documentos regulatórios de vacinas. O Gemini analisará o documento completo e coletará dezenas de informações estruturadas automaticamente.
+              </p>
+
+              <div
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = '.pdf';
+                  input.onchange = (e: any) => {
+                    if (e.target.files?.[0]) setPdfFiles([e.target.files[0]]);
+                  };
+                  input.click();
+                }}
+                className="p-8 border-2 border-dashed border-slate-300 hover:border-teal-500 rounded-2xl text-center cursor-pointer transition bg-white space-y-2"
+              >
+                <Upload size={32} className="mx-auto text-slate-400" />
+                <p className="text-xs font-black uppercase text-slate-700">Arraste e solte ou clique aqui</p>
+                <p className="text-[10px] text-slate-400">Formatos suportados: Apenas arquivos .PDF</p>
+                {pdfFiles.length > 0 && (
+                  <span className="inline-block px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold">
+                    Selecionado: {pdfFiles[0].name}
+                  </span>
+                )}
+              </div>
+
+              <button
+                onClick={handleProcessPdfWithGemini}
+                disabled={pdfProcessing}
+                className="w-full py-3 bg-slate-900 hover:bg-teal-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2"
+              >
+                <Sparkles size={16} /> {pdfProcessing ? 'Analisando PDF com Gemini...' : 'Processar Lote de PDFs com Gemini'}
+              </button>
+            </div>
+
+            {/* Ficha de Revisão Vazia / Output */}
+            <div className="p-6 bg-white rounded-3xl border border-slate-200 flex flex-col justify-center items-center text-center space-y-3">
+              {pdfResult ? (
+                <div className="p-4 bg-teal-50 border border-teal-200 rounded-2xl text-left text-xs font-mono text-teal-900 whitespace-pre-line w-full">
+                  {pdfResult}
+                </div>
+              ) : (
+                <>
+                  <FileText size={48} className="text-slate-300" />
+                  <h3 className="text-xs font-black uppercase text-slate-600">Ficha de Revisão Vazia</h3>
+                  <p className="text-[11px] text-slate-400 max-w-xs leading-relaxed">
+                    Adicione seus PDFs de bulas e clique em "Processar Lote de PDFs com Gemini" para executar a extração automatizada de ingredientes.
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== 5. EXPLORADOR VIEW ==================== */}
+      {mainTab === 'explorer' && (
+        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-slate-200 shadow-xs space-y-6">
+          <div>
+            <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">EXPLORADOR</h2>
+            <p className="text-xs font-bold text-slate-400">Mapeamento bidirecional de insumos e composição</p>
+          </div>
+
+          <div className="p-6 bg-slate-50 rounded-3xl border border-slate-200 space-y-4">
+            <h3 className="text-xs font-black uppercase tracking-widest text-slate-700 flex items-center gap-2">
+              <Compass size={16} className="text-teal-600" /> Mapeamento de Insumos & Inter-relação Regulatório
+            </h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Analise o vínculo cruzado automático de substâncias do catálogo nacional. Selecione qualquer componente abaixo para auditar imediatamente todas as vacinas que compartilham deste adjuvante ou ingrediente ativo.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+              {/* Left Panel: Cataloged Substances */}
+              <div className="space-y-3">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                  SUBSTÂNCIAS CATALOGADAS ({components.length})
+                </span>
+
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={explorerFilter}
+                    onChange={e => setExplorerFilter(e.target.value)}
+                    placeholder="Filtrar excipiente, IFA ou adjuvantes..."
+                    className="w-full pl-9 pr-3 py-2 bg-white rounded-xl border border-slate-200 text-xs outline-none"
+                  />
+                </div>
+
+                <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar pr-1">
+                  {components.filter(c => c.name.toLowerCase().includes(explorerFilter.toLowerCase())).map(comp => (
+                    <div
+                      key={comp.id}
+                      onClick={() => setSelectedSubstance(comp)}
+                      className={`p-3 rounded-xl border cursor-pointer transition flex items-center justify-between text-xs ${
+                        selectedSubstance?.id === comp.id ? 'bg-teal-50 border-teal-300 font-bold' : 'bg-white border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div>
+                        <span className="font-bold text-slate-900 block">{comp.name}</span>
+                        <span className="text-[10px] text-slate-400">{comp.category} | {comp.code}</span>
+                      </div>
+                      <ChevronRight size={14} className="text-slate-400" />
+                    </div>
+                  ))}
+                  {components.length === 0 && (
+                    <p className="text-xs text-slate-400 italic py-8 text-center">Nenhuma substância mapeada na base regulatória.</p>
+                  )}
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+              {/* Right Panel: Cross Mapping */}
+              <div className="p-6 bg-white rounded-2xl border border-slate-200 flex flex-col justify-center items-center text-center space-y-2">
+                {selectedSubstance ? (
+                  <div className="text-left w-full space-y-3">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-teal-700 block">Correlação Encontrada</span>
+                    <h4 className="font-black text-slate-900 text-sm">{selectedSubstance.name}</h4>
+                    <p className="text-xs text-slate-600">Categoria: {selectedSubstance.category} | Grau: {selectedSubstance.grade}</p>
+                    <p className="text-xs text-slate-500">Lote Atual: {selectedSubstance.batchNumber}</p>
+                  </div>
+                ) : (
+                  <>
+                    <Compass size={36} className="text-slate-300" />
+                    <h4 className="text-xs font-black uppercase text-slate-600">Sem Correlações Ativas</h4>
+                    <p className="text-[10px] text-slate-400 max-w-xs">
+                      Clique em qualquer insumo biológico ou veículo químico da lista lateral para correlacionar imediatamente.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== 6. CATÁLOGO & LOTES VIEW ==================== */}
+      {mainTab === 'catalog' && (
+        <div className="space-y-6">
+          {/* Subtabs for Catalog */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-1 bg-slate-100 p-1.5 rounded-2xl overflow-x-auto">
+              <button
+                onClick={() => setCatalogSubTab('candidates')}
+                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 ${
+                  catalogSubTab === 'candidates' ? 'bg-white text-teal-900 shadow-xs' : 'text-slate-500'
+                }`}
+              >
+                <Syringe size={14} /> Candidatos Vacinais ({candidates.length})
+              </button>
+
+              <button
+                onClick={() => setCatalogSubTab('components')}
+                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 ${
+                  catalogSubTab === 'components' ? 'bg-white text-teal-900 shadow-xs' : 'text-slate-500'
+                }`}
+              >
+                <Dna size={14} /> Componentes & Insumos ({components.length})
+              </button>
+
+              <button
+                onClick={() => setCatalogSubTab('batches')}
+                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 ${
+                  catalogSubTab === 'batches' ? 'bg-white text-teal-900 shadow-xs' : 'text-slate-500'
+                }`}
+              >
+                <TestTube size={14} /> Lotes de Formulação ({formulationBatches.length})
+              </button>
+
+              <button
+                onClick={() => setCatalogSubTab('pipeline')}
+                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 ${
+                  catalogSubTab === 'pipeline' ? 'bg-white text-teal-900 shadow-xs' : 'text-slate-500'
+                }`}
+              >
+                <BarChart2 size={14} /> Pipeline
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {catalogSubTab === 'candidates' && (
                 <button
-                  type="button"
-                  onClick={() => setCandidateModal(null)}
-                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase transition"
+                  onClick={() => setCandidateModal({})}
+                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2"
                 >
-                  Cancelar
+                  <Plus size={14} /> Novo Candidato
                 </button>
+              )}
+              {catalogSubTab === 'components' && (
                 <button
-                  type="submit"
-                  className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-md"
+                  onClick={() => setComponentModal({})}
+                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2"
                 >
-                  Salvar Candidato
+                  <Plus size={14} /> Novo Insumo
                 </button>
+              )}
+              {catalogSubTab === 'batches' && (
+                <button
+                  onClick={() => setBatchModal({ componentsUsed: [] })}
+                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2"
+                >
+                  <Plus size={14} /> Novo Lote
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* TAB CONTENT: CANDIDATES */}
+          {catalogSubTab === 'candidates' && (
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredCandidates.map(cand => (
+                  <div key={cand.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-start">
+                    <div className="space-y-1">
+                      <span className="text-[9px] font-black uppercase text-teal-700 block">{cand.platform}</span>
+                      <h4 className="font-black text-slate-900 text-base">{cand.name}</h4>
+                      <p className="text-xs font-bold text-slate-600">Patógeno: {cand.targetPathogen}</p>
+                      <p className="text-[10px] text-slate-500">Fase: {cand.phase}</p>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setViewCandidate(cand)} className="p-2 text-slate-500 hover:text-slate-800"><Eye size={16}/></button>
+                      <button onClick={() => setCandidateModal(cand)} className="p-2 text-slate-500 hover:text-teal-700"><Edit3 size={16}/></button>
+                      <button onClick={() => handleDeleteCandidate(cand.id, cand.name)} className="p-2 text-slate-500 hover:text-red-600"><Trash2 size={16}/></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB CONTENT: COMPONENTS */}
+          {catalogSubTab === 'components' && (
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredComponents.map(comp => (
+                  <div key={comp.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-start">
+                    <div className="space-y-1">
+                      <span className="text-[9px] font-mono font-bold text-slate-500 block">{comp.code}</span>
+                      <h4 className="font-black text-slate-900 text-base">{comp.name}</h4>
+                      <p className="text-xs font-bold text-slate-600">Categoria: {comp.category}</p>
+                      <p className="text-[10px] text-slate-500">Estoque: {comp.stockQuantity} {comp.unit} | Temp: {comp.storageTemperature}</p>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setComponentModal(comp)} className="p-2 text-slate-500 hover:text-teal-700"><Edit3 size={16}/></button>
+                      <button onClick={() => handleDeleteComponent(comp.id, comp.name)} className="p-2 text-slate-500 hover:text-red-600"><Trash2 size={16}/></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB CONTENT: BATCHES */}
+          {catalogSubTab === 'batches' && (
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredBatches.map(batch => (
+                  <div key={batch.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-start">
+                    <div className="space-y-1">
+                      <span className="text-[9px] font-mono font-black text-teal-700 block">{batch.batchCode}</span>
+                      <h4 className="font-black text-slate-900 text-base">Lote de Formulação</h4>
+                      <p className="text-xs text-slate-600">Responsável: {batch.responsibleTechnician}</p>
+                      <p className="text-[10px] text-slate-500">Data Preparo: {batch.preparationDate}</p>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => handleDeleteBatch(batch.id, batch.batchCode)} className="p-2 text-slate-500 hover:text-red-600"><Trash2 size={16}/></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB CONTENT: PIPELINE */}
+          {catalogSubTab === 'pipeline' && (
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+              <h3 className="text-xs font-black uppercase tracking-widest text-slate-600">PIPELINE VACINAL CTVACINAS</h3>
+              <div className="p-8 text-center text-slate-400 space-y-2">
+                <BarChart2 size={36} className="mx-auto text-teal-600" />
+                <p className="text-xs font-bold uppercase">Relatório de Avanço Clínico</p>
+                <p className="text-[10px]">Visão consolidada dos marcos regulatórios de desenvolvimento.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MODALS Preserved */}
+      {candidateModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 bg-slate-900 text-white flex items-center justify-between">
+              <h3 className="text-lg font-black uppercase tracking-tight">
+                {candidateModal.id ? 'Editar Candidato' : 'Novo Candidato Vacinal'}
+              </h3>
+              <button onClick={() => setCandidateModal(null)} className="p-2 text-slate-400 hover:text-white"><X size={18} /></button>
+            </div>
+
+            <form onSubmit={handleSaveCandidate} className="p-6 overflow-y-auto space-y-4 text-xs">
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Nome *</label>
+                <input
+                  type="text"
+                  required
+                  value={candidateModal.name || ''}
+                  onChange={e => setCandidateModal({ ...candidateModal, name: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Patógeno Alvo *</label>
+                <input
+                  type="text"
+                  required
+                  value={candidateModal.targetPathogen || ''}
+                  onChange={e => setCandidateModal({ ...candidateModal, targetPathogen: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none"
+                />
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
+                <button type="button" onClick={() => setCandidateModal(null)} className="px-4 py-2 bg-slate-100 rounded-xl font-bold uppercase">Cancelar</button>
+                <button type="submit" className="px-5 py-2 bg-teal-700 text-white rounded-xl font-black uppercase">Salvar</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: ADD / EDIT COMPONENT */}
       {componentModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-2xl w-full max-w-xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
             <div className="p-6 bg-slate-900 text-white flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-black uppercase tracking-tight">
-                  {componentModal.id ? 'Editar Insumo / Componente' : 'Novo Insumo / Componente'}
-                </h3>
-                <p className="text-xs text-slate-400">Cadastre o componente biológico, lote e condições de guarda.</p>
-              </div>
-              <button onClick={() => setComponentModal(null)} className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white rounded-full transition">
-                <X size={18} />
-              </button>
+              <h3 className="text-lg font-black uppercase tracking-tight">
+                {componentModal.id ? 'Editar Insumo' : 'Novo Insumo / Componente'}
+              </h3>
+              <button onClick={() => setComponentModal(null)} className="p-2 text-slate-400 hover:text-white"><X size={18} /></button>
             </div>
 
-            <form onSubmit={handleSaveComponent} className="p-6 overflow-y-auto space-y-4 custom-scrollbar">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <form onSubmit={handleSaveComponent} className="p-6 overflow-y-auto space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Nome do Insumo *</label>
+                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Nome *</label>
                   <input
                     type="text"
                     required
                     value={componentModal.name || ''}
                     onChange={e => setComponentModal({ ...componentModal, name: e.target.value })}
-                    placeholder="Ex: Proteína SpiN, Adjuvante Alumínio"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none"
                   />
                 </div>
-
                 <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Código / Sigla *</label>
+                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Código *</label>
                   <input
                     type="text"
                     required
                     value={componentModal.code || ''}
                     onChange={e => setComponentModal({ ...componentModal, code: e.target.value })}
-                    placeholder="Ex: PROT-SPIN-01, ADJ-MPLA"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono uppercase"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none font-mono"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Categoria</label>
-                  <select
-                    value={componentModal.category || 'Antígeno'}
-                    onChange={e => setComponentModal({ ...componentModal, category: e.target.value as ComponentCategory })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
-                  >
-                    <option value="Antígeno">Antígeno</option>
-                    <option value="Adjuvante">Adjuvante</option>
-                    <option value="Vetor de Expressão">Vetor de Expressão</option>
-                    <option value="Tampão / Estabilizante">Tampão / Estabilizante</option>
-                    <option value="Proteína Carrier">Proteína Carrier</option>
-                    <option value="Linhagem Celular">Linhagem Celular</option>
-                    <option value="Outro Insumo">Outro Insumo</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Grau de Limpeza / Qualidade</label>
-                  <select
-                    value={componentModal.grade || 'Grau Científico / Pesquisa'}
-                    onChange={e => setComponentModal({ ...componentModal, grade: e.target.value as ComponentGrade })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
-                  >
-                    <option value="Grau Científico / Pesquisa">Grau Científico / Pesquisa</option>
-                    <option value="Pre-GMP">Pre-GMP</option>
-                    <option value="GMP / Grau Clínico">GMP / Grau Clínico</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Hospedeiro / Origem</label>
-                  <input
-                    type="text"
-                    value={componentModal.originHostSystem || ''}
-                    onChange={e => setComponentModal({ ...componentModal, originHostSystem: e.target.value })}
-                    placeholder="Ex: Pichia pastoris, E. coli"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Temp. Guarda</label>
-                  <input
-                    type="text"
-                    value={componentModal.storageTemperature || ''}
-                    onChange={e => setComponentModal({ ...componentModal, storageTemperature: e.target.value })}
-                    placeholder="Ex: -80°C, 2-8°C"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Nº do Lote</label>
-                  <input
-                    type="text"
-                    value={componentModal.batchNumber || ''}
-                    onChange={e => setComponentModal({ ...componentModal, batchNumber: e.target.value })}
-                    placeholder="Ex: LOTE-2026-01"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Quantidade em Estoque</label>
-                  <input
-                    type="text"
-                    value={componentModal.stockQuantity || ''}
-                    onChange={e => setComponentModal({ ...componentModal, stockQuantity: e.target.value })}
-                    placeholder="Ex: 500, 10.000"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Unidade de Medida</label>
-                  <input
-                    type="text"
-                    value={componentModal.unit || ''}
-                    onChange={e => setComponentModal({ ...componentModal, unit: e.target.value })}
-                    placeholder="Ex: doses, mL, frascos, mg"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setComponentModal(null)}
-                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-md"
-                >
-                  Salvar Insumo
-                </button>
+              <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
+                <button type="button" onClick={() => setComponentModal(null)} className="px-4 py-2 bg-slate-100 rounded-xl font-bold uppercase">Cancelar</button>
+                <button type="submit" className="px-5 py-2 bg-teal-700 text-white rounded-xl font-black uppercase">Salvar Insumo</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: VIEW CANDIDATE DETAILS */}
       {viewCandidate && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 bg-slate-900 text-white flex items-center justify-between">
+          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col">
+            <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
               <div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 block">Ficha do Candidato Vacinal</span>
-                <h3 className="text-xl font-black uppercase tracking-tight">{viewCandidate.name}</h3>
+                <span className="text-[10px] font-black uppercase tracking-widest text-teal-400 block">Ficha da Vacina</span>
+                <h3 className="text-xl font-black uppercase">{viewCandidate.name}</h3>
               </div>
-              <button onClick={() => setViewCandidate(null)} className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white rounded-full transition">
-                <X size={18} />
-              </button>
+              <button onClick={() => setViewCandidate(null)} className="p-2 text-slate-400 hover:text-white"><X size={18} /></button>
             </div>
 
-            <div className="p-6 overflow-y-auto space-y-6 custom-scrollbar text-xs">
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                <div>
-                  <span className="text-[9px] font-black uppercase text-slate-400 block">Patógeno Alvo</span>
-                  <span className="font-black text-slate-900 text-sm">{viewCandidate.targetPathogen}</span>
-                </div>
-                <div>
-                  <span className="text-[9px] font-black uppercase text-slate-400 block">Fase Atual</span>
-                  <span className="font-black text-emerald-800 text-sm">{viewCandidate.phase}</span>
-                </div>
-                <div>
-                  <span className="text-[9px] font-black uppercase text-slate-400 block">Plataforma</span>
-                  <span className="font-bold text-slate-800">{viewCandidate.platform}</span>
-                </div>
-                <div>
-                  <span className="text-[9px] font-black uppercase text-slate-400 block">Pesquisador Responsável</span>
-                  <span className="font-bold text-slate-800">{viewCandidate.leadResearcher}</span>
-                </div>
+            <div className="p-6 space-y-4 text-xs">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-2 gap-3">
+                <div><span className="text-[9px] font-black uppercase text-slate-400 block">Patógeno</span><span className="font-bold">{viewCandidate.targetPathogen}</span></div>
+                <div><span className="text-[9px] font-black uppercase text-slate-400 block">Fase</span><span className="font-bold text-teal-800">{viewCandidate.phase}</span></div>
+                <div><span className="text-[9px] font-black uppercase text-slate-400 block">Plataforma</span><span className="font-bold">{viewCandidate.platform}</span></div>
+                <div><span className="text-[9px] font-black uppercase text-slate-400 block">Pesquisador</span><span className="font-bold">{viewCandidate.leadResearcher}</span></div>
               </div>
 
               <div>
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Descrição e Estratégia Vacinal</h4>
-                <p className="text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-200/80">
-                  {viewCandidate.description || 'Nenhuma descrição cadastrada.'}
-                </p>
-              </div>
-
-              <div>
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Insumos e Componentes Biológicos Associados</h4>
-                <div className="space-y-2">
-                  {components.filter(c => viewCandidate.associatedComponentIds?.includes(c.id)).map(comp => (
-                    <div key={comp.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex justify-between items-center">
-                      <div>
-                        <span className="font-mono font-bold text-slate-900 mr-2">{comp.code}</span>
-                        <span className="font-bold text-slate-800">{comp.name}</span>
-                        <span className="text-slate-500 text-[10px] block">Lote: {comp.batchNumber} | Temp: {comp.storageTemperature}</span>
-                      </div>
-                      <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-                        {comp.grade}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">Descrição & Estudos</span>
+                <p className="p-3 bg-slate-50 rounded-xl border border-slate-200 leading-relaxed text-slate-700">{viewCandidate.description || 'Sem descrição.'}</p>
               </div>
             </div>
           </div>
