@@ -33,7 +33,10 @@ import {
   LayoutDashboard,
   Calendar,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  ChevronLeft,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 
 interface RegulatoryStandardsManagerProps {
@@ -169,7 +172,8 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   onUpdateSubjects = () => {}
 }) => {
   // Navigation State
-  const [activeNav, setActiveNav] = useState<'visao_geral' | 'post_its' | 'acervo' | 'favoritos' | 'minhas_atividades'>('visao_geral');
+  const [activeNav, setActiveNav] = useState<'post_its' | 'acervo' | 'favoritos'>('acervo');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('todas');
   const [viewLayout, setViewLayout] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'recentes' | 'nome' | 'status'>('recentes');
@@ -532,45 +536,46 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   return (
     <div className="-m-4 sm:-m-10 bg-slate-50 min-h-screen flex flex-col lg:flex-row text-slate-800 font-sans">
       
-      {/* 1. LEFT SIDEBAR (DEDICATED NORMAS SIDEBAR MATCHING MOCKUP) */}
-      <aside className="w-full lg:w-64 bg-white border-r border-slate-200/90 flex-shrink-0 p-5 flex flex-col justify-between space-y-6">
+      {/* 1. LEFT SIDEBAR (COLLAPSIBLE DEDICATED NORMAS SIDEBAR) */}
+      <aside className={`w-full ${isSidebarCollapsed ? 'lg:w-20 p-3' : 'lg:w-64 p-5'} bg-white border-r border-slate-200/90 flex-shrink-0 flex flex-col justify-between space-y-6 transition-all duration-300 relative`}>
         <div>
-          {/* Logo Header */}
-          <div className="flex items-center gap-3 px-2 py-2 mb-6">
-            <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-md shadow-slate-900/10">
-              <Sparkles size={20} className="text-teal-400" />
+          {/* Logo Header & Collapse Toggle */}
+          <div className="flex items-center justify-between gap-2 px-1 py-1 mb-6">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-md shadow-slate-900/10 flex-shrink-0">
+                <Sparkles size={20} className="text-teal-400" />
+              </div>
+              {!isSidebarCollapsed && (
+                <div className="min-w-0">
+                  <span className="text-base font-black tracking-tight text-slate-900 block leading-tight truncate">CTVacinas</span>
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-100/80">
+                    Regulatório
+                  </span>
+                </div>
+              )}
             </div>
-            <div>
-              <span className="text-base font-black tracking-tight text-slate-900 block leading-tight">CTVacinas</span>
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-100/80">
-                Regulatório
-              </span>
-            </div>
+
+            <button
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              title={isSidebarCollapsed ? "Expandir menu lateral" : "Minimizar menu lateral"}
+              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition flex-shrink-0"
+            >
+              {isSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </button>
           </div>
 
           {/* Section 1: Normas Regulatórias */}
           <div className="space-y-1 mb-6">
-            <p className="px-3 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-              NORMAS REGULATÓRIAS
-            </p>
-
-            <button
-              onClick={() => { setActiveNav('visao_geral'); setSelectedCategory('todas'); setIsAdding(false); }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-extrabold transition-all ${
-                activeNav === 'visao_geral'
-                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-100 shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-            >
-              <div className={`p-1.5 rounded-xl ${activeNav === 'visao_geral' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400'}`}>
-                <ShieldCheck size={16} />
-              </div>
-              Visão Geral
-            </button>
+            {!isSidebarCollapsed && (
+              <p className="px-3 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                NORMAS REGULATÓRIAS
+              </p>
+            )}
 
             <button
               onClick={() => { setActiveNav('post_its'); setIsAdding(false); }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-extrabold transition-all ${
+              title="Post-its de Conhecimento"
+              className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3.5 py-2.5'} rounded-2xl text-xs font-extrabold transition-all ${
                 activeNav === 'post_its'
                   ? 'bg-emerald-50 text-emerald-800 border border-emerald-100 shadow-xs'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -579,12 +584,13 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
               <div className={`p-1.5 rounded-xl ${activeNav === 'post_its' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400'}`}>
                 <StickyNote size={16} />
               </div>
-              Post-its de Conhecimento
+              {!isSidebarCollapsed && <span>Post-its de Conhecimento</span>}
             </button>
 
             <button
               onClick={() => { setActiveNav('acervo'); setSelectedCategory('todas'); setIsAdding(false); }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-extrabold transition-all ${
+              title="Acervo de Normas"
+              className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3.5 py-2.5'} rounded-2xl text-xs font-extrabold transition-all ${
                 activeNav === 'acervo'
                   ? 'bg-emerald-50 text-emerald-800 border border-emerald-100 shadow-xs'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -593,12 +599,13 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
               <div className={`p-1.5 rounded-xl ${activeNav === 'acervo' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400'}`}>
                 <FileText size={16} />
               </div>
-              Acervo de Normas
+              {!isSidebarCollapsed && <span>Acervo de Normas</span>}
             </button>
 
             <button
               onClick={() => { setActiveNav('favoritos'); setIsAdding(false); }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-extrabold transition-all ${
+              title="Favoritos"
+              className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3.5 py-2.5'} rounded-2xl text-xs font-extrabold transition-all ${
                 activeNav === 'favoritos'
                   ? 'bg-emerald-50 text-emerald-800 border border-emerald-100 shadow-xs'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -607,29 +614,17 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
               <div className={`p-1.5 rounded-xl ${activeNav === 'favoritos' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400'}`}>
                 <Star size={16} />
               </div>
-              Favoritos
-            </button>
-
-            <button
-              onClick={() => { setActiveNav('minhas_atividades'); setIsAdding(false); }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-extrabold transition-all ${
-                activeNav === 'minhas_atividades'
-                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-100 shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-            >
-              <div className={`p-1.5 rounded-xl ${activeNav === 'minhas_atividades' ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400'}`}>
-                <Clock size={16} />
-              </div>
-              Minhas Atividades
+              {!isSidebarCollapsed && <span>Favoritos</span>}
             </button>
           </div>
 
           {/* Section 2: Categorias Sidebar Links */}
           <div className="space-y-1">
-            <p className="px-3 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-              CATEGORIAS
-            </p>
+            {!isSidebarCollapsed && (
+              <p className="px-3 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                CATEGORIAS
+              </p>
+            )}
 
             {[
               { id: 'Boas Práticas', label: 'Boas Práticas', icon: FlaskConical, count: categoryCounts['Boas Práticas'] },
@@ -644,12 +639,13 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
               return (
                 <button
                   key={cat.id}
+                  title={cat.label}
                   onClick={() => {
                     setSelectedCategory(isSelected ? 'todas' : cat.id);
-                    if (activeNav === 'post_its') setActiveNav('visao_geral');
+                    if (activeNav === 'post_its') setActiveNav('acervo');
                     setIsAdding(false);
                   }}
-                  className={`w-full flex items-center justify-between px-3.5 py-2 rounded-2xl text-xs font-bold transition-all ${
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'justify-between px-3.5 py-2'} rounded-2xl text-xs font-bold transition-all ${
                     isSelected 
                       ? 'bg-teal-50 text-teal-800 font-black border border-teal-100' 
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -657,13 +653,15 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                 >
                   <div className="flex items-center gap-2.5 truncate">
                     <CatIcon size={15} className={isSelected ? 'text-teal-600' : 'text-slate-400'} />
-                    <span className="truncate">{cat.label}</span>
+                    {!isSidebarCollapsed && <span className="truncate">{cat.label}</span>}
                   </div>
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
-                    isSelected ? 'bg-teal-100 text-teal-800 border-teal-200' : 'bg-emerald-50 text-emerald-800 border-emerald-100'
-                  }`}>
-                    {cat.count}
-                  </span>
+                  {!isSidebarCollapsed && (
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                      isSelected ? 'bg-teal-100 text-teal-800 border-teal-200' : 'bg-emerald-50 text-emerald-800 border-emerald-100'
+                    }`}>
+                      {cat.count}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -671,16 +669,22 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
         </div>
 
         {/* Bottom Help Box */}
-        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
-              <HelpCircle size={15} className="text-teal-600" />
-              Precisa de ajuda?
-            </span>
-            <ChevronRight size={14} className="text-slate-400" />
+        {!isSidebarCollapsed ? (
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                <HelpCircle size={15} className="text-teal-600" />
+                Precisa de ajuda?
+              </span>
+              <ChevronRight size={14} className="text-slate-400" />
+            </div>
+            <p className="text-[11px] text-slate-500 font-medium">Acesse o guia rápido do módulo</p>
           </div>
-          <p className="text-[11px] text-slate-500 font-medium">Acesse o guia rápido do módulo</p>
-        </div>
+        ) : (
+          <div className="flex justify-center p-2" title="Precisa de ajuda?">
+            <HelpCircle size={18} className="text-teal-600" />
+          </div>
+        )}
       </aside>
 
       {/* 2. MAIN CONTENT AREA */}
@@ -726,7 +730,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
             </button>
 
             <button
-              onClick={() => { setActiveNav('visao_geral'); setSelectedCategory('todas'); }}
+              onClick={() => { setActiveNav('acervo'); setSelectedCategory('todas'); }}
               className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-black transition-all ${
                 activeNav !== 'post_its'
                   ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-xs'
@@ -1166,102 +1170,51 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
               </div>
             )}
 
-            {/* MAIN LOWER SPLIT: LEFT CATEGORIAS CARD + RIGHT NORMAS RECENTES GRID */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* NORMAS RECENTES GRID (FULL WIDTH) */}
+            <div className="space-y-4">
               
-              {/* LEFT COLUMN: CATEGORIAS CARD */}
-              <div className="lg:col-span-4 bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
-                <h3 className="text-base font-black text-slate-900 tracking-tight">Categorias</h3>
-
-                <div className="space-y-2">
-                  {[
-                    { id: 'Boas Práticas', label: 'Boas Práticas', icon: FlaskConical, count: categoryCounts['Boas Práticas'] },
-                    { id: 'RDC', label: 'RDC', icon: FileText, count: categoryCounts['RDC'] },
-                    { id: 'Guias e Diretrizes', label: 'Guias e Diretrizes', icon: BookOpen, count: categoryCounts['Guias e Diretrizes'] },
-                    { id: 'Instruções Normativas', label: 'Instruções Normativas', icon: Layers, count: categoryCounts['Instruções Normativas'] },
-                    { id: 'Outros Documentos', label: 'Outros Documentos', icon: MoreHorizontal, count: categoryCounts['Outros Documentos'] }
-                  ].map((cat) => {
-                    const CatIcon = cat.icon;
-                    const isSelected = selectedCategory === cat.id;
-
-                    return (
-                      <div
-                        key={cat.id}
-                        onClick={() => setSelectedCategory(isSelected ? 'todas' : cat.id)}
-                        className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between cursor-pointer ${
-                          isSelected 
-                            ? 'bg-teal-50 border-teal-200 text-teal-900 font-extrabold shadow-xs' 
-                            : 'bg-white border-slate-100 hover:border-slate-200 text-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className={`p-2 rounded-xl ${isSelected ? 'bg-teal-100 text-teal-700' : 'bg-slate-50 text-slate-500'}`}>
-                            <CatIcon size={18} />
-                          </div>
-                          <span className="text-xs font-black truncate">{cat.label}</span>
-                        </div>
-
-                        <span className="text-xs font-black text-teal-700 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded-full">
-                          {cat.count}
-                        </span>
-                      </div>
-                    );
-                  })}
+              {/* Header row */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-black text-slate-900 tracking-tight">Normas recentes</h3>
+                  <span className="text-[10px] font-black text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                    {filteredStandards.length} resultados
+                  </span>
                 </div>
 
-                <button 
-                  onClick={() => setSelectedCategory('todas')}
-                  className="w-full text-center text-xs font-bold text-teal-700 hover:text-teal-800 pt-2 flex items-center justify-center gap-1 transition"
-                >
-                  Ver todas as categorias <ChevronRight size={14} />
-                </button>
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500 font-bold">
+                    <span>Ordenar por:</span>
+                    <select 
+                      value={sortBy}
+                      onChange={e => setSortBy(e.target.value as any)}
+                      className="bg-transparent font-black text-slate-800 outline-none cursor-pointer"
+                    >
+                      <option value="recentes">Mais recentes</option>
+                      <option value="nome">Nome</option>
+                      <option value="status">Status</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                    <button 
+                      onClick={() => setViewLayout('grid')}
+                      className={`p-1.5 rounded-lg transition ${viewLayout === 'grid' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-400'}`}
+                    >
+                      <Grid size={15} />
+                    </button>
+                    <button 
+                      onClick={() => setViewLayout('list')}
+                      className={`p-1.5 rounded-lg transition ${viewLayout === 'list' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-400'}`}
+                    >
+                      <List size={15} />
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              {/* RIGHT COLUMN: NORMAS RECENTES GRID */}
-              <div className="lg:col-span-8 space-y-4">
-                
-                {/* Header row */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-black text-slate-900 tracking-tight">Normas recentes</h3>
-                    <span className="text-[10px] font-black text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
-                      {filteredStandards.length} resultados
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500 font-bold">
-                      <span>Ordenar por:</span>
-                      <select 
-                        value={sortBy}
-                        onChange={e => setSortBy(e.target.value as any)}
-                        className="bg-transparent font-black text-slate-800 outline-none cursor-pointer"
-                      >
-                        <option value="recentes">Mais recentes</option>
-                        <option value="nome">Nome</option>
-                        <option value="status">Status</option>
-                      </select>
-                    </div>
-
-                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
-                      <button 
-                        onClick={() => setViewLayout('grid')}
-                        className={`p-1.5 rounded-lg transition ${viewLayout === 'grid' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-400'}`}
-                      >
-                        <Grid size={15} />
-                      </button>
-                      <button 
-                        onClick={() => setViewLayout('list')}
-                        className={`p-1.5 rounded-lg transition ${viewLayout === 'list' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-400'}`}
-                      >
-                        <List size={15} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Cards Grid */}
-                <div className={viewLayout === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 gap-4" : "space-y-3"}>
+              {/* Cards Grid */}
+              <div className={viewLayout === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-3"}>
                   {filteredStandards.map(std => {
                     const statusBadge = getStatusBadge(std.status);
                     const isFav = favoriteIds.includes(std.id);
@@ -1351,8 +1304,6 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                 </div>
 
               </div>
-
-            </div>
 
           </div>
         )}
