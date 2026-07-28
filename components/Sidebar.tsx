@@ -14,13 +14,20 @@ import {
   Clock,
   Database,
   Download,
-  Upload
+  Upload,
+  Syringe,
+  FileText,
+  FileSpreadsheet,
+  FileUp,
+  Compass
 } from 'lucide-react';
 
 interface SidebarProps {
   currentModule?: 'activities_projects' | 'regulatory_standards' | 'vaccines_components';
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
+  vaccineTab?: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog';
+  onVaccineTabChange?: (tab: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog') => void;
   onGoHome: () => void;
   onLogout: () => void;
   onSwitchProfile: () => void;
@@ -53,6 +60,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   currentModule,
   currentView, 
   onViewChange, 
+  vaccineTab,
+  onVaccineTabChange,
   onGoHome,
   onLogout,
   onSwitchProfile,
@@ -98,40 +107,81 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <div>
             <h2 className="text-white font-black text-sm leading-tight uppercase">GESTÃO</h2>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Regulatória</p>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+              {currentModule === 'vaccines_components' ? 'Vacinas & Insumos' : 'Regulatória'}
+            </p>
           </div>
         </div>
 
-        <nav className="space-y-2">
-          <SidebarButton active={currentView === 'dashboard'} onClick={() => onViewChange('dashboard')} icon={<LayoutDashboard size={18} />} label="Dashboard" />
-          {!selectedProfile?.isComiteGestor && (
-            <SidebarButton active={currentView === 'tasks'} onClick={() => onViewChange('tasks')} icon={<ListTodo size={18} />} label="Atividades" />
-          )}
-          <SidebarButton 
-            active={currentView === 'projects'} 
-            onClick={() => { 
-              onViewChange('projects'); 
-              if (selectedProfile?.isComiteGestor) {
-                onSelectProjectSubView('visual'); 
-                onSelectVisualizationMode('phases'); 
-              } else {
-                onSelectProjectSubView('management'); 
-              }
-            }} 
-            icon={<FolderKanban size={18} />} 
-            label="Projetos" 
-          />
-          
-          {currentModule !== 'activities_projects' && !selectedProfile?.isComiteGestor && (
-            <SidebarButton active={currentView === 'regulatory'} onClick={() => onViewChange('regulatory')} icon={<ShieldCheck size={18} />} label="Normas" />
-          )}
-          {hasFullAccess && !selectedProfile?.isComiteGestor && (
-            <>
-              <SidebarButton active={currentView === 'quality'} onClick={() => onViewChange('quality')} icon={<ShieldCheck size={18} />} label="Acessos" />
-              <SidebarButton active={currentView === 'traceability'} onClick={() => onViewChange('traceability')} icon={<History size={18} />} label="Auditoria" />
-            </>
-          )}
-        </nav>
+        {currentModule === 'vaccines_components' ? (
+          <nav className="space-y-2">
+            <SidebarButton 
+              active={vaccineTab === 'dashboard'} 
+              onClick={() => { onVaccineTabChange?.('dashboard'); onClose?.(); }} 
+              icon={<LayoutDashboard size={18} />} 
+              label="Dashboard" 
+            />
+            <SidebarButton 
+              active={vaccineTab === 'manual_inclusion'} 
+              onClick={() => { onVaccineTabChange?.('manual_inclusion'); onClose?.(); }} 
+              icon={<FileText size={18} />} 
+              label="Inclusão Manual" 
+            />
+            <SidebarButton 
+              active={vaccineTab === 'import_spreadsheet'} 
+              onClick={() => { onVaccineTabChange?.('import_spreadsheet'); onClose?.(); }} 
+              icon={<FileSpreadsheet size={18} />} 
+              label="Importar Planilha" 
+            />
+            <SidebarButton 
+              active={vaccineTab === 'import_pdf'} 
+              onClick={() => { onVaccineTabChange?.('import_pdf'); onClose?.(); }} 
+              icon={<FileUp size={18} />} 
+              label="Importar PDF" 
+            />
+            <SidebarButton 
+              active={vaccineTab === 'explorer'} 
+              onClick={() => { onVaccineTabChange?.('explorer'); onClose?.(); }} 
+              icon={<Compass size={18} />} 
+              label="Explorador" 
+            />
+            <SidebarButton 
+              active={vaccineTab === 'catalog'} 
+              onClick={() => { onVaccineTabChange?.('catalog'); onClose?.(); }} 
+              icon={<Syringe size={18} />} 
+              label="Catálogo & Lotes" 
+            />
+          </nav>
+        ) : (
+          <nav className="space-y-2">
+            <SidebarButton active={currentView === 'dashboard'} onClick={() => { onViewChange('dashboard'); onClose?.(); }} icon={<LayoutDashboard size={18} />} label="Dashboard" />
+            {!selectedProfile?.isComiteGestor && (
+              <SidebarButton active={currentView === 'tasks'} onClick={() => { onViewChange('tasks'); onClose?.(); }} icon={<ListTodo size={18} />} label="Atividades" />
+            )}
+            <SidebarButton 
+              active={currentView === 'projects'} 
+              onClick={() => { 
+                onViewChange('projects'); 
+                if (selectedProfile?.isComiteGestor) {
+                  onSelectProjectSubView('visual'); 
+                  onSelectVisualizationMode('phases'); 
+                } else {
+                  onSelectProjectSubView('management'); 
+                }
+                onClose?.();
+              }} 
+              icon={<FolderKanban size={18} />} 
+              label="Projetos" 
+            />
+            
+            {hasFullAccess && !selectedProfile?.isComiteGestor && (
+              <>
+                <SidebarButton active={currentView === 'quality'} onClick={() => { onViewChange('quality'); onClose?.(); }} icon={<ShieldCheck size={18} />} label="Acessos" />
+                <SidebarButton active={currentView === 'traceability'} onClick={() => { onViewChange('traceability'); onClose?.(); }} icon={<History size={18} />} label="Auditoria" />
+              </>
+            )}
+          </nav>
+        )}
       </div>
 
       <div className="mt-auto p-4 sm:p-6 space-y-3 sm:space-y-4">

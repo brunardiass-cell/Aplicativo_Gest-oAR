@@ -49,6 +49,8 @@ interface VaccinesComponentsManagerProps {
   onUpdateBatches: (batches: FormulationBatch[]) => void;
   projects?: any[];
   currentUser?: any;
+  activeTab?: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog';
+  onTabChange?: (tab: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog') => void;
 }
 
 export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps> = ({
@@ -58,10 +60,14 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
   onUpdateCandidates,
   onUpdateComponents,
   onUpdateBatches,
-  currentUser
+  currentUser,
+  activeTab,
+  onTabChange
 }) => {
   // Main Module Tabs
-  const [mainTab, setMainTab] = useState<'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog'>('dashboard');
+  const [internalMainTab, setInternalMainTab] = useState<'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog'>('dashboard');
+  const mainTab = activeTab || internalMainTab;
+  const setMainTab = onTabChange || setInternalMainTab;
   
   // Dashboard Subtab
   const [dashboardSubTab, setDashboardSubTab] = useState<'vaccines' | 'components'>('vaccines');
@@ -386,7 +392,7 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
     <div className="space-y-6">
       {/* Navigation Header / Main Tabs */}
       <div className="bg-slate-900 rounded-[2.5rem] p-4 sm:p-6 text-white shadow-xl">
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-6">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-teal-500/20 text-teal-400 border border-teal-500/30 flex items-center justify-center font-black text-lg shadow-inner">
               G
@@ -409,69 +415,6 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
               <Activity size={13} /> {totalCandidates} Vacinas
             </span>
           </div>
-        </div>
-
-        {/* 6 Primary Module Buttons matching screenshot */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 bg-slate-800/80 p-2 rounded-2xl border border-slate-700/80">
-          <button
-            onClick={() => setMainTab('dashboard')}
-            className={`px-3 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition flex flex-col items-center justify-center gap-1.5 ${
-              mainTab === 'dashboard' ? 'bg-teal-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            <LayoutDashboard size={18} />
-            <span>Dashboard</span>
-          </button>
-
-          <button
-            onClick={() => setMainTab('manual_inclusion')}
-            className={`px-3 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition flex flex-col items-center justify-center gap-1.5 ${
-              mainTab === 'manual_inclusion' ? 'bg-teal-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            <FileText size={18} />
-            <span>Inclusão Manual</span>
-          </button>
-
-          <button
-            onClick={() => setMainTab('import_spreadsheet')}
-            className={`px-3 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition flex flex-col items-center justify-center gap-1.5 ${
-              mainTab === 'import_spreadsheet' ? 'bg-teal-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            <FileSpreadsheet size={18} />
-            <span>Importar Planilha</span>
-          </button>
-
-          <button
-            onClick={() => setMainTab('import_pdf')}
-            className={`px-3 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition flex flex-col items-center justify-center gap-1.5 ${
-              mainTab === 'import_pdf' ? 'bg-teal-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            <FileUp size={18} />
-            <span>Importar PDF</span>
-          </button>
-
-          <button
-            onClick={() => setMainTab('explorer')}
-            className={`px-3 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition flex flex-col items-center justify-center gap-1.5 ${
-              mainTab === 'explorer' ? 'bg-teal-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            <Compass size={18} />
-            <span>Explorador</span>
-          </button>
-
-          <button
-            onClick={() => setMainTab('catalog')}
-            className={`px-3 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition flex flex-col items-center justify-center gap-1.5 ${
-              mainTab === 'catalog' ? 'bg-teal-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            <Syringe size={18} />
-            <span>Catálogo & Lotes</span>
-          </button>
         </div>
       </div>
 

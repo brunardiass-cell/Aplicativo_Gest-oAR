@@ -66,6 +66,7 @@ const App: React.FC = () => {
   const [regulatorySubjects, setRegulatorySubjects] = useState<RegulatorySubject[]>([]);
   const [currentModule, setCurrentModule] = useState<'activities_projects' | 'regulatory_standards' | 'vaccines_components'>('activities_projects');
   const [hasChosenModule, setHasChosenModule] = useState<boolean>(false);
+  const [vaccineTab, setVaccineTab] = useState<'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog'>('dashboard');
   const [vaccineCandidates, setVaccineCandidates] = useState<VaccineCandidate[]>(DEFAULT_VACCINE_CANDIDATES);
   const [vaccineComponents, setVaccineComponents] = useState<VaccineComponent[]>(DEFAULT_VACCINE_COMPONENTS);
   const [formulationBatches, setFormulationBatches] = useState<FormulationBatch[]>(DEFAULT_FORMULATION_BATCHES);
@@ -1243,32 +1244,47 @@ const App: React.FC = () => {
   return (
     <>
       <div className={`flex ${isMobile ? 'min-h-screen' : 'h-screen'} bg-slate-100 font-sans ${isMobile ? '' : 'overflow-hidden'} ${isMobile ? 'flex-col' : ''}`}>
-      <Sidebar 
-        currentModule={currentModule}
-        currentView={view} 
-        onViewChange={(v) => { setView(v); setIsSidebarOpen(false); }} 
-        onGoHome={() => { setView('dashboard'); setIsSidebarOpen(false); }} 
-        onLogout={handleLogout} 
-        onSwitchProfile={handleSwitchProfile} 
-        selectedProfile={selectedProfile} 
-        hasFullAccess={hasFullAccess} 
-        lastSync={lastSync} 
-        onSaveBackup={handleSaveLocalBackup} 
-        onLoadBackup={() => fileInputRef.current?.click()}
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        isMobile={isMobile || isTablet}
-        activeProjects={activeProjects}
-        selectedProjectId={selectedProjectIdForView}
-        onSelectProjectId={setSelectedProjectIdForView}
-        visualizationMode={projectVisualizationMode}
-        onSelectVisualizationMode={setProjectVisualizationMode}
-        projectSubView={projectSubView}
-        onSelectProjectSubView={setProjectSubView}
-      />
+      {currentModule !== 'regulatory_standards' && (
+        <Sidebar 
+          currentModule={currentModule}
+          currentView={view} 
+          onViewChange={(v) => { setView(v); setIsSidebarOpen(false); }} 
+          vaccineTab={vaccineTab}
+          onVaccineTabChange={(tab) => { setVaccineTab(tab); setIsSidebarOpen(false); }}
+          onGoHome={() => { 
+            if (currentModule === 'vaccines_components') {
+              setVaccineTab('dashboard');
+            } else {
+              setView('dashboard'); 
+            }
+            setIsSidebarOpen(false); 
+          }} 
+          onLogout={handleLogout} 
+          onSwitchProfile={handleSwitchProfile} 
+          selectedProfile={selectedProfile} 
+          hasFullAccess={hasFullAccess} 
+          lastSync={lastSync} 
+          onSaveBackup={handleSaveLocalBackup} 
+          onLoadBackup={() => fileInputRef.current?.click()}
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+          isMobile={isMobile || isTablet}
+          activeProjects={activeProjects}
+          selectedProjectId={selectedProjectIdForView}
+          onSelectProjectId={setSelectedProjectIdForView}
+          visualizationMode={projectVisualizationMode}
+          onSelectVisualizationMode={setProjectVisualizationMode}
+          projectSubView={projectSubView}
+          onSelectProjectSubView={setProjectSubView}
+        />
+      )}
       <input type="file" ref={fileInputRef} onChange={handleLoadLocalBackup} accept=".json" className="hidden" />
 
-      <main className={`flex-1 overflow-y-auto transition-all duration-300 ${isDesktop ? 'ml-64 p-10' : 'ml-0 p-4 pt-24'}`}>
+      <main className={`flex-1 overflow-y-auto transition-all duration-300 ${
+        currentModule === 'regulatory_standards' 
+          ? (isDesktop ? 'p-10' : 'p-4 pt-6') 
+          : (isDesktop ? 'ml-64 p-10' : 'ml-0 p-4 pt-24')
+      }`}>
         {/* Indicador do Módulo Ativo com Troca de Módulo Independentes */}
         <div className="mb-6 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-sm flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -1316,15 +1332,33 @@ const App: React.FC = () => {
         )}
 
         {currentModule === 'vaccines_components' ? (
-          <VaccinesComponentsManager
-            candidates={vaccineCandidates}
-            onUpdateCandidates={(c) => { setVaccineCandidates(c); setDataDirty(); }}
-            components={vaccineComponents}
-            onUpdateComponents={(comp) => { setVaccineComponents(comp); setDataDirty(); }}
-            formulationBatches={formulationBatches}
-            onUpdateBatches={(b) => { setFormulationBatches(b); setDataDirty(); }}
-            projects={activeProjects}
-          />
+          <>
+            {!isDesktop && (
+              <div className="mb-4 flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
+                <button 
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="p-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2"
+                >
+                  <Menu size={18} /> Menu Lateral
+                </button>
+                <span className="text-xs font-black uppercase text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-100">
+                  {vaccineTab.replace('_', ' ')}
+                </span>
+              </div>
+            )}
+            <VaccinesComponentsManager
+              candidates={vaccineCandidates}
+              onUpdateCandidates={(c) => { setVaccineCandidates(c); setDataDirty(); }}
+              components={vaccineComponents}
+              onUpdateComponents={(comp) => { setVaccineComponents(comp); setDataDirty(); }}
+              formulationBatches={formulationBatches}
+              onUpdateBatches={(b) => { setFormulationBatches(b); setDataDirty(); }}
+              projects={activeProjects}
+              currentUser={selectedProfile}
+              activeTab={vaccineTab}
+              onTabChange={setVaccineTab}
+            />
+          </>
         ) : currentModule === 'regulatory_standards' ? (
           <RegulatoryStandardsManager 
             standards={regulatoryStandards} 
