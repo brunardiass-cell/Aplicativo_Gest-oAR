@@ -1467,6 +1467,7 @@ const App: React.FC = () => {
                 onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} 
                 onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} 
                 onDelete={(task) => {handleOpenDeleteItemModal({ type: 'task', name: task.activity, ids: { taskId: task.id } });}} 
+                onNewTask={canCreate ? () => { setSelectedTask(null); setIsModalOpen(true); } : undefined}
                 onAssignReview={() => {}} 
                 notifications={notifications.filter(n => !n.read)} 
                 onNotificationClick={handleNotificationClick} 
