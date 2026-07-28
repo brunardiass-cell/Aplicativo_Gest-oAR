@@ -159,7 +159,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   onSearchTermChange,
   onNewTask
 }) => {
-  const [viewMode, setViewMode] = useState<'list' | 'cards' | 'kanban' | 'timeline'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
@@ -398,17 +398,6 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
       {/* 3. VIEW MODE SWITCHER TABS */}
       <div className="flex items-center gap-2 border-b border-slate-200/80 pb-2">
         <button 
-          onClick={() => setViewMode('cards')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${
-            viewMode === 'cards' 
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-xs' 
-              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-          }`}
-        >
-          <LayoutGrid size={15} /> Cards
-        </button>
-
-        <button 
           onClick={() => setViewMode('list')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${
             viewMode === 'list' 
@@ -420,25 +409,14 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
         </button>
 
         <button 
-          onClick={() => setViewMode('kanban')}
+          onClick={() => setViewMode('cards')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${
-            viewMode === 'kanban' 
+            viewMode === 'cards' 
               ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-xs' 
               : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
           }`}
         >
-          <Kanban size={15} /> Kanban
-        </button>
-
-        <button 
-          onClick={() => setViewMode('timeline')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${
-            viewMode === 'timeline' 
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-xs' 
-              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-          }`}
-        >
-          <Clock size={15} /> Timeline
+          <LayoutGrid size={15} /> Cards
         </button>
       </div>
 
@@ -854,74 +832,6 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
               <p className="text-slate-400 font-black uppercase text-xs tracking-widest italic">Nenhuma atividade encontrada para os filtros selecionados.</p>
             </div>
           )}
-        </div>
-      )}
-
-      {/* 7. KANBAN VIEW MODE */}
-      {viewMode === 'kanban' && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {(['Planejada', 'Em Andamento', 'Pausado', 'Concluída'] as Status[]).map((colStatus) => {
-            const colTasks = sortedTasks.filter(t => t.status === colStatus);
-            const colLabel = colStatus === 'Pausado' ? 'Em Revisão / Pausado' : colStatus;
-
-            return (
-              <div key={colStatus} className="bg-slate-50 p-4 rounded-3xl border border-slate-200/80 space-y-3 min-h-[450px]">
-                <div className="flex items-center justify-between px-2 pb-2 border-b border-slate-200/80">
-                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">{colLabel}</h3>
-                  <span className="text-[10px] font-black text-slate-500 bg-white border border-slate-200 px-2.5 py-0.5 rounded-full">
-                    {colTasks.length}
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  {colTasks.map(task => (
-                    <div 
-                      key={task.id} 
-                      onClick={() => onView(task)}
-                      className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition cursor-pointer space-y-2.5"
-                    >
-                      <span className="text-[9px] font-black text-teal-800 uppercase tracking-widest block">{task.project}</span>
-                      <h4 className="text-xs font-black text-slate-900 leading-snug">{task.activity}</h4>
-                      <div className="flex items-center justify-between text-[10px] text-slate-500 pt-2 border-t border-slate-100 font-bold">
-                        <span>{task.projectLead}</span>
-                        <span>{formatDateBR(task.completionDate)}</span>
-                      </div>
-                    </div>
-                  ))}
-                  {colTasks.length === 0 && (
-                    <div className="py-12 text-center text-slate-400 text-xs font-bold italic">
-                      Nenhuma atividade
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* 8. TIMELINE VIEW MODE */}
-      {viewMode === 'timeline' && (
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
-          <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Cronograma de Prazos</h3>
-          <div className="relative border-l-2 border-slate-200 ml-4 space-y-6 py-2">
-            {sortedTasks.map(task => (
-              <div key={task.id} className="relative pl-6 group">
-                <div className="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-teal-600 border-2 border-white shadow-xs" />
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 hover:bg-white hover:shadow-xs transition flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <span className="text-[9px] font-black text-teal-800 uppercase tracking-widest">{task.project}</span>
-                    <h4 className="text-sm font-black text-slate-900">{task.activity}</h4>
-                    <p className="text-xs font-medium text-slate-500 mt-0.5">{task.description}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-xs font-black text-slate-800 block">{formatDateBR(task.completionDate)}</span>
-                    <span className="text-[10px] font-bold uppercase text-slate-400">{task.status}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       )}
 

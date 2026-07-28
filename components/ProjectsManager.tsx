@@ -580,31 +580,96 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   return (
     <div className="space-y-8 project-manager-container animate-in fade-in duration-500">
       <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col gap-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-50 pb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-100 pb-6">
           <div className="flex items-center gap-3">
-            <button onClick={() => setViewMode('selection')} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition">
-              <X size={18} />
+            <button 
+              onClick={() => setViewMode('initial')} 
+              className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-black transition active:scale-95 shadow-2xs"
+              title="Voltar para a Página Inicial do Gerenciador de Projetos"
+            >
+              <ArrowLeft size={16} /> Voltar para Página Inicial
             </button>
-            <div className="flex items-center gap-2 px-2.5 py-0.5 bg-brand-primary/10 text-brand-primary rounded-full text-[8px] font-black uppercase tracking-widest">
-              <Activity size={10} /> Dashboard do Projeto
-            </div>
           </div>
-          <div className="flex gap-1.5 bg-slate-50 p-1 rounded-2xl border border-slate-100 shadow-sm">
-             <button onClick={() => setProjectDetailView('dashboard')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'dashboard' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
-               <LayoutDashboard size={12} /> Dashboard
-             </button>
-             <button onClick={() => setProjectDetailView('timeline')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'timeline' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
-               <Clock size={12} /> Plano de Trabalho
-             </button>
-             <button onClick={() => setProjectDetailView('gantt')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'gantt' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
-               <GanttChartSquare size={12} /> Gantt
-             </button>
-             <button onClick={() => setProjectDetailView('kanban')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'kanban' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
-               <Kanban size={12} /> Kanban
-             </button>
-             <button onClick={() => setProjectDetailView('phases')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${projectDetailView === 'phases' ? 'bg-white text-brand-primary shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>
-               <LayoutGrid size={12} /> Fases
-             </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Primary Navigation Tabs */}
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200/60">
+              <button 
+                onClick={() => setProjectDetailView('dashboard')} 
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                  projectDetailView === 'dashboard' 
+                    ? 'bg-white text-brand-primary shadow-sm font-black' 
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <LayoutDashboard size={14} /> Dashboard
+              </button>
+
+              <button 
+                onClick={() => setProjectDetailView('timeline')} 
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                  projectDetailView === 'timeline' 
+                    ? 'bg-white text-brand-primary shadow-sm font-black' 
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Clock size={14} /> Plano de Trabalho
+              </button>
+
+              <button 
+                onClick={() => setProjectDetailView('phases')} 
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                  projectDetailView === 'phases' 
+                    ? 'bg-emerald-700 text-white shadow-sm font-black' 
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Visualização Principal do Cronograma e Fases"
+              >
+                <LayoutGrid size={14} /> Fases
+              </button>
+            </div>
+
+            {/* Other View Options (Gantt & Kanban) */}
+            <div className="relative group">
+              <button 
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-wider border transition-all ${
+                  (projectDetailView === 'gantt' || projectDetailView === 'kanban')
+                    ? 'bg-brand-primary/10 text-brand-primary border-brand-primary/30'
+                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <Layers size={14} />
+                {projectDetailView === 'gantt' ? 'Gantt' : projectDetailView === 'kanban' ? 'Kanban' : 'Outras Formas de Visualização'}
+                <ChevronDown size={12} />
+              </button>
+              <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-30 hidden group-hover:block hover:block animate-in fade-in duration-150">
+                <button 
+                  onClick={() => setProjectDetailView('gantt')}
+                  className={`w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-wider flex items-center gap-2 hover:bg-slate-50 transition ${
+                    projectDetailView === 'gantt' ? 'text-brand-primary bg-brand-primary/5' : 'text-slate-700'
+                  }`}
+                >
+                  <GanttChartSquare size={14} /> Visualização Gantt
+                </button>
+                <button 
+                  onClick={() => setProjectDetailView('kanban')}
+                  className={`w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-wider flex items-center gap-2 hover:bg-slate-50 transition ${
+                    projectDetailView === 'kanban' ? 'text-brand-primary bg-brand-primary/5' : 'text-slate-700'
+                  }`}
+                >
+                  <Kanban size={14} /> Visualização Kanban
+                </button>
+              </div>
+            </div>
+
+            {/* Mapa de Atividades (Ver Tela Cheia) */}
+            <button 
+              onClick={() => setIsActivityMapOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-2xl text-[10px] font-black uppercase tracking-wider transition shadow-2xs"
+              title="Visualizar Mapa de Atividades em Tela Cheia"
+            >
+              <Workflow size={14} /> Ver Tela Cheia
+            </button>
           </div>
         </div>
 
