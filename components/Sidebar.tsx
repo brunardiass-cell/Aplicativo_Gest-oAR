@@ -19,15 +19,16 @@ import {
   FileText,
   FileSpreadsheet,
   FileUp,
-  Compass
+  Compass,
+  AlertTriangle
 } from 'lucide-react';
 
 interface SidebarProps {
   currentModule?: 'activities_projects' | 'regulatory_standards' | 'vaccines_components';
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
-  vaccineTab?: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog';
-  onVaccineTabChange?: (tab: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog') => void;
+  vaccineTab?: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog' | 'impurities';
+  onVaccineTabChange?: (tab: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog' | 'impurities') => void;
   onGoHome: () => void;
   onLogout: () => void;
   onSwitchProfile: () => void;
@@ -149,24 +150,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                 isVaccine
               />
               <SidebarButton 
-                active={vaccineTab === 'manual_inclusion'} 
-                onClick={() => { onVaccineTabChange?.('manual_inclusion'); onClose?.(); }} 
-                icon={<FileText size={16} />} 
-                label="Formulações" 
-                isVaccine
-              />
-              <SidebarButton 
-                active={false} 
-                onClick={() => { onVaccineTabChange?.('catalog'); onClose?.(); }} 
-                icon={<Clock size={16} />} 
-                label="Ensaios" 
-                isVaccine
-              />
-              <SidebarButton 
-                active={false} 
-                onClick={() => { onVaccineTabChange?.('catalog'); onClose?.(); }} 
-                icon={<Database size={16} />} 
-                label="Lotes" 
+                active={vaccineTab === 'impurities'} 
+                onClick={() => { onVaccineTabChange?.('impurities'); onClose?.(); }} 
+                icon={<AlertTriangle size={16} />} 
+                label="Impurezas" 
                 isVaccine
               />
               <SidebarButton 
@@ -184,31 +171,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                 isVaccine
               />
             </nav>
-
-            {/* ATALHOS Section (as in reference image) */}
-            <div className="pt-3 border-t border-emerald-800/60 space-y-2">
-              <p className="text-[9px] font-black text-emerald-300/80 uppercase tracking-widest px-2">
-                ATALHOS
-              </p>
-              <button 
-                onClick={() => { onVaccineTabChange?.('manual_inclusion'); onClose?.(); }}
-                className="w-full text-left px-3 py-1.5 rounded-lg text-emerald-100 hover:bg-emerald-800/50 text-xs font-semibold flex items-center gap-2 transition"
-              >
-                <span className="text-emerald-400 font-bold text-sm">+</span> Nova Vacina
-              </button>
-              <button 
-                onClick={() => { onVaccineTabChange?.('catalog'); onClose?.(); }}
-                className="w-full text-left px-3 py-1.5 rounded-lg text-emerald-100 hover:bg-emerald-800/50 text-xs font-semibold flex items-center gap-2 transition"
-              >
-                <span className="text-emerald-400 font-bold text-sm">+</span> Novo Lote
-              </button>
-              <button 
-                onClick={() => { onVaccineTabChange?.('catalog'); onClose?.(); }}
-                className="w-full text-left px-3 py-1.5 rounded-lg text-emerald-100 hover:bg-emerald-800/50 text-xs font-semibold flex items-center gap-2 transition"
-              >
-                <span className="text-emerald-400 font-bold text-sm">+</span> Novo Ensaio
-              </button>
-            </div>
           </div>
         ) : (
           <nav className="space-y-2 flex-1">

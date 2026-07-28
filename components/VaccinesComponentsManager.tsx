@@ -6,7 +6,9 @@ import {
   VaccinePhase, 
   VaccinePlatform, 
   ComponentCategory, 
-  ComponentGrade 
+  ComponentGrade,
+  VaccineImpurity,
+  ImpurityCategory
 } from '../types';
 import { 
   Syringe, 
@@ -37,35 +39,43 @@ import {
   Info,
   Shield,
   Activity,
-  Box
+  Box,
+  AlertTriangle,
+  FileCheck
 } from 'lucide-react';
 
 interface VaccinesComponentsManagerProps {
   candidates: VaccineCandidate[];
   components: VaccineComponent[];
   formulationBatches: FormulationBatch[];
+  impurities?: VaccineImpurity[];
   onUpdateCandidates: (candidates: VaccineCandidate[]) => void;
   onUpdateComponents: (components: VaccineComponent[]) => void;
   onUpdateBatches: (batches: FormulationBatch[]) => void;
+  onUpdateImpurities?: (impurities: VaccineImpurity[]) => void;
   projects?: any[];
   currentUser?: any;
-  activeTab?: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog';
-  onTabChange?: (tab: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog') => void;
+  activeTab?: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog' | 'impurities';
+  onTabChange?: (tab: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog' | 'impurities') => void;
+  onSwitchModule?: () => void;
 }
 
 export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps> = ({
   candidates,
   components,
   formulationBatches,
+  impurities = [],
   onUpdateCandidates,
   onUpdateComponents,
   onUpdateBatches,
+  onUpdateImpurities = () => {},
   currentUser,
   activeTab,
-  onTabChange
+  onTabChange,
+  onSwitchModule
 }) => {
   // Main Module Tabs
-  const [internalMainTab, setInternalMainTab] = useState<'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog'>('dashboard');
+  const [internalMainTab, setInternalMainTab] = useState<'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog' | 'impurities'>('dashboard');
   const mainTab = activeTab || internalMainTab;
   const setMainTab = onTabChange || setInternalMainTab;
   
@@ -79,8 +89,18 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
   const [searchTerm, setSearchTerm] = useState('');
   const [phaseFilter, setPhaseFilter] = useState<string>('Todos');
   const [platformFilter, setPlatformFilter] = useState<string>('Todos');
+  const [originFilter, setOriginFilter] = useState<'Todos' | 'interna' | 'aprovada'>('Todos');
   const [categoryFilter, setCategoryFilter] = useState<string>('Todos');
   const [gradeFilter, setGradeFilter] = useState<string>('Todos');
+
+  // Impurities Filter State
+  const [impuritySearchTerm, setImpuritySearchTerm] = useState('');
+  const [impurityVaccineFilter, setImpurityVaccineFilter] = useState<string>('Todos');
+  const [impurityCategoryFilter, setImpurityCategoryFilter] = useState<string>('Todos');
+
+  // Impurity Modals
+  const [impurityModal, setImpurityModal] = useState<Partial<VaccineImpurity> | null>(null);
+  const [viewImpurity, setViewImpurity] = useState<VaccineImpurity | null>(null);
 
   // Manual Inclusion Form State
   const [manualName, setManualName] = useState('');
@@ -127,7 +147,8 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
       c.leadResearcher.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesPhase = phaseFilter === 'Todos' || c.phase === phaseFilter;
     const matchesPlatform = platformFilter === 'Todos' || c.platform === platformFilter;
-    return matchesSearch && matchesPhase && matchesPlatform;
+    const matchesOrigin = originFilter === 'Todos' || (c.vaccineOriginType || 'interna') === originFilter;
+    return matchesSearch && matchesPhase && matchesPlatform && matchesOrigin;
   });
 
   const filteredComponents = components.filter(comp => {
@@ -144,6 +165,60 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
       b.responsibleTechnician.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSearch;
   });
+
+  const filteredImpurities = impurities.filter(imp => {
+    const matchesSearch = imp.item.toLowerCase().includes(impuritySearchTerm.toLowerCase()) ||
+      imp.vaccineName.toLowerCase().includes(impuritySearchTerm.toLowerCase()) ||
+      (imp.subCategory || '').toLowerCase().includes(impuritySearchTerm.toLowerCase());
+    const matchesVaccine = impurityVaccineFilter === 'Todos' || imp.vaccineId === impurityVaccineFilter;
+    const matchesCategory = impurityCategoryFilter === 'Todos' || imp.category === impurityCategoryFilter;
+    return matchesSearch && matchesVaccine && matchesCategory;
+  });
+
+  // Impurity Save Handler
+  const handleSaveImpurity = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!impurityModal?.item || !impurityModal.vaccineId) {
+      alert('Por favor, informe a vacina vinculada e a descrição da impureza/item.');
+      return;
+    }
+    const now = new Date().toISOString().split('T')[0];
+    const selectedVac = candidates.find(c => c.id === impurityModal.vaccineId);
+    const vaccineName = selectedVac ? selectedVac.name : (impurityModal.vaccineName || 'Vacina CTVacinas');
+
+    if (impurityModal.id) {
+      const updated = impurities.map(imp => imp.id === impurityModal.id ? {
+        ...(impurityModal as VaccineImpurity),
+        vaccineName,
+        updatedDate: now
+      } : imp);
+      onUpdateImpurities(updated);
+    } else {
+      const newImp: VaccineImpurity = {
+        id: `imp_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        item: impurityModal.item.trim(),
+        vaccineId: impurityModal.vaccineId,
+        vaccineName,
+        category: impurityModal.category || 'Relacionada ao Processo',
+        subCategory: impurityModal.subCategory?.trim() || 'Resíduos Processuais',
+        safetyData: impurityModal.safetyData?.trim() || '',
+        noael: impurityModal.noael?.trim() || 'N/A',
+        pdeAdi: impurityModal.pdeAdi?.trim() || 'N/A',
+        acceptanceCriteria: impurityModal.acceptanceCriteria?.trim() || 'Padrão pharmacopeia',
+        reference: impurityModal.reference?.trim() || 'Dossiê Técnico Regulatória',
+        createdDate: now,
+        updatedDate: now
+      };
+      onUpdateImpurities([...impurities, newImp]);
+    }
+    setImpurityModal(null);
+  };
+
+  const handleDeleteImpurity = (id: string, item: string) => {
+    if (window.confirm(`Tem certeza que deseja remover o registro de impureza "${item}"?`)) {
+      onUpdateImpurities(impurities.filter(i => i.id !== id));
+    }
+  };
 
   // Candidate Save Handler
   const handleSaveCandidate = (e: React.FormEvent) => {
@@ -390,72 +465,46 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
 
   return (
     <div className="space-y-6">
-      {/* Navigation Header / Main Tabs */}
-      <div className="bg-slate-900 rounded-[2.5rem] p-4 sm:p-6 text-white shadow-xl">
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-teal-500/20 text-teal-400 border border-teal-500/30 flex items-center justify-center font-black text-lg shadow-inner">
-              G
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white flex items-center gap-2">
-                GESTÃO REGULATÓRIA DE VACINAS
-              </h1>
-              <p className="text-xs font-bold text-slate-400 tracking-wider">
-                Módulo Especializado de Vacinas & Componentes Biológicos
-              </p>
-            </div>
+      {/* Single Green Header Card for Vaccines Module */}
+      <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-emerald-950 rounded-3xl p-6 sm:p-7 text-white shadow-lg relative overflow-hidden">
+        {/* Background DNA Watermark Illustration */}
+        <div className="absolute right-0 top-0 bottom-0 opacity-10 pointer-events-none transform translate-x-10">
+          <svg width="300" height="200" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M20,10 Q50,50 80,90 M80,10 Q50,50 20,90" />
+            <line x1="30" y1="23" x2="70" y2="23" />
+            <line x1="38" y1="35" x2="62" y2="35" />
+            <line x1="45" y1="46" x2="55" y2="46" />
+            <line x1="38" y1="65" x2="62" y2="65" />
+            <line x1="30" y1="77" x2="70" y2="77" />
+          </svg>
+        </div>
+
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white mb-1.5 flex items-center gap-2.5">
+              <Syringe className="text-emerald-400 shrink-0" size={28} />
+              Módulo de Vacinas
+            </h1>
+            <p className="text-xs sm:text-sm text-emerald-100/90 font-medium max-w-2xl leading-relaxed">
+              Gestão regulatória, componentes biológicos e registro de formulações
+            </p>
           </div>
 
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-300">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
-              <ShieldCheck size={13} /> Anvisa OK
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-teal-500/10 text-teal-400 border border-teal-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
-              <Activity size={13} /> {totalCandidates} Vacinas
-            </span>
-          </div>
+          {onSwitchModule && (
+            <button
+              onClick={onSwitchModule}
+              className="px-4 py-2.5 bg-emerald-700/80 hover:bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 border border-emerald-500/40 shadow-sm shrink-0 self-start sm:self-auto"
+            >
+              <Layers size={16} />
+              <span>Trocar Módulo</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* ==================== 1. DASHBOARD VIEW ==================== */}
       {mainTab === 'dashboard' && (
         <div className="space-y-6">
-          
-          {/* Top Banner Header as in Image 1 */}
-          <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-emerald-950 rounded-3xl p-6 sm:p-8 text-white shadow-lg relative overflow-hidden">
-            {/* Background DNA Watermark Illustration */}
-            <div className="absolute right-0 top-0 bottom-0 opacity-10 pointer-events-none transform translate-x-10">
-              <svg width="300" height="200" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M20,10 Q50,50 80,90 M80,10 Q50,50 20,90" />
-                <line x1="30" y1="23" x2="70" y2="23" />
-                <line x1="38" y1="35" x2="62" y2="35" />
-                <line x1="45" y1="46" x2="55" y2="46" />
-                <line x1="38" y1="65" x2="62" y2="65" />
-                <line x1="30" y1="77" x2="70" y2="77" />
-              </svg>
-            </div>
-
-            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white mb-2">
-                  Gestão Regulatória de Vacinas
-                </h1>
-                <p className="text-xs sm:text-sm text-emerald-100/90 font-medium max-w-2xl leading-relaxed">
-                  Módulo especializado no desenvolvimento e controle de vacinas e componentes biológicos
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
-                <span className="px-3.5 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 rounded-full text-xs font-extrabold flex items-center gap-1.5 backdrop-blur-xs">
-                  <ShieldCheck size={14} className="text-emerald-400" /> ANVISA OK
-                </span>
-                <span className="px-3.5 py-1.5 bg-teal-500/20 text-teal-300 border border-teal-400/30 rounded-full text-xs font-extrabold flex items-center gap-1.5 backdrop-blur-xs">
-                  <Activity size={14} className="text-teal-400" /> 3 VACINAS ATIVAS
-                </span>
-              </div>
-            </div>
-          </div>
 
           {/* 5 Metric Cards as in Image 1 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -1240,6 +1289,151 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
         </div>
       )}
 
+      {/* ==================== IMPUREZAS VIEW ==================== */}
+      {mainTab === 'impurities' && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-slate-200 shadow-xs space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                  <AlertTriangle className="text-amber-500" size={22} />
+                  Gestão e Controle de Impurezas
+                </h2>
+                <p className="text-xs font-bold text-slate-400 mt-1">
+                  Mapeamento de impurezas do processo e produto, limites aceitáveis, dados de segurança (NOAEL, PDE/ADI) e referências regulatórias.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setImpurityModal({ category: 'Relacionada ao Processo' })}
+                className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shadow-md shrink-0 self-start md:self-auto"
+              >
+                <Plus size={16} /> Nova Impureza
+              </button>
+            </div>
+
+            {/* Filters Bar */}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col md:flex-row items-center justify-between gap-3">
+              <div className="relative w-full md:w-1/2">
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={impuritySearchTerm}
+                  onChange={e => setImpuritySearchTerm(e.target.value)}
+                  placeholder="Buscar por item, vacina, subcategoria ou dados de segurança..."
+                  className="w-full pl-10 pr-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-medium outline-none focus:ring-2 focus:ring-emerald-500/20 text-slate-800"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                <select 
+                  value={impurityVaccineFilter}
+                  onChange={e => setImpurityVaccineFilter(e.target.value)}
+                  className="px-3.5 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-700 outline-none"
+                >
+                  <option value="Todos">Todas as vacinas</option>
+                  {candidates.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+
+                <select 
+                  value={impurityCategoryFilter}
+                  onChange={e => setImpurityCategoryFilter(e.target.value)}
+                  className="px-3.5 py-2 bg-white rounded-xl border border-slate-200 text-xs font-bold text-slate-700 outline-none"
+                >
+                  <option value="Todos">Todas as categorias</option>
+                  <option value="Relacionada ao Processo">Relacionada ao Processo</option>
+                  <option value="Relacionada ao Produto">Relacionada ao Produto</option>
+                  <option value="Reagentes Residual">Reagentes Residual</option>
+                  <option value="DNA/HCP Celular">DNA/HCP Celular</option>
+                  <option value="Lixiviáveis/Extraíveis">Lixiviáveis/Extraíveis</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Impurities Grid */}
+            <div className="grid grid-cols-1 gap-4">
+              {filteredImpurities.map(imp => (
+                <div key={imp.id} className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs hover:border-emerald-300 transition space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-[10px] font-black uppercase">
+                          {imp.vaccineName}
+                        </span>
+                        <span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-[10px] font-bold uppercase">
+                          {imp.category}
+                        </span>
+                        <span className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-[10px] font-bold">
+                          {imp.subCategory}
+                        </span>
+                      </div>
+                      <h3 className="font-black text-slate-900 text-base mt-1">{imp.item}</h3>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button 
+                        onClick={() => setImpurityModal(imp)} 
+                        className="p-2 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition"
+                        title="Editar"
+                      >
+                        <Edit3 size={16}/>
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteImpurity(imp.id, imp.item)} 
+                        className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition"
+                        title="Excluir"
+                      >
+                        <Trash2 size={16}/>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Fields Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs bg-slate-50/70 p-4 rounded-xl border border-slate-100">
+                    <div>
+                      <span className="text-[10px] font-black uppercase text-slate-400 block mb-0.5">Dados de Segurança</span>
+                      <p className="font-medium text-slate-800 leading-relaxed">{imp.safetyData || 'N/A'}</p>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] font-black uppercase text-slate-400 block mb-0.5">NOAEL (Nível Sem Efeito)</span>
+                      <p className="font-mono font-bold text-slate-800">{imp.noael || 'N/A'}</p>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] font-black uppercase text-slate-400 block mb-0.5">PDE / ADI (Exposição Diária Permitida)</span>
+                      <p className="font-mono font-bold text-teal-800">{imp.pdeAdi || 'N/A'}</p>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] font-black uppercase text-slate-400 block mb-0.5">Critérios de Aceitação / Justificativa</span>
+                      <p className="font-medium text-slate-800">{imp.acceptanceCriteria || 'N/A'}</p>
+                    </div>
+                  </div>
+
+                  {imp.reference && (
+                    <div className="text-[11px] text-slate-500 flex items-center gap-1.5 pt-1">
+                      <FileCheck size={14} className="text-emerald-600 shrink-0" />
+                      <span className="font-bold text-slate-600">Referência:</span> {imp.reference}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {filteredImpurities.length === 0 && (
+                <div className="p-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 space-y-2">
+                  <AlertTriangle size={32} className="mx-auto text-slate-300" />
+                  <p className="text-xs font-bold uppercase">Nenhuma impureza encontrada</p>
+                  <p className="text-[11px]">Clique em "Nova Impureza" para cadastrar itens de controle de segurança.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ==================== 5. EXPLORADOR VIEW ==================== */}
       {mainTab === 'explorer' && (
         <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-slate-200 shadow-xs space-y-6">
@@ -1474,38 +1668,237 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
         </div>
       )}
 
+      {/* MODAL IMPUREZA */}
+      {impurityModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="text-amber-400" size={20} />
+                <h3 className="text-lg font-black uppercase tracking-tight">
+                  {impurityModal.id ? 'Editar Registro de Impureza' : 'Nova Impureza Regulatória'}
+                </h3>
+              </div>
+              <button onClick={() => setImpurityModal(null)} className="p-2 text-slate-400 hover:text-white"><X size={18} /></button>
+            </div>
+
+            <form onSubmit={handleSaveImpurity} className="p-6 overflow-y-auto space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Vacina Relacionada *</label>
+                  <select
+                    required
+                    value={impurityModal.vaccineId || ''}
+                    onChange={e => setImpurityModal({ ...impurityModal, vaccineId: e.target.value })}
+                    className="w-full px-3 py-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  >
+                    <option value="">Selecione a vacina...</option>
+                    {candidates.map(c => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.codeName || c.platform})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Categoria Principal *</label>
+                  <select
+                    value={impurityModal.category || 'Relacionada ao Processo'}
+                    onChange={e => setImpurityModal({ ...impurityModal, category: e.target.value as ImpurityCategory })}
+                    className="w-full px-3 py-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  >
+                    <option value="Relacionada ao Processo">Relacionada ao Processo</option>
+                    <option value="Relacionada ao Produto">Relacionada ao Produto</option>
+                    <option value="Reagentes Residual">Reagentes Residual</option>
+                    <option value="DNA/HCP Celular">DNA/HCP Celular</option>
+                    <option value="Lixiviáveis/Extraíveis">Lixiviáveis/Extraíveis</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Item / Descrição da Impureza *</label>
+                  <input
+                    type="text"
+                    required
+                    value={impurityModal.item || ''}
+                    onChange={e => setImpurityModal({ ...impurityModal, item: e.target.value })}
+                    placeholder="Ex: Impureza relacionada ao processo de fabricação da proteína Sm29"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Subcategoria / Origem</label>
+                  <input
+                    type="text"
+                    value={impurityModal.subCategory || ''}
+                    onChange={e => setImpurityModal({ ...impurityModal, subCategory: e.target.value })}
+                    placeholder="Ex: Resíduos de Coluna Cromatográfica / Proteínas HCP"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Dados de Segurança</label>
+                <textarea
+                  rows={2}
+                  value={impurityModal.safetyData || ''}
+                  onChange={e => setImpurityModal({ ...impurityModal, safetyData: e.target.value })}
+                  placeholder="Informações toxicológicas e perfil de imunogenicidade ou citotoxicidade..."
+                  className="w-full p-3 rounded-xl border border-slate-200 text-xs outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">NOAEL (quando houver)</label>
+                  <input
+                    type="text"
+                    value={impurityModal.noael || ''}
+                    onChange={e => setImpurityModal({ ...impurityModal, noael: e.target.value })}
+                    placeholder="Ex: 10 mg/kg/dia (Ratos)"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">PDE / ADI (se disponível)</label>
+                  <input
+                    type="text"
+                    value={impurityModal.pdeAdi || ''}
+                    onChange={e => setImpurityModal({ ...impurityModal, pdeAdi: e.target.value })}
+                    placeholder="Ex: 50 µg/dia"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Critérios de Aceitação e Justificativa</label>
+                  <input
+                    type="text"
+                    value={impurityModal.acceptanceCriteria || ''}
+                    onChange={e => setImpurityModal({ ...impurityModal, acceptanceCriteria: e.target.value })}
+                    placeholder="Ex: ≤ 0,5% em conformidade com guia ICH Q3A/Q3B"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Referência das Impurezas por Vacina</label>
+                  <input
+                    type="text"
+                    value={impurityModal.reference || ''}
+                    onChange={e => setImpurityModal({ ...impurityModal, reference: e.target.value })}
+                    placeholder="Ex: Dossiê ANVISA nº 25351.102394 / Farmacopeia Brasileira"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
+                <button type="button" onClick={() => setImpurityModal(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold uppercase transition">Cancelar</button>
+                <button type="submit" className="px-6 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-black uppercase transition shadow-md">Salvar Impureza</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* MODALS Preserved */}
       {candidateModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[200] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
             <div className="p-6 bg-slate-900 text-white flex items-center justify-between">
               <h3 className="text-lg font-black uppercase tracking-tight">
-                {candidateModal.id ? 'Editar Candidato' : 'Novo Candidato Vacinal'}
+                {candidateModal.id ? 'Editar Vacina' : 'Cadastrar Nova Vacina'}
               </h3>
               <button onClick={() => setCandidateModal(null)} className="p-2 text-slate-400 hover:text-white"><X size={18} /></button>
             </div>
 
             <form onSubmit={handleSaveCandidate} className="p-6 overflow-y-auto space-y-4 text-xs">
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Nome *</label>
-                <input
-                  type="text"
-                  required
-                  value={candidateModal.name || ''}
-                  onChange={e => setCandidateModal({ ...candidateModal, name: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Tipo de Vacina *</label>
+                  <select
+                    value={candidateModal.vaccineOriginType || 'interna'}
+                    onChange={e => setCandidateModal({ ...candidateModal, vaccineOriginType: e.target.value as 'interna' | 'aprovada' })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none bg-slate-50"
+                  >
+                    <option value="interna">Vacina Interna (Em Desenvolvimento)</option>
+                    <option value="aprovada">Vacina Aprovada (Órgão Regulatório)</option>
+                  </select>
+                </div>
+
+                {candidateModal.vaccineOriginType === 'aprovada' && (
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Órgão Regulatório / Agência</label>
+                    <input
+                      type="text"
+                      value={candidateModal.approvalAgency || 'ANVISA'}
+                      onChange={e => setCandidateModal({ ...candidateModal, approvalAgency: e.target.value })}
+                      placeholder="Ex: ANVISA, FDA, EMA, OMS"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none"
+                    />
+                  </div>
+                )}
               </div>
 
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Patógeno Alvo *</label>
-                <input
-                  type="text"
-                  required
-                  value={candidateModal.targetPathogen || ''}
-                  onChange={e => setCandidateModal({ ...candidateModal, targetPathogen: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Nome da Vacina *</label>
+                  <input
+                    type="text"
+                    required
+                    value={candidateModal.name || ''}
+                    onChange={e => setCandidateModal({ ...candidateModal, name: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Patógeno Alvo *</label>
+                  <input
+                    type="text"
+                    required
+                    value={candidateModal.targetPathogen || ''}
+                    onChange={e => setCandidateModal({ ...candidateModal, targetPathogen: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Plataforma Tecnológica</label>
+                  <select
+                    value={candidateModal.platform || 'Proteína Recombinante'}
+                    onChange={e => setCandidateModal({ ...candidateModal, platform: e.target.value as VaccinePlatform })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none bg-slate-50"
+                  >
+                    <option value="Proteína Recombinante">Proteína Recombinante</option>
+                    <option value="Vetor Viral">Vetor Viral</option>
+                    <option value="RNA/mRNA">RNA/mRNA</option>
+                    <option value="DNA">DNA</option>
+                    <option value="Inativada">Inativada</option>
+                    <option value="Atenuada">Atenuada</option>
+                    <option value="Subunidade Proteica">Subunidade Proteica</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Fase / Estágio Atual</label>
+                  <select
+                    value={candidateModal.phase || 'Pesquisa Básica'}
+                    onChange={e => setCandidateModal({ ...candidateModal, phase: e.target.value as VaccinePhase })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold outline-none bg-slate-50"
+                  >
+                    {phasesList.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
               </div>
 
               <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">

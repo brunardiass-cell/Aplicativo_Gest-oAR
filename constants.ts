@@ -198,9 +198,15 @@ export const DEFAULT_VACCINE_CANDIDATES = [
     targetPathogen: 'SARS-CoV-2 / Coronavírus',
     phase: 'Ensaio Clínico Fase 1' as const,
     status: 'Em Ensaio' as const,
+    vaccineOriginType: 'interna' as const,
+    approvalAgency: 'ANVISA (Em ensaio clínico DDCM)',
     leadResearcher: 'Dr. Ricardo Gazzinelli / Dra. Ana Paula Salles',
     description: 'Vacina brasileira desenvolvida com proteína quimérica recombinante fundindo a proteína SpiN do SARS-CoV-2 com o nucleocapsídeo.',
     associatedComponentIds: ['comp_spin_prot', 'comp_adj_mpla'],
+    componentUsages: [
+      { componentId: 'comp_spin_prot', componentName: 'Proteína Quimérica SpiN-UTG Recombinante', concentration: '50 µg/dose' },
+      { componentId: 'comp_adj_mpla', componentName: 'Adjuvante Alumínio + MPLA', concentration: '500 µg Al+3 + 50 µg MPLA/dose' }
+    ],
     anvisaStatus: 'DDCM Aprovado - Fase 1/2',
     technicalNotes: 'Estudos de imunogenicidade e neutralização em andamento.',
     createdDate: '2025-01-15',
@@ -214,9 +220,15 @@ export const DEFAULT_VACCINE_CANDIDATES = [
     targetPathogen: 'Leishmania infantum',
     phase: 'Registro / Produção' as const,
     status: 'Aprovado' as const,
+    vaccineOriginType: 'aprovada' as const,
+    approvalAgency: 'ANVISA / MAPA',
     leadResearcher: 'Dr. Alexandre Machado',
     description: 'Vacina de proteína recombinante A2 para prevenção e controle da leishmaniose visceral.',
     associatedComponentIds: ['comp_a2_prot', 'comp_adj_sap'],
+    componentUsages: [
+      { componentId: 'comp_a2_prot', componentName: 'Proteína Recombinante A2 (Leishmania)', concentration: '100 µg/dose' },
+      { componentId: 'comp_adj_sap', componentName: 'Saponina Adjuvante Purificada (Saponin/QS-21)', concentration: '250 µg/dose' }
+    ],
     anvisaStatus: 'Registro MAPA / ANVISA Aprovado',
     technicalNotes: 'Produto em comercialização e uso veterinário/humano.',
     createdDate: '2024-06-10',
@@ -230,13 +242,66 @@ export const DEFAULT_VACCINE_CANDIDATES = [
     targetPathogen: 'Trypanosoma cruzi',
     phase: 'Pré-clínico In Vivo' as const,
     status: 'Em Desenvolvimento' as const,
+    vaccineOriginType: 'interna' as const,
+    approvalAgency: 'CEUA / CONCEA (Pré-clínico)',
     leadResearcher: 'Dra. Bruna Dias / Dr. Santuza Teixeira',
     description: 'Candidato vacinal baseado em vetor viral recombinante expressando antígenos Tc24 e TS para Doença de Chagas.',
     associatedComponentIds: ['comp_ad5_vetor'],
+    componentUsages: [
+      { componentId: 'comp_ad5_vetor', componentName: 'Vetor Adenoviral Ad5 Recombinante Tc24/TS', concentration: '1 x 10^10 VP/dose' }
+    ],
     anvisaStatus: 'Estudo Pré-Clínico de Eficácia e Tolerabilidade',
     technicalNotes: 'Resultados promissores de redução de carga parasitária.',
     createdDate: '2025-08-01',
     updatedDate: '2026-04-12'
+  }
+];
+
+export const DEFAULT_VACCINE_IMPURITIES = [
+  {
+    id: 'imp_sm29_hcp',
+    item: 'Possíveis impurezas relacionadas ao processo de fabricação da proteína Sm29 (HCP E. coli)',
+    vaccineId: 'cand_spin_utg',
+    vaccineName: 'SpiN-UTG (Vacina COVID-19 / Pan-coronavírus)',
+    category: 'Relacionada ao Processo' as const,
+    subCategory: 'Proteínas de Célula Hospedeira (HCP)',
+    safetyData: 'NOAEL determinado em ensaios toxicológicos de doses repetidas em roedores, sem sinais de imunogenicidade adversa.',
+    noael: '50 mg/kg/dia',
+    pdeAdi: 'PDE: 0.5 mg/dia',
+    acceptanceCriteria: '≤ 100 ppm (ng HCP/mg proteína). Justificativa: Nível biologicamente seguro alinhado à Farmacopéia e guias ICH Q3D.',
+    reference: 'Dossiê de Processo Sm29 / Guias ANVISA RDC 55 e ICH Q3D',
+    createdDate: '2025-02-10',
+    updatedDate: '2026-03-01'
+  },
+  {
+    id: 'imp_host_dna',
+    item: 'DNA Residual da Célula Hospedeira (Host Cell DNA)',
+    vaccineId: 'cand_spin_utg',
+    vaccineName: 'SpiN-UTG (Vacina COVID-19 / Pan-coronavírus)',
+    category: 'DNA/HCP Celular' as const,
+    subCategory: 'Ácidos Nucleicos Residuais',
+    safetyData: 'Tamanho de fragmentos mantido estritamente < 200 pb via digestão enzimática (Benzonase) eliminando potencial oncogênico.',
+    noael: 'N/A (parâmetro genotóxico de pureza)',
+    pdeAdi: '≤ 10 ng por dose humana (OMS)',
+    acceptanceCriteria: '≤ 10 ng de DNA por dose (fragmentos < 200 pb). Justificativa: Recomendação e diretriz técnica internacional OMS/ANVISA.',
+    reference: 'WHO Technical Report Series 980 / Bula Técnica SpiN-UTG',
+    createdDate: '2025-02-12',
+    updatedDate: '2026-03-05'
+  },
+  {
+    id: 'imp_formaldehyd',
+    item: 'Formaldeído Residual Livre do Processo de Inativação',
+    vaccineId: 'cand_leishtec',
+    vaccineName: 'Leishtec (Vacina Leishmaniose Visceral)',
+    category: 'Reagentes Residual' as const,
+    subCategory: 'Inativador Químico',
+    safetyData: 'Monitoramento de limites para prevenção de irritação local e reações imunogênicas cruzadas.',
+    noael: '15 mg/kg/dia',
+    pdeAdi: 'PDE: 0.2 mg/dia',
+    acceptanceCriteria: '≤ 0.1 mg por dose (≤ 100 µg/dose). Justificativa: Limite de segurança regulatório estabelecido pela Farmacopéia e ANVISA.',
+    reference: 'Dossiê Regulatório de Liberação de Lote MAPA/ANVISA Leishtec',
+    createdDate: '2024-07-01',
+    updatedDate: '2026-01-15'
   }
 ];
 

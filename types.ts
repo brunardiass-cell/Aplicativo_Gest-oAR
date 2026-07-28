@@ -370,6 +370,12 @@ export type ComponentGrade =
   | 'Grau Científico / Pesquisa' 
   | 'Farmacopéico USP/EP';
 
+export interface ComponentUsageInVaccine {
+  componentId: string;
+  componentName?: string;
+  concentration: string;
+}
+
 export interface VaccineCandidate {
   id: string;
   name: string;
@@ -381,6 +387,9 @@ export interface VaccineCandidate {
   leadResearcher: string;
   description: string;
   associatedComponentIds: string[];
+  componentUsages?: ComponentUsageInVaccine[];
+  vaccineOriginType?: 'interna' | 'aprovada';
+  approvalAgency?: string;
   associatedProjectId?: string;
   anvisaStatus?: string;
   technicalNotes?: string;
@@ -404,6 +413,30 @@ export interface VaccineComponent {
   supplier?: string;
   coaUrl?: string;
   safetyDataSheetLink?: string;
+}
+
+export type ImpurityCategory = 
+  | 'Relacionada ao Processo' 
+  | 'Relacionada ao Produto' 
+  | 'Reagentes Residual' 
+  | 'DNA/HCP Celular' 
+  | 'Lixiviáveis / Extraíveis' 
+  | 'Outros';
+
+export interface VaccineImpurity {
+  id: string;
+  item: string; // ex: Item Possíveis impurezas relacionadas ao processo de fabricação da proteína Sm29
+  vaccineId: string;
+  vaccineName: string;
+  category: ImpurityCategory;
+  subCategory?: string;
+  safetyData?: string; // Dados de segurança
+  noael?: string; // NOAEL, quando houver
+  pdeAdi?: string; // PDE / ADI (se disponível)
+  acceptanceCriteria: string; // Critérios de aceitação e justificativa
+  reference: string; // Referência das impurezas por vacina
+  createdDate: string;
+  updatedDate: string;
 }
 
 export interface FormulationBatchComponentUsage {

@@ -3,8 +3,8 @@
 // Versão corrigida para sincronização
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch } from './types';
-import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES } from './constants';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity } from './types';
+import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES } from './constants';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
 import Sidebar from './components/Sidebar';
@@ -66,10 +66,11 @@ const App: React.FC = () => {
   const [regulatorySubjects, setRegulatorySubjects] = useState<RegulatorySubject[]>([]);
   const [currentModule, setCurrentModule] = useState<'activities_projects' | 'regulatory_standards' | 'vaccines_components'>('activities_projects');
   const [hasChosenModule, setHasChosenModule] = useState<boolean>(false);
-  const [vaccineTab, setVaccineTab] = useState<'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog'>('dashboard');
+  const [vaccineTab, setVaccineTab] = useState<'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog' | 'impurities'>('dashboard');
   const [vaccineCandidates, setVaccineCandidates] = useState<VaccineCandidate[]>(DEFAULT_VACCINE_CANDIDATES);
   const [vaccineComponents, setVaccineComponents] = useState<VaccineComponent[]>(DEFAULT_VACCINE_COMPONENTS);
   const [formulationBatches, setFormulationBatches] = useState<FormulationBatch[]>(DEFAULT_FORMULATION_BATCHES);
+  const [vaccineImpurities, setVaccineImpurities] = useState<VaccineImpurity[]>(DEFAULT_VACCINE_IMPURITIES);
   const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
   const [dataVersion, setDataVersion] = useState<string | null>(null);
   const [isDataDirty, setIsDataDirty] = useState(false);
@@ -1286,7 +1287,7 @@ const App: React.FC = () => {
           : (isDesktop ? 'ml-64 p-10' : 'ml-0 p-4 pt-24')
       }`}>
         {/* Indicador do Módulo Ativo com Troca de Módulo Independentes */}
-        {currentModule !== 'regulatory_standards' && (
+        {currentModule !== 'regulatory_standards' && currentModule !== 'vaccines_components' && (
           <div className="mb-6 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-sm flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-700 border border-teal-100 flex items-center justify-center font-black text-xs shadow-xs shrink-0">
@@ -1296,7 +1297,6 @@ const App: React.FC = () => {
                 <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">Módulo do Sistema CTVacinas</span>
                 <h2 className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-tight">
                   {currentModule === 'activities_projects' && 'Gestão de Atividades e Projetos'}
-                  {currentModule === 'vaccines_components' && 'Módulo de Vacinas e Componentes'}
                 </h2>
               </div>
             </div>
@@ -1352,12 +1352,15 @@ const App: React.FC = () => {
               onUpdateCandidates={(c) => { setVaccineCandidates(c); setDataDirty(); }}
               components={vaccineComponents}
               onUpdateComponents={(comp) => { setVaccineComponents(comp); setDataDirty(); }}
+              impurities={vaccineImpurities}
+              onUpdateImpurities={(imp) => { setVaccineImpurities(imp); setDataDirty(); }}
               formulationBatches={formulationBatches}
               onUpdateBatches={(b) => { setFormulationBatches(b); setDataDirty(); }}
               projects={activeProjects}
               currentUser={selectedProfile}
               activeTab={vaccineTab}
               onTabChange={setVaccineTab}
+              onSwitchModule={() => setHasChosenModule(false)}
             />
           </>
         ) : currentModule === 'regulatory_standards' ? (
