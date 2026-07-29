@@ -253,23 +253,14 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   const isCollaborator = (task: Task) => currentUser !== 'Todos' && task.collaborators?.includes(currentUser) && task.projectLead !== currentUser;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       
-      {/* 1. TOP HEADER BANNER */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-transparent">
+      {/* 1. SUB HEADER */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-transparent">
         <div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Atividades</h2>
-          <p className="text-xs font-bold text-slate-500 mt-1">Acompanhe e gerencie suas atividades e prazos.</p>
+          <h2 className="text-xl font-black text-slate-900 tracking-tight">Atividades</h2>
+          <p className="text-xs font-bold text-slate-500">Acompanhe e gerencie suas atividades e prazos.</p>
         </div>
-
-        {onNewTask && (
-          <button 
-            onClick={onNewTask}
-            className="flex items-center gap-2 px-5 py-3 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-md transition active:scale-95 shrink-0"
-          >
-            <Plus size={16} /> Nova Atividade
-          </button>
-        )}
       </div>
 
       {/* 2. STATS SUMMARY CARDS */}

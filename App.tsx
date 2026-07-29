@@ -1248,6 +1248,7 @@ const App: React.FC = () => {
       {currentModule !== 'regulatory_standards' && (
         <Sidebar 
           currentModule={currentModule}
+          onSwitchModule={() => setHasChosenModule(false)}
           currentView={view} 
           onViewChange={(v) => { setView(v); setIsSidebarOpen(false); }} 
           vaccineTab={vaccineTab}
@@ -1283,37 +1284,12 @@ const App: React.FC = () => {
 
       <main className={`flex-1 overflow-y-auto transition-all duration-300 ${
         currentModule === 'regulatory_standards' 
-          ? (isDesktop ? 'p-10' : 'p-4 pt-6') 
-          : (isDesktop ? 'ml-64 p-10' : 'ml-0 p-4 pt-24')
+          ? (isDesktop ? 'p-6 sm:p-8' : 'p-4 pt-6') 
+          : (isDesktop ? 'ml-64 p-6 sm:p-8' : 'ml-0 p-4 pt-20')
       }`}>
-        {/* Indicador do Módulo Ativo com Troca de Módulo Independentes */}
-        {currentModule !== 'regulatory_standards' && currentModule !== 'vaccines_components' && (
-          <div className="mb-6 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-sm flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-700 border border-teal-100 flex items-center justify-center font-black text-xs shadow-xs shrink-0">
-                CTV
-              </div>
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">Módulo do Sistema CTVacinas</span>
-                <h2 className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-tight">
-                  {currentModule === 'activities_projects' && 'Gestão de Atividades e Projetos'}
-                </h2>
-              </div>
-            </div>
-
-            <button
-              onClick={() => { setHasChosenModule(false); }}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-600 hover:text-teal-700 bg-slate-100 hover:bg-teal-50 transition flex items-center gap-2 border border-slate-200/80 shrink-0"
-              title="Voltar para a Seleção de Módulos"
-            >
-              <Layers size={15} />
-              <span className="hidden sm:inline">Trocar Módulo</span>
-            </button>
-          </div>
-        )}
 
         {comiteImpersonatingFrom && (
-          <div className="mb-6 bg-teal-50 border border-teal-200 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-in fade-in duration-300">
+          <div className="mb-4 bg-teal-50 border border-teal-200 p-3.5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm animate-in fade-in duration-300">
             <div className="flex items-center gap-3">
               <div className="bg-teal-100 p-2 rounded-xl text-teal-700 animate-pulse">
                 <Users size={18} />
@@ -1377,7 +1353,7 @@ const App: React.FC = () => {
           />
         ) : (
           <>
-            <header className={`flex justify-between items-center mb-8 ${isDesktop ? '' : 'fixed top-0 left-0 right-0 bg-slate-100/80 backdrop-blur-md z-40 p-4 border-b border-slate-200'}`}>
+            <header className={`flex justify-between items-center mb-4 ${isDesktop ? '' : 'fixed top-0 left-0 right-0 bg-slate-100/80 backdrop-blur-md z-40 p-4 border-b border-slate-200'}`}>
             <div className="flex items-center gap-4">
               {!isDesktop && (
                 <button 
@@ -1387,18 +1363,17 @@ const App: React.FC = () => {
                   <Menu size={24} />
                 </button>
               )}
-              {view !== 'projects' && (
-                <div>
-                  <h1 className={`${isMobile ? 'text-lg' : 'text-3xl'} font-black text-slate-800 uppercase tracking-tighter leading-none`}>
-                    {view === 'dashboard' && 'Dashboard'}
-                    {view === 'tasks' && 'Painel de Atividades'}
-                    {view === 'quality' && 'Controle de Acesso'}
-                    {view === 'traceability' && 'Auditoria'}
-                    {view === 'regulatory' && 'Normas Regulatórias'}
-                  </h1>
-                  <p className="text-[9px] sm:text-sm font-bold text-slate-400 mt-0.5">{selectedProfile?.name}</p>
-                </div>
-              )}
+              <div>
+                <h1 className={`${isMobile ? 'text-lg' : 'text-2xl sm:text-3xl'} font-black text-slate-800 uppercase tracking-tighter leading-none`}>
+                  {view === 'dashboard' && 'Dashboard'}
+                  {view === 'tasks' && 'Painel de Atividades'}
+                  {view === 'projects' && 'Projetos'}
+                  {view === 'quality' && 'Controle de Acesso'}
+                  {view === 'traceability' && 'Auditoria'}
+                  {view === 'regulatory' && 'Normas Regulatórias'}
+                </h1>
+                <p className="text-[9px] sm:text-xs font-bold text-slate-400 mt-0.5">{selectedProfile?.name}</p>
+              </div>
             </div>
             <div className="flex items-center gap-2 sm:gap-3">
                 {activeUsers.length > 0 && (

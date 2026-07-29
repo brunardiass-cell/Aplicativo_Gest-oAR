@@ -569,7 +569,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       <aside className={`w-full ${isSidebarCollapsed ? 'lg:w-20 p-3' : 'lg:w-64 p-5'} bg-white border-r border-slate-200/90 flex-shrink-0 flex flex-col justify-between space-y-6 transition-all duration-300 relative`}>
         <div>
           {/* Logo Header & Collapse Toggle */}
-          <div className="flex items-center justify-between gap-2 px-1 py-1 mb-6">
+          <div className="flex items-center justify-between gap-2 px-1 py-1 mb-4">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-md shadow-slate-900/10 flex-shrink-0">
                 <Sparkles size={20} className="text-teal-400" />
@@ -592,6 +592,20 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
               {isSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
             </button>
           </div>
+
+          {/* Trocar Módulo option */}
+          {onSwitchModule && (
+            <button
+              onClick={onSwitchModule}
+              title="Trocar Módulo"
+              className={`w-full mb-5 flex items-center ${isSidebarCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2'} rounded-xl text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 hover:bg-teal-50 text-slate-700 hover:text-teal-800 border border-slate-200 hover:border-teal-200 transition active:scale-95`}
+            >
+              <div className="flex items-center gap-2">
+                <Layers size={14} className="text-teal-600" />
+                {!isSidebarCollapsed && <span>Trocar Módulo</span>}
+              </div>
+            </button>
+          )}
 
           {/* Section 1: Normas Regulatórias */}
           <div className="space-y-1 mb-6">

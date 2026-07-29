@@ -450,16 +450,16 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
   if (viewMode === 'selection' || viewMode === 'initial') {
     return (
-      <div className="space-y-6 animate-in fade-in duration-500 pb-12">
+      <div className="space-y-4 animate-in fade-in duration-500 pb-12">
         {/* Top Header Row */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-100/90 text-teal-700 flex items-center justify-center shadow-xs shrink-0">
-              <Folder size={24} />
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-teal-50 border border-teal-100/90 text-teal-700 flex items-center justify-center shadow-xs shrink-0">
+              <Folder size={22} />
             </div>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Projetos</h1>
-              <p className="text-xs font-medium text-slate-500 mt-0.5">
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Projetos</h1>
+              <p className="text-xs font-medium text-slate-500">
                 Acompanhe, gerencie e visualize todos os projetos do módulo.
               </p>
             </div>
@@ -885,9 +885,9 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   }
 
   return (
-    <div className="space-y-8 project-manager-container animate-in fade-in duration-500">
-      <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col gap-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-100 pb-6">
+    <div className="space-y-4 project-manager-container animate-in fade-in duration-500">
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setViewMode('selection')} 

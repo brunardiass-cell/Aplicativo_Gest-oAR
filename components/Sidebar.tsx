@@ -20,11 +20,14 @@ import {
   FileSpreadsheet,
   FileUp,
   Compass,
-  AlertTriangle
+  AlertTriangle,
+  Layers,
+  ArrowRightLeft
 } from 'lucide-react';
 
 interface SidebarProps {
   currentModule?: 'activities_projects' | 'regulatory_standards' | 'vaccines_components';
+  onSwitchModule?: () => void;
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
   vaccineTab?: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog' | 'impurities';
@@ -59,6 +62,7 @@ const getInitials = (name?: string): string => {
 
 const Sidebar: React.FC<SidebarProps> = ({ 
   currentModule,
+  onSwitchModule,
   currentView, 
   onViewChange, 
   vaccineTab,
@@ -105,7 +109,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       <aside className={sidebarClasses}>
       <div className="p-4 sm:p-5 flex-1 flex flex-col">
         {/* Sidebar Header */}
-        <div className="flex items-center justify-between mb-6 cursor-pointer group" onClick={onGoHome}>
+        <div className="flex items-center justify-between mb-4 cursor-pointer group" onClick={onGoHome}>
           <div className="flex items-center gap-2.5">
             <div className={`w-9 h-9 ${isVaccinesModule ? 'bg-[#022c22] text-emerald-400 border border-emerald-700/60' : 'bg-brand-primary text-white'} rounded-xl flex items-center justify-center font-black text-sm shadow-md transition-transform group-hover:scale-105 shrink-0`}>
               {isVaccinesModule ? <Syringe size={18} /> : getInitials(selectedProfile?.name)}
@@ -123,6 +127,25 @@ const Sidebar: React.FC<SidebarProps> = ({
             </button>
           )}
         </div>
+
+        {/* Option to Switch Module */}
+        {onSwitchModule && (
+          <button
+            onClick={() => { onSwitchModule(); onClose?.(); }}
+            className={`w-full mb-5 px-3 py-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider flex items-center justify-between transition border active:scale-95 ${
+              isVaccinesModule
+                ? 'bg-emerald-950/60 hover:bg-emerald-900 text-emerald-200 border-emerald-700/60'
+                : 'bg-slate-700/40 hover:bg-slate-700/80 text-slate-200 border-slate-600/60'
+            }`}
+            title="Trocar Módulo do Sistema"
+          >
+            <div className="flex items-center gap-2">
+              <Layers size={14} className="text-teal-400" />
+              <span>Trocar Módulo</span>
+            </div>
+            <ArrowRightLeft size={12} className="opacity-60" />
+          </button>
+        )}
 
         {/* Navigation Menu */}
         {isVaccinesModule ? (
