@@ -548,7 +548,7 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
   return (
     <div className="space-y-6">
       {/* Single Green Header Card for Vaccines Module */}
-      <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-emerald-950 rounded-3xl p-6 sm:p-7 text-white shadow-lg relative overflow-hidden">
+      <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-emerald-950 rounded-2xl p-4 sm:p-5 text-white shadow-md relative overflow-hidden">
         {/* Background DNA Watermark Illustration */}
         <div className="absolute right-0 top-0 bottom-0 opacity-10 pointer-events-none transform translate-x-10">
           <svg width="300" height="200" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="2">
@@ -561,26 +561,16 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
           </svg>
         </div>
 
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white mb-1.5 flex items-center gap-2.5">
-              <Syringe className="text-emerald-400 shrink-0" size={28} />
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
+              <Syringe className="text-emerald-400 shrink-0" size={24} />
               Módulo de Vacinas
             </h1>
-            <p className="text-xs sm:text-sm text-emerald-100/90 font-medium max-w-2xl leading-relaxed">
+            <p className="text-xs text-emerald-100/90 font-medium max-w-2xl mt-0.5">
               Gestão regulatória, componentes biológicos e registro de formulações
             </p>
           </div>
-
-          {onSwitchModule && (
-            <button
-              onClick={onSwitchModule}
-              className="px-4 py-2.5 bg-emerald-700/80 hover:bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 border border-emerald-500/40 shadow-sm shrink-0 self-start sm:self-auto"
-            >
-              <Layers size={16} />
-              <span>Trocar Módulo</span>
-            </button>
-          )}
         </div>
       </div>
 

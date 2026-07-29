@@ -731,45 +731,19 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       </aside>
 
       {/* 2. MAIN CONTENT AREA */}
-      <main className="flex-1 p-4 sm:p-8 space-y-6 max-w-7xl">
-        
-        {/* Indicador do Módulo Ativo */}
-        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-700 border border-teal-100 flex items-center justify-center font-black text-xs shadow-xs shrink-0">
-              CTV
-            </div>
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">Módulo do Sistema CTVacinas</span>
-              <h2 className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-tight">
-                MÓDULO DE NORMAS REGULATÓRIAS
-              </h2>
-            </div>
-          </div>
-
-          {onSwitchModule && (
-            <button
-              onClick={onSwitchModule}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-600 hover:text-teal-700 bg-slate-100 hover:bg-teal-50 transition flex items-center gap-2 border border-slate-200/80 shrink-0"
-              title="Voltar para a Seleção de Módulos"
-            >
-              <Layers size={15} />
-              <span className="hidden sm:inline">Trocar Módulo</span>
-            </button>
-          )}
-        </div>
+      <main className="flex-1 p-4 sm:p-6 space-y-4 max-w-7xl">
         
         {/* Header Banner matching mockup image */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-2xl border border-emerald-100 shadow-xs flex-shrink-0">
-              <ShieldCheck size={28} />
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100 shadow-xs flex-shrink-0">
+              <ShieldCheck size={22} />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
                 Gestão de Normas Regulatórias
               </h1>
-              <p className="text-slate-500 text-xs sm:text-sm font-medium mt-1">
+              <p className="text-slate-500 text-xs font-medium">
                 Consulte o acervo normativo e explore os Post-its de Conhecimento embasados em evidências regulatórias.
               </p>
             </div>
@@ -777,9 +751,9 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
 
           <button
             onClick={() => { setIsAdding(true); setEditingId(null); resetForm(); }}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-teal-800 hover:bg-teal-900 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-md shadow-teal-900/10 active:scale-95 flex-shrink-0"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-md shadow-teal-900/10 active:scale-95 flex-shrink-0"
           >
-            <Plus size={16} /> Nova Norma
+            <Plus size={15} /> Nova Norma
           </button>
         </div>
 
