@@ -757,34 +757,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
           </button>
         </div>
 
-        {/* Top View Selector Tabs (Post-its de Conhecimento vs Acervo de Normas) */}
-        {!isAdding && (
-          <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-slate-200/80 shadow-xs w-fit">
-            <button
-              onClick={() => setActiveNav('post_its')}
-              className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-black transition-all ${
-                activeNav === 'post_its'
-                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <StickyNote size={15} className={activeNav === 'post_its' ? 'text-emerald-600' : 'text-slate-400'} />
-              Post-its de Conhecimento
-            </button>
 
-            <button
-              onClick={() => { setActiveNav('acervo'); setSelectedCategory('todas'); }}
-              className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-black transition-all ${
-                activeNav !== 'post_its'
-                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <FileText size={15} className={activeNav !== 'post_its' ? 'text-emerald-600' : 'text-slate-400'} />
-              Acervo de Normas
-            </button>
-          </div>
-        )}
 
         {/* Search & Filter Bar */}
         {!isAdding && activeNav !== 'post_its' && (
