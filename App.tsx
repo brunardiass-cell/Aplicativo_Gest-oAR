@@ -1563,8 +1563,8 @@ const App: React.FC = () => {
             onUpdateSubjects={(newSubjects) => { setRegulatorySubjects(newSubjects); setDataDirty(); }}
           />
         )}
-        {view === 'dossier_contributions' && (
-          <DossierContributionsManager
+        {(view === 'dossier_assembler' || view === 'dossier_contributions') && (
+          <DossierAssemblerManager
             projects={activeProjects}
             tasks={tasks}
             onUpdateProject={(updatedProject) => {
@@ -1576,12 +1576,6 @@ const App: React.FC = () => {
               handleSaveTask(updatedTask);
             }}
             currentUser={selectedProfile?.name || 'Usuário'}
-          />
-        )}
-        {view === 'dossier_assembler' && (
-          <DossierAssemblerManager
-            projects={activeProjects}
-            tasks={tasks}
           />
         )}
           </>

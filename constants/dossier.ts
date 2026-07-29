@@ -1,12 +1,4 @@
-import { DossierChapterId } from '../types';
-
-export interface DDCMChapterDef {
-  id: DossierChapterId;
-  code: string;
-  title: string;
-  shortTitle: string;
-  description: string;
-}
+import { DossierChapterId, DDCMChapterDef, Project } from '../types';
 
 export const DDCM_CHAPTERS: DDCMChapterDef[] = [
   {
@@ -52,3 +44,10 @@ export const DDCM_CHAPTERS: DDCMChapterDef[] = [
     description: 'Relatórios técnicos na íntegra, artigos de referência, certificados de análise (CoA) e correspondências da Anvisa.'
   }
 ];
+
+export function getProjectDossierChapters(project?: Project): DDCMChapterDef[] {
+  if (project?.dossierChapters && project.dossierChapters.length > 0) {
+    return project.dossierChapters;
+  }
+  return DDCM_CHAPTERS;
+}

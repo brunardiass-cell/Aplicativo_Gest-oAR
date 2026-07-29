@@ -85,7 +85,16 @@ export type DossierChapterId =
   | 'cap_3' 
   | 'cap_4' 
   | 'cap_5' 
-  | 'cap_6';
+  | 'cap_6'
+  | string;
+
+export interface DDCMChapterDef {
+  id: DossierChapterId;
+  code: string;
+  title: string;
+  shortTitle: string;
+  description: string;
+}
 
 export type DossierContributionType = 'texto' | 'documento' | 'formulario';
 export type DossierContributionStatus = 'Rascunho' | 'Em Revisão' | 'Aprovado';
@@ -334,6 +343,7 @@ export interface Project {
   objective?: string;
   transversalActivities?: TransversalActivity[];
   description?: string;
+  dossierChapters?: DDCMChapterDef[];
 }
 
 export interface TeamMember {

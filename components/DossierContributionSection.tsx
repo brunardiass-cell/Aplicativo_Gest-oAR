@@ -5,7 +5,8 @@ import {
   DossierContributionType, 
   DossierContributionStatus, 
   DossierFormFields,
-  DossierContributionVersion 
+  DossierContributionVersion,
+  DDCMChapterDef
 } from '../types';
 import { DDCM_CHAPTERS } from '../constants/dossier';
 import { 
@@ -39,6 +40,7 @@ interface DossierContributionSectionProps {
   contribution?: DossierContribution;
   onSaveContribution: (contribution: DossierContribution) => void;
   currentUser?: string;
+  customChapters?: DDCMChapterDef[];
 }
 
 export const DossierContributionSection: React.FC<DossierContributionSectionProps> = ({
@@ -52,8 +54,10 @@ export const DossierContributionSection: React.FC<DossierContributionSectionProp
   onToggleGeneratesRegulatoryContent,
   contribution,
   onSaveContribution,
-  currentUser = 'Usuário'
+  currentUser = 'Usuário',
+  customChapters
 }) => {
+  const chaptersList = customChapters && customChapters.length > 0 ? customChapters : DDCM_CHAPTERS;
   const [chapterId, setChapterId] = useState<DossierChapterId>(
     contribution?.chapterId || 'cap_1'
   );
@@ -110,7 +114,7 @@ export const DossierContributionSection: React.FC<DossierContributionSectionProp
     }
   }, [contribution]);
 
-  const selectedChapterDef = DDCM_CHAPTERS.find(c => c.id === chapterId) || DDCM_CHAPTERS[0];
+  const selectedChapterDef = chaptersList.find(c => c.id === chapterId) || chaptersList[0];
 
   const handleSave = () => {
     const now = new Date().toISOString();
@@ -210,7 +214,7 @@ export const DossierContributionSection: React.FC<DossierContributionSectionProp
                 onChange={(e) => setChapterId(e.target.value as DossierChapterId)}
                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-2xl p-3 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500/40"
               >
-                {DDCM_CHAPTERS.map((ch) => (
+                {chaptersList.map((ch) => (
                   <option key={ch.id} value={ch.id}>
                     {ch.title}
                   </option>

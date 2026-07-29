@@ -220,14 +220,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             />
 
             <SidebarButton 
-              active={currentView === 'dossier_contributions'} 
-              onClick={() => { onViewChange('dossier_contributions'); onClose?.(); }} 
-              icon={<FileCheck2 size={18} />} 
-              label="Contribuições Dossiê" 
-            />
-
-            <SidebarButton 
-              active={currentView === 'dossier_assembler'} 
+              active={currentView === 'dossier_assembler' || currentView === 'dossier_contributions'} 
               onClick={() => { onViewChange('dossier_assembler'); onClose?.(); }} 
               icon={<BookOpen size={18} />} 
               label="Dossiê (DDCM)" 

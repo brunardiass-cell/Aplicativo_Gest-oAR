@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Project, MacroActivity, MicroActivity, MicroActivityStatus, TeamMember, Prerequisite, BudgetInfo, PrerequisiteType, PrerequisiteStatus, BudgetStatus, RegulatoryStandard } from '../types';
+import { Project, MacroActivity, MicroActivity, MicroActivityStatus, TeamMember, Prerequisite, BudgetInfo, PrerequisiteType, PrerequisiteStatus, BudgetStatus, RegulatoryStandard, DDCMChapterDef } from '../types';
 import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle, Layers, GripVertical, ListTodo, DollarSign, Calendar, User, CheckCircle2, Clock, ShieldCheck, ClipboardCheck, Activity, BadgeAlert } from 'lucide-react';
 import { PrerequisitesModal } from './PrerequisitesModal';
 import { DossierContributionSection } from './DossierContributionSection';
@@ -655,6 +655,7 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
                 projectName={project.name}
                 macroId={macro.id}
                 macroName={macro.name}
+                dossierChapters={project.dossierChapters}
               />
             ))}
           </SortableContext>
@@ -844,6 +845,7 @@ interface MicroActivityRowProps {
   projectName?: string;
   macroId?: string;
   macroName?: string;
+  dossierChapters?: DDCMChapterDef[];
 }
 
 const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ 
@@ -858,7 +860,8 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({
   projectId = 'geral',
   projectName = 'Geral',
   macroId,
-  macroName
+  macroName,
+  dossierChapters
 }) => {
     const {
       attributes,
