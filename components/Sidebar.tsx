@@ -22,7 +22,9 @@ import {
   Compass,
   AlertTriangle,
   Layers,
-  ArrowRightLeft
+  ArrowRightLeft,
+  FileCheck2,
+  BookOpen
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -215,6 +217,20 @@ const Sidebar: React.FC<SidebarProps> = ({
               }} 
               icon={<FolderKanban size={18} />} 
               label="Projetos" 
+            />
+
+            <SidebarButton 
+              active={currentView === 'dossier_contributions'} 
+              onClick={() => { onViewChange('dossier_contributions'); onClose?.(); }} 
+              icon={<FileCheck2 size={18} />} 
+              label="Contribuições Dossiê" 
+            />
+
+            <SidebarButton 
+              active={currentView === 'dossier_assembler'} 
+              onClick={() => { onViewChange('dossier_assembler'); onClose?.(); }} 
+              icon={<BookOpen size={18} />} 
+              label="Dossiê (DDCM)" 
             />
             
             {hasFullAccess && !selectedProfile?.isComiteGestor && (

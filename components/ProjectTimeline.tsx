@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Project, MacroActivity, MicroActivity, MicroActivityStatus, TeamMember, Prerequisite, BudgetInfo, PrerequisiteType, PrerequisiteStatus, BudgetStatus, RegulatoryStandard } from '../types';
 import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle, Layers, GripVertical, ListTodo, DollarSign, Calendar, User, CheckCircle2, Clock, ShieldCheck, ClipboardCheck, Activity, BadgeAlert } from 'lucide-react';
 import { PrerequisitesModal } from './PrerequisitesModal';
+import { DossierContributionSection } from './DossierContributionSection';
 import {
   DndContext, 
   closestCenter,
@@ -640,7 +641,21 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
             strategy={verticalListSortingStrategy}
           >
             {macro.microActivities.map(micro => (
-              <MicroActivityRow key={micro.id} micro={micro} assignees={assignees} onUpdate={(updates) => onMicroUpdate(macro.id, micro.id, updates)} onDelete={() => onOpenDeletionModal({ type: 'micro', ids: { projectId: project.id, macroId: macro.id, microId: micro.id }, name: micro.name })} isEditing={editingMicro === micro.id} onSetEditing={onSetEditingMicro} regulatoryStandards={regulatoryStandards} onOpenRegulatoryModal={onOpenRegulatoryModal}/>
+              <MicroActivityRow 
+                key={micro.id} 
+                micro={micro} 
+                assignees={assignees} 
+                onUpdate={(updates) => onMicroUpdate(macro.id, micro.id, updates)} 
+                onDelete={() => onOpenDeletionModal({ type: 'micro', ids: { projectId: project.id, macroId: macro.id, microId: micro.id }, name: micro.name })} 
+                isEditing={editingMicro === micro.id} 
+                onSetEditing={onSetEditingMicro} 
+                regulatoryStandards={regulatoryStandards} 
+                onOpenRegulatoryModal={onOpenRegulatoryModal}
+                projectId={project.id}
+                projectName={project.name}
+                macroId={macro.id}
+                macroName={macro.name}
+              />
             ))}
           </SortableContext>
           <button onClick={() => onAddMicro(macro.id)} className="w-full mt-2 p-3 bg-slate-50 text-slate-500 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition"><Plus size={14}/> Adicionar Microatividade</button>
@@ -825,9 +840,26 @@ interface MicroActivityRowProps {
   assignees: string[];
   regulatoryStandards: RegulatoryStandard[];
   onOpenRegulatoryModal: (name: string) => void;
+  projectId?: string;
+  projectName?: string;
+  macroId?: string;
+  macroName?: string;
 }
 
-const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, onDelete, isEditing, onSetEditing, assignees, regulatoryStandards, onOpenRegulatoryModal }) => {
+const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ 
+  micro, 
+  onUpdate, 
+  onDelete, 
+  isEditing, 
+  onSetEditing, 
+  assignees, 
+  regulatoryStandards, 
+  onOpenRegulatoryModal,
+  projectId = 'geral',
+  projectName = 'Geral',
+  macroId,
+  macroName
+}) => {
     const {
       attributes,
       listeners,
@@ -1098,6 +1130,21 @@ const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ micro, onUpdate, on
           </div>
         </div>
       )}
+
+      {/* Seção Contribuição para o Dossiê (DDCM) */}
+      <DossierContributionSection
+        activityId={micro.id}
+        activityName={micro.name}
+        projectId={projectId}
+        projectName={projectName}
+        macroActivityId={macroId}
+        macroActivityName={macroName}
+        generatesRegulatoryContent={micro.generatesRegulatoryContent || false}
+        onToggleGeneratesRegulatoryContent={(val) => onUpdate({ generatesRegulatoryContent: val })}
+        contribution={micro.dossierContribution}
+        onSaveContribution={(contrib) => onUpdate({ dossierContribution: contrib, generatesRegulatoryContent: true })}
+        currentUser={micro.assignee || 'Usuário'}
+      />
     </div>
     );
 };

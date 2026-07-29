@@ -71,9 +71,71 @@ export interface Task {
   deletionReason?: string;
   deletionDate?: string;
   completedCollaborators?: string[]; // Adicionado para rastrear quem finalizou a revisão
+  generatesRegulatoryContent?: boolean;
+  dossierContribution?: DossierContribution;
 }
 
-export type ViewMode = 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceability' | 'regulatory';
+export type ViewMode = 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceability' | 'regulatory' | 'dossier_contributions' | 'dossier_assembler';
+
+export type SystemModule = 'activities_projects' | 'regulatory_standards' | 'vaccines_components' | 'dossier_contributions' | 'dossier_assembler';
+
+export type DossierChapterId = 
+  | 'cap_1' 
+  | 'cap_2' 
+  | 'cap_3' 
+  | 'cap_4' 
+  | 'cap_5' 
+  | 'cap_6';
+
+export type DossierContributionType = 'texto' | 'documento' | 'formulario';
+export type DossierContributionStatus = 'Rascunho' | 'Em Revisão' | 'Aprovado';
+
+export interface DossierFormFields {
+  title?: string;
+  methodologySummary?: string;
+  keyResults?: string;
+  regulatoryConclusion?: string;
+  specifications?: string;
+  customNotes?: string;
+}
+
+export interface DossierContributionVersion {
+  version: number;
+  updatedAt: string;
+  updatedBy: string;
+  type: DossierContributionType;
+  content: string;
+  attachmentUrl?: string;
+  attachmentName?: string;
+  formFields?: DossierFormFields;
+  status: DossierContributionStatus;
+  reviewNotes?: string;
+}
+
+export interface DossierContribution {
+  id: string;
+  projectId: string;
+  projectName?: string;
+  macroActivityId?: string;
+  macroActivityName?: string;
+  activityId: string;
+  activityName: string;
+  chapterId: DossierChapterId;
+  chapterTitle: string;
+  type: DossierContributionType;
+  content: string;
+  attachmentUrl?: string;
+  attachmentName?: string;
+  formFields?: DossierFormFields;
+  status: DossierContributionStatus;
+  version: number;
+  versionsHistory?: DossierContributionVersion[];
+  author: string;
+  reviewer?: string;
+  reviewNotes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export type RegulatoryStandardStatus = 'vigente' | 'vigente com alteração' | 'Alterador' | 'À Entrar em Vigor' | 'obsoleto';
 
@@ -236,6 +298,8 @@ export interface MicroActivity {
   budget?: BudgetInfo;
   realStartDate?: string;
   realEndDate?: string;
+  generatesRegulatoryContent?: boolean;
+  dossierContribution?: DossierContribution;
 }
 
 export interface MacroActivity {

@@ -23,6 +23,8 @@ import RegulatoryStandardsManager from './components/RegulatoryStandardsManager'
 import RegulatoryStandardsModal from './components/RegulatoryStandardsModal';
 import VaccinesComponentsManager from './components/VaccinesComponentsManager';
 import ModuleSelectionView from './components/ModuleSelectionView';
+import { DossierContributionsManager } from './components/DossierContributionsManager';
+import { DossierAssemblerManager } from './components/DossierAssemblerManager';
 import { MicrosoftGraphService } from './services/microsoftGraphService';
 import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft, LayoutGrid, Kanban, Clock, Briefcase, Map as MapIcon, Syringe, Layers } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
@@ -1371,6 +1373,8 @@ const App: React.FC = () => {
                   {view === 'quality' && 'Controle de Acesso'}
                   {view === 'traceability' && 'Auditoria'}
                   {view === 'regulatory' && 'Normas Regulatórias'}
+                  {view === 'dossier_contributions' && 'Contribuições do Dossiê'}
+                  {view === 'dossier_assembler' && 'Dossiê (DDCM)'}
                 </h1>
                 <p className="text-[9px] sm:text-xs font-bold text-slate-400 mt-0.5">{selectedProfile?.name}</p>
               </div>
@@ -1557,6 +1561,27 @@ const App: React.FC = () => {
             projects={activeProjects}
             subjects={regulatorySubjects}
             onUpdateSubjects={(newSubjects) => { setRegulatorySubjects(newSubjects); setDataDirty(); }}
+          />
+        )}
+        {view === 'dossier_contributions' && (
+          <DossierContributionsManager
+            projects={activeProjects}
+            tasks={tasks}
+            onUpdateProject={(updatedProject) => {
+              const newProjects = activeProjects.map(p => p.id === updatedProject.id ? updatedProject : p);
+              setProjects(newProjects);
+              setDataDirty();
+            }}
+            onUpdateTask={(updatedTask) => {
+              handleSaveTask(updatedTask);
+            }}
+            currentUser={selectedProfile?.name || 'Usuário'}
+          />
+        )}
+        {view === 'dossier_assembler' && (
+          <DossierAssemblerManager
+            projects={activeProjects}
+            tasks={tasks}
           />
         )}
           </>

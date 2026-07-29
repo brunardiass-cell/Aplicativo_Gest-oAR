@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Task, Priority, Status, TaskNote, ReportStage, TeamMember } from '../types';
 import { X, Calendar, Users, Info, MessageSquare, ClipboardList, PlusCircle, FileText, UserCheck, Link } from 'lucide-react';
+import { DossierContributionSection } from './DossierContributionSection';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -410,6 +411,17 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, onSave, projects
                 <textarea rows={6} value={formData.nextStep} onChange={e => setFormData({...formData, nextStep: e.target.value})} placeholder="Defina a próxima ação necessária..." className="w-full px-8 py-6 bg-brand-primary/5 border border-brand-primary/10 rounded-[2rem] text-sm font-bold text-black outline-none focus:ring-2 focus:ring-brand-primary resize-none" />
              </div>
           </div>
+
+          <DossierContributionSection
+            activityId={formData.id || 'new_task'}
+            activityName={formData.activity || 'Nova Atividade'}
+            projectName={formData.project || 'Geral'}
+            generatesRegulatoryContent={formData.generatesRegulatoryContent || false}
+            onToggleGeneratesRegulatoryContent={(val) => setFormData({ ...formData, generatesRegulatoryContent: val })}
+            contribution={formData.dossierContribution}
+            onSaveContribution={(contrib) => setFormData({ ...formData, dossierContribution: contrib, generatesRegulatoryContent: true })}
+            currentUser={currentProfileName}
+          />
         </form>
 
         <footer className="px-10 py-8 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 shrink-0">
