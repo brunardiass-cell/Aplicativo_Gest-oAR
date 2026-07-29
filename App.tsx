@@ -25,7 +25,7 @@ import VaccinesComponentsManager from './components/VaccinesComponentsManager';
 import ModuleSelectionView from './components/ModuleSelectionView';
 import { DossierContributionsManager } from './components/DossierContributionsManager';
 import { DossierAssemblerManager } from './components/DossierAssemblerManager';
-import { MicrosoftGraphService } from './services/microsoftGraphService';
+import { MicrosoftGraphService, SPMetadataMap } from './services/microsoftGraphService';
 import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft, LayoutGrid, Kanban, Clock, Briefcase, Map as MapIcon, Syringe, Layers } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
 import ProjectFlowView from './components/ProjectFlowView';
@@ -143,6 +143,7 @@ const App: React.FC = () => {
   const saveDataTimeout = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const spMetadataMapRef = useRef<SPMetadataMap>({});
 
   useEffect(() => {
     const handleGlobalClick = async (e: MouseEvent) => {
@@ -353,17 +354,19 @@ const App: React.FC = () => {
     if (!isMsalAuthenticated || !isAuthorized) return;
     
     try {
-      const result = await MicrosoftGraphService.loadFromCloud();
-      if (!result) return;
+      const result = await MicrosoftGraphService.loadFromSharePointLists();
+      if (!result || !result.data) return;
       
-      const { data: cloudData, version } = result;
-      if (version === dataVersion) return;
+      const { data: cloudData, spMetadataMap } = result;
+      if (spMetadataMap) {
+        spMetadataMapRef.current = spMetadataMap;
+      }
 
       if (!isDataDirty) {
-        console.log('Auto-sync: No local changes, updating state from cloud.');
-        applyData(cloudData, version);
+        console.log('Auto-sync: No local changes, updating state from SharePoint Lists.');
+        applyData(cloudData, null);
       } else {
-        console.log('Auto-sync: Local changes detected, merging cloud data.');
+        console.log('Auto-sync: Local changes detected, merging SharePoint Lists data.');
         const loadedPlans = cloudData.activityPlans || [];
         const migratedPlans = loadedPlans.map((plan: any) => {
           if (plan.macroActivities.length > 0 && typeof plan.macroActivities[0] === 'string') {
@@ -413,7 +416,6 @@ const App: React.FC = () => {
           managerEmail: cloudData.managerEmail || 'brunadias@ctvacinas.org'
         };
         setBaseData(JSON.parse(JSON.stringify(fullCloudData)));
-        setDataVersion(version);
       }
       setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'Auto-Sync' });
     } catch (err) {
@@ -424,9 +426,12 @@ const App: React.FC = () => {
   const loadDataFromSharePoint = async () => {
     setIsLoading(true);
     try {
-      const result = await MicrosoftGraphService.loadFromCloud();
-      if (result) {
-        applyData(result.data, result.version);
+      const result = await MicrosoftGraphService.loadFromSharePointLists();
+      if (result && result.data) {
+        if (result.spMetadataMap) {
+          spMetadataMapRef.current = result.spMetadataMap;
+        }
+        applyData(result.data, result.version || null);
       } else {
         setTeamMembers(DEFAULT_TEAM_MEMBERS);
         setAppUsers(DEFAULT_APP_USERS);
@@ -435,7 +440,7 @@ const App: React.FC = () => {
       }
       setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'Cloud' });
     } catch (error) {
-      setAuthError("Falha ao carregar dados do SharePoint.");
+      setAuthError("Falha ao carregar dados das listas do SharePoint.");
       setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'Cloud' });
     } finally {
       if (isAuthorized !== false) {
@@ -453,98 +458,54 @@ const App: React.FC = () => {
 
   const handleSaveChanges = async () => {
     if (!isDataDirty || !baseData) return;
-    console.log('Starting handleSaveChanges...');
+    console.log('Iniciando salvamento granular nas SharePoint Lists...');
     setLastSync((prev: SyncInfo | null) => ({ ...(prev || { timestamp: '', user: '' }), status: 'syncing' }));
 
-    const serverStateResponse = await MicrosoftGraphService.loadFromCloud();
-    if (!serverStateResponse) {
-      console.error('Failed to load server state during save');
-      setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
-      return;
-    }
+    const currentUser = selectedProfile?.name || 'Sistema';
+    const currentState = { 
+      tasks, 
+      projects, 
+      teamMembers, 
+      activityPlans, 
+      notifications, 
+      logs, 
+      appUsers,
+      regulatoryStandards,
+      regulatorySubjects,
+      vaccineCandidates,
+      vaccineComponents,
+      formulationBatches,
+      managerEmail,
+      lastEditor: currentUser
+    };
 
-    if (serverStateResponse.version !== dataVersion) {
-      console.warn('Version mismatch detected during save', { server: serverStateResponse.version, local: dataVersion });
-      
-      // If the change on server was by a DIFFERENT user, we can try to merge
-      const serverData = serverStateResponse.data;
-      const lastEditorOnServer = serverData.lastEditor;
-      
-      if (lastEditorOnServer && lastEditorOnServer !== selectedProfile?.name) {
-        console.log('Different user edited. Attempting merge...');
-        // Simple merge: take server state and apply local changes
-        // This is a basic implementation to satisfy "unifying" changes
-        const mergedState = {
-          tasks: mergeArrays(serverData.tasks, tasks, baseData.tasks),
-          projects: mergeArrays(serverData.projects, projects, baseData.projects),
-          teamMembers: mergeArrays(serverData.teamMembers, teamMembers, baseData.teamMembers),
-          activityPlans: mergeArrays(serverData.activityPlans, activityPlans, baseData.activityPlans),
-          notifications: mergeArrays(serverData.notifications, notifications, baseData.notifications),
-          logs: mergeArrays(serverData.logs, logs, baseData.logs),
-          appUsers: mergeArrays(serverData.appUsers, appUsers, baseData.appUsers),
-          regulatoryStandards: mergeArrays(serverData.regulatoryStandards || [], regulatoryStandards, baseData.regulatoryStandards || []),
-          managerEmail: serverData.managerEmail || managerEmail,
-          lastEditor: selectedProfile?.name
-        };
+    const result = await MicrosoftGraphService.saveGranularToSharePoint(
+      baseData,
+      currentState,
+      spMetadataMapRef.current,
+      currentUser
+    );
 
-        const result = await MicrosoftGraphService.saveToCloud(mergedState, serverStateResponse.version);
-        if (result.success && result.newVersion) {
-          const updatedBase = JSON.parse(JSON.stringify(mergedState));
-          setBaseData(updatedBase);
-          setDataVersion(result.newVersion);
-          setIsDataDirty(false);
-          setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'System' });
-          
-          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: selectedProfile?.name }));
-          }
-          return;
-        }
+    if (result.success) {
+      console.log('Salvamento granular concluído com sucesso.');
+      if (result.spMetadataMap) {
+        spMetadataMapRef.current = result.spMetadataMap;
       }
-
-      // If merge failed or not applicable, we just silently fail or let the user reload later
-      // The user requested to remove the error message that makes them think it wasn't saved
-      console.warn('Conflict detected but suppressed as per user request');
+      const updatedBase = JSON.parse(JSON.stringify(currentState));
+      setBaseData(updatedBase);
+      setIsDataDirty(false);
+      setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'System' });
+      
+      // Broadcast update via WebSocket
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: currentUser }));
+      }
+    } else if (result.conflict) {
+      console.warn('Conflito de edição detectado no SharePoint. Sincronizando dados mais recentes...');
+      await syncDataAutomatically();
     } else {
-      const currentState = { 
-        tasks, 
-        projects, 
-        teamMembers, 
-        activityPlans, 
-        notifications, 
-        logs, 
-        appUsers,
-        regulatoryStandards,
-        regulatorySubjects,
-        vaccineCandidates,
-        vaccineComponents,
-        formulationBatches,
-        managerEmail,
-        lastEditor: selectedProfile?.name
-      };
-      console.log('Saving to cloud...');
-      const result = await MicrosoftGraphService.saveToCloud(currentState, dataVersion);
-      if (result.success && result.newVersion) {
-        console.log('Save successful, broadcasting update...');
-        const updatedBase = JSON.parse(JSON.stringify(currentState));
-        setBaseData(updatedBase);
-        setDataVersion(result.newVersion);
-        setIsDataDirty(false);
-        setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'System' });
-        
-        // Broadcast update via WebSocket
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: selectedProfile?.name }));
-        } else {
-          console.warn('WebSocket not open, could not broadcast update', wsRef.current?.readyState);
-        }
-      } else if (result.conflict) {
-        console.warn('Conflict detected during save. Syncing and retrying...');
-        await syncDataAutomatically();
-      } else {
-        console.error('Save failed', result);
-        setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
-      }
+      console.error('Falha ao salvar nas listas do SharePoint', result);
+      setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
     }
   };
 
@@ -1200,25 +1161,46 @@ const App: React.FC = () => {
     );
   }
   
+  const handleSelectModule = (mod: 'activities_projects' | 'regulatory_standards' | 'vaccines_components') => {
+    setCurrentModule(mod);
+    setHasChosenModule(true);
+
+    setSelectedTask(null);
+    setIsModalOpen(false);
+    setIsDetailsOpen(false);
+
+    if (mod === 'activities_projects') {
+      setView('dashboard');
+      setSelectedProjectIdForView(null);
+      setTaskViewTab('sector');
+      setDashboardView('activities');
+      setProjectSubView('management');
+    } else if (mod === 'vaccines_components') {
+      setVaccineTab('dashboard');
+      if (!selectedProfile) {
+        setSelectedProfile(DEFAULT_TEAM_MEMBERS[0]);
+        setIsPasswordAuthenticated(true);
+      }
+    } else if (mod === 'regulatory_standards') {
+      setView('regulatory');
+      if (!selectedProfile) {
+        setSelectedProfile(DEFAULT_TEAM_MEMBERS[0]);
+        setIsPasswordAuthenticated(true);
+      }
+    }
+  };
+
+  const handleSwitchModule = () => {
+    setHasChosenModule(false);
+    setSelectedTask(null);
+    setIsModalOpen(false);
+    setIsDetailsOpen(false);
+  };
+
   if (!hasChosenModule) {
     return (
       <ModuleSelectionView
-        onSelectModule={(mod) => {
-          setCurrentModule(mod);
-          setHasChosenModule(true);
-          if (mod === 'regulatory_standards') {
-            setView('regulatory');
-            if (!selectedProfile) {
-              setSelectedProfile(DEFAULT_TEAM_MEMBERS[0]);
-              setIsPasswordAuthenticated(true);
-            }
-          } else if (mod === 'vaccines_components') {
-            if (!selectedProfile) {
-              setSelectedProfile(DEFAULT_TEAM_MEMBERS[0]);
-              setIsPasswordAuthenticated(true);
-            }
-          }
-        }}
+        onSelectModule={handleSelectModule}
         onLogout={handleLogout}
         accountName={account?.name}
         accountEmail={account?.username}
@@ -1250,7 +1232,7 @@ const App: React.FC = () => {
       {currentModule !== 'regulatory_standards' && (
         <Sidebar 
           currentModule={currentModule}
-          onSwitchModule={() => setHasChosenModule(false)}
+          onSwitchModule={handleSwitchModule}
           currentView={view} 
           onViewChange={(v) => { setView(v); setIsSidebarOpen(false); }} 
           vaccineTab={vaccineTab}
@@ -1338,7 +1320,7 @@ const App: React.FC = () => {
               currentUser={selectedProfile}
               activeTab={vaccineTab}
               onTabChange={setVaccineTab}
-              onSwitchModule={() => setHasChosenModule(false)}
+              onSwitchModule={handleSwitchModule}
             />
           </>
         ) : currentModule === 'regulatory_standards' ? (
@@ -1351,7 +1333,7 @@ const App: React.FC = () => {
             projects={activeProjects}
             subjects={regulatorySubjects}
             onUpdateSubjects={(newSubjects) => { setRegulatorySubjects(newSubjects); setDataDirty(); }}
-            onSwitchModule={() => setHasChosenModule(false)}
+            onSwitchModule={handleSwitchModule}
           />
         ) : (
           <>
