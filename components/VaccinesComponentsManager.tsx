@@ -83,7 +83,8 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
   const [dashboardSubTab, setDashboardSubTab] = useState<'vaccines' | 'components'>('vaccines');
 
   // Catalog Subtab
-  const [catalogSubTab, setCatalogSubTab] = useState<'candidates' | 'components' | 'batches' | 'pipeline'>('candidates');
+  const [catalogSubTab, setCatalogSubTab] = useState<'candidates' | 'components'>('candidates');
+  const [componentCategoryFilter, setComponentCategoryFilter] = useState<string>('Todos');
 
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState('');
@@ -154,10 +155,20 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
   const filteredComponents = components.filter(comp => {
     const matchesSearch = comp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       comp.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      comp.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (comp.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       comp.batchNumber.toLowerCase().includes(searchTerm.toLowerCase());
+
     const matchesCategory = categoryFilter === 'Todos' || comp.category === categoryFilter;
     const matchesGrade = gradeFilter === 'Todos' || comp.grade === gradeFilter;
-    return matchesSearch && matchesCategory && matchesGrade;
+
+    const matchesCategoryPill = componentCategoryFilter === 'Todos' ||
+      (componentCategoryFilter === 'Antígenos' && comp.category === 'Antígeno') ||
+      (componentCategoryFilter === 'Adjuvantes' && comp.category === 'Adjuvante') ||
+      (componentCategoryFilter === 'Excipientes' && (comp.category === 'Tampão / Estabilizante' || comp.category === 'Conservante' || comp.category === 'Solvente / Diluente')) ||
+      (componentCategoryFilter === 'Vetores' && (comp.category === 'Vetor de Expressão' || comp.category === 'Linhagem Celular'));
+
+    return matchesSearch && matchesCategory && matchesGrade && matchesCategoryPill;
   });
 
   const filteredBatches = formulationBatches.filter(b => {
@@ -440,17 +451,88 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
     }
   };
 
-  // Process PDF with Gemini mock
-  const handleProcessPdfWithGemini = () => {
+  // Process PDF with Real Gemini AI API
+  const handleProcessPdfWithGemini = async () => {
     if (pdfFiles.length === 0) {
       alert('Selecione ou solte ao menos um arquivo PDF de bula.');
       return;
     }
+
+    const file = pdfFiles[0];
     setPdfProcessing(true);
-    setTimeout(() => {
+    setPdfResult(null);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const base64Data = reader.result as string;
+          const response = await fetch('/api/parse-bula-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              pdfBase64: base64Data,
+              filename: file.name
+            })
+          });
+
+          const data = await response.json();
+          setPdfProcessing(false);
+
+          if (!response.ok || data.error) {
+            alert('Erro ao processar PDF com Gemini: ' + (data.error || 'Falha no servidor.'));
+            setPdfResult(`Erro na análise da bula PDF: ${data.error || 'Erro desconhecido.'}`);
+          } else {
+            setPdfResult(data.text);
+          }
+        } catch (err: any) {
+          setPdfProcessing(false);
+          alert('Erro de comunicação ao enviar PDF: ' + err.message);
+          setPdfResult('Erro na análise da bula PDF.');
+        }
+      };
+
+      reader.onerror = () => {
+        setPdfProcessing(false);
+        alert('Erro ao carregar o arquivo PDF do seu sistema.');
+      };
+
+      reader.readAsDataURL(file);
+    } catch (err: any) {
       setPdfProcessing(false);
-      setPdfResult(`Bula Analisada com Sucesso pelo Gemini AI:\n- Candidato Vacinal: SpiN-CTVacinas v2\n- Antígeno Recombinante: 50 mcg/dose\n- Adjuvante: Alumínio + QS21\n- Pureza por HPLC: >98%\n- Endotoxinas: <0.01 EU/dose`);
-    }, 1500);
+      alert('Erro inesperado: ' + err.message);
+    }
+  };
+
+  // Helper to import extracted PDF data directly into catalog
+  const handleImportExtractedPdfData = () => {
+    if (!pdfResult) return;
+    const now = new Date().toISOString().split('T')[0];
+    
+    // Extract candidate name or default to file name
+    const nameMatch = pdfResult.match(/Nome Comercial.*?:?\s*(.*)/i) || pdfResult.match(/Marca.*?:?\s*(.*)/i);
+    const extractedName = nameMatch && nameMatch[1]?.trim() ? nameMatch[1].trim().replace(/[\*\_]/g, '') : (pdfFiles[0]?.name.replace('.pdf', '') || 'Vacina Bula Importada');
+
+    const newCand: VaccineCandidate = {
+      id: `cand_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      name: extractedName,
+      codeName: `BUL-PDF-${Date.now().toString().slice(-4)}`,
+      platform: pdfResult.toLowerCase().includes('rnam') || pdfResult.toLowerCase().includes('mrna') ? 'RNA/mRNA' : pdfResult.toLowerCase().includes('vetor') ? 'Vetor Viral' : 'Proteína Recombinante',
+      targetPathogen: 'Definido na Bula PDF',
+      phase: 'Registro / Produção',
+      status: 'Aprovado',
+      leadResearcher: 'Titular / Bula Regulamentada',
+      description: `Importado via Bula PDF (${pdfFiles[0]?.name || 'Bula'}).\n\nResumo da Extração Gemini:\n${pdfResult.slice(0, 400)}...`,
+      associatedComponentIds: [],
+      anvisaStatus: 'Bula Registrada ANVISA',
+      technicalNotes: pdfResult,
+      createdDate: now,
+      updatedDate: now
+    };
+
+    onUpdateCandidates([newCand, ...candidates]);
+    alert(`Sucesso! A vacina "${extractedName}" foi cadastrada no catálogo com dados extraídos do PDF.`);
+    setMainTab('catalog');
   };
 
   const phasesList: VaccinePhase[] = [
@@ -1270,19 +1352,37 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
             </div>
 
             {/* Ficha de Revisão Vazia / Output */}
-            <div className="p-6 bg-white rounded-3xl border border-slate-200 flex flex-col justify-center items-center text-center space-y-3">
+            <div className="p-6 bg-white rounded-3xl border border-slate-200 flex flex-col justify-start items-start text-left space-y-4">
               {pdfResult ? (
-                <div className="p-4 bg-teal-50 border border-teal-200 rounded-2xl text-left text-xs font-mono text-teal-900 whitespace-pre-line w-full">
-                  {pdfResult}
+                <div className="w-full space-y-4">
+                  <div className="flex items-center justify-between border-b border-teal-200 pb-3">
+                    <div className="flex items-center gap-2 text-teal-900 font-black text-xs uppercase">
+                      <Sparkles size={16} className="text-teal-600" /> Relatório de Extração da Bula (Gemini AI)
+                    </div>
+                    <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold">
+                      Processado com Sucesso
+                    </span>
+                  </div>
+
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left text-xs font-mono text-slate-800 whitespace-pre-line w-full max-h-[420px] overflow-y-auto custom-scrollbar leading-relaxed">
+                    {pdfResult}
+                  </div>
+
+                  <button
+                    onClick={handleImportExtractedPdfData}
+                    className="w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition shadow-lg flex items-center justify-center gap-2"
+                  >
+                    <Plus size={16} /> Cadastrar Vacina & Componentes Extraídos no Catálogo
+                  </button>
                 </div>
               ) : (
-                <>
+                <div className="w-full py-12 flex flex-col items-center justify-center text-center space-y-3">
                   <FileText size={48} className="text-slate-300" />
                   <h3 className="text-xs font-black uppercase text-slate-600">Ficha de Revisão Vazia</h3>
                   <p className="text-[11px] text-slate-400 max-w-xs leading-relaxed">
                     Adicione seus PDFs de bulas e clique em "Processar Lote de PDFs com Gemini" para executar a extração automatizada de ingredientes.
                   </p>
-                </>
+                </div>
               )}
             </div>
           </div>
@@ -1514,7 +1614,7 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
         </div>
       )}
 
-      {/* ==================== 6. CATÁLOGO & LOTES VIEW ==================== */}
+      {/* ==================== 6. CATÁLOGO DE VACINAS E COMPONENTES VIEW ==================== */}
       {mainTab === 'catalog' && (
         <div className="space-y-6">
           {/* Subtabs for Catalog */}
@@ -1526,7 +1626,7 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
                   catalogSubTab === 'candidates' ? 'bg-white text-teal-900 shadow-xs' : 'text-slate-500'
                 }`}
               >
-                <Syringe size={14} /> Candidatos Vacinais ({candidates.length})
+                <Syringe size={14} /> Vacinas Cadastradas ({candidates.length})
               </button>
 
               <button
@@ -1537,49 +1637,23 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
               >
                 <Dna size={14} /> Componentes & Insumos ({components.length})
               </button>
-
-              <button
-                onClick={() => setCatalogSubTab('batches')}
-                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 ${
-                  catalogSubTab === 'batches' ? 'bg-white text-teal-900 shadow-xs' : 'text-slate-500'
-                }`}
-              >
-                <TestTube size={14} /> Lotes de Formulação ({formulationBatches.length})
-              </button>
-
-              <button
-                onClick={() => setCatalogSubTab('pipeline')}
-                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 ${
-                  catalogSubTab === 'pipeline' ? 'bg-white text-teal-900 shadow-xs' : 'text-slate-500'
-                }`}
-              >
-                <BarChart2 size={14} /> Pipeline
-              </button>
             </div>
 
             <div className="flex items-center gap-2">
               {catalogSubTab === 'candidates' && (
                 <button
                   onClick={() => setCandidateModal({})}
-                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2"
+                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shadow-sm"
                 >
-                  <Plus size={14} /> Novo Candidato
+                  <Plus size={14} /> Nova Vacina
                 </button>
               )}
               {catalogSubTab === 'components' && (
                 <button
                   onClick={() => setComponentModal({})}
-                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2"
+                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 shadow-sm"
                 >
-                  <Plus size={14} /> Novo Insumo
-                </button>
-              )}
-              {catalogSubTab === 'batches' && (
-                <button
-                  onClick={() => setBatchModal({ componentsUsed: [] })}
-                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2"
-                >
-                  <Plus size={14} /> Novo Lote
+                  <Plus size={14} /> Novo Componente
                 </button>
               )}
             </div>
@@ -1590,18 +1664,23 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredCandidates.map(cand => (
-                  <div key={cand.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-start">
-                    <div className="space-y-1">
-                      <span className="text-[9px] font-black uppercase text-teal-700 block">{cand.platform}</span>
+                  <div key={cand.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-start hover:border-teal-300 transition shadow-2xs">
+                    <div className="space-y-1.5 flex-1 pr-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">{cand.platform}</span>
+                        <span className="text-[9px] font-bold text-slate-500 uppercase">{cand.phase}</span>
+                      </div>
                       <h4 className="font-black text-slate-900 text-base">{cand.name}</h4>
-                      <p className="text-xs font-bold text-slate-600">Patógeno: {cand.targetPathogen}</p>
-                      <p className="text-[10px] text-slate-500">Fase: {cand.phase}</p>
+                      <p className="text-xs font-bold text-slate-600">Patógeno Alvo: {cand.targetPathogen}</p>
+                      {cand.description && (
+                        <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">{cand.description}</p>
+                      )}
                     </div>
 
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => setViewCandidate(cand)} className="p-2 text-slate-500 hover:text-slate-800"><Eye size={16}/></button>
-                      <button onClick={() => setCandidateModal(cand)} className="p-2 text-slate-500 hover:text-teal-700"><Edit3 size={16}/></button>
-                      <button onClick={() => handleDeleteCandidate(cand.id, cand.name)} className="p-2 text-slate-500 hover:text-red-600"><Trash2 size={16}/></button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button onClick={() => setViewCandidate(cand)} className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 rounded-xl transition"><Eye size={16}/></button>
+                      <button onClick={() => setCandidateModal(cand)} className="p-2 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-xl transition"><Edit3 size={16}/></button>
+                      <button onClick={() => handleDeleteCandidate(cand.id, cand.name)} className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition"><Trash2 size={16}/></button>
                     </div>
                   </div>
                 ))}
@@ -1611,57 +1690,128 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
 
           {/* TAB CONTENT: COMPONENTS */}
           {catalogSubTab === 'components' && (
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredComponents.map(comp => (
-                  <div key={comp.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-start">
-                    <div className="space-y-1">
-                      <span className="text-[9px] font-mono font-bold text-slate-500 block">{comp.code}</span>
-                      <h4 className="font-black text-slate-900 text-base">{comp.name}</h4>
-                      <p className="text-xs font-bold text-slate-600">Categoria: {comp.category}</p>
-                      <p className="text-[10px] text-slate-500">Estoque: {comp.stockQuantity} {comp.unit} | Temp: {comp.storageTemperature}</p>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => setComponentModal(comp)} className="p-2 text-slate-500 hover:text-teal-700"><Edit3 size={16}/></button>
-                      <button onClick={() => handleDeleteComponent(comp.id, comp.name)} className="p-2 text-slate-500 hover:text-red-600"><Trash2 size={16}/></button>
-                    </div>
-                  </div>
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-6">
+              {/* Category Filter Pills */}
+              <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-2 rounded-2xl border border-slate-200">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-3">Filtrar Insumos:</span>
+                {['Todos', 'Antígenos', 'Adjuvantes', 'Excipientes', 'Vetores'].map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setComponentCategoryFilter(cat)}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
+                      componentCategoryFilter === cat ? 'bg-emerald-700 text-white shadow-xs' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {cat}
+                  </button>
                 ))}
               </div>
-            </div>
-          )}
 
-          {/* TAB CONTENT: BATCHES */}
-          {catalogSubTab === 'batches' && (
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredBatches.map(batch => (
-                  <div key={batch.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-200 flex justify-between items-start">
-                    <div className="space-y-1">
-                      <span className="text-[9px] font-mono font-black text-teal-700 block">{batch.batchCode}</span>
-                      <h4 className="font-black text-slate-900 text-base">Lote de Formulação</h4>
-                      <p className="text-xs text-slate-600">Responsável: {batch.responsibleTechnician}</p>
-                      <p className="text-[10px] text-slate-500">Data Preparo: {batch.preparationDate}</p>
-                    </div>
+              {/* Components Cards Grid with Correlation */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {filteredComponents.map(comp => {
+                  const linkedVaccines = candidates.filter(cand => {
+                    const byId = cand.associatedComponentIds?.includes(comp.id);
+                    const byUsage = cand.componentUsages?.some(u => u.componentId === comp.id || (u.componentName && u.componentName.toLowerCase().includes(comp.name.toLowerCase())));
+                    const byText = (cand.name + " " + cand.description + " " + (cand.technicalNotes || "")).toLowerCase().includes(comp.name.toLowerCase());
+                    return byId || byUsage || byText;
+                  });
 
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => handleDeleteBatch(batch.id, batch.batchCode)} className="p-2 text-slate-500 hover:text-red-600"><Trash2 size={16}/></button>
+                  const categoryColor = comp.category === 'Antígeno' ? 'bg-purple-100 text-purple-900 border-purple-200' :
+                                        comp.category === 'Adjuvante' ? 'bg-amber-100 text-amber-900 border-amber-200' :
+                                        'bg-blue-100 text-blue-900 border-blue-200';
+
+                  return (
+                    <div key={comp.id} className="p-5 bg-slate-50/90 rounded-2xl border border-slate-200 flex flex-col justify-between hover:border-emerald-300 transition shadow-2xs space-y-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-mono font-bold text-slate-400">{comp.code}</span>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border ${categoryColor}`}>
+                            {comp.category}
+                          </span>
+                        </div>
+
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="font-black text-slate-900 text-base leading-snug">{comp.name}</h4>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button onClick={() => setComponentModal(comp)} className="p-1.5 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-xl transition"><Edit3 size={16}/></button>
+                            <button onClick={() => handleDeleteComponent(comp.id, comp.name)} className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition"><Trash2 size={16}/></button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 pt-1">
+                          <div>
+                            <span className="font-bold text-slate-500 block text-[9px] uppercase">Grau / Especificação</span>
+                            <span>{comp.grade}</span>
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-500 block text-[9px] uppercase">Armazenamento</span>
+                            <span>{comp.storageTemperature}</span>
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-500 block text-[9px] uppercase">Estoque Disponível</span>
+                            <span className="font-mono font-bold text-slate-900">{comp.stockQuantity} {comp.unit}</span>
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-500 block text-[9px] uppercase">Lote Atual</span>
+                            <span className="font-mono">{comp.batchNumber}</span>
+                          </div>
+                        </div>
+
+                        {comp.description && (
+                          <p className="text-[11px] text-slate-500 leading-relaxed pt-1 border-t border-slate-200/60">{comp.description}</p>
+                        )}
+                      </div>
+
+                      {/* CORRELATION SECTION: How many and which vaccines use this component */}
+                      <div className="pt-3 border-t border-slate-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                            <Syringe size={13} className="text-emerald-600" />
+                            Correlação de Uso nas Vacinas
+                          </span>
+                          {linkedVaccines.length > 0 ? (
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-black border border-emerald-200">
+                              Usado em {linkedVaccines.length} {linkedVaccines.length === 1 ? 'vacina' : 'vacinas'}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-bold italic">Sem vacinas associadas</span>
+                          )}
+                        </div>
+
+                        {linkedVaccines.length > 0 && (
+                          <div className="space-y-1.5 pt-1">
+                            {linkedVaccines.map(v => {
+                              const usage = v.componentUsages?.find(u => u.componentId === comp.id || (u.componentName && u.componentName.toLowerCase().includes(comp.name.toLowerCase())));
+                              return (
+                                <div key={v.id} className="p-2.5 bg-white border border-emerald-200/90 rounded-xl text-xs space-y-0.5 shadow-2xs">
+                                  <div className="font-black text-slate-900 flex items-center justify-between gap-2">
+                                    <span className="text-emerald-950">{v.name}</span>
+                                    <span className="px-1.5 py-0.5 bg-emerald-800 text-white rounded text-[9px] font-mono shrink-0">{v.platform}</span>
+                                  </div>
+                                  <div className="text-[10px] text-slate-600 flex items-center justify-between gap-2">
+                                    <span>Fase: <strong className="text-slate-800">{v.phase}</strong></span>
+                                    {usage?.concentration && (
+                                      <span className="font-mono text-emerald-800 font-bold">Dosagem: {usage.concentration}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
+                  );
+                })}
+
+                {filteredComponents.length === 0 && (
+                  <div className="col-span-2 p-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 space-y-2">
+                    <Dna size={32} className="mx-auto text-slate-300" />
+                    <p className="text-xs font-bold uppercase">Nenhum componente encontrado nessa categoria</p>
+                    <p className="text-[11px]">Selecione "Todos" ou clique em "Novo Componente" para cadastrar insumos.</p>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* TAB CONTENT: PIPELINE */}
-          {catalogSubTab === 'pipeline' && (
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-              <h3 className="text-xs font-black uppercase tracking-widest text-slate-600">PIPELINE VACINAL CTVACINAS</h3>
-              <div className="p-8 text-center text-slate-400 space-y-2">
-                <BarChart2 size={36} className="mx-auto text-teal-600" />
-                <p className="text-xs font-bold uppercase">Relatório de Avanço Clínico</p>
-                <p className="text-[10px]">Visão consolidada dos marcos regulatórios de desenvolvimento.</p>
+                )}
               </div>
             </div>
           )}

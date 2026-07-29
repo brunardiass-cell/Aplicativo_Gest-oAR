@@ -8,7 +8,8 @@ import {
   Users2, Presentation, ArrowLeft, Edit, Trash2, LayoutGrid,
   ShieldAlert, CheckCircle2, Workflow, DollarSign, User,
   FolderKanban, GanttChartSquare, Kanban, ClipboardCheck,
-  Printer, BarChart3, TrendingUp, Layers
+  Printer, BarChart3, TrendingUp, Layers, Folder, Play,
+  SlidersHorizontal, MoreVertical, ArrowRight
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -54,7 +55,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   onOpenRegulatoryModal,
   currentUser
 }) => {
-  const [viewMode, setViewMode] = useState<'initial' | 'selection' | 'dashboard'>('initial');
+  const [viewMode, setViewMode] = useState<'initial' | 'selection' | 'dashboard'>('selection');
   const [projectDetailView, setProjectDetailView] = useState<'dashboard' | 'timeline' | 'kanban' | 'phases' | 'gantt'>('dashboard');
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
@@ -65,17 +66,33 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   const [newTeamMemberName, setNewTeamMemberName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Filter & Sort State for Projects Overview
+  const [statusFilter, setStatusFilter] = useState<string>('Todos');
+  const [responsibleFilter, setResponsibleFilter] = useState<string>('Todos');
+  const [areaFilter, setAreaFilter] = useState<string>('Todas');
+  const [typeFilter, setTypeFilter] = useState<string>('Todos');
+  const [sortBy, setSortBy] = useState<'recent' | 'name' | 'progress'>('recent');
+  const [showFiltersBar, setShowFiltersBar] = useState<boolean>(true);
+  const [activeMenuProjectId, setActiveMenuProjectId] = useState<string | null>(null);
+
+  const getHealthColor = (score: number) => {
+    if (score > 80) return 'text-emerald-500';
+    if (score > 60) return 'text-amber-500';
+    return 'text-red-500';
+  };
+
   const isAdmin = currentUserRole === 'admin';
+  const canCreatePlan = isAdmin || (currentUserRole as string) === 'admin' || (currentUserRole as string) === 'gerente' || currentUser?.isComiteGestor || currentUser?.isLeader;
   
   useEffect(() => {
-    if (initialProjectId && viewMode === 'initial') {
+    if (initialProjectId) {
       const projectToSelect = projects.find(p => p.id === initialProjectId);
       if (projectToSelect) {
         setSelectedProject(projectToSelect);
         setViewMode('dashboard');
       }
     }
-  }, [initialProjectId, projects, viewMode]);
+  }, [initialProjectId, projects]);
 
   useEffect(() => {
     if (selectedProject) {
@@ -348,91 +365,503 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     addProject(newProject);
   };
 
+  const uniqueResponsibles = useMemo(() => {
+    const set = new Set<string>();
+    projects.forEach(p => {
+      if (p.responsible) set.add(p.responsible);
+    });
+    return Array.from(set);
+  }, [projects]);
+
+  const overviewStats = useMemo(() => {
+    const total = projects.length;
+    let inProgress = 0;
+    let completed = 0;
+    let planned = 0;
+
+    projects.forEach(p => {
+      const st = (p.status || '').toLowerCase();
+      if (st.includes('concl')) {
+        completed++;
+      } else if (st.includes('plan')) {
+        planned++;
+      } else {
+        inProgress++;
+      }
+    });
+
+    const inProgressPct = total > 0 ? Math.round((inProgress / total) * 100) : 0;
+    const completedPct = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const plannedPct = total > 0 ? Math.round((planned / total) * 100) : 0;
+
+    return { total, inProgress, inProgressPct, completed, completedPct, planned, plannedPct };
+  }, [projects]);
+
   const filteredProjects = useMemo(() => {
     return projects
-      .filter(p => 
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        (p.responsible && p.responsible.toLowerCase().includes(searchTerm.toLowerCase()))
-      )
+      .filter(project => {
+        // Search term
+        const term = searchTerm.toLowerCase().trim();
+        if (term) {
+          const nameMatch = project.name.toLowerCase().includes(term);
+          const respMatch = (project.responsible || '').toLowerCase().includes(term);
+          const descMatch = (project.description || '').toLowerCase().includes(term);
+          if (!nameMatch && !respMatch && !descMatch) return false;
+        }
+
+        // Status Filter
+        if (statusFilter !== 'Todos') {
+          const st = (project.status || '').toLowerCase();
+          if (statusFilter === 'EM ANDAMENTO' && (!st.includes('ativo') && !st.includes('andamento'))) return false;
+          if (statusFilter === 'EM REVISÃO' && !st.includes('revis')) return false;
+          if (statusFilter === 'PLANEJADO' && !st.includes('planej')) return false;
+          if (statusFilter === 'CONCLUÍDO' && !st.includes('concl')) return false;
+          if (statusFilter === 'SUSPENSO' && !st.includes('susp')) return false;
+        }
+
+        // Responsible Filter
+        if (responsibleFilter !== 'Todos' && project.responsible !== responsibleFilter) {
+          return false;
+        }
+
+        return true;
+      })
       .sort((a, b) => {
-        // Ativos first
+        if (sortBy === 'name') {
+          return a.name.localeCompare(b.name);
+        }
+        if (sortBy === 'progress') {
+          const getProgress = (proj: Project) => {
+            let tot = 0, done = 0;
+            proj.macroActivities.forEach(m => m.microActivities.forEach(mi => {
+              tot++;
+              if (mi.status === 'Concluído e aprovado') done++;
+            }));
+            return tot > 0 ? done / tot : 0;
+          };
+          return getProgress(b) - getProgress(a);
+        }
+        // Recent / Active first
         if (a.status === 'Ativo' && b.status !== 'Ativo') return -1;
         if (a.status !== 'Ativo' && b.status === 'Ativo') return 1;
         return 0;
       });
-  }, [projects, searchTerm]);
+  }, [projects, searchTerm, statusFilter, responsibleFilter, sortBy]);
 
-  const getHealthColor = (score: number) => {
-    if (score > 80) return 'text-emerald-500';
-    if (score > 60) return 'text-amber-500';
-    return 'text-red-500';
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Ativo': return 'bg-emerald-100 text-emerald-700';
-      case 'Em Planejamento': return 'bg-amber-100 text-amber-700';
-      case 'Suspenso': return 'bg-red-100 text-red-700';
-      case 'Concluído': return 'bg-slate-100 text-slate-700';
-      default: return 'bg-slate-100 text-slate-700';
-    }
-  };
-
-  if (viewMode === 'initial') {
+  if (viewMode === 'selection' || viewMode === 'initial') {
     return (
-      <div className="flex flex-col items-center justify-center py-6 px-6">
-        <div className="max-w-4xl w-full text-center space-y-8 animate-in fade-in zoom-in-95 duration-700">
-          <div className="space-y-2">
-            <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">Gerenciador de Projetos</h1>
-            <p className="text-slate-400 font-bold uppercase text-[9px] tracking-[0.4em]">Selecione uma opção para começar</p>
+      <div className="space-y-6 animate-in fade-in duration-500 pb-12">
+        {/* Top Header Row */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-100/90 text-teal-700 flex items-center justify-center shadow-xs shrink-0">
+              <Folder size={24} />
+            </div>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Projetos</h1>
+              <p className="text-xs font-medium text-slate-500 mt-0.5">
+                Acompanhe, gerencie e visualize todos os projetos do módulo.
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-5xl mx-auto">
-            <button onClick={() => setViewMode('selection')} className="group p-6 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-brand-primary/30 transition-all flex flex-col items-center gap-6 active:scale-95">
-              <div className="p-6 bg-brand-primary text-white rounded-[1.5rem] shadow-2xl shadow-brand-primary/20 group-hover:scale-110 transition-transform">
-                <LayoutDashboard size={36} />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight leading-tight">Acompanhar projeto</h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">Visualize progresso e métricas detalhadas.</p>
-              </div>
-            </button>
-
-            <button onClick={() => setIsNewProjectModalOpen(true)} className="group p-6 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-teal-400/30 transition-all flex flex-col items-center gap-6 active:scale-95">
-              <div className="p-6 bg-teal-500 text-white rounded-[1.5rem] shadow-2xl shadow-teal-500/20 group-hover:scale-110 transition-transform">
-                <FolderPlus size={36} />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight leading-tight">Criar Novo Projeto</h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">Inicie um novo cronograma completo.</p>
-              </div>
-            </button>
-
-            <button onClick={() => setIsActivityMapOpen(true)} className="group p-6 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-indigo-400/30 transition-all flex flex-col items-center gap-6 active:scale-95">
-              <div className="p-6 bg-indigo-500 text-white rounded-[1.5rem] shadow-2xl shadow-indigo-500/20 group-hover:scale-110 transition-transform">
-                <Workflow size={36} />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight leading-tight">Mapa de Atividades</h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">Infográfico de implementação estratégica.</p>
-              </div>
-            </button>
-
-            {isAdmin && (
-              <button onClick={() => setIsPlanModalOpen(true)} className="group p-6 bg-white rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-2xl hover:border-amber-400/30 transition-all flex flex-col items-center gap-6 active:scale-95">
-                <div className="p-6 bg-amber-500 text-white rounded-[1.5rem] shadow-2xl shadow-amber-500/20 group-hover:scale-110 transition-transform">
-                  <ListPlus size={36} />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight leading-tight">Gerenciar Planos</h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">Edite templates e padrões de projetos.</p>
-                </div>
+          <div className="flex items-center gap-2.5 self-start md:self-auto">
+            {canCreatePlan && (
+              <button 
+                onClick={() => setIsPlanModalOpen(true)}
+                className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 rounded-2xl text-xs font-bold uppercase tracking-wider transition shadow-2xs flex items-center gap-2 active:scale-95"
+              >
+                <Plus size={16} className="text-slate-500" /> Criar Novo Plano
               </button>
             )}
+
+            <button 
+              onClick={() => setIsNewProjectModalOpen(true)}
+              className="px-5 py-2.5 bg-[#00875A] hover:bg-[#00704a] text-white rounded-2xl text-xs font-black uppercase tracking-wider transition shadow-sm flex items-center gap-2 active:scale-95"
+            >
+              <Plus size={16} /> CRIAR NOVO PROJETO
+            </button>
           </div>
         </div>
 
-        {isNewProjectModalOpen && (<NewProjectModal isOpen={isNewProjectModalOpen} onClose={() => setIsNewProjectModalOpen(false)} plans={activityPlans} onAddProject={addProject} teamMembers={teamMembers}/>)}
+        {/* 4 Summary Stat Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Total de Projetos */}
+          <div className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs flex items-start justify-between relative overflow-hidden">
+            <div className="space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">TOTAL DE PROJETOS</span>
+              <span className="text-2xl font-black text-slate-900 block leading-tight">{overviewStats.total}</span>
+              <span className="text-[11px] font-bold text-slate-400 block">Todos os projetos</span>
+            </div>
+            <div className="p-2.5 bg-teal-50 text-teal-700 border border-teal-100/80 rounded-2xl">
+              <Folder size={20} />
+            </div>
+          </div>
+
+          {/* Em Andamento */}
+          <div className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between relative overflow-hidden">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">EM ANDAMENTO</span>
+                <span className="text-2xl font-black text-slate-900 block leading-tight">{overviewStats.inProgress}</span>
+                <span className="text-[11px] font-bold text-slate-400 block">{overviewStats.inProgressPct}% do total</span>
+              </div>
+              <div className="p-2.5 bg-blue-50 text-blue-500 rounded-full border border-blue-100/80">
+                <Play size={18} className="fill-blue-500 ml-0.5" />
+              </div>
+            </div>
+            <div className="w-full h-1 bg-blue-500 rounded-full mt-4" />
+          </div>
+
+          {/* Concluídos */}
+          <div className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between relative overflow-hidden">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">CONCLUÍDOS</span>
+                <span className="text-2xl font-black text-slate-900 block leading-tight">{overviewStats.completed}</span>
+                <span className="text-[11px] font-bold text-slate-400 block">{overviewStats.completedPct}% do total</span>
+              </div>
+              <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100/80">
+                <CheckCircle2 size={18} />
+              </div>
+            </div>
+            <div className="w-full h-1 bg-emerald-500 rounded-full mt-4" />
+          </div>
+
+          {/* Planejados */}
+          <div className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between relative overflow-hidden">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">PLANEJADOS</span>
+                <span className="text-2xl font-black text-slate-900 block leading-tight">{overviewStats.planned}</span>
+                <span className="text-[11px] font-bold text-slate-400 block">{overviewStats.plannedPct}% do total</span>
+              </div>
+              <div className="p-2.5 bg-amber-50 text-amber-500 rounded-full border border-amber-100/80">
+                <Clock size={18} />
+              </div>
+            </div>
+            <div className="w-full h-1 bg-amber-500 rounded-full mt-4" />
+          </div>
+        </div>
+
+        {/* Search & Action Controls Row */}
+        <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-2xs space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input 
+                type="text" 
+                placeholder="Buscar por nome do projeto, responsável ou descrição..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-11 pr-4 py-3 bg-slate-50/60 border border-slate-200/80 rounded-2xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 transition"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setShowFiltersBar(!showFiltersBar)}
+                className={`px-4 py-3 rounded-2xl text-xs font-bold uppercase tracking-wider transition flex items-center gap-2 border ${
+                  showFiltersBar ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <SlidersHorizontal size={15} /> FILTROS
+              </button>
+
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value as any)}
+                className="px-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 outline-none hover:bg-slate-50 transition cursor-pointer"
+              >
+                <option value="recent">Mais recentes</option>
+                <option value="name">Nome (A-Z)</option>
+                <option value="progress">Maior progresso</option>
+              </select>
+
+              <button 
+                onClick={() => setIsActivityMapOpen(true)} 
+                className="p-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-2xl text-xs font-bold uppercase transition flex items-center gap-1.5"
+                title="Abrir Mapa de Atividades"
+              >
+                <Workflow size={16} /> <span className="hidden sm:inline">Mapa</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          {showFiltersBar && (
+            <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center gap-3">
+              <div className="flex flex-col text-[10px] font-bold text-slate-400 uppercase">
+                <span>Status</span>
+                <select
+                  value={statusFilter}
+                  onChange={e => setStatusFilter(e.target.value)}
+                  className="mt-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                >
+                  <option value="Todos">Todos</option>
+                  <option value="EM ANDAMENTO">Em andamento</option>
+                  <option value="EM REVISÃO">Em revisão</option>
+                  <option value="PLANEJADO">Planejado</option>
+                  <option value="CONCLUÍDO">Concluído</option>
+                  <option value="SUSPENSO">Suspenso</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col text-[10px] font-bold text-slate-400 uppercase">
+                <span>Responsável</span>
+                <select
+                  value={responsibleFilter}
+                  onChange={e => setResponsibleFilter(e.target.value)}
+                  className="mt-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                >
+                  <option value="Todos">Todos</option>
+                  {uniqueResponsibles.map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col text-[10px] font-bold text-slate-400 uppercase">
+                <span>Área</span>
+                <select
+                  value={areaFilter}
+                  onChange={e => setAreaFilter(e.target.value)}
+                  className="mt-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                >
+                  <option value="Todas">Todas</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col text-[10px] font-bold text-slate-400 uppercase">
+                <span>Tipo de projeto</span>
+                <select
+                  value={typeFilter}
+                  onChange={e => setTypeFilter(e.target.value)}
+                  className="mt-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                >
+                  <option value="Todos">Todos</option>
+                </select>
+              </div>
+
+              <button
+                onClick={() => {
+                  setStatusFilter('Todos');
+                  setResponsibleFilter('Todos');
+                  setAreaFilter('Todas');
+                  setTypeFilter('Todos');
+                  setSearchTerm('');
+                }}
+                className="mt-4 text-[10px] font-black uppercase text-teal-700 hover:text-teal-900 transition flex items-center gap-1 ml-auto"
+              >
+                <X size={12} /> LIMPAR FILTROS
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Projects Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredProjects.map(project => {
+            let totalMicros = 0;
+            let doneMicros = 0;
+            let alertsCount = 0;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            project.macroActivities.forEach(macro => {
+              macro.microActivities.forEach(micro => {
+                totalMicros++;
+                if (micro.status === 'Concluído e aprovado') doneMicros++;
+                if (micro.dueDate && new Date(micro.dueDate + 'T00:00:00') < today && micro.status !== 'Concluído e aprovado') {
+                  alertsCount++;
+                }
+              });
+            });
+
+            const progress = totalMicros > 0 ? Math.round((doneMicros / totalMicros) * 100) : 0;
+            const macrosCount = project.macroActivities.length;
+
+            const stLower = (project.status || '').toLowerCase();
+            let statusBadgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
+            let statusBadgeText: string = project.status || 'Ativo';
+
+            if (stLower.includes('revis')) {
+              statusBadgeClass = 'bg-blue-100/90 text-blue-800 border-blue-200/80';
+              statusBadgeText = 'EM REVISÃO';
+            } else if (stLower.includes('plan')) {
+              statusBadgeClass = 'bg-amber-100/90 text-amber-800 border-amber-200/80';
+              statusBadgeText = 'PLANEJADO';
+            } else if (stLower.includes('concl')) {
+              statusBadgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
+              statusBadgeText = 'CONCLUÍDO';
+            } else if (stLower.includes('susp')) {
+              statusBadgeClass = 'bg-red-100/90 text-red-800 border-red-200/80';
+              statusBadgeText = 'SUSPENSO';
+            } else {
+              statusBadgeClass = 'bg-emerald-100/90 text-emerald-800 border-emerald-200/80';
+              statusBadgeText = 'EM ANDAMENTO';
+            }
+
+            return (
+              <div 
+                key={project.id} 
+                className="group p-6 bg-white rounded-3xl border border-slate-200/90 shadow-2xs hover:shadow-lg hover:border-teal-300 transition-all text-left flex flex-col justify-between space-y-5 relative"
+              >
+                {/* Card Top Row */}
+                <div className="flex justify-between items-start gap-2">
+                  <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider border ${statusBadgeClass}`}>
+                    {statusBadgeText}
+                  </span>
+
+                  {/* Menu Options Button */}
+                  <div className="relative">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMenuProjectId(activeMenuProjectId === project.id ? null : project.id);
+                      }}
+                      className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+
+                    {activeMenuProjectId === project.id && (
+                      <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-30 animate-in fade-in duration-150">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedProject(project);
+                            setViewMode('dashboard');
+                            setProjectDetailView('dashboard');
+                            setActiveMenuProjectId(null);
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                        >
+                          <Folder size={14} /> Abrir Projeto
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDuplicateProject(project);
+                            setActiveMenuProjectId(null);
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                        >
+                          <ListPlus size={14} /> Duplicar
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenDeletionModal({ type: 'project', ids: { projectId: project.id }, name: project.name });
+                            setActiveMenuProjectId(null);
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
+                        >
+                          <Trash2 size={14} /> Excluir
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Main Info */}
+                <div 
+                  className="space-y-2 cursor-pointer flex-1"
+                  onClick={() => {
+                    setSelectedProject(project);
+                    setViewMode('dashboard');
+                    setProjectDetailView('dashboard');
+                  }}
+                >
+                  <h3 className="text-base font-black text-slate-900 uppercase tracking-tight group-hover:text-teal-800 transition-colors leading-snug">
+                    {project.name}
+                  </h3>
+
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 uppercase">
+                    <User size={13} className="text-slate-400" />
+                    <span>{project.responsible || 'BRUNA'}</span>
+                  </div>
+
+                  <p className="text-xs text-slate-500 leading-relaxed line-clamp-2 pt-1 min-h-[34px]">
+                    {project.description || 'Desenvolvimento e acompanhamento de candidato vacinal no módulo CTVacinas.'}
+                  </p>
+                </div>
+
+                {/* Progress Bar & Details */}
+                <div 
+                  className="space-y-2 pt-2 border-t border-slate-100 cursor-pointer"
+                  onClick={() => {
+                    setSelectedProject(project);
+                    setViewMode('dashboard');
+                    setProjectDetailView('dashboard');
+                  }}
+                >
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="font-black text-slate-900">{progress}%</span>
+                    <span className="text-[10px] text-slate-400">{doneMicros} / {totalMicros} atividades</span>
+                  </div>
+
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-teal-600 rounded-full transition-all duration-700" 
+                      style={{ width: `${progress}%` }} 
+                    />
+                  </div>
+                </div>
+
+                {/* Card Footer Row */}
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <AlertTriangle size={14} className={alertsCount > 0 ? 'text-amber-500' : 'text-slate-300'} />
+                      <span className={`text-[10px] font-black uppercase tracking-tight ${alertsCount > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                        {alertsCount} ALERTAS
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <FolderKanban size={14} className="text-slate-400" />
+                      <span className="text-[10px] font-black uppercase tracking-tight text-slate-400">
+                        {macrosCount} MACROS
+                      </span>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => {
+                      setSelectedProject(project);
+                      setViewMode('dashboard');
+                      setProjectDetailView('dashboard');
+                    }}
+                    className="p-2 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded-xl transition"
+                    title="Abrir Projeto"
+                  >
+                    <ArrowRight size={18} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {filteredProjects.length === 0 && (
+          <div className="p-16 text-center bg-white rounded-3xl border border-dashed border-slate-200 space-y-2">
+            <Folder size={36} className="mx-auto text-slate-300" />
+            <p className="text-xs font-bold uppercase text-slate-500">Nenhum projeto encontrado</p>
+            <p className="text-[11px] text-slate-400">Tente ajustar a busca ou limpe os filtros aplicados.</p>
+          </div>
+        )}
+
+        {/* Modals preserved */}
+        {isNewProjectModalOpen && (
+          <NewProjectModal 
+            isOpen={isNewProjectModalOpen} 
+            onClose={() => setIsNewProjectModalOpen(false)} 
+            plans={activityPlans} 
+            onAddProject={addProject} 
+            teamMembers={teamMembers}
+          />
+        )}
         {isActivityMapOpen && (
           <ProjectActivityMap 
             templates={activityPlans} 
@@ -455,139 +884,17 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     );
   }
 
-  if (viewMode === 'selection') {
-    return (
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setViewMode('initial')} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition">
-              <ArrowLeft size={20} />
-            </button>
-            <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Acompanhar projeto</h2>
-          </div>
-          
-          <div className="flex items-center gap-4 flex-1 max-w-2xl">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input 
-                type="text" 
-                placeholder="Buscar por nome ou responsável..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-bold shadow-sm focus:ring-2 focus:ring-brand-primary/20 transition outline-none"
-              />
-            </div>
-            <button onClick={() => setIsActivityMapOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-indigo-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 transition shadow-lg shadow-indigo-200">
-                <Workflow size={16} /> Mapa
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProjects.map(project => {
-            let totalMicros = 0;
-            let doneMicros = 0;
-            let alerts = 0;
-            const today = new Date();
-            today.setHours(0,0,0,0);
-
-            project.macroActivities.forEach(macro => {
-              macro.microActivities.forEach(micro => {
-                totalMicros++;
-                if (micro.status === 'Concluído e aprovado') doneMicros++;
-                if (micro.dueDate && new Date(micro.dueDate + 'T00:00:00') < today && micro.status !== 'Concluído e aprovado') {
-                  alerts++;
-                }
-              });
-            });
-
-            const progress = totalMicros > 0 ? Math.round((doneMicros / totalMicros) * 100) : 0;
-
-            return (
-              <button 
-                key={project.id} 
-                onClick={() => {
-                  setSelectedProject(project);
-                  setViewMode('dashboard');
-                  setProjectDetailView('dashboard');
-                }}
-                className="group p-6 bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-brand-primary/30 transition-all text-left space-y-6"
-              >
-                <div className="flex justify-between items-start">
-                  <div className="space-y-1">
-                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight group-hover:text-brand-primary transition-colors">{project.name}</h3>
-                    <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-slate-400">
-                      <User size={12} />
-                      {project.responsible || 'Sem responsável'}
-                    </div>
-                  </div>
-                  <div className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${getStatusColor(project.status)}`}>
-                    {project.status}
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <span className="text-lg font-black text-slate-800 tracking-tighter w-12">{progress}%</span>
-                    <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-brand-primary transition-all duration-1000" style={{ width: `${progress}%` }}></div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4 pt-4 border-t border-slate-50">
-                    <div className="flex items-center gap-1.5">
-                      <div className={`p-1.5 rounded-md ${alerts > 0 ? 'bg-red-50 text-red-500' : 'bg-slate-50 text-slate-400'}`}>
-                        <AlertTriangle size={12} />
-                      </div>
-                      <span className={`text-[10px] font-black uppercase tracking-tight ${alerts > 0 ? 'text-red-500' : 'text-slate-400'}`}>{alerts} Alertas</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="p-1.5 bg-slate-50 text-slate-400 rounded-md">
-                        <FolderKanban size={12} />
-                      </div>
-                      <span className="text-[10px] font-black uppercase tracking-tight text-slate-400">{project.macroActivities.length} Macros</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end text-brand-primary opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-1">
-                  <span className="text-[9px] font-black uppercase tracking-widest mr-2">Abrir Dashboard</span>
-                  <ChevronRight size={14} />
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {filteredProjects.length === 0 && (
-          <div className="py-20 text-center">
-            <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">Nenhum projeto encontrado.</p>
-          </div>
-        )}
-
-        {isActivityMapOpen && (
-          <ProjectActivityMap 
-            templates={activityPlans} 
-            projects={projects}
-            onClose={() => setIsActivityMapOpen(false)} 
-            onNavigateToProject={handleNavigateToProject}
-          />
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-8 project-manager-container animate-in fade-in duration-500">
       <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col gap-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-100 pb-6">
           <div className="flex items-center gap-3">
             <button 
-              onClick={() => setViewMode('initial')} 
+              onClick={() => setViewMode('selection')} 
               className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-black transition active:scale-95 shadow-2xs"
-              title="Voltar para a Página Inicial do Gerenciador de Projetos"
+              title="Voltar para a Lista de Projetos"
             >
-              <ArrowLeft size={16} /> Voltar para Página Inicial
+              <ArrowLeft size={16} /> Voltar para Projetos
             </button>
           </div>
 

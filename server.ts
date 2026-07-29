@@ -59,9 +59,83 @@ async function startServer() {
     });
   });
 
+  // Express JSON Body Parser for large payload (e.g. PDF base64)
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
   // API routes
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // API endpoint to process PDF / Bula with Gemini 2.5 Flash Multimodal
+  app.post("/api/parse-bula-pdf", async (req, res) => {
+    try {
+      const { pdfBase64, filename } = req.body;
+      if (!pdfBase64) {
+        return res.status(400).json({ error: "Nenhum arquivo PDF ou bula enviado." });
+      }
+
+      const cleanBase64 = pdfBase64.replace(/^data:application\/pdf;base64,/, "").trim();
+
+      const { GoogleGenAI } = await import("@google/genai");
+      const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "Chave da API Gemini não configurada no servidor." });
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+
+      const prompt = `Você é um perito em Assuntos Regulatórios, Farmacologia e Imunobiológicos do CTVacinas.
+Analise com precisão absoluta o documento PDF / Bula fornecido em anexo ("${filename || 'Bula.pdf'}").
+
+DIRETRIZES CRÍTICAS:
+1. Extraia APENAS as informações REALMENTE PRESENTES no documento PDF fornecido. NÃO invente dados de outras vacinas e não substitua informações por exemplos genéricos.
+2. Identifique e estruture todos os dados relevantes em Português do Brasil:
+
+### 📄 DADOS IDENTIFICADORES DA VACINA / BULA
+- **Nome Comercial / Marca**: [Nome constante na bula]
+- **Nome Técnico / Composição Qualitativa**: [Denominação técnica]
+- **Fabricante / Empresa / Titular**: [Fabricante]
+- **Plataforma Tecnológica**: [Ex: RNAm, Proteína Recombinante, Vetor Viral, Vírus Inativado, etc.]
+- **Indicação Terapêutica / Alvo**: [Indicação da vacina]
+
+### 🔬 COMPOSIÇÃO QUALITATIVA E QUANTITATIVA POR DOSE
+- **1. ANTÍGENOS / INGREDIENTES ATIVOS (IFA)**:
+  - Nome do antígeno e concentração/quantidade exata por dose (Ex: 30 µg, 50 mcg, 1x10^10 partículas)
+- **2. ADJUVANTES**:
+  - Lista de adjuvantes presentes e suas concentrações/dosagens por dose (Ex: Hidróxido de Alumínio 0.5 mg, QS-21 50 µg)
+- **3. EXCIPIENTES E INATIVOS**:
+  - Lista de sais, açúcares, tampões e conservantes (Ex: Cloreto de Sódio, Polissorbato 80, Histidina, Sacarose, EDTA) e suas concentrações
+- **4. IMPUREZAS / RESÍDUOS REGULADOS**:
+  - Impurezas do processo/produto ou limites de tolerância descritos (se houver)
+
+### 📋 RECOMENDAÇÕES REGULATÓRIAS E CONSERVAÇÃO
+- **Posologia e Via de Administração**:
+- **Condições de Armazenamento / Temperatura e Validade**:
+- **Resumo Técnico e Observações Gerais**:
+
+Se alguma informação não for encontrada no documento PDF, escreva explicitamente "(Não informado na bula)".`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          {
+            inlineData: {
+              mimeType: 'application/pdf',
+              data: cleanBase64
+            }
+          },
+          prompt
+        ]
+      });
+
+      const text = response.text || "Não foi possível extrair o texto da bula.";
+      res.json({ text, success: true });
+    } catch (err: any) {
+      console.error("Erro ao processar PDF da bula com Gemini:", err);
+      res.status(500).json({ error: err.message || "Erro interno ao processar PDF com Gemini." });
+    }
   });
 
   // Vite middleware for development

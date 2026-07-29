@@ -202,10 +202,12 @@ export const DEFAULT_VACCINE_CANDIDATES = [
     approvalAgency: 'ANVISA (Em ensaio clínico DDCM)',
     leadResearcher: 'Dr. Ricardo Gazzinelli / Dra. Ana Paula Salles',
     description: 'Vacina brasileira desenvolvida com proteína quimérica recombinante fundindo a proteína SpiN do SARS-CoV-2 com o nucleocapsídeo.',
-    associatedComponentIds: ['comp_spin_prot', 'comp_adj_mpla'],
+    associatedComponentIds: ['comp_spin_prot', 'comp_adj_mpla', 'comp_exc_pbs', 'comp_exc_poly80'],
     componentUsages: [
       { componentId: 'comp_spin_prot', componentName: 'Proteína Quimérica SpiN-UTG Recombinante', concentration: '50 µg/dose' },
-      { componentId: 'comp_adj_mpla', componentName: 'Adjuvante Alumínio + MPLA', concentration: '500 µg Al+3 + 50 µg MPLA/dose' }
+      { componentId: 'comp_adj_mpla', componentName: 'Adjuvante Alumínio + MPLA', concentration: '500 µg Al+3 + 50 µg MPLA/dose' },
+      { componentId: 'comp_exc_pbs', componentName: 'Tampão Fosfato Salino (PBS)', concentration: 'q.s.p 0,5 mL' },
+      { componentId: 'comp_exc_poly80', componentName: 'Polissorbato 80 (Tween 80)', concentration: '0,05% p/v' }
     ],
     anvisaStatus: 'DDCM Aprovado - Fase 1/2',
     technicalNotes: 'Estudos de imunogenicidade e neutralização em andamento.',
@@ -224,10 +226,12 @@ export const DEFAULT_VACCINE_CANDIDATES = [
     approvalAgency: 'ANVISA / MAPA',
     leadResearcher: 'Dr. Alexandre Machado',
     description: 'Vacina de proteína recombinante A2 para prevenção e controle da leishmaniose visceral.',
-    associatedComponentIds: ['comp_a2_prot', 'comp_adj_sap'],
+    associatedComponentIds: ['comp_a2_prot', 'comp_adj_sap', 'comp_adj_alum', 'comp_exc_pbs'],
     componentUsages: [
       { componentId: 'comp_a2_prot', componentName: 'Proteína Recombinante A2 (Leishmania)', concentration: '100 µg/dose' },
-      { componentId: 'comp_adj_sap', componentName: 'Saponina Adjuvante Purificada (Saponin/QS-21)', concentration: '250 µg/dose' }
+      { componentId: 'comp_adj_sap', componentName: 'Saponina Adjuvante Purificada (Saponin/QS-21)', concentration: '250 µg/dose' },
+      { componentId: 'comp_adj_alum', componentName: 'Hidróxido de Alumínio (Alhydrogel)', concentration: '0.5 mg Al+3/dose' },
+      { componentId: 'comp_exc_pbs', componentName: 'Tampão Fosfato Salino (PBS)', concentration: 'q.s.p 1,0 mL' }
     ],
     anvisaStatus: 'Registro MAPA / ANVISA Aprovado',
     technicalNotes: 'Produto em comercialização e uso veterinário/humano.',
@@ -246,9 +250,11 @@ export const DEFAULT_VACCINE_CANDIDATES = [
     approvalAgency: 'CEUA / CONCEA (Pré-clínico)',
     leadResearcher: 'Dra. Bruna Dias / Dr. Santuza Teixeira',
     description: 'Candidato vacinal baseado em vetor viral recombinante expressando antígenos Tc24 e TS para Doença de Chagas.',
-    associatedComponentIds: ['comp_ad5_vetor'],
+    associatedComponentIds: ['comp_ad5_vetor', 'comp_exc_sucrose', 'comp_exc_pbs'],
     componentUsages: [
-      { componentId: 'comp_ad5_vetor', componentName: 'Vetor Adenoviral Ad5 Recombinante Tc24/TS', concentration: '1 x 10^10 VP/dose' }
+      { componentId: 'comp_ad5_vetor', componentName: 'Vetor Adenoviral Ad5 Recombinante Tc24/TS', concentration: '1 x 10^10 VP/dose' },
+      { componentId: 'comp_exc_sucrose', componentName: 'Sacarose Ultra Pura (Estabilizante)', concentration: '9% p/v' },
+      { componentId: 'comp_exc_pbs', componentName: 'Tampão Fosfato Salino (PBS)', concentration: 'q.s.p 0,5 mL' }
     ],
     anvisaStatus: 'Estudo Pré-Clínico de Eficácia e Tolerabilidade',
     technicalNotes: 'Resultados promissores de redução de carga parasitária.',
@@ -370,6 +376,58 @@ export const DEFAULT_VACCINE_COMPONENTS = [
     stockQuantity: '120',
     unit: 'frascos',
     description: 'Vetor viral não replicativo expressando Tc24.'
+  },
+  {
+    id: 'comp_adj_alum',
+    name: 'Hidróxido de Alumínio (Alhydrogel 2%)',
+    code: 'ADJ-ALUM-001',
+    category: 'Adjuvante' as const,
+    originHostSystem: 'Mineral Purificado',
+    grade: 'GMP / Grau Clínico' as const,
+    storageTemperature: '2-8°C',
+    batchNumber: 'ALUM-2025-08',
+    stockQuantity: '2.500',
+    unit: 'mL',
+    description: 'Adjuvante mineral clássico para adsorção de antígenos proteicos e indução de resposta humoral.'
+  },
+  {
+    id: 'comp_exc_pbs',
+    name: 'Tampão Fosfato Salino (PBS 1x pH 7.4)',
+    code: 'EXC-PBS-01',
+    category: 'Tampão / Estabilizante' as const,
+    originHostSystem: 'Sintético / Grau Reagente USP',
+    grade: 'Farmacopéico USP/EP' as const,
+    storageTemperature: '15-25°C',
+    batchNumber: 'PBS-2026-02',
+    stockQuantity: '50.000',
+    unit: 'mL',
+    description: 'Excipiente e diluente tampão fisiológico estéril para formulação vacinal.'
+  },
+  {
+    id: 'comp_exc_sucrose',
+    name: 'Sacarose Ultra Pura (Cryoprotectant)',
+    code: 'EXC-SUC-02',
+    category: 'Tampão / Estabilizante' as const,
+    originHostSystem: 'Vegetal Purificado',
+    grade: 'Farmacopéico USP/EP' as const,
+    storageTemperature: '15-25°C',
+    batchNumber: 'SUC-2025-12',
+    stockQuantity: '50',
+    unit: 'kg',
+    description: 'Excipiente liofilizante e crioprotetor para estabilização de antígenos e vetores virais.'
+  },
+  {
+    id: 'comp_exc_poly80',
+    name: 'Polissorbato 80 (Tween 80 Surfactante)',
+    code: 'EXC-P80-05',
+    category: 'Conservante' as const,
+    originHostSystem: 'Sintético',
+    grade: 'GMP / Grau Clínico' as const,
+    storageTemperature: '15-25°C',
+    batchNumber: 'P80-2025-10',
+    stockQuantity: '10',
+    unit: 'L',
+    description: 'Surfactante não iônico utilizado para prevenir agregação proteica em vacinas.'
   }
 ];
 
