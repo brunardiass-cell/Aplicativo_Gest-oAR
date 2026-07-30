@@ -3,7 +3,7 @@
 // Versão corrigida para sincronização
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity } from './types';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity, RegulatoryEvidence, MacroActivityConfig, RegulatoryInfoItem, RepeatableRecord, RegulatoryNarrative, RegulatoryDocument } from './types';
 import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES } from './constants';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
@@ -25,6 +25,7 @@ import VaccinesComponentsManager from './components/VaccinesComponentsManager';
 import ModuleSelectionView from './components/ModuleSelectionView';
 import { DossierContributionsManager } from './components/DossierContributionsManager';
 import { DossierAssemblerManager } from './components/DossierAssemblerManager';
+import { RegulatoryDocManagement } from './components/RegulatoryDocManagement';
 import { MicrosoftGraphService, SPMetadataMap } from './services/microsoftGraphService';
 import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft, LayoutGrid, Kanban, Clock, Briefcase, Map as MapIcon, Syringe, Layers } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
@@ -73,6 +74,12 @@ const App: React.FC = () => {
   const [vaccineComponents, setVaccineComponents] = useState<VaccineComponent[]>(DEFAULT_VACCINE_COMPONENTS);
   const [formulationBatches, setFormulationBatches] = useState<FormulationBatch[]>(DEFAULT_FORMULATION_BATCHES);
   const [vaccineImpurities, setVaccineImpurities] = useState<VaccineImpurity[]>(DEFAULT_VACCINE_IMPURITIES);
+  const [regulatoryEvidence, setRegulatoryEvidence] = useState<RegulatoryEvidence[]>([]);
+  const [macroActivityConfigs, setMacroActivityConfigs] = useState<MacroActivityConfig[]>([]);
+  const [regulatoryInfoItems, setRegulatoryInfoItems] = useState<RegulatoryInfoItem[]>([]);
+  const [repeatableRecords, setRepeatableRecords] = useState<RepeatableRecord[]>([]);
+  const [regulatoryNarratives, setRegulatoryNarratives] = useState<RegulatoryNarrative[]>([]);
+  const [regulatoryDocs, setRegulatoryDocs] = useState<RegulatoryDocument[]>([]);
   const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
   const [dataVersion, setDataVersion] = useState<string | null>(null);
   const [isDataDirty, setIsDataDirty] = useState(false);
@@ -329,6 +336,12 @@ const App: React.FC = () => {
       vaccineCandidates: cloudData.vaccineCandidates || DEFAULT_VACCINE_CANDIDATES,
       vaccineComponents: cloudData.vaccineComponents || DEFAULT_VACCINE_COMPONENTS,
       formulationBatches: cloudData.formulationBatches || DEFAULT_FORMULATION_BATCHES,
+      regulatoryEvidence: cloudData.regulatoryEvidence || [],
+      macroActivityConfigs: cloudData.macroActivityConfigs || [],
+      regulatoryInfoItems: cloudData.regulatoryInfoItems || [],
+      repeatableRecords: cloudData.repeatableRecords || [],
+      regulatoryNarratives: cloudData.regulatoryNarratives || [],
+      regulatoryDocs: cloudData.regulatoryDocs || [],
       managerEmail: cloudData.managerEmail || 'brunadias@ctvacinas.org',
     };
 
@@ -345,6 +358,12 @@ const App: React.FC = () => {
     setVaccineCandidates(fullData.vaccineCandidates);
     setVaccineComponents(fullData.vaccineComponents);
     setFormulationBatches(fullData.formulationBatches);
+    setRegulatoryEvidence(fullData.regulatoryEvidence);
+    setMacroActivityConfigs(fullData.macroActivityConfigs);
+    setRegulatoryInfoItems(fullData.regulatoryInfoItems);
+    setRepeatableRecords(fullData.repeatableRecords);
+    setRegulatoryNarratives(fullData.regulatoryNarratives);
+    setRegulatoryDocs(fullData.regulatoryDocs);
     setBaseData(JSON.parse(JSON.stringify(fullData)));
     setDataVersion(version);
     setIsDataDirty(false);
@@ -1357,6 +1376,7 @@ const App: React.FC = () => {
                   {view === 'regulatory' && 'Normas Regulatórias'}
                   {view === 'dossier_contributions' && 'Contribuições do Dossiê'}
                   {view === 'dossier_assembler' && 'Dossiê (DDCM)'}
+                  {view === 'regulatory_docs' && 'Doc. Regulatórios'}
                 </h1>
                 <p className="text-[9px] sm:text-xs font-bold text-slate-400 mt-0.5">{selectedProfile?.name}</p>
               </div>
@@ -1558,6 +1578,26 @@ const App: React.FC = () => {
               handleSaveTask(updatedTask);
             }}
             currentUser={selectedProfile?.name || 'Usuário'}
+          />
+        )}
+        {view === 'regulatory_docs' && (
+          <RegulatoryDocManagement
+            projects={activeProjects}
+            tasks={tasks}
+            regulatoryEvidence={regulatoryEvidence}
+            macroActivityConfigs={macroActivityConfigs}
+            regulatoryInfoItems={regulatoryInfoItems}
+            repeatableRecords={repeatableRecords}
+            regulatoryNarratives={regulatoryNarratives}
+            regulatoryDocs={regulatoryDocs}
+            onUpdateEvidence={(ev) => { setRegulatoryEvidence(ev); setDataDirty(); }}
+            onUpdateMacroConfigs={(mc) => { setMacroActivityConfigs(mc); setDataDirty(); }}
+            onUpdateInfoItems={(info) => { setRegulatoryInfoItems(info); setDataDirty(); }}
+            onUpdateRepeatableRecords={(rep) => { setRepeatableRecords(rep); setDataDirty(); }}
+            onUpdateNarratives={(nar) => { setRegulatoryNarratives(nar); setDataDirty(); }}
+            onUpdateDocs={(docs) => { setRegulatoryDocs(docs); setDataDirty(); }}
+            currentUser={selectedProfile?.name || 'Usuário'}
+            hasAdminAccess={hasFullAccess}
           />
         )}
           </>

@@ -383,6 +383,12 @@ export const MicrosoftGraphService = {
     await seedArray('CT_VaccineCandidates', cloudData.vaccineCandidates || [], c => c.id);
     await seedArray('CT_VaccineComponents', cloudData.vaccineComponents || [], c => c.id);
     await seedArray('CT_FormulationBatches', cloudData.formulationBatches || [], b => b.id);
+    await seedArray('CT_RegulatoryEvidence', cloudData.regulatoryEvidence || [], e => e.id);
+    await seedArray('CT_MacroActivityConfigs', cloudData.macroActivityConfigs || [], m => m.id);
+    await seedArray('CT_RegulatoryInfoItems', cloudData.regulatoryInfoItems || [], i => i.id);
+    await seedArray('CT_RepeatableRecords', cloudData.repeatableRecords || [], r => r.id);
+    await seedArray('CT_RegulatoryNarratives', cloudData.regulatoryNarratives || [], n => n.id);
+    await seedArray('CT_RegulatoryDocs', cloudData.regulatoryDocs || [], d => d.id);
 
     const configListId = await this.getListId(token, siteId, 'CT_AppConfig');
     if (configListId) {
@@ -416,6 +422,12 @@ export const MicrosoftGraphService = {
         'CT_VaccineCandidates',
         'CT_VaccineComponents',
         'CT_FormulationBatches',
+        'CT_RegulatoryEvidence',
+        'CT_MacroActivityConfigs',
+        'CT_RegulatoryInfoItems',
+        'CT_RepeatableRecords',
+        'CT_RegulatoryNarratives',
+        'CT_RegulatoryDocs',
         'CT_AppConfig'
       ];
 
@@ -502,6 +514,12 @@ export const MicrosoftGraphService = {
         vaccineCandidates: loadedCollections['CT_VaccineCandidates'] || [],
         vaccineComponents: loadedCollections['CT_VaccineComponents'] || [],
         formulationBatches: loadedCollections['CT_FormulationBatches'] || [],
+        regulatoryEvidence: loadedCollections['CT_RegulatoryEvidence'] || [],
+        macroActivityConfigs: loadedCollections['CT_MacroActivityConfigs'] || [],
+        regulatoryInfoItems: loadedCollections['CT_RegulatoryInfoItems'] || [],
+        repeatableRecords: loadedCollections['CT_RepeatableRecords'] || [],
+        regulatoryNarratives: loadedCollections['CT_RegulatoryNarratives'] || [],
+        regulatoryDocs: loadedCollections['CT_RegulatoryDocs'] || [],
         teamMembers: appConfig.teamMembers,
         activityPlans: appConfig.activityPlans,
         appUsers: appConfig.appUsers,
@@ -544,6 +562,12 @@ export const MicrosoftGraphService = {
         { listName: 'CT_VaccineCandidates', prevArray: previousData?.vaccineCandidates || [], newArray: newData?.vaccineCandidates || [], getId: i => i.id },
         { listName: 'CT_VaccineComponents', prevArray: previousData?.vaccineComponents || [], newArray: newData?.vaccineComponents || [], getId: i => i.id },
         { listName: 'CT_FormulationBatches', prevArray: previousData?.formulationBatches || [], newArray: newData?.formulationBatches || [], getId: i => i.id },
+        { listName: 'CT_RegulatoryEvidence', prevArray: previousData?.regulatoryEvidence || [], newArray: newData?.regulatoryEvidence || [], getId: i => i.id },
+        { listName: 'CT_MacroActivityConfigs', prevArray: previousData?.macroActivityConfigs || [], newArray: newData?.macroActivityConfigs || [], getId: i => i.id },
+        { listName: 'CT_RegulatoryInfoItems', prevArray: previousData?.regulatoryInfoItems || [], newArray: newData?.regulatoryInfoItems || [], getId: i => i.id },
+        { listName: 'CT_RepeatableRecords', prevArray: previousData?.repeatableRecords || [], newArray: newData?.repeatableRecords || [], getId: i => i.id },
+        { listName: 'CT_RegulatoryNarratives', prevArray: previousData?.regulatoryNarratives || [], newArray: newData?.regulatoryNarratives || [], getId: i => i.id },
+        { listName: 'CT_RegulatoryDocs', prevArray: previousData?.regulatoryDocs || [], newArray: newData?.regulatoryDocs || [], getId: i => i.id },
       ];
 
       for (const mapping of collectionsMapping) {

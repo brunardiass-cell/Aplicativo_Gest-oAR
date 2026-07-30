@@ -225,6 +225,13 @@ const Sidebar: React.FC<SidebarProps> = ({
               icon={<BookOpen size={18} />} 
               label="Dossiê (DDCM)" 
             />
+
+            <SidebarButton 
+              active={currentView === 'regulatory_docs'} 
+              onClick={() => { onViewChange('regulatory_docs'); onClose?.(); }} 
+              icon={<FileCheck2 size={18} />} 
+              label="Doc. Regulatórios" 
+            />
             
             {hasFullAccess && !selectedProfile?.isComiteGestor && (
               <>

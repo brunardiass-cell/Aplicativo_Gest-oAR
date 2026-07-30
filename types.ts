@@ -75,7 +75,7 @@ export interface Task {
   dossierContribution?: DossierContribution;
 }
 
-export type ViewMode = 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceability' | 'regulatory' | 'dossier_contributions' | 'dossier_assembler';
+export type ViewMode = 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceability' | 'regulatory' | 'dossier_contributions' | 'dossier_assembler' | 'regulatory_docs';
 
 export type SystemModule = 'activities_projects' | 'regulatory_standards' | 'vaccines_components' | 'dossier_contributions' | 'dossier_assembler';
 
@@ -530,4 +530,114 @@ export interface FormulationBatch {
   potencyResult?: string;
   responsibleTechnician: string;
   notes?: string;
+}
+
+// --- MÓDULO DE GESTÃO DE DOCUMENTOS REGULATÓRIOS ---
+
+export interface RegulatoryEvidence {
+  id: string;
+  title: string;
+  description: string;
+  originActivityId: string;
+  originActivityName: string;
+  macroActivityId?: string;
+  macroActivityName?: string;
+  fileUrl?: string;
+  fileName?: string;
+  date: string;
+  responsible: string;
+  useInRegulatoryDoc: boolean; // Sim / Não
+  projectId: string;
+}
+
+export interface MacroActivityConfigField {
+  id: string;
+  name: string;
+  label: string;
+  type: 'text' | 'number' | 'date' | 'select' | 'textarea';
+  options?: string[];
+  required?: boolean;
+}
+
+export interface MacroActivityConfig {
+  id: string;
+  macroActivityName: string;
+  phase?: string;
+  requiredFields: MacroActivityConfigField[];
+}
+
+export interface RegulatoryInfoItem {
+  id: string;
+  internalId: string; // ex: PRODUCT.NAME, IFA.DESCRIPTION, STABILITY.TABLE
+  name: string;
+  category: string; // Produto, IFA, Adjuvante, Processo, etc.
+  type: string; // Parâmetro, Texto, Tabela, Especificação
+  value: string;
+  origin: string; // Cadastro do Produto, Ensaio, Lote, etc.
+  version: number;
+  supportingEvidenceId?: string;
+  supportingEvidenceTitle?: string;
+  updatedAt: string;
+  projectId: string;
+}
+
+export interface RepeatableRecord {
+  id: string;
+  projectId: string;
+  category: 'Lotes' | 'Doses' | 'Apresentações' | 'Estabilidades' | 'ControleQualidade' | 'Comparabilidade' | string;
+  title: string;
+  data: Record<string, any>;
+  updatedAt: string;
+}
+
+export interface RegulatoryNarrativeRevision {
+  version: number;
+  date: string;
+  author: string;
+  text: string;
+  notes?: string;
+}
+
+export interface RegulatoryNarrative {
+  id: string;
+  projectId: string;
+  title: string;
+  category: string; // Introdução, Histórico, IFA, Adjuvante, Vacina, Risco, Conclusões
+  text: string;
+  version: number;
+  revisionHistory: RegulatoryNarrativeRevision[];
+  approvalStatus: 'Rascunho' | 'Em Revisão' | 'Aprovado';
+  updatedAt: string;
+}
+
+export type RegulatoryDocItemType = 'Informação Regulatória' | 'Narrativa' | 'Evidência' | 'Tabela' | 'Figura' | 'Referência';
+export type RegulatoryDocItemStatus = 'Pendente' | 'Em Andamento' | 'Concluído';
+
+export interface RegulatoryDocumentItem {
+  id: string;
+  name: string;
+  type: RegulatoryDocItemType;
+  required: boolean; // Obrigatório ou opcional
+  sourceInternalId: string; // Ponteiro para Identificador Interno ou ID de Narrativa/Evidência
+  status: RegulatoryDocItemStatus;
+  marker?: string; // ex: [NOME_DA_VACINA]
+  notes?: string;
+}
+
+export interface RegulatoryDocumentChapter {
+  id: string;
+  code: string;
+  title: string;
+  items: RegulatoryDocumentItem[];
+  subchapters?: RegulatoryDocumentChapter[];
+}
+
+export interface RegulatoryDocument {
+  id: string;
+  projectId: string;
+  title: string; // DDCM, Dossiê da Vacina, Dossiê do IFA, Dossiê do Adjuvante, Brochura do Investigador, DEEC
+  type: string;
+  description?: string;
+  chapters: RegulatoryDocumentChapter[];
+  updatedAt: string;
 }
