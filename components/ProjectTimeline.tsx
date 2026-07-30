@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Project, MacroActivity, MicroActivity, MicroActivityStatus, TeamMember, Prerequisite, BudgetInfo, PrerequisiteType, PrerequisiteStatus, BudgetStatus, RegulatoryStandard, DDCMChapterDef } from '../types';
-import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle, Layers, GripVertical, ListTodo, DollarSign, Calendar, User, CheckCircle2, Clock, ShieldCheck, ClipboardCheck, Activity, BadgeAlert } from 'lucide-react';
+import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle, Layers, GripVertical, ListTodo, DollarSign, Calendar, User, CheckCircle2, Clock, ShieldCheck, ClipboardCheck, Activity, BadgeAlert, Paperclip, Eye } from 'lucide-react';
 import { PrerequisitesModal } from './PrerequisitesModal';
 import { DossierContributionSection } from './DossierContributionSection';
 import {
@@ -420,6 +420,7 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
   const [showPrerequisites, setShowPrerequisites] = useState(false);
 
   const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
+  const [evidenceModalMicro, setEvidenceModalMicro] = useState<MicroActivity | null>(null);
 
   const hasBudgetPrerequisite = useMemo(() => {
     return (macro.prerequisites || []).some(p => p.type === 'orçamento');
@@ -636,31 +637,56 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
       )}
       {isExpanded && (
         <div className="bg-white p-4 border-t border-slate-100 space-y-3">
-          <SortableContext 
-            items={macro.microActivities.map(m => m.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {macro.microActivities.map(micro => (
-              <MicroActivityRow 
-                key={micro.id} 
-                micro={micro} 
-                assignees={assignees} 
-                onUpdate={(updates) => onMicroUpdate(macro.id, micro.id, updates)} 
-                onDelete={() => onOpenDeletionModal({ type: 'micro', ids: { projectId: project.id, macroId: macro.id, microId: micro.id }, name: micro.name })} 
-                isEditing={editingMicro === micro.id} 
-                onSetEditing={onSetEditingMicro} 
-                regulatoryStandards={regulatoryStandards} 
-                onOpenRegulatoryModal={onOpenRegulatoryModal}
-                projectId={project.id}
-                projectName={project.name}
-                macroId={macro.id}
-                macroName={macro.name}
-                dossierChapters={project.dossierChapters}
-              />
-            ))}
-          </SortableContext>
-          <button onClick={() => onAddMicro(macro.id)} className="w-full mt-2 p-3 bg-slate-50 text-slate-500 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition"><Plus size={14}/> Adicionar Microatividade</button>
+          <div className="overflow-x-auto custom-scrollbar border border-slate-200/80 rounded-2xl bg-white shadow-sm">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-100/80 border-b border-slate-200 text-[10px] font-black uppercase tracking-wider text-slate-600">
+                  <th className="py-3 px-4 min-w-[200px]">Atividade</th>
+                  <th className="py-3 px-4 min-w-[140px]">Responsável</th>
+                  <th className="py-3 px-4 min-w-[150px]">Status</th>
+                  <th className="py-3 px-4 min-w-[120px]">Evidência</th>
+                  <th className="py-3 px-4 min-w-[170px]">Contribuição Regulatória</th>
+                  <th className="py-3 px-4 w-[90px] text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {macro.microActivities.map(micro => (
+                  <MicroActivityTableRow 
+                    key={micro.id} 
+                    micro={micro} 
+                    assignees={assignees} 
+                    onUpdate={(updates) => onMicroUpdate(macro.id, micro.id, updates)} 
+                    onDelete={() => onOpenDeletionModal({ type: 'micro', ids: { projectId: project.id, macroId: macro.id, microId: micro.id }, name: micro.name })} 
+                    onOpenEvidenceModal={(m) => setEvidenceModalMicro(m)}
+                    projectId={project.id}
+                    projectName={project.name}
+                    macroId={macro.id}
+                    macroName={macro.name}
+                  />
+                ))}
+                {macro.microActivities.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-6 text-center text-slate-400 italic text-xs font-medium">
+                      Nenhuma atividade cadastrada nesta macroatividade.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <button onClick={() => onAddMicro(macro.id)} className="w-full mt-2 p-3 bg-slate-50 text-slate-600 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition border border-dashed border-slate-200"><Plus size={14}/> Adicionar Microatividade</button>
         </div>
+      )}
+
+      {evidenceModalMicro && (
+        <MicroEvidenceModal
+          micro={evidenceModalMicro}
+          onClose={() => setEvidenceModalMicro(null)}
+          onSave={(updates) => {
+            onMicroUpdate(macro.id, evidenceModalMicro.id, updates);
+            setEvidenceModalMicro(null);
+          }}
+        />
       )}
     </div>
   );
@@ -832,324 +858,306 @@ const MacroActivityResultsModal: React.FC<MacroActivityResultsModalProps> = ({
   );
 };
 
-interface MicroActivityRowProps {
+interface MicroActivityTableRowProps {
   micro: MicroActivity;
+  assignees: string[];
   onUpdate: (updates: Partial<MicroActivity>) => void;
   onDelete: () => void;
-  isEditing: boolean;
-  onSetEditing: (id: string | null) => void;
-  assignees: string[];
-  regulatoryStandards: RegulatoryStandard[];
-  onOpenRegulatoryModal: (name: string) => void;
+  onOpenEvidenceModal: (micro: MicroActivity) => void;
   projectId?: string;
   projectName?: string;
   macroId?: string;
   macroName?: string;
-  dossierChapters?: DDCMChapterDef[];
 }
 
-const MicroActivityRow: React.FC<MicroActivityRowProps> = ({ 
-  micro, 
-  onUpdate, 
-  onDelete, 
-  isEditing, 
-  onSetEditing, 
-  assignees, 
-  regulatoryStandards, 
-  onOpenRegulatoryModal,
+const MicroActivityTableRow: React.FC<MicroActivityTableRowProps> = ({
+  micro,
+  assignees,
+  onUpdate,
+  onDelete,
+  onOpenEvidenceModal,
   projectId = 'geral',
   projectName = 'Geral',
   macroId,
-  macroName,
-  dossierChapters
+  macroName
 }) => {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging
-    } = useSortable({ id: micro.id });
+  const [localName, setLocalName] = useState(micro.name);
 
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      zIndex: isDragging ? 50 : 'auto',
-      opacity: isDragging ? 0.5 : 1,
-    };
+  useEffect(() => {
+    setLocalName(micro.name);
+  }, [micro.name]);
 
-    const [localName, setLocalName] = useState(micro.name);
-    const [showPrerequisites, setShowPrerequisites] = useState(false);
-    const [showBudget, setShowBudget] = useState(false);
+  const hasEvidence = Boolean(
+    (micro.reportLink && micro.reportLink.trim().length > 0) ||
+    (micro.observations && micro.observations.trim().length > 0) ||
+    (micro.dossierContribution?.attachmentUrl && micro.dossierContribution.attachmentUrl.trim().length > 0)
+  );
 
-    const dueDateStatus = useMemo(() => {
-        if (micro.status === 'Concluído e aprovado' || !micro.dueDate) return null;
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        const dueDate = new Date(micro.dueDate + 'T00:00:00');
-        const timeDiff = dueDate.getTime() - today.getTime();
-        const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
-        if (dayDiff < 0) return { status: 'overdue', text: 'Vencida', color: 'text-red-500' };
-        if (dayDiff <= 7) return { status: 'upcoming', text: dayDiff === 0 ? 'Vence Hoje' : `Vence em ${dayDiff}d`, color: 'text-amber-500' };
-        return null;
-    }, [micro.dueDate, micro.status]);
+  const handleToggleRegulatory = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const isChecked = e.target.checked;
+    
+    if (isChecked) {
+      const existingContrib = micro.dossierContribution || {
+        id: 'contrib_' + Math.random().toString(36).substring(2, 9),
+        projectId: projectId,
+        projectName: projectName,
+        macroActivityId: macroId,
+        macroActivityName: macroName,
+        activityId: micro.id,
+        activityName: micro.name,
+        chapterId: 'cap_1' as const,
+        chapterTitle: 'Geral',
+        type: 'documento' as const,
+        content: micro.observations || '',
+        status: 'Em Revisão' as const,
+        version: 1,
+        author: micro.assignee || 'Usuário',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
 
-    const prerequisiteAlert = useMemo(() => {
-        if (!micro.prerequisites || micro.prerequisites.length === 0 || !micro.dueDate) return false;
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        
-        return micro.prerequisites.some(pre => {
-            if (pre.status === 'concluído' || pre.completed) return false;
-            const dueDate = new Date(micro.dueDate + 'T00:00:00');
-            const startDate = new Date(dueDate);
-            startDate.setDate(dueDate.getDate() - pre.leadTimeDays);
-            return today >= startDate;
-        });
-    }, [micro.dueDate, micro.prerequisites]);
+      onUpdate({
+        generatesRegulatoryContent: true,
+        dossierContribution: existingContrib
+      });
+    } else {
+      onUpdate({
+        generatesRegulatoryContent: false
+      });
+    }
+  };
 
-    const hasRegulatoryStandards = useMemo(() => {
-        return regulatoryStandards.some(s => 
-            s.relatedActivities.some((a: string) => a.toLowerCase() === micro.name.toLowerCase())
-        );
-    }, [micro.name, regulatoryStandards]);
-
-    const handleSaveName = () => { onUpdate({ name: localName }); onSetEditing(null); };
-
-    const handleAddPrerequisite = () => {
-        const newPre: Prerequisite = {
-            id: 'pre_' + Math.random().toString(36).substr(2, 9),
-            name: 'Novo Pré-requisito',
-            type: 'recurso',
-            status: 'não iniciado',
-            completed: false,
-            leadTimeDays: 1
-        };
-        onUpdate({ prerequisites: [...(micro.prerequisites || []), newPre] });
-    };
-
-    const handleUpdatePrerequisite = (id: string, updates: Partial<Prerequisite>) => {
-        const updated = (micro.prerequisites || []).map(p => p.id === id ? { ...p, ...updates } : p);
-        onUpdate({ prerequisites: updated });
-    };
-
-    const handleDeletePrerequisite = (id: string) => {
-        onUpdate({ prerequisites: (micro.prerequisites || []).filter(p => p.id !== id) });
-    };
-
-    const handleUpdateBudget = (updates: Partial<BudgetInfo>) => {
-        onUpdate({ budget: { ...(micro.budget || { estimatedValue: 0, supplier: '', budgetDate: '', status: 'solicitado' }), ...updates } });
-    };
-
-    const handleRemoveBudget = () => {
-        onUpdate({ budget: undefined });
-    };
-
-    const isCompleted = micro.status === 'Concluído e aprovado' || micro.status === 'Concluído com restrições';
-
-    const realStart = micro.realStartDate || micro.startDate || '';
-    const realEnd = micro.realEndDate || micro.completionDate || micro.dueDate || '';
-
-    const calculateRealDuration = (start?: string, end?: string) => {
-      if (!start || !end) return '-';
-      const s = new Date(start + 'T00:00:00');
-      const e = new Date(end + 'T00:00:00');
-      const diffTime = e.getTime() - s.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      if (isNaN(diffDays) || diffDays < 0) return '-';
-      return `${diffDays} ${diffDays === 1 ? 'dia' : 'dias'}`;
-    };
-
-    const hasBudgetPrerequisite = useMemo(() => {
-        return (micro.prerequisites || []).some(pre => pre.type === 'orçamento');
-    }, [micro.prerequisites]);
-
-    return (
-    <div ref={setNodeRef} style={style} id={`micro-${micro.id}`} className={`p-4 border rounded-2xl transition-all ${isEditing ? 'bg-teal-50/50 border-teal-200 shadow-lg' : 'bg-slate-50/30 border-slate-100'}`}>
-      <div className="flex flex-col sm:grid sm:grid-cols-12 gap-4 items-start sm:items-center">
-        <div className="w-full sm:col-span-3 flex items-center gap-2">
-            <div {...attributes} {...listeners} className="p-2 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing">
-              <GripVertical size={14} />
-            </div>
-            {isEditing ? (<>
-                <input value={localName} onChange={e => setLocalName(e.target.value)} autoFocus className="w-full text-xs font-bold text-slate-900 bg-white border border-teal-300 rounded-md px-2 py-1"/>
-                <button onClick={handleSaveName} className="p-1 text-emerald-500 hover:bg-emerald-100 rounded-md"><Save size={14}/></button>
-            </>) : (<>
-                <div className="flex items-center gap-2">
-                    {prerequisiteAlert && (
-                        <div className="animate-bounce" title="Pré-requisito pendente para iniciar!">
-                            <AlertTriangle size={14} className="text-red-500" />
-                        </div>
-                    )}
-                    <span className="text-xs font-bold text-slate-700">{micro.name}</span>
-                    {hasRegulatoryStandards && (
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); onOpenRegulatoryModal(micro.name); }}
-                            className="p-1 text-brand-primary hover:bg-brand-primary/10 rounded-md transition-colors"
-                            title="Normas Regulatórias Aplicáveis"
-                        >
-                            <ShieldCheck size={14} />
-                        </button>
-                    )}
-                </div>
-                <button onClick={() => { setLocalName(micro.name); onSetEditing(micro.id); }} className="p-1 text-slate-400 hover:bg-slate-100 rounded-md"><Edit size={14}/></button>
-            </>)}
-        </div>
-        <div className="w-full sm:col-span-2">
-          <select value={micro.assignee || ''} onChange={e => onUpdate({ assignee: e.target.value })} className="w-full bg-transparent text-[10px] font-bold text-slate-600 outline-none">
-            <option value="">Não Definido</option>
-            {assignees.map(name => <option key={name} value={name}>{name}</option>)}
-          </select>
-        </div>
-        <div className="w-full sm:col-span-2 relative">
-          <label className={`text-[8px] font-black uppercase block mb-1 ${isCompleted ? 'text-emerald-500' : 'text-slate-400'}`}>
-            {isCompleted ? 'Início Real' : 'Início Plan.'}
-          </label>
-          <input 
-            type="date" 
-            value={isCompleted ? realStart : (micro.startDate || '')} 
-            onChange={e => onUpdate(isCompleted ? { realStartDate: e.target.value } : { startDate: e.target.value })} 
-            className={`w-full bg-transparent text-[10px] font-bold outline-none ${isCompleted ? 'text-emerald-600 font-extrabold' : 'text-slate-600'}`}
-          />
-        </div>
-        <div className="w-full sm:col-span-2 relative">
-          <label className={`text-[8px] font-black uppercase block mb-1 ${isCompleted ? 'text-emerald-500' : 'text-slate-400'}`}>
-            {isCompleted ? 'Término Real' : 'Término Plan.'}
-          </label>
-          <input 
-            type="date" 
-            value={isCompleted ? realEnd : (micro.dueDate || '')} 
-            onChange={e => onUpdate(isCompleted ? { realEndDate: e.target.value } : { dueDate: e.target.value })} 
-            className={`w-full bg-transparent text-[10px] font-bold outline-none ${isCompleted ? 'text-emerald-700 font-extrabold' : 'text-slate-600'}`}
-          />
-          {!isCompleted && dueDateStatus && (
-            <div className={`absolute -top-3.5 right-0 text-[8px] font-bold flex items-center gap-1 ${dueDateStatus.color}`}>
-              <AlertTriangle size={10} /> {dueDateStatus.text}
-            </div>
-          )}
-        </div>
-        <div className="w-full sm:col-span-2">
-          <select value={micro.status} onChange={e => onUpdate({ status: e.target.value as MicroActivityStatus })} className={`w-full bg-transparent text-[10px] font-bold outline-none ${
-              micro.status === 'Concluído e aprovado' ? 'text-emerald-600' :
-              micro.status === 'Concluído com restrições' ? 'text-amber-600' :
-              micro.status === 'A repetir / retrabalho' ? 'text-red-600' : 'text-slate-600'
-          }`}>
-             <option value="Planejado">Planejado</option>
-             <option value="Em andamento">Em andamento</option>
-             <option value="Concluído com restrições">Concluído com restrições</option>
-             <option value="A repetir / retrabalho">A repetir / retrabalho</option>
-             <option value="Concluído e aprovado">Concluído e aprovado ✅</option>
-          </select>
-        </div>
-        <div className="w-full sm:col-span-1 flex items-center justify-end gap-1.5">
-           <button 
-            onClick={() => setShowPrerequisites(!showPrerequisites)}
-            className={`p-1.5 rounded-lg transition flex items-center gap-1 ${showPrerequisites ? 'bg-teal-100 text-teal-600' : 'text-slate-400 hover:bg-slate-100'}`}
-            title="Pré-requisitos e Orçamentos"
-           >
-               <ListTodo size={12}/>
-               {hasBudgetPrerequisite && <DollarSign size={12} className="text-emerald-500 animate-pulse" />}
-               <span className="text-[8px] font-bold">{micro.prerequisites?.length || 0}</span>
-           </button>
-           <button onClick={onDelete} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Excluir"><Trash2 size={12}/></button>
-        </div>
-      </div>
-
-      {showPrerequisites && (
-        <PrerequisitesModal
-          isOpen={showPrerequisites}
-          onClose={() => setShowPrerequisites(false)}
-          title={micro.name}
-          prerequisites={micro.prerequisites || []}
-          onUpdatePrerequisites={(updated) => onUpdate({ prerequisites: updated })}
+  return (
+    <tr className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+      <td className="py-3 px-4 font-medium text-slate-800">
+        <input 
+          type="text"
+          value={localName}
+          onChange={(e) => setLocalName(e.target.value)}
+          onBlur={() => {
+            if (localName.trim() !== micro.name) {
+              onUpdate({ name: localName.trim() });
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          className="w-full bg-transparent font-bold text-slate-800 text-xs border-b border-transparent focus:border-teal-500 hover:border-slate-300 outline-none px-1 py-0.5 rounded transition-colors"
+          placeholder="Nome da atividade..."
         />
-      )}
+      </td>
 
-      {(micro.status === 'Em andamento' || micro.status === 'Concluído com restrições') && (
-        <div className="mt-3 pt-3 border-t border-slate-100/80 flex items-center gap-4">
-            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Progresso</label>
-            <input type="range" min="0" max="100" step="5" value={micro.progress || 0} onChange={e => onUpdate({ progress: parseInt(e.target.value) })} className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-brand-primary"/>
-            <span className="text-sm font-bold text-brand-primary w-12 text-right">{micro.progress || 0}%</span>
+      <td className="py-3 px-4 text-slate-600">
+        <select 
+          value={micro.assignee || ''} 
+          onChange={(e) => onUpdate({ assignee: e.target.value })}
+          className="w-full bg-slate-50 border border-slate-200/80 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
+        >
+          <option value="">Selecione...</option>
+          {assignees.map(a => (
+            <option key={a} value={a}>{a}</option>
+          ))}
+        </select>
+      </td>
+
+      <td className="py-3 px-4">
+        <select 
+          value={micro.status} 
+          onChange={(e) => onUpdate({ status: e.target.value as MicroActivityStatus })}
+          className={`w-full text-xs font-bold px-2 py-1.5 rounded-xl border outline-none cursor-pointer transition ${
+            micro.status === 'Concluído e aprovado' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' :
+            micro.status === 'Em andamento' ? 'bg-amber-50 text-amber-800 border-amber-300' :
+            micro.status === 'Concluído com restrições' ? 'bg-orange-50 text-orange-800 border-orange-300' :
+            micro.status === 'A repetir / retrabalho' ? 'bg-rose-50 text-rose-800 border-rose-300' :
+            'bg-slate-50 text-slate-700 border-slate-200'
+          }`}
+        >
+          <option value="Planejado">⚪ Não iniciado</option>
+          <option value="Em andamento">🟡 Em andamento</option>
+          <option value="Concluído e aprovado">🟩 Concluído</option>
+          <option value="Concluído com restrições">🟠 Com restrições</option>
+          <option value="A repetir / retrabalho">🔴 A repetir</option>
+        </select>
+      </td>
+
+      <td className="py-3 px-4">
+        <button
+          type="button"
+          onClick={() => onOpenEvidenceModal(micro)}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm ${
+            hasEvidence 
+              ? 'bg-emerald-100/90 text-emerald-900 hover:bg-emerald-200 border border-emerald-300' 
+              : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+          }`}
+        >
+          {hasEvidence ? (
+            <>
+              <Paperclip size={13} className="text-emerald-700" />
+              <span>Evidência</span>
+            </>
+          ) : (
+            <>
+              <Plus size={13} className="text-slate-500" />
+              <span>Adicionar</span>
+            </>
+          )}
+        </button>
+      </td>
+
+      <td className="py-3 px-4">
+        <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+          <input 
+            type="checkbox"
+            checked={Boolean(micro.generatesRegulatoryContent)}
+            onChange={handleToggleRegulatory}
+            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer"
+          />
+          <span className={`text-xs font-bold ${
+            micro.generatesRegulatoryContent ? 'text-indigo-900' : 'text-slate-500'
+          }`}>
+            {micro.generatesRegulatoryContent ? '☑ Sim' : '☐ Não'}
+          </span>
+        </label>
+      </td>
+
+      <td className="py-3 px-4 text-center">
+        <div className="flex items-center justify-center gap-1">
+          <button
+            type="button"
+            onClick={() => onOpenEvidenceModal(micro)}
+            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+            title="Visualizar / Editar Detalhes da Evidência"
+          >
+            <Eye size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+            title="Excluir Atividade"
+          >
+            <Trash2 size={16} />
+          </button>
         </div>
-      )}
+      </td>
+    </tr>
+  );
+};
 
-      {isCompleted && (
-        <div className="mt-4 pt-4 border-t border-slate-100 animate-in slide-in-from-top-2 duration-300 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex flex-col justify-center">
-              <span className="text-[8.5px] font-black text-slate-400 uppercase tracking-wider block mb-1">
-                Cronograma Planejado
-              </span>
-              <div className="text-[10px] font-bold text-slate-600 flex flex-col gap-0.5">
-                <span>Início: <strong className="text-slate-800">{micro.startDate ? micro.startDate.split('-').reverse().join('/') : '-'}</strong></span>
-                <span>Término: <strong className="text-slate-800">{micro.dueDate ? micro.dueDate.split('-').reverse().join('/') : '-'}</strong></span>
-              </div>
-            </div>
+interface MicroEvidenceModalProps {
+  micro: MicroActivity;
+  onClose: () => void;
+  onSave: (updates: Partial<MicroActivity>) => void;
+}
 
-            <div className="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100 flex flex-col justify-center items-center text-center font-bold">
-              <span className="text-[8.5px] font-black text-emerald-600 uppercase tracking-wider block mb-1">
-                Duração Real
-              </span>
-              <span className="text-sm font-black text-emerald-800">
-                {calculateRealDuration(realStart, realEnd)}
-              </span>
-            </div>
+const MicroEvidenceModal: React.FC<MicroEvidenceModalProps> = ({ micro, onClose, onSave }) => {
+  const [link, setLink] = useState(micro.reportLink || '');
+  const [obs, setObs] = useState(micro.observations || '');
+  const [docUrl, setDocUrl] = useState(micro.dossierContribution?.attachmentUrl || '');
 
-            {hasBudgetPrerequisite && (
-              <div className="bg-teal-50/40 p-3 rounded-2xl border border-teal-100 flex flex-col justify-center items-center text-center">
-                <span className="text-[8.5px] font-black text-teal-600 uppercase tracking-wider block mb-1">
-                  Atividade Financeira
-                </span>
-                <span className="text-[9.5px] font-semibold text-teal-850 uppercase flex items-center gap-1 font-bold">
-                  <DollarSign size={12} className="text-teal-600 animate-pulse" /> Possui Orçamento
-                </span>
-              </div>
-            )}
+  const handleSave = () => {
+    const updatedContrib = micro.dossierContribution ? {
+      ...micro.dossierContribution,
+      attachmentUrl: docUrl.trim(),
+      attachmentName: docUrl.trim() ? (docUrl.trim().split('/').pop() || 'Anexo') : '',
+      content: obs.trim() || micro.dossierContribution.content
+    } : (docUrl.trim() ? {
+      id: 'contrib_' + Math.random().toString(36).substring(2, 9),
+      projectId: 'geral',
+      activityId: micro.id,
+      activityName: micro.name,
+      chapterId: 'cap_1' as const,
+      chapterTitle: 'Geral',
+      type: 'documento' as const,
+      content: obs.trim(),
+      attachmentUrl: docUrl.trim(),
+      attachmentName: docUrl.trim().split('/').pop() || 'Anexo',
+      status: 'Em Revisão' as const,
+      version: 1,
+      author: micro.assignee || 'Usuário',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    } : undefined);
+
+    onSave({
+      reportLink: link.trim(),
+      observations: obs.trim(),
+      dossierContribution: updatedContrib
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+        <header className="p-5 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex items-center justify-between">
+          <div>
+            <span className="text-[9px] font-black uppercase text-teal-400 tracking-wider block mb-0.5">Painel de Evidência</span>
+            <h3 className="text-base font-black uppercase tracking-tight">{micro.name}</h3>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-xl text-slate-300 hover:text-white transition">
+            <X size={18} />
+          </button>
+        </header>
+
+        <div className="p-6 space-y-4 text-xs">
+          <p className="text-slate-500 font-medium">
+            Preencha ao menos uma das opções abaixo para que a evidência seja considerada existente.
+          </p>
+
+          <div className="space-y-1">
+            <label className="font-extrabold text-slate-700 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+              <LinkIcon size={12} className="text-indigo-600" /> Link
+            </label>
+            <input 
+              type="text"
+              value={link}
+              onChange={e => setLink(e.target.value)}
+              placeholder="https://sharepoint.com/... ou URL do arquivo"
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-teal-500"
+            />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2 sm:col-span-1">
-              <label className="text-[9px] font-black text-slate-400 flex items-center gap-1 mb-1">
-                <MessageSquare size={12}/> Observações de Conclusão / Análise
-              </label>
-              <textarea 
-                value={micro.observations || ''} 
-                onChange={e => onUpdate({ observations: e.target.value })} 
-                rows={2} 
-                placeholder="Insira detalhes adicionais sobre o resultado alcançado..." 
-                className="w-full text-xs p-3 border border-slate-200 rounded-2xl bg-white text-slate-900 outline-none focus:ring-1 focus:ring-teal-500"
-              />
-            </div>
-            <div className="col-span-2 sm:col-span-1">
-              <label className="text-[9px] font-black text-slate-400 flex items-center gap-1 mb-1">
-                <LinkIcon size={12}/> Link do Relatório de Análise
-              </label>
-              <input 
-                value={micro.reportLink || ''} 
-                onChange={e => onUpdate({ reportLink: e.target.value })} 
-                placeholder="Acesse o documento para comprovação (SharePoint/Drive)..." 
-                className="w-full text-xs p-3 border border-slate-200 rounded-2xl bg-white text-slate-900 outline-none focus:ring-1 focus:ring-teal-500"
-              />
-            </div>
+          <div className="space-y-1">
+            <label className="font-extrabold text-slate-700 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+              <MessageSquare size={12} className="text-indigo-600" /> Texto / Observação
+            </label>
+            <textarea 
+              rows={3}
+              value={obs}
+              onChange={e => setObs(e.target.value)}
+              placeholder="Insira detalhes técnicos, observações ou notas da evidência..."
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="font-extrabold text-slate-700 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+              <Paperclip size={12} className="text-indigo-600" /> Documento (Anexo)
+            </label>
+            <input 
+              type="text"
+              value={docUrl}
+              onChange={e => setDocUrl(e.target.value)}
+              placeholder="Link do anexo ou documento de suporte..."
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-teal-500"
+            />
           </div>
         </div>
-      )}
 
-      {/* Seção Contribuição para o Dossiê (DDCM) */}
-      <DossierContributionSection
-        activityId={micro.id}
-        activityName={micro.name}
-        projectId={projectId}
-        projectName={projectName}
-        macroActivityId={macroId}
-        macroActivityName={macroName}
-        generatesRegulatoryContent={micro.generatesRegulatoryContent || false}
-        onToggleGeneratesRegulatoryContent={(val) => onUpdate({ generatesRegulatoryContent: val })}
-        contribution={micro.dossierContribution}
-        onSaveContribution={(contrib) => onUpdate({ dossierContribution: contrib, generatesRegulatoryContent: true })}
-        currentUser={micro.assignee || 'Usuário'}
-      />
+        <footer className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-bold uppercase text-[10px]">
+            Cancelar
+          </button>
+          <button onClick={handleSave} className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-black uppercase text-[10px] tracking-wider hover:bg-indigo-700 shadow-md">
+            Salvar Evidência
+          </button>
+        </footer>
+      </div>
     </div>
-    );
+  );
 };
 
 

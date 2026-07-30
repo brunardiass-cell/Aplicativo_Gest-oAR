@@ -1565,22 +1565,7 @@ const App: React.FC = () => {
             onUpdateSubjects={(newSubjects) => { setRegulatorySubjects(newSubjects); setDataDirty(); }}
           />
         )}
-        {(view === 'dossier_assembler' || view === 'dossier_contributions') && (
-          <DossierAssemblerManager
-            projects={activeProjects}
-            tasks={tasks}
-            onUpdateProject={(updatedProject) => {
-              const newProjects = activeProjects.map(p => p.id === updatedProject.id ? updatedProject : p);
-              setProjects(newProjects);
-              setDataDirty();
-            }}
-            onUpdateTask={(updatedTask) => {
-              handleSaveTask(updatedTask);
-            }}
-            currentUser={selectedProfile?.name || 'Usuário'}
-          />
-        )}
-        {view === 'regulatory_docs' && (
+        {(view === 'regulatory_docs' || view === 'dossier_assembler' || view === 'dossier_contributions') && (
           <RegulatoryDocManagement
             projects={activeProjects}
             tasks={tasks}
