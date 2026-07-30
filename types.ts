@@ -360,6 +360,9 @@ export interface MicroActivity {
   realEndDate?: string;
   generatesRegulatoryContent?: boolean;
   dossierContribution?: DossierContribution;
+  evidenceUrl?: string;
+  evidenceDescription?: string;
+  evidenceFileName?: string;
 }
 
 export interface MacroActivity {
@@ -672,6 +675,9 @@ export interface RegulatoryDocumentItem {
   sourceInternalId: string; // Ponteiro para Identificador Interno ou ID de Narrativa/Evidência
   status: RegulatoryDocItemStatus;
   marker?: string; // ex: [NOME_DA_VACINA]
+  value?: string; // Conteúdo / Valor do Item
+  evidenceUrl?: string; // URL da evidencia/arquivo
+  evidenceFileName?: string; // Nome do arquivo anexo
   notes?: string;
 }
 

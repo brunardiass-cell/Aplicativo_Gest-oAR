@@ -9,7 +9,7 @@ import {
   ShieldAlert, CheckCircle2, Workflow, DollarSign, User,
   FolderKanban, GanttChartSquare, Kanban, ClipboardCheck,
   Printer, BarChart3, TrendingUp, Layers, Folder, Play,
-  SlidersHorizontal, MoreVertical, ArrowRight
+  SlidersHorizontal, MoreVertical, ArrowRight, ListOrdered
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -74,6 +74,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   const [areaFilter, setAreaFilter] = useState<string>('Todas');
   const [typeFilter, setTypeFilter] = useState<string>('Todos');
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'progress'>('recent');
+  const [projectsLayoutMode, setProjectsLayoutMode] = useState<'list' | 'cards'>('list');
   const [showFiltersBar, setShowFiltersBar] = useState<boolean>(true);
   const [activeMenuProjectId, setActiveMenuProjectId] = useState<string | null>(null);
 
@@ -561,6 +562,27 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200">
+                <button
+                  onClick={() => setProjectsLayoutMode('list')}
+                  className={`px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer ${
+                    projectsLayoutMode === 'list' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                  title="Visualizar em formato de Lista"
+                >
+                  <ListOrdered size={15} /> Lista
+                </button>
+                <button
+                  onClick={() => setProjectsLayoutMode('cards')}
+                  className={`px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer ${
+                    projectsLayoutMode === 'cards' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                  title="Visualizar em formato de Cards"
+                >
+                  <LayoutGrid size={15} /> Cards
+                </button>
+              </div>
+
               <button
                 onClick={() => setShowFiltersBar(!showFiltersBar)}
                 className={`px-4 py-3 rounded-2xl text-xs font-bold uppercase tracking-wider transition flex items-center gap-2 border ${
@@ -661,190 +683,375 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           )}
         </div>
 
-        {/* Projects Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredProjects.map(project => {
-            let totalMicros = 0;
-            let doneMicros = 0;
-            let alertsCount = 0;
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
+        {/* Projects View Render (List or Cards) */}
+        {projectsLayoutMode === 'list' ? (
+          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-200 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                    <th className="py-4 px-6">Projeto</th>
+                    <th className="py-4 px-4 text-center">Status</th>
+                    <th className="py-4 px-4 text-center">Líder</th>
+                    <th className="py-4 px-6">Progresso</th>
+                    <th className="py-4 px-4 text-center">Alertas / Macros</th>
+                    <th className="py-4 px-6 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredProjects.map(project => {
+                    let totalMicros = 0;
+                    let doneMicros = 0;
+                    let alertsCount = 0;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
 
-            project.macroActivities.forEach(macro => {
-              macro.microActivities.forEach(micro => {
-                totalMicros++;
-                if (micro.status === 'Concluído e aprovado') doneMicros++;
-                if (micro.dueDate && new Date(micro.dueDate + 'T00:00:00') < today && micro.status !== 'Concluído e aprovado') {
-                  alertsCount++;
-                }
+                    project.macroActivities.forEach(macro => {
+                      macro.microActivities.forEach(micro => {
+                        totalMicros++;
+                        if (micro.status === 'Concluído e aprovado') doneMicros++;
+                        if (micro.dueDate && new Date(micro.dueDate + 'T00:00:00') < today && micro.status !== 'Concluído e aprovado') {
+                          alertsCount++;
+                        }
+                      });
+                    });
+
+                    const progress = totalMicros > 0 ? Math.round((doneMicros / totalMicros) * 100) : 0;
+                    const macrosCount = project.macroActivities.length;
+
+                    const stLower = (project.status || '').toLowerCase();
+                    let statusBadgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
+                    let statusBadgeText: string = project.status || 'Ativo';
+
+                    if (stLower.includes('revis')) {
+                      statusBadgeClass = 'bg-blue-100/90 text-blue-800 border-blue-200/80';
+                      statusBadgeText = 'EM REVISÃO';
+                    } else if (stLower.includes('plan')) {
+                      statusBadgeClass = 'bg-amber-100/90 text-amber-800 border-amber-200/80';
+                      statusBadgeText = 'PLANEJADO';
+                    } else if (stLower.includes('concl')) {
+                      statusBadgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
+                      statusBadgeText = 'CONCLUÍDO';
+                    } else if (stLower.includes('susp')) {
+                      statusBadgeClass = 'bg-red-100/90 text-red-800 border-red-200/80';
+                      statusBadgeText = 'SUSPENSO';
+                    } else {
+                      statusBadgeClass = 'bg-emerald-100/90 text-emerald-800 border-emerald-200/80';
+                      statusBadgeText = 'EM ANDAMENTO';
+                    }
+
+                    return (
+                      <tr 
+                        key={project.id}
+                        onClick={() => {
+                          setSelectedProject(project);
+                          setViewMode('dashboard');
+                          setProjectDetailView('dashboard');
+                        }}
+                        className="hover:bg-slate-50/80 transition cursor-pointer group"
+                      >
+                        <td className="py-4 px-6">
+                          <div className="space-y-0.5">
+                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight group-hover:text-teal-700 transition-colors">
+                              {project.name}
+                            </h3>
+                            <p className="text-[11px] text-slate-500 line-clamp-1">
+                              {project.description || 'Desenvolvimento e acompanhamento de candidato vacinal no módulo CTVacinas.'}
+                            </p>
+                          </div>
+                        </td>
+
+                        <td className="py-4 px-4 text-center">
+                          <span className={`inline-block px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider border ${statusBadgeClass}`}>
+                            {statusBadgeText}
+                          </span>
+                        </td>
+
+                        <td className="py-4 px-4 text-center">
+                          <span className="text-xs font-extrabold text-slate-700 uppercase">
+                            {project.responsible || 'BRUNA'}
+                          </span>
+                        </td>
+
+                        <td className="py-4 px-6 min-w-[180px]">
+                          <div className="space-y-1">
+                            <div className="flex justify-between items-center text-[10px] font-extrabold">
+                              <span className="text-slate-900 font-black">{progress}%</span>
+                              <span className="text-slate-400">{doneMicros} / {totalMicros} ativ.</span>
+                            </div>
+                            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-teal-600 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="py-4 px-4 text-center">
+                          <div className="flex items-center justify-center gap-2 text-[10px] font-black uppercase">
+                            <span className={`px-2 py-0.5 rounded-full ${alertsCount > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500'}`}>
+                              {alertsCount} alertas
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                              {macrosCount} macros
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setSelectedProject(project);
+                                setViewMode('dashboard');
+                                setProjectDetailView('dashboard');
+                              }}
+                              className="px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-2xs flex items-center gap-1"
+                            >
+                              Abrir <ArrowRight size={14} />
+                            </button>
+
+                            <div className="relative">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuProjectId(activeMenuProjectId === project.id ? null : project.id);
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+                              >
+                                <MoreVertical size={16} />
+                              </button>
+
+                              {activeMenuProjectId === project.id && (
+                                <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-30 animate-in fade-in duration-150">
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedProject(project);
+                                      setViewMode('dashboard');
+                                      setProjectDetailView('dashboard');
+                                      setActiveMenuProjectId(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                  >
+                                    <Folder size={14} /> Abrir Projeto
+                                  </button>
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDuplicateProject(project);
+                                      setActiveMenuProjectId(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                  >
+                                    <ListPlus size={14} /> Duplicar
+                                  </button>
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onOpenDeletionModal({ type: 'project', ids: { projectId: project.id }, name: project.name });
+                                      setActiveMenuProjectId(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                  >
+                                    <Trash2 size={14} /> Excluir
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          /* Projects Cards Grid */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredProjects.map(project => {
+              let totalMicros = 0;
+              let doneMicros = 0;
+              let alertsCount = 0;
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+
+              project.macroActivities.forEach(macro => {
+                macro.microActivities.forEach(micro => {
+                  totalMicros++;
+                  if (micro.status === 'Concluído e aprovado') doneMicros++;
+                  if (micro.dueDate && new Date(micro.dueDate + 'T00:00:00') < today && micro.status !== 'Concluído e aprovado') {
+                    alertsCount++;
+                  }
+                });
               });
-            });
 
-            const progress = totalMicros > 0 ? Math.round((doneMicros / totalMicros) * 100) : 0;
-            const macrosCount = project.macroActivities.length;
+              const progress = totalMicros > 0 ? Math.round((doneMicros / totalMicros) * 100) : 0;
+              const macrosCount = project.macroActivities.length;
 
-            const stLower = (project.status || '').toLowerCase();
-            let statusBadgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
-            let statusBadgeText: string = project.status || 'Ativo';
+              const stLower = (project.status || '').toLowerCase();
+              let statusBadgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
+              let statusBadgeText: string = project.status || 'Ativo';
 
-            if (stLower.includes('revis')) {
-              statusBadgeClass = 'bg-blue-100/90 text-blue-800 border-blue-200/80';
-              statusBadgeText = 'EM REVISÃO';
-            } else if (stLower.includes('plan')) {
-              statusBadgeClass = 'bg-amber-100/90 text-amber-800 border-amber-200/80';
-              statusBadgeText = 'PLANEJADO';
-            } else if (stLower.includes('concl')) {
-              statusBadgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
-              statusBadgeText = 'CONCLUÍDO';
-            } else if (stLower.includes('susp')) {
-              statusBadgeClass = 'bg-red-100/90 text-red-800 border-red-200/80';
-              statusBadgeText = 'SUSPENSO';
-            } else {
-              statusBadgeClass = 'bg-emerald-100/90 text-emerald-800 border-emerald-200/80';
-              statusBadgeText = 'EM ANDAMENTO';
-            }
+              if (stLower.includes('revis')) {
+                statusBadgeClass = 'bg-blue-100/90 text-blue-800 border-blue-200/80';
+                statusBadgeText = 'EM REVISÃO';
+              } else if (stLower.includes('plan')) {
+                statusBadgeClass = 'bg-amber-100/90 text-amber-800 border-amber-200/80';
+                statusBadgeText = 'PLANEJADO';
+              } else if (stLower.includes('concl')) {
+                statusBadgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
+                statusBadgeText = 'CONCLUÍDO';
+              } else if (stLower.includes('susp')) {
+                statusBadgeClass = 'bg-red-100/90 text-red-800 border-red-200/80';
+                statusBadgeText = 'SUSPENSO';
+              } else {
+                statusBadgeClass = 'bg-emerald-100/90 text-emerald-800 border-emerald-200/80';
+                statusBadgeText = 'EM ANDAMENTO';
+              }
 
-            return (
-              <div 
-                key={project.id} 
-                className="group p-6 bg-white rounded-3xl border border-slate-200/90 shadow-2xs hover:shadow-lg hover:border-teal-300 transition-all text-left flex flex-col justify-between space-y-5 relative"
-              >
-                {/* Card Top Row */}
-                <div className="flex justify-between items-start gap-2">
-                  <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider border ${statusBadgeClass}`}>
-                    {statusBadgeText}
-                  </span>
-
-                  {/* Menu Options Button */}
-                  <div className="relative">
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveMenuProjectId(activeMenuProjectId === project.id ? null : project.id);
-                      }}
-                      className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
-                    >
-                      <MoreVertical size={16} />
-                    </button>
-
-                    {activeMenuProjectId === project.id && (
-                      <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-30 animate-in fade-in duration-150">
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedProject(project);
-                            setViewMode('dashboard');
-                            setProjectDetailView('dashboard');
-                            setActiveMenuProjectId(null);
-                          }}
-                          className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                        >
-                          <Folder size={14} /> Abrir Projeto
-                        </button>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDuplicateProject(project);
-                            setActiveMenuProjectId(null);
-                          }}
-                          className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                        >
-                          <ListPlus size={14} /> Duplicar
-                        </button>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenDeletionModal({ type: 'project', ids: { projectId: project.id }, name: project.name });
-                            setActiveMenuProjectId(null);
-                          }}
-                          className="w-full text-left px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
-                        >
-                          <Trash2 size={14} /> Excluir
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Main Info */}
+              return (
                 <div 
-                  className="space-y-2 cursor-pointer flex-1"
-                  onClick={() => {
-                    setSelectedProject(project);
-                    setViewMode('dashboard');
-                    setProjectDetailView('dashboard');
-                  }}
+                  key={project.id} 
+                  className="group p-6 bg-white rounded-3xl border border-slate-200/90 shadow-2xs hover:shadow-lg hover:border-teal-300 transition-all text-left flex flex-col justify-between space-y-5 relative"
                 >
-                  <h3 className="text-base font-black text-slate-900 uppercase tracking-tight group-hover:text-teal-800 transition-colors leading-snug">
-                    {project.name}
-                  </h3>
+                  {/* Card Top Row */}
+                  <div className="flex justify-between items-start gap-2">
+                    <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider border ${statusBadgeClass}`}>
+                      {statusBadgeText}
+                    </span>
 
-                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 uppercase">
-                    <User size={13} className="text-slate-400" />
-                    <span>{project.responsible || 'BRUNA'}</span>
-                  </div>
+                    {/* Menu Options Button */}
+                    <div className="relative">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuProjectId(activeMenuProjectId === project.id ? null : project.id);
+                        }}
+                        className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+                      >
+                        <MoreVertical size={16} />
+                      </button>
 
-                  <p className="text-xs text-slate-500 leading-relaxed line-clamp-2 pt-1 min-h-[34px]">
-                    {project.description || 'Desenvolvimento e acompanhamento de candidato vacinal no módulo CTVacinas.'}
-                  </p>
-                </div>
-
-                {/* Progress Bar & Details */}
-                <div 
-                  className="space-y-2 pt-2 border-t border-slate-100 cursor-pointer"
-                  onClick={() => {
-                    setSelectedProject(project);
-                    setViewMode('dashboard');
-                    setProjectDetailView('dashboard');
-                  }}
-                >
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="font-black text-slate-900">{progress}%</span>
-                    <span className="text-[10px] text-slate-400">{doneMicros} / {totalMicros} atividades</span>
-                  </div>
-
-                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-teal-600 rounded-full transition-all duration-700" 
-                      style={{ width: `${progress}%` }} 
-                    />
-                  </div>
-                </div>
-
-                {/* Card Footer Row */}
-                <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5">
-                      <AlertTriangle size={14} className={alertsCount > 0 ? 'text-amber-500' : 'text-slate-300'} />
-                      <span className={`text-[10px] font-black uppercase tracking-tight ${alertsCount > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
-                        {alertsCount} ALERTAS
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <FolderKanban size={14} className="text-slate-400" />
-                      <span className="text-[10px] font-black uppercase tracking-tight text-slate-400">
-                        {macrosCount} MACROS
-                      </span>
+                      {activeMenuProjectId === project.id && (
+                        <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-30 animate-in fade-in duration-150">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedProject(project);
+                              setViewMode('dashboard');
+                              setProjectDetailView('dashboard');
+                              setActiveMenuProjectId(null);
+                            }}
+                            className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                          >
+                            <Folder size={14} /> Abrir Projeto
+                          </button>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDuplicateProject(project);
+                              setActiveMenuProjectId(null);
+                            }}
+                            className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                          >
+                            <ListPlus size={14} /> Duplicar
+                          </button>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenDeletionModal({ type: 'project', ids: { projectId: project.id }, name: project.name });
+                              setActiveMenuProjectId(null);
+                            }}
+                            className="w-full text-left px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
+                          >
+                            <Trash2 size={14} /> Excluir
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <button 
+                  {/* Main Info */}
+                  <div 
+                    className="space-y-2 cursor-pointer flex-1"
                     onClick={() => {
                       setSelectedProject(project);
                       setViewMode('dashboard');
                       setProjectDetailView('dashboard');
                     }}
-                    className="p-2 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded-xl transition"
-                    title="Abrir Projeto"
                   >
-                    <ArrowRight size={18} />
-                  </button>
+                    <h3 className="text-base font-black text-slate-900 uppercase tracking-tight group-hover:text-teal-800 transition-colors leading-snug">
+                      {project.name}
+                    </h3>
+
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 uppercase">
+                      <User size={13} className="text-slate-400" />
+                      <span>{project.responsible || 'BRUNA'}</span>
+                    </div>
+
+                    <p className="text-xs text-slate-500 leading-relaxed line-clamp-2 pt-1 min-h-[34px]">
+                      {project.description || 'Desenvolvimento e acompanhamento de candidato vacinal no módulo CTVacinas.'}
+                    </p>
+                  </div>
+
+                  {/* Progress Bar & Details */}
+                  <div 
+                    className="space-y-2 pt-2 border-t border-slate-100 cursor-pointer"
+                    onClick={() => {
+                      setSelectedProject(project);
+                      setViewMode('dashboard');
+                      setProjectDetailView('dashboard');
+                    }}
+                  >
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="font-black text-slate-900">{progress}%</span>
+                      <span className="text-[10px] text-slate-400">{doneMicros} / {totalMicros} atividades</span>
+                    </div>
+
+                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-teal-600 rounded-full transition-all duration-700" 
+                        style={{ width: `${progress}%` }} 
+                      />
+                    </div>
+                  </div>
+
+                  {/* Card Footer Row */}
+                  <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <AlertTriangle size={14} className={alertsCount > 0 ? 'text-amber-500' : 'text-slate-300'} />
+                        <span className={`text-[10px] font-black uppercase tracking-tight ${alertsCount > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                          {alertsCount} ALERTAS
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <FolderKanban size={14} className="text-slate-400" />
+                        <span className="text-[10px] font-black uppercase tracking-tight text-slate-400">
+                          {macrosCount} MACROS
+                        </span>
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={() => {
+                        setSelectedProject(project);
+                        setViewMode('dashboard');
+                        setProjectDetailView('dashboard');
+                      }}
+                      className="p-2 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded-xl transition"
+                      title="Abrir Projeto"
+                    >
+                      <ArrowRight size={18} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
         {filteredProjects.length === 0 && (
           <div className="p-16 text-center bg-white rounded-3xl border border-dashed border-slate-200 space-y-2">

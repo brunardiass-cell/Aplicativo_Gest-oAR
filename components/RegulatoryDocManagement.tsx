@@ -239,13 +239,106 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
 
   const [showItemCompleterModal, setShowItemCompleterModal] = useState(false);
   const [activeItemForModal, setActiveItemForModal] = useState<{ chapterId: string; item: RegulatoryDocumentItem } | null>(null);
+  const [modalItemValue, setModalItemValue] = useState('');
+  const [modalItemEvidenceUrl, setModalItemEvidenceUrl] = useState('');
+  const [modalItemNotes, setModalItemNotes] = useState('');
+  const [modalItemStatus, setModalItemStatus] = useState<RegulatoryDocItemStatus>('Concluído');
+
+  // Modal to add new item to a document chapter
+  const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [targetChapterIdForNewItem, setTargetChapterIdForNewItem] = useState('');
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemType, setNewItemType] = useState<RegulatoryDocItemType>('Informação Regulatória');
+  const [newItemRequired, setNewItemRequired] = useState(true);
+  const [newItemMarker, setNewItemMarker] = useState('');
+  const [newItemSourceId, setNewItemSourceId] = useState('');
+
+  // Modal to add or edit item in Internal Database
+  const [showAddInfoItemModal, setShowAddInfoItemModal] = useState(false);
+  const [editingInfoItemId, setEditingInfoItemId] = useState<string | null>(null);
+  const [infoItemInternalId, setInfoItemInternalId] = useState('');
+  const [infoItemName, setInfoItemName] = useState('');
+  const [infoItemCategory, setInfoItemCategory] = useState('Produto');
+  const [infoItemValue, setInfoItemValue] = useState('');
 
   const [selectedEvidenceForView, setSelectedEvidenceForView] = useState<any>(null);
 
+  // Default seed info items for internal database if empty
+  const defaultInfoItems = useMemo<RegulatoryInfoItem[]>(() => {
+    if (regulatoryInfoItems.length > 0) return regulatoryInfoItems;
+    const currentProjId = activeProject?.id || 'p1';
+    return [
+      {
+        id: 'info_1',
+        projectId: currentProjId,
+        internalId: 'PRODUCT.NAME',
+        name: 'Nome da Vacina',
+        category: 'Produto',
+        type: 'Parâmetro',
+        value: 'Vacina Malaria Universal - UniMaV',
+        origin: 'Definição Estratégica do Projeto',
+        version: 1,
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 'info_2',
+        projectId: currentProjId,
+        internalId: 'PRODUCT.INDICATION',
+        name: 'Indicação Terapêutica / Proposta',
+        category: 'Produto',
+        type: 'Texto',
+        value: 'Prevenção da malária causada por Plasmodium falciparum em populações de risco e regiões endêmicas.',
+        origin: 'Protocolo Clínico',
+        version: 1,
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 'info_3',
+        projectId: currentProjId,
+        internalId: 'PRODUCT.ADMINISTRATION_ROUTE',
+        name: 'Via de Administração e Forma Farmacêutica',
+        category: 'Produto',
+        type: 'Parâmetro',
+        value: 'Via Intramuscular (IM) - Suspensão Injetável de Proteína Recombinante com Adjuvante',
+        origin: 'Formulação de Lote PILOTO',
+        version: 1,
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 'info_4',
+        projectId: currentProjId,
+        internalId: 'PRODUCT.PRESENTATION',
+        name: 'Apresentações e Conservação',
+        category: 'Produto',
+        type: 'Parâmetro',
+        value: 'Frasco-ampola multidose (5 doses), conservado entre +2°C e +8°C protegido da luz.',
+        origin: 'Estudo de Estabilidade',
+        version: 1,
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 'info_5',
+        projectId: currentProjId,
+        internalId: 'IFA.STRUCTURE',
+        name: 'Caracterização do Insumo Farmacêutico Ativo (IFA)',
+        category: 'IFA',
+        type: 'Texto',
+        value: 'Proteína recombinante expressa em Pichia pastoris, purificada por cromatografia e caracterizada por espectrometria de massas.',
+        origin: 'Relatório de Caracterização da Mão de Obra / CTCVacinas',
+        version: 1,
+        updatedAt: new Date().toISOString()
+      }
+    ];
+  }, [regulatoryInfoItems, activeProject]);
+
+  const effectiveInfoItems = useMemo(() => {
+    return regulatoryInfoItems.length > 0 ? regulatoryInfoItems : defaultInfoItems;
+  }, [regulatoryInfoItems, defaultInfoItems]);
+
   // Collections filtered for active project
   const projectInfoItems = useMemo(() => {
-    return regulatoryInfoItems.filter(i => selectedProjectId === 'all' || i.projectId === selectedProjectId);
-  }, [regulatoryInfoItems, selectedProjectId]);
+    return effectiveInfoItems.filter(i => selectedProjectId === 'all' || i.projectId === selectedProjectId);
+  }, [effectiveInfoItems, selectedProjectId]);
 
   const projectNarratives = useMemo(() => {
     return regulatoryNarratives.filter(n => selectedProjectId === 'all' || n.projectId === selectedProjectId);
@@ -261,11 +354,212 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
 
   // Pending Contributions coming from Projects execution
   const projectPendingContributions = useMemo(() => {
-    return tasks.filter(t => 
+    const list: any[] = [];
+
+    // 1. Gather from microactivities inside project macroactivities
+    projects.forEach(proj => {
+      if (selectedProjectId !== 'all' && proj.id !== selectedProjectId) return;
+
+      proj.macroActivities.forEach(macro => {
+        macro.microActivities.forEach(micro => {
+          if (micro.dossierContribution || micro.generatesRegulatoryContent || micro.evidenceUrl) {
+            list.push({
+              id: micro.id,
+              projectId: proj.id,
+              projectName: proj.name,
+              macroName: macro.name,
+              phase: macro.phase,
+              title: micro.name,
+              description: micro.evidenceDescription || `Contribuição gerada pela microatividade ${micro.name} na macroatividade ${macro.name}`,
+              status: micro.status,
+              assignee: micro.assignee || 'Não atribuído',
+              evidenceUrl: micro.evidenceUrl,
+              evidenceFileName: micro.evidenceFileName,
+              updatedAt: micro.dueDate || new Date().toISOString()
+            });
+          }
+        });
+      });
+    });
+
+    // 2. Gather from standalone tasks
+    tasks.filter(t => 
       (selectedProjectId === 'all' || t.project === activeProject?.name || t.project === selectedProjectId) &&
       (t.generatesRegulatoryContent || t.dossierContribution)
-    );
-  }, [tasks, selectedProjectId, activeProject]);
+    ).forEach(t => {
+      list.push({
+        id: t.id,
+        projectId: activeProject?.id,
+        projectName: t.project,
+        macroName: 'Geral',
+        phase: 'Execução',
+        title: t.activity,
+        description: t.description || 'Contribuição regulatória registrada em tarefa',
+        status: t.status,
+        assignee: t.projectLead || 'Não atribuído',
+        updatedAt: t.completionDate || t.plannedStartDate || new Date().toISOString()
+      });
+    });
+
+    return list;
+  }, [projects, tasks, selectedProjectId, activeProject]);
+
+  // Open item completer modal with current item data
+  const handleOpenItemCompleter = (chapterId: string, item: RegulatoryDocumentItem) => {
+    setActiveItemForModal({ chapterId, item });
+    setModalItemValue(item.value || '');
+    setModalItemEvidenceUrl(item.evidenceUrl || '');
+    setModalItemNotes(item.notes || '');
+    setModalItemStatus(item.status || 'Concluído');
+    setShowItemCompleterModal(true);
+  };
+
+  // Save detailed item information (value, evidence, notes, status)
+  const handleSaveItemDetails = () => {
+    if (!activeDoc || !activeItemForModal) return;
+
+    const { chapterId, item } = activeItemForModal;
+
+    const updatedChapters = activeDoc.chapters.map(chap => {
+      if (chap.id !== chapterId) return chap;
+      return {
+        ...chap,
+        items: chap.items.map(it => {
+          if (it.id !== item.id) return it;
+          return {
+            ...it,
+            status: modalItemStatus,
+            value: modalItemValue.trim(),
+            evidenceUrl: modalItemEvidenceUrl.trim(),
+            notes: modalItemNotes.trim()
+          };
+        })
+      };
+    });
+
+    const updatedDoc = { ...activeDoc, chapters: updatedChapters, updatedAt: new Date().toISOString() };
+    const updatedList = effectiveDocs.map(d => d.id === updatedDoc.id ? updatedDoc : d);
+    onUpdateDocs(updatedList);
+
+    // Sync to Internal Database Info Items automatically
+    if (item.sourceInternalId || item.marker || item.name) {
+      const internalKey = item.sourceInternalId || item.marker || item.name.toUpperCase().replace(/\s+/g, '_');
+      const existingInfoIndex = effectiveInfoItems.findIndex(i => i.internalId === internalKey && i.projectId === activeDoc.projectId);
+
+      let updatedInfoItems = [...effectiveInfoItems];
+      if (existingInfoIndex >= 0) {
+        updatedInfoItems[existingInfoIndex] = {
+          ...updatedInfoItems[existingInfoIndex],
+          value: modalItemValue.trim() || updatedInfoItems[existingInfoIndex].value,
+          updatedAt: new Date().toISOString()
+        };
+      } else {
+        updatedInfoItems.push({
+          id: `info_auto_${Date.now()}`,
+          projectId: activeDoc.projectId,
+          internalId: internalKey,
+          name: item.name,
+          category: 'Produto',
+          type: item.type === 'Informação Regulatória' ? 'Parâmetro' : 'Texto',
+          value: modalItemValue.trim(),
+          origin: `Item ${item.name} no documento ${activeDoc.title}`,
+          version: 1,
+          updatedAt: new Date().toISOString()
+        });
+      }
+      onUpdateInfoItems(updatedInfoItems);
+    }
+
+    setShowItemCompleterModal(false);
+  };
+
+  // Handle adding a new item to a document chapter
+  const handleAddNewItemToChapter = () => {
+    if (!activeDoc || !targetChapterIdForNewItem || !newItemName.trim()) return;
+
+    const newItemObj: RegulatoryDocumentItem = {
+      id: `item_custom_${Date.now()}`,
+      name: newItemName.trim(),
+      type: newItemType,
+      required: newItemRequired,
+      sourceInternalId: newItemSourceId.trim() || newItemName.toUpperCase().replace(/\s+/g, '.'),
+      status: 'Pendente',
+      marker: newItemMarker.trim() || `[${newItemName.toUpperCase().replace(/\s+/g, '_')}]`
+    };
+
+    const updatedChapters = activeDoc.chapters.map(chap => {
+      if (chap.id !== targetChapterIdForNewItem) return chap;
+      return {
+        ...chap,
+        items: [...(chap.items || []), newItemObj]
+      };
+    });
+
+    const updatedDoc = { ...activeDoc, chapters: updatedChapters, updatedAt: new Date().toISOString() };
+    const updatedList = effectiveDocs.map(d => d.id === updatedDoc.id ? updatedDoc : d);
+    onUpdateDocs(updatedList);
+
+    setShowAddItemModal(false);
+    setNewItemName('');
+    setNewItemMarker('');
+    setNewItemSourceId('');
+  };
+
+  // Add or Edit Info Item in Internal Database
+  const handleOpenInfoItemModal = (existingItem?: RegulatoryInfoItem) => {
+    if (existingItem) {
+      setEditingInfoItemId(existingItem.id);
+      setInfoItemInternalId(existingItem.internalId);
+      setInfoItemName(existingItem.name);
+      setInfoItemCategory(existingItem.category || 'Produto');
+      setInfoItemValue(existingItem.value || '');
+    } else {
+      setEditingInfoItemId(null);
+      setInfoItemInternalId('');
+      setInfoItemName('');
+      setInfoItemCategory('Produto');
+      setInfoItemValue('');
+    }
+    setShowAddInfoItemModal(true);
+  };
+
+  const handleSaveInfoItem = () => {
+    if (!infoItemName.trim() || !infoItemValue.trim()) return;
+
+    const currentProjId = activeProject?.id || 'p1';
+    let updatedInfoItems = [...effectiveInfoItems];
+
+    if (editingInfoItemId) {
+      updatedInfoItems = updatedInfoItems.map(item => {
+        if (item.id !== editingInfoItemId) return item;
+        return {
+          ...item,
+          internalId: infoItemInternalId.trim() || item.internalId,
+          name: infoItemName.trim(),
+          category: infoItemCategory,
+          value: infoItemValue.trim(),
+          updatedAt: new Date().toISOString()
+        };
+      });
+    } else {
+      const newObj: RegulatoryInfoItem = {
+        id: `info_custom_${Date.now()}`,
+        projectId: currentProjId,
+        internalId: infoItemInternalId.trim() || infoItemName.toUpperCase().replace(/\s+/g, '_'),
+        name: infoItemName.trim(),
+        category: infoItemCategory,
+        type: 'Parâmetro',
+        value: infoItemValue.trim(),
+        origin: 'Cadastro Manual na Base Interna',
+        version: 1,
+        updatedAt: new Date().toISOString()
+      };
+      updatedInfoItems.push(newObj);
+    }
+
+    onUpdateInfoItems(updatedInfoItems);
+    setShowAddInfoItemModal(false);
+  };
 
   // Metrics Calculation
   const completenessMetrics = useMemo(() => {
@@ -394,6 +688,40 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
 
   return (
     <div className="space-y-6">
+      {/* Active Project Banner */}
+      <div className="bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-teal-500/10 border border-amber-500/30 p-4 rounded-3xl flex flex-wrap items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 font-black">
+            <BookOpen size={20} />
+          </div>
+          <div>
+            <span className="text-[10px] font-black uppercase text-amber-700 tracking-wider">
+              PROJETO ATIVO EM EXIBIÇÃO:
+            </span>
+            <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+              {activeProject?.name || 'Todos os Projetos'}
+              <span className="text-[9px] font-bold px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full border border-amber-200">
+                {selectedProjectId === 'all' ? 'Modo Visão Geral' : 'Filtro Ativo'}
+              </span>
+            </h2>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 bg-white/80 p-1.5 rounded-2xl border border-slate-200 shadow-sm">
+          <span className="text-xs font-bold text-slate-600 px-2">Selecionar Projeto:</span>
+          <select
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            className="bg-slate-900 text-white font-black px-3.5 py-2 rounded-xl border border-slate-700 outline-none cursor-pointer text-xs"
+          >
+            <option value="all">Todos os Projetos</option>
+            {projects.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* Top Header Card */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 rounded-3xl p-6 text-white shadow-xl border border-slate-700/60">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -412,21 +740,6 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {/* Project Filter */}
-            <div className="flex items-center gap-2 bg-slate-800/80 px-3.5 py-2 rounded-2xl border border-slate-600 text-xs font-bold">
-              <span className="text-slate-400">Projeto:</span>
-              <select
-                value={selectedProjectId}
-                onChange={(e) => setSelectedProjectId(e.target.value)}
-                className="bg-transparent text-white font-extrabold focus:outline-none cursor-pointer"
-              >
-                <option value="all" className="bg-slate-800 text-white">Todos os Projetos</option>
-                {projects.map(p => (
-                  <option key={p.id} value={p.id} className="bg-slate-800 text-white">{p.name}</option>
-                ))}
-              </select>
-            </div>
-
             {/* Export JSON */}
             <button
               onClick={handleExportDossierBank}
@@ -557,7 +870,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                   </h4>
                   <button
                     onClick={() => setShowVersionModal(true)}
-                    className="text-[10px] font-black text-indigo-600 hover:underline uppercase flex items-center gap-1"
+                    className="text-[10px] font-black text-indigo-600 hover:underline uppercase flex items-center gap-1 cursor-pointer"
                   >
                     <Plus size={12} /> Nova Versão
                   </button>
@@ -602,7 +915,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
 
                   <button
                     onClick={() => setShowVersionModal(true)}
-                    className="px-5 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg hover:bg-indigo-500 transition active:scale-95 flex items-center gap-2"
+                    className="px-5 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg hover:bg-indigo-500 transition active:scale-95 flex items-center gap-2 cursor-pointer"
                   >
                     <Plus size={16} />
                     <span>Atualizar Versão</span>
@@ -614,22 +927,34 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                   {activeDoc.chapters && activeDoc.chapters.length > 0 ? (
                     activeDoc.chapters.map(chap => (
                       <div key={chap.id} className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/40">
-                        <div className="bg-slate-100/80 px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
+                        <div className="bg-slate-100/80 px-5 py-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
                           <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-2">
                             <span className="px-2 py-0.5 bg-indigo-600 text-white rounded-md text-[10px]">{chap.code}</span>
                             {chap.title}
                           </h3>
-                          <span className="text-[10px] font-bold text-slate-500">
-                            {chap.items?.filter(i => i.status === 'Concluído').length || 0} / {chap.items?.length || 0} itens concluídos
-                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[10px] font-bold text-slate-500">
+                              {chap.items?.filter(i => i.status === 'Concluído').length || 0} / {chap.items?.length || 0} itens concluídos
+                            </span>
+                            <button
+                              onClick={() => {
+                                setTargetChapterIdForNewItem(chap.id);
+                                setShowAddItemModal(true);
+                              }}
+                              className="px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg text-[10px] font-black uppercase transition flex items-center gap-1 cursor-pointer"
+                            >
+                              <Plus size={12} />
+                              Cadastrar Item
+                            </button>
+                          </div>
                         </div>
 
                         {/* Items Table */}
                         <div className="divide-y divide-slate-100">
                           {chap.items?.map(item => (
-                            <div key={item.id} className="p-4 bg-white hover:bg-slate-50 transition flex flex-col md:flex-row md:items-center justify-between gap-4">
-                              <div className="space-y-1 flex-1">
-                                <div className="flex items-center gap-2">
+                            <div key={item.id} className="p-4 bg-white hover:bg-slate-50 transition flex flex-col md:flex-row md:items-start justify-between gap-4">
+                              <div className="space-y-1.5 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-sm font-black text-slate-900">{item.name}</span>
                                   {item.required && (
                                     <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded-md text-[8px] font-black uppercase">Obrigatório</span>
@@ -637,10 +962,23 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                                   <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md text-[8px] font-bold uppercase">{item.type}</span>
                                 </div>
                                 <p className="text-[10px] text-slate-400 font-medium">Marcador: <code className="bg-slate-100 text-slate-700 px-1 py-0.5 rounded">{item.marker || '[PADRAO]'}</code></p>
+
+                                {/* Render Defined Item Value */}
+                                {item.value && (
+                                  <div className="mt-2 p-3 bg-indigo-50/70 border border-indigo-200/80 rounded-xl text-xs space-y-1">
+                                    <span className="text-[9px] font-black uppercase text-indigo-700 tracking-wider block">Conteúdo / Valor Definido:</span>
+                                    <p className="font-bold text-indigo-950 whitespace-pre-wrap">{item.value}</p>
+                                    {item.evidenceUrl && (
+                                      <a href={item.evidenceUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-600 hover:underline flex items-center gap-1 font-semibold mt-1">
+                                        <Paperclip size={12} /> Ver Anexo de Evidência
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
                               </div>
 
                               {/* Item Controls & Status Actions */}
-                              <div className="flex items-center gap-2 flex-wrap">
+                              <div className="flex items-center gap-2 flex-wrap shrink-0">
                                 <select
                                   value={item.status}
                                   onChange={(e) => handleUpdateItemStatus(chap.id, item.id, e.target.value as RegulatoryDocItemStatus)}
@@ -655,13 +993,10 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                                 </select>
 
                                 <button
-                                  onClick={() => {
-                                    setActiveItemForModal({ chapterId: chap.id, item });
-                                    setShowItemCompleterModal(true);
-                                  }}
-                                  className="px-3.5 py-1.5 bg-brand-primary text-white hover:bg-brand-accent rounded-xl text-[10px] font-black uppercase tracking-wider transition shadow-sm"
+                                  onClick={() => handleOpenItemCompleter(chap.id, item)}
+                                  className="px-3.5 py-1.5 bg-brand-primary text-white hover:bg-brand-accent rounded-xl text-[10px] font-black uppercase tracking-wider transition shadow-sm cursor-pointer"
                                 >
-                                  Completar Item
+                                  {item.value ? 'Editar / Preencher' : 'Completar Item'}
                                 </button>
                               </div>
                             </div>
@@ -752,36 +1087,56 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
               Contribuições Regulatórias Originadas no Módulo Projetos
             </h3>
             <p className="text-xs text-slate-500 font-medium mt-1">
-              Atividades concluídas no gerenciamento de execução que foram marcadas como geradoras de conteúdo regulatório.
+              Microatividades ou tarefas marcadas como geradoras de conteúdo regulatório ou com evidência cadastrada.
             </p>
           </div>
 
           <div className="space-y-3">
-            {projectPendingContributions.map(task => (
-              <div key={task.id} className="p-5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+            {projectPendingContributions.map(contrib => (
+              <div key={contrib.id} className="p-5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <span className="text-[9px] font-black uppercase text-brand-primary bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
-                    {task.project}
-                  </span>
-                  <h4 className="text-sm font-black text-slate-900 mt-1">{task.activity}</h4>
-                  <p className="text-xs text-slate-500 font-medium">{task.description || 'Sem descrição'}</p>
-                  <span className="text-[10px] text-slate-400 font-bold block mt-1">Líder: {task.projectLead}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-black uppercase text-brand-primary bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                      {contrib.projectName}
+                    </span>
+                    <span className="text-[9px] font-extrabold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
+                      Macro: {contrib.macroName}
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-black text-slate-900 mt-1">{contrib.title}</h4>
+                  <p className="text-xs text-slate-600 font-medium">{contrib.description || 'Sem descrição'}</p>
+                  <span className="text-[10px] text-slate-400 font-bold block mt-1">Responsável: {contrib.assignee}</span>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setSelectedEvidenceForView(task)}
-                    className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-black text-xs uppercase tracking-wider rounded-xl transition flex items-center gap-1.5"
-                  >
-                    <Eye size={14} /> Ver Evidência
-                  </button>
+                  {contrib.evidenceUrl && (
+                    <a
+                      href={contrib.evidenceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-black text-xs uppercase tracking-wider rounded-xl transition flex items-center gap-1.5"
+                    >
+                      <Paperclip size={14} /> Anexo
+                    </a>
+                  )}
                   <button
                     onClick={() => {
-                      setActiveTab('docs');
+                      handleOpenInfoItemModal({
+                        id: '',
+                        projectId: contrib.projectId,
+                        internalId: contrib.title.toUpperCase().replace(/\s+/g, '_'),
+                        name: contrib.title,
+                        category: 'Produto',
+                        type: 'Texto',
+                        value: contrib.description || contrib.title,
+                        origin: `Microatividade: ${contrib.title}`,
+                        version: 1,
+                        updatedAt: new Date().toISOString()
+                      });
                     }}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow-sm flex items-center gap-1.5"
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer"
                   >
-                    <CheckCircle size={14} /> Vincular ao Documento
+                    <CheckCircle size={14} /> Cadastrar na Base
                   </button>
                 </div>
               </div>
@@ -801,7 +1156,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
           ========================================================================= */}
       {activeTab === 'internal_db' && (
         <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
-          <div className="flex items-center justify-between border-b pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
             <div>
               <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
                 <Database size={20} className="text-indigo-600" />
@@ -812,25 +1167,34 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
               </p>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex items-center gap-3 flex-wrap">
               <button
-                onClick={() => setDbSubTab('info_items')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${dbSubTab === 'info_items' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+                onClick={() => handleOpenInfoItemModal()}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer"
               >
-                Informações
+                <Plus size={14} /> Cadastrar Item
               </button>
-              <button
-                onClick={() => setDbSubTab('narratives')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${dbSubTab === 'narratives' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}
-              >
-                Narrativas
-              </button>
-              <button
-                onClick={() => setDbSubTab('evidence')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${dbSubTab === 'evidence' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}
-              >
-                Evidências
-              </button>
+
+              <div className="flex gap-2 bg-slate-100 p-1 rounded-2xl">
+                <button
+                  onClick={() => setDbSubTab('info_items')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${dbSubTab === 'info_items' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600'}`}
+                >
+                  Informações
+                </button>
+                <button
+                  onClick={() => setDbSubTab('narratives')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${dbSubTab === 'narratives' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600'}`}
+                >
+                  Narrativas
+                </button>
+                <button
+                  onClick={() => setDbSubTab('evidence')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${dbSubTab === 'evidence' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600'}`}
+                >
+                  Evidências
+                </button>
+              </div>
             </div>
           </div>
 
@@ -838,12 +1202,20 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
           {dbSubTab === 'info_items' && (
             <div className="space-y-3">
               {projectInfoItems.map(item => (
-                <div key={item.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex justify-between items-center">
-                  <div>
-                    <span className="text-[9px] font-black uppercase text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">{item.internalId}</span>
-                    <h4 className="text-sm font-bold text-slate-900 mt-1">{item.name}</h4>
-                    <p className="text-xs text-slate-600 font-medium">{item.value || 'Sem valor preenchido'}</p>
+                <div key={item.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-black uppercase text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">{item.internalId}</span>
+                    <h4 className="text-sm font-bold text-slate-900">{item.name}</h4>
+                    <p className="text-xs text-slate-700 font-medium whitespace-pre-wrap">{item.value || 'Sem valor preenchido'}</p>
+                    <span className="text-[10px] text-slate-400 font-bold block">Origem: {item.origin}</span>
                   </div>
+
+                  <button
+                    onClick={() => handleOpenInfoItemModal(item)}
+                    className="px-3.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-black text-xs uppercase tracking-wider rounded-xl transition cursor-pointer shrink-0"
+                  >
+                    Editar Item
+                  </button>
                 </div>
               ))}
             </div>
@@ -929,28 +1301,61 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
         </div>
       )}
 
-      {/* Item Completer Modal */}
+      {/* Item Completer / Editor Modal */}
       {showItemCompleterModal && activeItemForModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 max-w-lg w-full space-y-5 animate-in zoom-in-95">
             <div className="flex justify-between items-center border-b pb-3">
-              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Completar Item: {activeItemForModal.item.name}</h3>
+              <div>
+                <span className="text-[9px] font-black uppercase text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
+                  {activeItemForModal.item.type}
+                </span>
+                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight mt-1">
+                  Preencher/Editar: {activeItemForModal.item.name}
+                </h3>
+              </div>
               <button onClick={() => setShowItemCompleterModal(false)} className="p-1 text-slate-400 hover:text-slate-600"><X size={20} /></button>
             </div>
 
-            <p className="text-xs text-slate-600 font-medium">
-              Ajuste o status e os dados de suporte deste requisito obrigatório do documento.
-            </p>
-
             <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Valor / Conteúdo Definido (ex: Nome da Vacina, Dosagem, etc.)</label>
+                <textarea
+                  rows={3}
+                  value={modalItemValue}
+                  onChange={e => setModalItemValue(e.target.value)}
+                  placeholder="Informe o conteúdo, nome definido, ou resumo dos dados..."
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Link ou URL de Evidência Anexa (Opcional)</label>
+                <input
+                  type="text"
+                  value={modalItemEvidenceUrl}
+                  onChange={e => setModalItemEvidenceUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Observações Regulatórias</label>
+                <input
+                  type="text"
+                  value={modalItemNotes}
+                  onChange={e => setModalItemNotes(e.target.value)}
+                  placeholder="Notas internas de apoio..."
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                />
+              </div>
+
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase">Status do Item</label>
                 <select
-                  value={activeItemForModal.item.status}
-                  onChange={e => {
-                    handleUpdateItemStatus(activeItemForModal.chapterId, activeItemForModal.item.id, e.target.value as RegulatoryDocItemStatus);
-                    setShowItemCompleterModal(false);
-                  }}
+                  value={modalItemStatus}
+                  onChange={e => setModalItemStatus(e.target.value as RegulatoryDocItemStatus)}
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
                 >
                   <option value="Pendente">Pendente</option>
@@ -960,8 +1365,145 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
               </div>
             </div>
 
-            <div className="flex justify-end pt-2">
-              <button onClick={() => setShowItemCompleterModal(false)} className="px-6 py-2.5 bg-slate-900 text-white font-black text-xs rounded-xl">Fechar</button>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setShowItemCompleterModal(false)} className="px-5 py-2.5 bg-slate-200 text-slate-700 font-bold text-xs rounded-xl">Cancelar</button>
+              <button onClick={handleSaveItemDetails} className="px-6 py-2.5 bg-indigo-600 text-white font-black text-xs rounded-xl shadow-lg">Salvar Dados do Item</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal to Register New Item in a Chapter */}
+      {showAddItemModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 max-w-lg w-full space-y-5 animate-in zoom-in-95">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Cadastrar Novo Item no Capítulo</h3>
+              <button onClick={() => setShowAddItemModal(false)} className="p-1 text-slate-400 hover:text-slate-600"><X size={20} /></button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Nome do Requisito / Item</label>
+                <input
+                  type="text"
+                  placeholder="ex: Especificação de Pureza do IFA"
+                  value={newItemName}
+                  onChange={e => setNewItemName(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Tipo do Item</label>
+                <select
+                  value={newItemType}
+                  onChange={e => setNewItemType(e.target.value as RegulatoryDocItemType)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                >
+                  <option value="Informação Regulatória">Informação Regulatória</option>
+                  <option value="Narrativa">Narrativa</option>
+                  <option value="Evidência">Evidência</option>
+                  <option value="Tabela">Tabela</option>
+                  <option value="Figura">Figura</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Marcador / Tag Interna</label>
+                <input
+                  type="text"
+                  placeholder="ex: [IFA_PUREZA]"
+                  value={newItemMarker}
+                  onChange={e => setNewItemMarker(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="newItemReq"
+                  checked={newItemRequired}
+                  onChange={e => setNewItemRequired(e.target.checked)}
+                  className="w-4 h-4 text-indigo-600 rounded"
+                />
+                <label htmlFor="newItemReq" className="text-xs font-bold text-slate-700">Requisito Obrigatório no Dossiê</label>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setShowAddItemModal(false)} className="px-5 py-2.5 bg-slate-200 text-slate-700 font-bold text-xs rounded-xl">Cancelar</button>
+              <button onClick={handleAddNewItemToChapter} className="px-6 py-2.5 bg-indigo-600 text-white font-black text-xs rounded-xl shadow-lg">Cadastrar Item</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal to Register/Edit Item in Internal Database */}
+      {showAddInfoItemModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 max-w-lg w-full space-y-5 animate-in zoom-in-95">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">
+                {editingInfoItemId ? 'Editar Item da Base Interna' : 'Cadastrar Item na Base Interna'}
+              </h3>
+              <button onClick={() => setShowAddInfoItemModal(false)} className="p-1 text-slate-400 hover:text-slate-600"><X size={20} /></button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Identificador Interno (ID / Marcador)</label>
+                <input
+                  type="text"
+                  placeholder="ex: PRODUCT.NAME"
+                  value={infoItemInternalId}
+                  onChange={e => setInfoItemInternalId(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Nome da Informação</label>
+                <input
+                  type="text"
+                  placeholder="ex: Nome da Vacina"
+                  value={infoItemName}
+                  onChange={e => setInfoItemName(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Categoria</label>
+                <select
+                  value={infoItemCategory}
+                  onChange={e => setInfoItemCategory(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                >
+                  <option value="Produto">Produto</option>
+                  <option value="IFA">Insumo Farmacêutico Ativo (IFA)</option>
+                  <option value="Adjuvante">Adjuvante</option>
+                  <option value="Processo">Processo de Fabricação</option>
+                  <option value="Ensaio">Ensaio Clínico / Não-Clínico</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Valor / Conteúdo Preenchido</label>
+                <textarea
+                  rows={3}
+                  placeholder="Informe o conteúdo..."
+                  value={infoItemValue}
+                  onChange={e => setInfoItemValue(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setShowAddInfoItemModal(false)} className="px-5 py-2.5 bg-slate-200 text-slate-700 font-bold text-xs rounded-xl">Cancelar</button>
+              <button onClick={handleSaveInfoItem} className="px-6 py-2.5 bg-indigo-600 text-white font-black text-xs rounded-xl shadow-lg">Salvar na Base</button>
             </div>
           </div>
         </div>
