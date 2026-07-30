@@ -12,7 +12,13 @@ import {
   RegulatoryDocumentItem,
   RegulatoryDocItemType,
   RegulatoryDocItemStatus,
-  RegulatoryDocumentVersion
+  RegulatoryDocumentVersion,
+  RegulatoryItemResource,
+  RegulatoryResourceType,
+  KnowledgeCategory,
+  RegulatoryKnowledgeRecord,
+  RegulatoryStructuredTable,
+  RegulatoryMarkerMapping
 } from '../types';
 import { 
   FileText, 
@@ -48,7 +54,17 @@ import {
   ArrowRight,
   Info,
   CheckCircle,
-  HelpCircle
+  FolderTree,
+  Table as TableIcon,
+  FilePlus,
+  AlertTriangle,
+  CheckSquare,
+  XCircle,
+  HelpCircle,
+  Grid,
+  Link as LinkIcon,
+  Maximize2,
+  RefreshCw
 } from 'lucide-react';
 import { EvidenceDetailModal } from './EvidenceDetailModal';
 
@@ -90,17 +106,17 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
   currentUser = 'Usuário',
   hasAdminAccess = true
 }) => {
-  // Main Tab Selection - Default is 'docs' (Document-Centric Workflow)
+  // Main Navigation View Tabs
   const [activeTab, setActiveTab] = useState<
-    'docs' | 'completeness' | 'contributions' | 'internal_db' | 'macro_configs'
-  >('docs');
+    'doc_tree' | 'knowledge_bank' | 'repeatable_records' | 'contributions' | 'markers_templates'
+  >('doc_tree');
 
-  // Sub-tab for Internal Database
-  const [dbSubTab, setDbSubTab] = useState<
-    'info_items' | 'narratives' | 'evidence' | 'repeatable'
-  >('info_items');
+  // Sub-tab for Knowledge Bank (Banco de Conhecimento Regulatório)
+  const [kbCategoryTab, setKbCategoryTab] = useState<KnowledgeCategory>(
+    'Informações Estruturadas'
+  );
 
-  // Selected Project Filter
+  // Active Selected Project Filter
   const [selectedProjectId, setSelectedProjectId] = useState<string>(
     projects.length > 0 ? projects[0].id : 'all'
   );
@@ -111,6 +127,96 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
 
   // Selected Active Document inside Project
   const [selectedDocId, setSelectedDocId] = useState<string>('');
+
+  // Search filter inside tree view and knowledge bank
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Expand / Collapse state for tree view chapters
+  const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({
+    'cap_1': true,
+    'cap_2': true,
+    'cap_3': true
+  });
+
+  // Selected item detail state for drawer / modal
+  const [selectedTreeItem, setSelectedTreeItem] = useState<{
+    doc: RegulatoryDocument;
+    chapter: RegulatoryDocumentChapter;
+    item: RegulatoryDocumentItem;
+  } | null>(null);
+
+  // Independent Structured Tables State
+  const [structuredTables, setStructuredTables] = useState<RegulatoryStructuredTable[]>([
+    {
+      id: 'table_presentations',
+      projectId: activeProject?.id || 'p1',
+      key: 'TABLE_PRESENTATIONS',
+      title: 'Tabela de Apresentações e Embalagem Primária',
+      description: 'Apresentações comerciais, volumes de dose, tipo de vidro e embalagem primária',
+      columns: [
+        { key: 'apresentacao', label: 'Apresentação', type: 'text' },
+        { key: 'dose', label: 'Dose (µg)', type: 'number' },
+        { key: 'volume', label: 'Volume (mL)', type: 'number' },
+        { key: 'embalagem', label: 'Tipo de Embalagem', type: 'text' },
+        { key: 'num_doses', label: 'Nº Doses / Frasco', type: 'number' }
+      ],
+      rows: [
+        { apresentacao: 'Frasco Multidose Líquido', dose: 25, volume: 2.5, embalagem: 'Vidro Tipo I de 5mL', num_doses: 5 },
+        { apresentacao: 'Monodose Monodose Seringa', dose: 25, volume: 0.5, embalagem: 'Seringa Pré-enchida Luer Lock', num_doses: 1 }
+      ],
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: 'table_stability',
+      projectId: activeProject?.id || 'p1',
+      key: 'TABLE_STABILITY_SUMMARY',
+      title: 'Tabela de Resumo dos Estudos de Estabilidade',
+      description: 'Lotes testados, condições de temperatura, tempo de acompanhamento e resultados',
+      columns: [
+        { key: 'lote', label: 'Lote Testado', type: 'text' },
+        { key: 'condicao', label: 'Condição de Temperatura', type: 'text' },
+        { key: 'tempo', label: 'Tempo (Meses)', type: 'number' },
+        { key: 'resultado', label: 'Conclusão de Potência', type: 'text' }
+      ],
+      rows: [
+        { lote: 'LOTE-PILOTO-001', condicao: '2°C a 8°C (Longa Duração)', tempo: 24, resultado: 'Dentro das especificações (>95%)' },
+        { lote: 'LOTE-PILOTO-001', condicao: '25°C / 60% UR (Acelerado)', tempo: 6, resultado: 'Conforme especificação' }
+      ],
+      updatedAt: new Date().toISOString()
+    }
+  ]);
+
+  // Word Template Markers Mapping State
+  const [markerMappings, setMarkerMappings] = useState<RegulatoryMarkerMapping[]>([
+    {
+      id: 'm1',
+      marker: '[NOME_DA_VACINA]',
+      sourceCategory: 'Informações Estruturadas',
+      sourceKey: 'PRODUCT.NAME',
+      description: 'Substituído pelo Nome Comercial / Técnico da Vacina'
+    },
+    {
+      id: 'm2',
+      marker: '[INDICACAO_TERAPEUTICA]',
+      sourceCategory: 'Informações Estruturadas',
+      sourceKey: 'PRODUCT.INDICATION',
+      description: 'Substituído pelo texto da Indicação Terapêutica'
+    },
+    {
+      id: 'm3',
+      marker: '[TABELA_APRESENTACOES]',
+      sourceCategory: 'Tabelas',
+      sourceKey: 'TABLE_PRESENTATIONS',
+      description: 'Insere a tabela dinâmica de apresentações e embalagem'
+    },
+    {
+      id: 'm4',
+      marker: '[INTRODUÇÃO_PROJETO]',
+      sourceCategory: 'Narrativas Técnicas',
+      sourceKey: 'NARRATIVE.INTRO',
+      description: 'Substituído pelo texto completo da narrativa de Introdução'
+    }
+  ]);
 
   // Default Presets for Regulatory Documents
   const defaultDocs = useMemo<RegulatoryDocument[]>(() => {
@@ -133,21 +239,137 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
           {
             id: 'cap_1',
             code: '1.0',
-            title: 'Informações Gerais e Descrição do Produto',
+            title: '1. Informações Gerais e Descrição do Produto',
+            description: 'Visão geral da vacina, indicação, forma farmacêutica e apresentações',
             items: [
-              { id: 'item_1_1', name: 'Nome da Vacina', type: 'Informação Regulatória' as RegulatoryDocItemType, required: true, sourceInternalId: 'PRODUCT.NAME', status: 'Concluído' as RegulatoryDocItemStatus, marker: '[NOME_DA_VACINA]' },
-              { id: 'item_1_2', name: 'Indicação Terapêutica / Proposta', type: 'Informação Regulatória' as RegulatoryDocItemType, required: true, sourceInternalId: 'PRODUCT.INDICATION', status: 'Concluído' as RegulatoryDocItemStatus, marker: '[INDICACAO]' },
-              { id: 'item_1_3', name: 'Via de Administração e Forma Farmacêutica', type: 'Informação Regulatória' as RegulatoryDocItemType, required: true, sourceInternalId: 'PRODUCT.ADMINISTRATION_ROUTE', status: 'Em Andamento' as RegulatoryDocItemStatus, marker: '[FORMA_FARMACEUTICA]' },
-              { id: 'item_1_4', name: 'Apresentações e Conservação', type: 'Informação Regulatória' as RegulatoryDocItemType, required: true, sourceInternalId: 'PRODUCT.PRESENTATION', status: 'Pendente' as RegulatoryDocItemStatus, marker: '[APRESENTACOES]' }
+              { 
+                id: 'item_1_1', 
+                code: '1.1',
+                name: 'Nome e Identificação da Vacina', 
+                description: 'Denominação comercial e código de desenvolvimento técnico da vacina',
+                type: 'Informação Estruturada' as RegulatoryDocItemType, 
+                required: true, 
+                sourceInternalId: 'PRODUCT.NAME', 
+                status: 'Pronto' as RegulatoryDocItemStatus, 
+                marker: '[NOME_DA_VACINA]',
+                requiredResources: [
+                  { id: 'r1', name: 'Nome da vacina', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'PRODUCT.NAME' },
+                  { id: 'r2', name: 'Código interno do produto', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'PRODUCT.CODE' }
+                ]
+              },
+              { 
+                id: 'item_1_2', 
+                code: '1.2',
+                name: 'Indicação Terapêutica / Alvo Clínico', 
+                description: 'Detalhamento das populações de risco e patógeno alvo',
+                type: 'Informação Estruturada' as RegulatoryDocItemType, 
+                required: true, 
+                sourceInternalId: 'PRODUCT.INDICATION', 
+                status: 'Pronto' as RegulatoryDocItemStatus, 
+                marker: '[INDICACAO]',
+                requiredResources: [
+                  { id: 'r3', name: 'Texto de indicação terapêutica', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'PRODUCT.INDICATION' }
+                ]
+              },
+              { 
+                id: 'item_1_3', 
+                code: '1.3',
+                name: 'Descrição da Forma Farmacêutica e Composição', 
+                description: 'Propriedades organolépticas, IFA, adjuvantes e via de administração',
+                type: 'Informação Estruturada' as RegulatoryDocItemType, 
+                required: true, 
+                sourceInternalId: 'PRODUCT.ADMINISTRATION_ROUTE', 
+                status: 'Em Andamento' as RegulatoryDocItemStatus, 
+                marker: '[FORMA_FARMACEUTICA]',
+                requiredResources: [
+                  { id: 'r4', name: 'Nome da vacina', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'PRODUCT.NAME' },
+                  { id: 'r5', name: 'Descrição da vacina', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'PRODUCT.DESC' },
+                  { id: 'r6', name: 'Insumo Farmacêutico Ativo (IFA)', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'IFA.NAME' },
+                  { id: 'r7', name: 'Adjuvante utilizado', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'ADJUVANT.NAME' },
+                  { id: 'r8', name: 'Via de administração', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'PRODUCT.ADMINISTRATION_ROUTE' },
+                  { id: 'r9', name: 'Temperatura de armazenamento', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'PRODUCT.STORAGE_TEMP' }
+                ]
+              },
+              { 
+                id: 'item_1_4', 
+                code: '1.4',
+                name: 'Tabela de Apresentações e Embalagem Primária', 
+                description: 'Volume, doses por frasco e materiais de acondicionamento',
+                type: 'Tabela' as RegulatoryDocItemType, 
+                required: true, 
+                sourceInternalId: 'TABLE_PRESENTATIONS', 
+                status: 'Pronto' as RegulatoryDocItemStatus, 
+                marker: '[TABELA_APRESENTACOES]',
+                requiredResources: [
+                  { id: 'r10', name: 'Apresentações', type: 'Tabela' as RegulatoryResourceType, required: true, key: 'TABLE_PRESENTATIONS' },
+                  { id: 'r11', name: 'Dose', type: 'Tabela' as RegulatoryResourceType, required: true, key: 'TABLE_PRESENTATIONS' },
+                  { id: 'r12', name: 'Volume', type: 'Tabela' as RegulatoryResourceType, required: true, key: 'TABLE_PRESENTATIONS' },
+                  { id: 'r13', name: 'Embalagem', type: 'Tabela' as RegulatoryResourceType, required: true, key: 'TABLE_PRESENTATIONS' },
+                  { id: 'r14', name: 'Número de doses', type: 'Tabela' as RegulatoryResourceType, required: true, key: 'TABLE_PRESENTATIONS' }
+                ]
+              }
             ]
           },
           {
             id: 'cap_2',
             code: '2.0',
-            title: 'Estudos Pré-clínicos e Clínicos',
+            title: '2. Controle de Qualidade e Estudos de Estabilidade',
+            description: 'Resultados analíticos, liberação de lotes e acompanhamento de validade',
             items: [
-              { id: 'item_2_1', name: 'Resumo dos Ensaios de Imunogenicidade', type: 'Narrativa' as RegulatoryDocItemType, required: true, sourceInternalId: 'CLINICAL.IMMUNO', status: 'Em Andamento' as RegulatoryDocItemStatus, marker: '[IMUNOGENICIDADE]' },
-              { id: 'item_2_2', name: 'Relatório de Toxicologia Pré-clínica', type: 'Evidência' as RegulatoryDocItemType, required: true, sourceInternalId: 'EVID_TOX', status: 'Pendente' as RegulatoryDocItemStatus, marker: '[RELATORIO_TOX]' }
+              { 
+                id: 'item_2_1', 
+                code: '2.1',
+                name: 'Relatório de Estabilidade do Produto Terminado', 
+                description: 'Acompanhamento do prazo de validade em condições refrigeradas e aceleradas',
+                type: 'Narrativa' as RegulatoryDocItemType, 
+                required: true, 
+                sourceInternalId: 'STABILITY.REPORT', 
+                status: 'Em Andamento' as RegulatoryDocItemStatus, 
+                marker: '[ESTABILIDADE]',
+                requiredResources: [
+                  { id: 'r15', name: 'Narrativa técnica do estudo de estabilidade', type: 'Narrativa Técnica' as RegulatoryResourceType, required: true, key: 'NARRATIVE.STABILITY' },
+                  { id: 'r16', name: 'Tabela resumo dos ensaios de estabilidade', type: 'Tabela' as RegulatoryResourceType, required: true, key: 'TABLE_STABILITY_SUMMARY' },
+                  { id: 'r17', name: 'Registro dos lotes de estabilidade do projeto', type: 'Registro Repetitivo' as RegulatoryResourceType, required: true, key: 'PROJECT.STABILITY_BATCHES' },
+                  { id: 'r18', name: 'Certificado de Análise de Liberação de Lote', type: 'Anexo' as RegulatoryResourceType, required: true, key: 'ATTACHMENT.COA' }
+                ]
+              },
+              { 
+                id: 'item_2_2', 
+                code: '2.2',
+                name: 'Laudo de Esterilidade e Endotoxinas', 
+                description: 'Comprovação de segurança microbiológica do lote piloto',
+                type: 'Evidência' as RegulatoryDocItemType, 
+                required: true, 
+                sourceInternalId: 'EVID_STERILITY', 
+                status: 'Faltando' as RegulatoryDocItemStatus, 
+                marker: '[LAUDO_ESTERILIDADE]',
+                requiredResources: [
+                  { id: 'r19', name: 'Relatório do ensaio de esterilidade (Anexo)', type: 'Evidência' as RegulatoryResourceType, required: true, key: 'EVID.STERILITY' }
+                ]
+              }
+            ]
+          },
+          {
+            id: 'cap_3',
+            code: '3.0',
+            title: '3. Avaliação de Segurança Pré-Clínica e Imunogenicidade',
+            description: 'Resultados de modelos animais e caracterização da resposta imune',
+            items: [
+              { 
+                id: 'item_3_1', 
+                code: '3.1',
+                name: 'Resumo dos Ensaios de Imunogenicidade', 
+                description: 'Títulos de anticorpos neutralizantes e resposta celular',
+                type: 'Narrativa' as RegulatoryDocItemType, 
+                required: true, 
+                sourceInternalId: 'CLINICAL.IMMUNO', 
+                status: 'Pronto' as RegulatoryDocItemStatus, 
+                marker: '[IMUNOGENICIDADE]',
+                requiredResources: [
+                  { id: 'r20', name: 'Narrativa técnica de imunogenicidade', type: 'Narrativa Técnica' as RegulatoryResourceType, required: true, key: 'NARRATIVE.IMMUNO' },
+                  { id: 'r21', name: 'Relatório do modelo animal (Evidência)', type: 'Evidência' as RegulatoryResourceType, required: false, key: 'EVID.ANIMAL_MODEL' }
+                ]
+              }
             ]
           }
         ]
@@ -168,10 +390,37 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
           {
             id: 'cap_ifa_1',
             code: '1.0',
-            title: 'Caracterização e Processo do IFA',
+            title: '1. Caracterização e Processo de Fabricação do IFA',
+            description: 'Estrutura, linhagem de expressão, meio de cultura e purification flow',
             items: [
-              { id: 'item_ifa_1_1', name: 'Estrutura e Caracterização Físico-Química', type: 'Narrativa' as RegulatoryDocItemType, required: true, sourceInternalId: 'IFA.STRUCTURE', status: 'Em Andamento' as RegulatoryDocItemStatus, marker: '[ESTRUTURA_IFA]' },
-              { id: 'item_ifa_1_2', name: 'Esquema do Processo de Fabricação', type: 'Evidência' as RegulatoryDocItemType, required: true, sourceInternalId: 'EVID_IFA_PROCESS', status: 'Pendente' as RegulatoryDocItemStatus, marker: '[PROCESSO_IFA]' }
+              { 
+                id: 'item_ifa_1_1', 
+                code: '1.1',
+                name: 'Estrutura e Caracterização Físico-Química do IFA', 
+                description: 'Sequência primária, modificações pós-traducionais e massa molecular',
+                type: 'Narrativa' as RegulatoryDocItemType, 
+                required: true, 
+                sourceInternalId: 'IFA.STRUCTURE', 
+                status: 'Pronto' as RegulatoryDocItemStatus, 
+                marker: '[ESTRUTURA_IFA]',
+                requiredResources: [
+                  { id: 'r22', name: 'Caracterização do IFA', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'IFA.STRUCTURE' }
+                ]
+              },
+              { 
+                id: 'item_ifa_1_2', 
+                code: '1.2',
+                name: 'Fluxograma e Descrição do Processo de Purificação', 
+                description: 'Etapas cromatográficas, ultrafiltração e inativação viral',
+                type: 'Anexo' as RegulatoryDocItemType, 
+                required: true, 
+                sourceInternalId: 'EVID_IFA_PROCESS', 
+                status: 'Faltando' as RegulatoryDocItemStatus, 
+                marker: '[PROCESSO_IFA]',
+                requiredResources: [
+                  { id: 'r23', name: 'Fluxograma de purificação em alta resolução (Anexo)', type: 'Anexo' as RegulatoryResourceType, required: true, key: 'ATTACHMENT.IFA_FLOWCHART' }
+                ]
+              }
             ]
           }
         ]
@@ -185,29 +434,133 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
         currentVersion: '0.1',
         currentVersionStatus: 'Rascunho',
         updatedAt: new Date().toISOString(),
-        chapters: []
+        chapters: [
+          {
+            id: 'cap_adj_1',
+            code: '1.0',
+            title: '1. Especificações e Origem do Sistema Adjuvante',
+            description: 'Identificação química, emulsão e testes de segurança',
+            items: [
+              {
+                id: 'item_adj_1_1',
+                code: '1.1',
+                name: 'Composição Química e Razão Adjuvante/Antígeno',
+                description: 'Identificação dos lipídios / sais de alumínio e proporção por dose',
+                type: 'Informação Estruturada' as RegulatoryDocItemType,
+                required: true,
+                sourceInternalId: 'ADJUVANT.NAME',
+                status: 'Pronto' as RegulatoryDocItemStatus,
+                marker: '[COMPOSICAO_ADJUVANTE]',
+                requiredResources: [
+                  { id: 'r24', name: 'Nome e código do adjuvante', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'ADJUVANT.NAME' }
+                ]
+              }
+            ]
+          }
+        ]
       },
       {
         id: `doc_brochura_${proj.id}`,
         projectId: proj.id,
         title: 'Brochura do Investigador',
-        type: 'Brochura Clinica',
+        type: 'Brochura Clínica (IB)',
         description: 'Compilação de dados clínicos e de segurança para os investigadores do ensaio.',
         currentVersion: '0.1',
         currentVersionStatus: 'Rascunho',
         updatedAt: new Date().toISOString(),
-        chapters: []
+        chapters: [
+          {
+            id: 'cap_ib_1',
+            code: '1.0',
+            title: '1. Resumo Executivo e Racional Científico',
+            description: 'Contexto epidemiológico e justificativa para a formulação',
+            items: [
+              {
+                id: 'item_ib_1_1',
+                code: '1.1',
+                name: 'Racional da Formulação e Dose Selecionada',
+                description: 'Justificativa da escolha do antígeno e adjuvante',
+                type: 'Narrativa' as RegulatoryDocItemType,
+                required: true,
+                sourceInternalId: 'NARRATIVE.INTRO',
+                status: 'Pronto' as RegulatoryDocItemStatus,
+                marker: '[RACIONAL_FORMULACAO]',
+                requiredResources: [
+                  { id: 'r25', name: 'Narrativa de introdução e racional', type: 'Narrativa Técnica' as RegulatoryResourceType, required: true, key: 'NARRATIVE.INTRO' }
+                ]
+              }
+            ]
+          }
+        ]
       },
       {
         id: `doc_deec_${proj.id}`,
         projectId: proj.id,
-        title: 'DEEC - Dossier de Ensaio Clínico',
-        type: 'Documento de Submissão DEEC',
+        title: 'DEEC - Dossiê de Ensaio Clínico',
+        type: 'Documento de Submissão DEEC / Anvisa',
         description: 'Dossiê para submissão à Anvisa / CEUA / CONEP.',
         currentVersion: '0.1',
         currentVersionStatus: 'Rascunho',
         updatedAt: new Date().toISOString(),
-        chapters: []
+        chapters: [
+          {
+            id: 'cap_deec_1',
+            code: '1.0',
+            title: '1. Resumo do Ensaio Clínico Proposto',
+            description: 'Desenho do estudo, tamanho amostral e critérios de inclusão',
+            items: [
+              {
+                id: 'item_deec_1_1',
+                code: '1.1',
+                name: 'Identificação e Objetivos do Protocolo',
+                description: 'Objetivos primários, secundários e endpoint de eficácia',
+                type: 'Informação Estruturada' as RegulatoryDocItemType,
+                required: true,
+                sourceInternalId: 'PRODUCT.INDICATION',
+                status: 'Pronto' as RegulatoryDocItemStatus,
+                marker: '[PROTOCOLO_CLINICO]',
+                requiredResources: [
+                  { id: 'r26', name: 'Indicação e objetivo clínico', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'PRODUCT.INDICATION' }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        id: `doc_ddcm_${proj.id}`,
+        projectId: proj.id,
+        title: 'DDCM - Dossiê de Desenvolvimento Clínico de Medicamento',
+        type: 'Dossiê Regulatório Estratégico',
+        description: 'Mapeamento consolidado de todas as fases do desenvolvimento para submissão Anvisa.',
+        currentVersion: '0.1',
+        currentVersionStatus: 'Rascunho',
+        updatedAt: new Date().toISOString(),
+        chapters: [
+          {
+            id: 'cap_ddcm_1',
+            code: '1.0',
+            title: '1. Pleno Desenvolvimento e Qualidade do Produto',
+            description: 'Estratégia regulatória e cadeia de suprimento',
+            items: [
+              {
+                id: 'item_ddcm_1_1',
+                code: '1.1',
+                name: 'Resumo do Programa de Desenvolvimento Qualitativo',
+                description: 'Histórico de lotes fabricados e consistência do processo',
+                type: 'Narrativa' as RegulatoryDocItemType,
+                required: true,
+                sourceInternalId: 'NARRATIVE.INTRO',
+                status: 'Em Andamento' as RegulatoryDocItemStatus,
+                marker: '[PROGRAMA_DESENVOLVIMENTO]',
+                requiredResources: [
+                  { id: 'r27', name: 'Narrativa do desenvolvimento', type: 'Narrativa Técnica' as RegulatoryResourceType, required: true, key: 'NARRATIVE.INTRO' },
+                  { id: 'r28', name: 'Tabela de apresentações', type: 'Tabela' as RegulatoryResourceType, required: true, key: 'TABLE_PRESENTATIONS' }
+                ]
+              }
+            ]
+          }
+        ]
       }
     ]).flat();
   }, [regulatoryDocs, projects, currentUser]);
@@ -216,7 +569,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
     return regulatoryDocs.length > 0 ? regulatoryDocs : defaultDocs;
   }, [regulatoryDocs, defaultDocs]);
 
-  // Documents for the currently selected project
+  // Documents filtered for the currently selected project
   const currentProjectDocs = useMemo(() => {
     if (selectedProjectId === 'all') return effectiveDocs;
     return effectiveDocs.filter(d => d.projectId === selectedProjectId);
@@ -231,126 +584,333 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
     return currentProjectDocs.length > 0 ? currentProjectDocs[0] : null;
   }, [effectiveDocs, currentProjectDocs, selectedDocId]);
 
-  // Modals & Interactivity
-  const [showVersionModal, setShowVersionModal] = useState(false);
-  const [newVersionNum, setNewVersionNum] = useState('');
-  const [newVersionStatus, setNewVersionStatus] = useState('Rascunho');
-  const [newVersionNotes, setNewVersionNotes] = useState('');
-
-  const [showItemCompleterModal, setShowItemCompleterModal] = useState(false);
-  const [activeItemForModal, setActiveItemForModal] = useState<{ chapterId: string; item: RegulatoryDocumentItem } | null>(null);
-  const [modalItemValue, setModalItemValue] = useState('');
-  const [modalItemEvidenceUrl, setModalItemEvidenceUrl] = useState('');
-  const [modalItemNotes, setModalItemNotes] = useState('');
-  const [modalItemStatus, setModalItemStatus] = useState<RegulatoryDocItemStatus>('Concluído');
-
-  // Modal to add new item to a document chapter
-  const [showAddItemModal, setShowAddItemModal] = useState(false);
-  const [targetChapterIdForNewItem, setTargetChapterIdForNewItem] = useState('');
-  const [newItemName, setNewItemName] = useState('');
-  const [newItemType, setNewItemType] = useState<RegulatoryDocItemType>('Informação Regulatória');
-  const [newItemRequired, setNewItemRequired] = useState(true);
-  const [newItemMarker, setNewItemMarker] = useState('');
-  const [newItemSourceId, setNewItemSourceId] = useState('');
-
-  // Modal to add or edit item in Internal Database
-  const [showAddInfoItemModal, setShowAddInfoItemModal] = useState(false);
-  const [editingInfoItemId, setEditingInfoItemId] = useState<string | null>(null);
-  const [infoItemInternalId, setInfoItemInternalId] = useState('');
-  const [infoItemName, setInfoItemName] = useState('');
-  const [infoItemCategory, setInfoItemCategory] = useState('Produto');
-  const [infoItemValue, setInfoItemValue] = useState('');
-
-  const [selectedEvidenceForView, setSelectedEvidenceForView] = useState<any>(null);
-
-  // Default seed info items for internal database if empty
-  const defaultInfoItems = useMemo<RegulatoryInfoItem[]>(() => {
-    if (regulatoryInfoItems.length > 0) return regulatoryInfoItems;
+  // Default Knowledge Records for Knowledge Bank (Banco de Conhecimento Regulatório)
+  const defaultKnowledgeRecords = useMemo<RegulatoryKnowledgeRecord[]>(() => {
     const currentProjId = activeProject?.id || 'p1';
+    
+    // Seed initial structured info, narratives, evidence and attachments
     return [
       {
-        id: 'info_1',
+        id: 'kb_1',
         projectId: currentProjId,
         internalId: 'PRODUCT.NAME',
-        name: 'Nome da Vacina',
-        category: 'Produto',
-        type: 'Parâmetro',
-        value: 'Vacina Malaria Universal - UniMaV',
-        origin: 'Definição Estratégica do Projeto',
+        category: 'Informações Estruturadas',
+        title: 'Nome Comercial / Técnico da Vacina',
+        value: 'Vacina Malária Recombinante - UniMaV-01',
+        origin: 'Definição Estratégica da Liderança do Projeto',
+        updatedAt: new Date().toISOString(),
         version: 1,
-        updatedAt: new Date().toISOString()
+        history: [{ version: 1, updatedAt: new Date().toISOString(), author: currentUser, value: 'Vacina Malária Recombinante - UniMaV-01' }],
+        usedInDocs: [
+          { docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.1', itemName: 'Nome e Identificação da Vacina' },
+          { docId: 'doc_ddcm', docTitle: 'DDCM', itemCode: '1.1', itemName: 'Resumo do Programa de Desenvolvimento' },
+          { docId: 'doc_brochura', docTitle: 'Brochura do Investigador', itemCode: '1.1', itemName: 'Racional da Formulação' },
+          { docId: 'doc_deec', docTitle: 'DEEC', itemCode: '1.1', itemName: 'Identificação e Objetivos' }
+        ]
       },
       {
-        id: 'info_2',
+        id: 'kb_2',
+        projectId: currentProjId,
+        internalId: 'PRODUCT.CODE',
+        category: 'Informações Estruturadas',
+        title: 'Código Interno do Produto',
+        value: 'CTVAC-MAL-2026',
+        origin: 'Cadastro de Projeto no CTVacinas',
+        updatedAt: new Date().toISOString(),
+        version: 1,
+        usedInDocs: [{ docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.1', itemName: 'Nome e Identificação' }]
+      },
+      {
+        id: 'kb_3',
         projectId: currentProjId,
         internalId: 'PRODUCT.INDICATION',
-        name: 'Indicação Terapêutica / Proposta',
-        category: 'Produto',
-        type: 'Texto',
-        value: 'Prevenção da malária causada por Plasmodium falciparum em populações de risco e regiões endêmicas.',
-        origin: 'Protocolo Clínico',
+        category: 'Informações Estruturadas',
+        title: 'Indicação Terapêutica Proposta',
+        value: 'Imunização ativa para prevenção da malária clínica por Plasmodium falciparum em indivíduos a partir de 2 anos de idade.',
+        origin: 'Protocolo da Fase I / Comitê Científico',
+        updatedAt: new Date().toISOString(),
         version: 1,
-        updatedAt: new Date().toISOString()
+        usedInDocs: [
+          { docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.2', itemName: 'Indicação Terapêutica' },
+          { docId: 'doc_deec', docTitle: 'DEEC', itemCode: '1.1', itemName: 'Identificação e Objetivos' }
+        ]
       },
       {
-        id: 'info_3',
+        id: 'kb_4',
+        projectId: currentProjId,
+        internalId: 'PRODUCT.DESC',
+        category: 'Informações Estruturadas',
+        title: 'Descrição Organoléptica do Produto',
+        value: 'Suspensão injetável, homogênea, de coloração branco-opalescente, isenta de partículas estranhas visíveis.',
+        origin: 'Relatório do Lote Piloto LP-001',
+        updatedAt: new Date().toISOString(),
+        version: 1,
+        usedInDocs: [{ docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.3', itemName: 'Descrição da Forma Farmacêutica' }]
+      },
+      {
+        id: 'kb_5',
+        projectId: currentProjId,
+        internalId: 'IFA.NAME',
+        category: 'Informações Estruturadas',
+        title: 'Nome do Insumo Farmacêutico Ativo (IFA)',
+        value: 'Proteína Recombinante Pfs25 / MSP1-19',
+        origin: 'Bancada de Biologia Molecular',
+        updatedAt: new Date().toISOString(),
+        version: 1,
+        usedInDocs: [
+          { docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.3', itemName: 'Descrição da Forma Farmacêutica' },
+          { docId: 'doc_ifa', docTitle: 'Dossiê do IFA', itemCode: '1.1', itemName: 'Estrutura do IFA' }
+        ]
+      },
+      {
+        id: 'kb_6',
+        projectId: currentProjId,
+        internalId: 'ADJUVANT.NAME',
+        category: 'Informações Estruturadas',
+        title: 'Adjuvante e Sistema Imunoadjuvante',
+        value: 'Emulsão de Esqualeno com QS-21 (Adjuvante L30-Adjuv)',
+        origin: 'Formulação de Adjuvante',
+        updatedAt: new Date().toISOString(),
+        version: 1,
+        usedInDocs: [
+          { docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.3', itemName: 'Descrição da Forma Farmacêutica' },
+          { docId: 'doc_adj', docTitle: 'Dossiê do Adjuvante', itemCode: '1.1', itemName: 'Composição Química' }
+        ]
+      },
+      {
+        id: 'kb_7',
         projectId: currentProjId,
         internalId: 'PRODUCT.ADMINISTRATION_ROUTE',
-        name: 'Via de Administração e Forma Farmacêutica',
-        category: 'Produto',
-        type: 'Parâmetro',
-        value: 'Via Intramuscular (IM) - Suspensão Injetável de Proteína Recombinante com Adjuvante',
-        origin: 'Formulação de Lote PILOTO',
+        category: 'Informações Estruturadas',
+        title: 'Via de Administração e Posologia',
+        value: 'Intramuscular (IM), aplicada no músculo deltoide na dose de 0.5 mL.',
+        origin: 'Manual de Procedimentos Clínicos',
+        updatedAt: new Date().toISOString(),
         version: 1,
-        updatedAt: new Date().toISOString()
+        usedInDocs: [{ docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.3', itemName: 'Descrição da Forma Farmacêutica' }]
       },
       {
-        id: 'info_4',
+        id: 'kb_8',
         projectId: currentProjId,
-        internalId: 'PRODUCT.PRESENTATION',
-        name: 'Apresentações e Conservação',
-        category: 'Produto',
-        type: 'Parâmetro',
-        value: 'Frasco-ampola multidose (5 doses), conservado entre +2°C e +8°C protegido da luz.',
-        origin: 'Estudo de Estabilidade',
+        internalId: 'PRODUCT.STORAGE_TEMP',
+        category: 'Informações Estruturadas',
+        title: 'Temperatura de Armazenamento e Conservação',
+        value: 'Conservar sob refrigeração entre +2°C e +8°C, protegido da luz. Não congelar.',
+        origin: 'Estudo de Estabilidade de 12 Meses',
+        updatedAt: new Date().toISOString(),
         version: 1,
-        updatedAt: new Date().toISOString()
+        usedInDocs: [{ docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.3', itemName: 'Descrição da Forma Farmacêutica' }]
       },
       {
-        id: 'info_5',
+        id: 'kb_9',
         projectId: currentProjId,
-        internalId: 'IFA.STRUCTURE',
-        name: 'Caracterização do Insumo Farmacêutico Ativo (IFA)',
-        category: 'IFA',
-        type: 'Texto',
-        value: 'Proteína recombinante expressa em Pichia pastoris, purificada por cromatografia e caracterizada por espectrometria de massas.',
-        origin: 'Relatório de Caracterização da Mão de Obra / CTCVacinas',
+        internalId: 'NARRATIVE.INTRO',
+        category: 'Narrativas Técnicas',
+        title: 'Introdução e Racional do Desenvolvimento',
+        value: 'A malária representa um importante desafio de saúde pública global. O presente projeto visa desenvolver uma vacina altamente eficaz baseada em antígenos recombinantes expressos em Pichia pastoris formulados com adjuvante esqualênico. Os testes pré-clínicos demonstraram elevada indução de anticorpos neutralizantes e excelente perfil de tolerabilidade.',
+        origin: 'Elaboração Técnica / Equipe de Redação Regulatória',
+        updatedAt: new Date().toISOString(),
         version: 1,
-        updatedAt: new Date().toISOString()
+        usedInDocs: [
+          { docId: 'doc_brochura', docTitle: 'Brochura do Investigador', itemCode: '1.1', itemName: 'Racional da Formulação' },
+          { docId: 'doc_ddcm', docTitle: 'DDCM', itemCode: '1.1', itemName: 'Resumo do Programa' }
+        ]
+      },
+      {
+        id: 'kb_10',
+        projectId: currentProjId,
+        internalId: 'NARRATIVE.IMMUNO',
+        category: 'Narrativas Técnicas',
+        title: 'Narrativa de Resumo dos Ensaios de Imunogenicidade',
+        value: 'Em modelos murinos e primatas não humanos, a imunização com 3 doses da vacina UniMaV-01 produziu resposta humoral sustentada com títulos de IgG superiores a 1:100.000, além de resposta celular do tipo Th1 com secreção de IFN-gama por esplenócitos.',
+        origin: 'Relatório do Ensaio de Imunogenicidade Murina',
+        updatedAt: new Date().toISOString(),
+        version: 1,
+        usedInDocs: [{ docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '3.1', itemName: 'Resumo dos Ensaios de Imunogenicidade' }]
+      },
+      {
+        id: 'kb_11',
+        projectId: currentProjId,
+        internalId: 'NARRATIVE.STABILITY',
+        category: 'Narrativas Técnicas',
+        title: 'Narrativa do Estudo de Estabilidade Acelerada e Longa Duração',
+        value: 'Foram avaliados 3 lotes piloto mantidos nas temperaturas de 2-8°C e 25°C/60%UR. Após 12 meses sob refrigeração, não foram observadas alterações no pH, teor de antígeno ou esterilidade.',
+        origin: 'Laboratório de Controle de Qualidade',
+        updatedAt: new Date().toISOString(),
+        version: 1,
+        usedInDocs: [{ docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '2.1', itemName: 'Relatório de Estabilidade' }]
+      },
+      {
+        id: 'kb_12',
+        projectId: currentProjId,
+        internalId: 'EVID.STERILITY',
+        category: 'Evidências',
+        title: 'Certificado de Ensaio de Esterilidade e Endotoxinas',
+        value: 'https://sharepoint.ctvacinas.org/laudos/esterilidade_LP001.pdf',
+        origin: 'Laudo Microbiológico nº 2026-88',
+        updatedAt: new Date().toISOString(),
+        version: 1,
+        usedInDocs: [{ docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '2.2', itemName: 'Laudo de Esterilidade' }]
+      },
+      {
+        id: 'kb_13',
+        projectId: currentProjId,
+        internalId: 'ATTACHMENT.COA',
+        category: 'Anexos',
+        title: 'Certificado de Análise (CoA) do Lote Piloto LP-001',
+        value: 'https://sharepoint.ctvacinas.org/anexos/CoA_Lote_LP001.pdf',
+        origin: 'Controle de Qualidade Central',
+        updatedAt: new Date().toISOString(),
+        version: 1,
+        usedInDocs: [{ docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '2.1', itemName: 'Relatório de Estabilidade' }]
       }
     ];
-  }, [regulatoryInfoItems, activeProject]);
+  }, [activeProject, currentUser]);
 
-  const effectiveInfoItems = useMemo(() => {
-    return regulatoryInfoItems.length > 0 ? regulatoryInfoItems : defaultInfoItems;
-  }, [regulatoryInfoItems, defaultInfoItems]);
+  // Knowledge Bank State
+  const [knowledgeRecords, setKnowledgeRecords] = useState<RegulatoryKnowledgeRecord[]>(defaultKnowledgeRecords);
 
-  // Collections filtered for active project
-  const projectInfoItems = useMemo(() => {
-    return effectiveInfoItems.filter(i => selectedProjectId === 'all' || i.projectId === selectedProjectId);
-  }, [effectiveInfoItems, selectedProjectId]);
+  // Sync / Edit Knowledge Record Modal
+  const [showKbRecordModal, setShowKbRecordModal] = useState(false);
+  const [editingKbId, setEditingKbId] = useState<string | null>(null);
+  const [kbKey, setKbKey] = useState('');
+  const [kbTitle, setKbTitle] = useState('');
+  const [kbCategory, setKbCategory] = useState<KnowledgeCategory>('Informações Estruturadas');
+  const [kbValue, setKbValue] = useState('');
+  const [kbOrigin, setKbOrigin] = useState('');
 
-  const projectNarratives = useMemo(() => {
-    return regulatoryNarratives.filter(n => selectedProjectId === 'all' || n.projectId === selectedProjectId);
-  }, [regulatoryNarratives, selectedProjectId]);
+  // Auto completeness checker for item
+  const checkItemCompleteness = (item: RegulatoryDocumentItem) => {
+    const requiredResources = item.requiredResources || [];
+    if (requiredResources.length === 0) {
+      // Fallback simple check
+      if (item.value || item.evidenceUrl) {
+        return { available: 1, total: 1, percent: 100, missingNames: [], status: 'Pronto' as const };
+      }
+      return { available: 0, total: 1, percent: 0, missingNames: [item.name], status: 'Faltando' as const };
+    }
 
-  const projectEvidences = useMemo(() => {
-    return regulatoryEvidence.filter(e => selectedProjectId === 'all' || e.projectId === selectedProjectId);
-  }, [regulatoryEvidence, selectedProjectId]);
+    let availableCount = 0;
+    const missingNames: string[] = [];
 
-  const projectRepeatables = useMemo(() => {
-    return repeatableRecords.filter(r => selectedProjectId === 'all' || r.projectId === selectedProjectId);
-  }, [repeatableRecords, selectedProjectId]);
+    requiredResources.forEach(res => {
+      let found = false;
+      if (res.key) {
+        // Check Knowledge Bank
+        const rec = knowledgeRecords.find(k => k.internalId === res.key && (k.value !== undefined && k.value !== ''));
+        if (rec) found = true;
+
+        // Check structured tables if table type
+        if (!found && res.type === 'Tabela') {
+          const tbl = structuredTables.find(t => t.key === res.key && t.rows.length > 0);
+          if (tbl) found = true;
+        }
+
+        // Check repeatable records
+        if (!found && res.type === 'Registro Repetitivo') {
+          if (repeatableRecords.length > 0) found = true;
+        }
+      }
+
+      if (!found && item.value && item.value.trim().length > 0) {
+        found = true;
+      }
+
+      if (found) {
+        availableCount++;
+      } else {
+        missingNames.push(res.name);
+      }
+    });
+
+    const total = requiredResources.length;
+    const percent = Math.round((availableCount / total) * 100);
+
+    let calculatedStatus: 'Pronto' | 'Em Andamento' | 'Faltando' = 'Faltando';
+    if (availableCount === total) {
+      calculatedStatus = 'Pronto';
+    } else if (availableCount > 0) {
+      calculatedStatus = 'Em Andamento';
+    }
+
+    return {
+      available: availableCount,
+      total,
+      percent,
+      missingNames,
+      status: calculatedStatus
+    };
+  };
+
+  // Open modal to create / edit knowledge bank record
+  const handleOpenKbModal = (rec?: RegulatoryKnowledgeRecord) => {
+    if (rec) {
+      setEditingKbId(rec.id);
+      setKbKey(rec.internalId);
+      setKbTitle(rec.title);
+      setKbCategory(rec.category);
+      setKbValue(typeof rec.value === 'string' ? rec.value : JSON.stringify(rec.value));
+      setKbOrigin(rec.origin);
+    } else {
+      setEditingKbId(null);
+      setKbKey('');
+      setKbTitle('');
+      setKbCategory(kbCategoryTab);
+      setKbValue('');
+      setKbOrigin('Cadastro Direto no Banco de Conhecimento');
+    }
+    setShowKbRecordModal(true);
+  };
+
+  // Save Knowledge Bank Record with Single Source of Truth update!
+  const handleSaveKbRecord = () => {
+    if (!kbKey.trim() || !kbTitle.trim()) return;
+
+    const currentProjId = activeProject?.id || 'p1';
+    let updatedList = [...knowledgeRecords];
+
+    if (editingKbId) {
+      updatedList = updatedList.map(item => {
+        if (item.id !== editingKbId) return item;
+
+        const newVersion = item.version + 1;
+        const newHistory = [
+          ...(item.history || []),
+          { version: newVersion, updatedAt: new Date().toISOString(), author: currentUser, value: kbValue.trim() }
+        ];
+
+        return {
+          ...item,
+          internalId: kbKey.trim().toUpperCase().replace(/\s+/g, '_'),
+          title: kbTitle.trim(),
+          category: kbCategory,
+          value: kbValue.trim(),
+          origin: kbOrigin.trim() || item.origin,
+          version: newVersion,
+          history: newHistory,
+          updatedAt: new Date().toISOString()
+        };
+      });
+    } else {
+      const newRec: RegulatoryKnowledgeRecord = {
+        id: `kb_custom_${Date.now()}`,
+        projectId: currentProjId,
+        internalId: kbKey.trim().toUpperCase().replace(/\s+/g, '_'),
+        category: kbCategory,
+        title: kbTitle.trim(),
+        value: kbValue.trim(),
+        origin: kbOrigin.trim() || 'Cadastro Manual',
+        updatedAt: new Date().toISOString(),
+        version: 1,
+        history: [{ version: 1, updatedAt: new Date().toISOString(), author: currentUser, value: kbValue.trim() }],
+        usedInDocs: []
+      };
+      updatedList.push(newRec);
+    }
+
+    setKnowledgeRecords(updatedList);
+    setShowKbRecordModal(false);
+  };
 
   // Pending Contributions coming from Projects execution
   const projectPendingContributions = useMemo(() => {
@@ -362,7 +922,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
 
       proj.macroActivities.forEach(macro => {
         macro.microActivities.forEach(micro => {
-          if (micro.dossierContribution || micro.generatesRegulatoryContent || micro.evidenceUrl) {
+          if (micro.generatesRegulatoryContent || micro.evidenceUrl || micro.reportLink || micro.observations || micro.dossierContribution) {
             list.push({
               id: micro.id,
               projectId: proj.id,
@@ -370,7 +930,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
               macroName: macro.name,
               phase: macro.phase,
               title: micro.name,
-              description: micro.evidenceDescription || `Contribuição gerada pela microatividade ${micro.name} na macroatividade ${macro.name}`,
+              description: micro.evidenceDescription || `Microatividade: ${micro.name} na macroatividade ${macro.name}`,
               status: micro.status,
               assignee: micro.assignee || 'Não atribuído',
               evidenceUrl: micro.evidenceUrl,
@@ -404,274 +964,52 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
     return list;
   }, [projects, tasks, selectedProjectId, activeProject]);
 
-  // Open item completer modal with current item data
-  const handleOpenItemCompleter = (chapterId: string, item: RegulatoryDocumentItem) => {
-    setActiveItemForModal({ chapterId, item });
-    setModalItemValue(item.value || '');
-    setModalItemEvidenceUrl(item.evidenceUrl || '');
-    setModalItemNotes(item.notes || '');
-    setModalItemStatus(item.status || 'Concluído');
-    setShowItemCompleterModal(true);
-  };
-
-  // Save detailed item information (value, evidence, notes, status)
-  const handleSaveItemDetails = () => {
-    if (!activeDoc || !activeItemForModal) return;
-
-    const { chapterId, item } = activeItemForModal;
-
-    const updatedChapters = activeDoc.chapters.map(chap => {
-      if (chap.id !== chapterId) return chap;
-      return {
-        ...chap,
-        items: chap.items.map(it => {
-          if (it.id !== item.id) return it;
-          return {
-            ...it,
-            status: modalItemStatus,
-            value: modalItemValue.trim(),
-            evidenceUrl: modalItemEvidenceUrl.trim(),
-            notes: modalItemNotes.trim()
-          };
-        })
-      };
-    });
-
-    const updatedDoc = { ...activeDoc, chapters: updatedChapters, updatedAt: new Date().toISOString() };
-    const updatedList = effectiveDocs.map(d => d.id === updatedDoc.id ? updatedDoc : d);
-    onUpdateDocs(updatedList);
-
-    // Sync to Internal Database Info Items automatically
-    if (item.sourceInternalId || item.marker || item.name) {
-      const internalKey = item.sourceInternalId || item.marker || item.name.toUpperCase().replace(/\s+/g, '_');
-      const existingInfoIndex = effectiveInfoItems.findIndex(i => i.internalId === internalKey && i.projectId === activeDoc.projectId);
-
-      let updatedInfoItems = [...effectiveInfoItems];
-      if (existingInfoIndex >= 0) {
-        updatedInfoItems[existingInfoIndex] = {
-          ...updatedInfoItems[existingInfoIndex],
-          value: modalItemValue.trim() || updatedInfoItems[existingInfoIndex].value,
-          updatedAt: new Date().toISOString()
-        };
-      } else {
-        updatedInfoItems.push({
-          id: `info_auto_${Date.now()}`,
-          projectId: activeDoc.projectId,
-          internalId: internalKey,
-          name: item.name,
-          category: 'Produto',
-          type: item.type === 'Informação Regulatória' ? 'Parâmetro' : 'Texto',
-          value: modalItemValue.trim(),
-          origin: `Item ${item.name} no documento ${activeDoc.title}`,
-          version: 1,
-          updatedAt: new Date().toISOString()
-        });
-      }
-      onUpdateInfoItems(updatedInfoItems);
-    }
-
-    setShowItemCompleterModal(false);
-  };
-
-  // Handle adding a new item to a document chapter
-  const handleAddNewItemToChapter = () => {
-    if (!activeDoc || !targetChapterIdForNewItem || !newItemName.trim()) return;
-
-    const newItemObj: RegulatoryDocumentItem = {
-      id: `item_custom_${Date.now()}`,
-      name: newItemName.trim(),
-      type: newItemType,
-      required: newItemRequired,
-      sourceInternalId: newItemSourceId.trim() || newItemName.toUpperCase().replace(/\s+/g, '.'),
-      status: 'Pendente',
-      marker: newItemMarker.trim() || `[${newItemName.toUpperCase().replace(/\s+/g, '_')}]`
-    };
-
-    const updatedChapters = activeDoc.chapters.map(chap => {
-      if (chap.id !== targetChapterIdForNewItem) return chap;
-      return {
-        ...chap,
-        items: [...(chap.items || []), newItemObj]
-      };
-    });
-
-    const updatedDoc = { ...activeDoc, chapters: updatedChapters, updatedAt: new Date().toISOString() };
-    const updatedList = effectiveDocs.map(d => d.id === updatedDoc.id ? updatedDoc : d);
-    onUpdateDocs(updatedList);
-
-    setShowAddItemModal(false);
-    setNewItemName('');
-    setNewItemMarker('');
-    setNewItemSourceId('');
-  };
-
-  // Add or Edit Info Item in Internal Database
-  const handleOpenInfoItemModal = (existingItem?: RegulatoryInfoItem) => {
-    if (existingItem) {
-      setEditingInfoItemId(existingItem.id);
-      setInfoItemInternalId(existingItem.internalId);
-      setInfoItemName(existingItem.name);
-      setInfoItemCategory(existingItem.category || 'Produto');
-      setInfoItemValue(existingItem.value || '');
-    } else {
-      setEditingInfoItemId(null);
-      setInfoItemInternalId('');
-      setInfoItemName('');
-      setInfoItemCategory('Produto');
-      setInfoItemValue('');
-    }
-    setShowAddInfoItemModal(true);
-  };
-
-  const handleSaveInfoItem = () => {
-    if (!infoItemName.trim() || !infoItemValue.trim()) return;
-
-    const currentProjId = activeProject?.id || 'p1';
-    let updatedInfoItems = [...effectiveInfoItems];
-
-    if (editingInfoItemId) {
-      updatedInfoItems = updatedInfoItems.map(item => {
-        if (item.id !== editingInfoItemId) return item;
-        return {
-          ...item,
-          internalId: infoItemInternalId.trim() || item.internalId,
-          name: infoItemName.trim(),
-          category: infoItemCategory,
-          value: infoItemValue.trim(),
-          updatedAt: new Date().toISOString()
-        };
-      });
-    } else {
-      const newObj: RegulatoryInfoItem = {
-        id: `info_custom_${Date.now()}`,
-        projectId: currentProjId,
-        internalId: infoItemInternalId.trim() || infoItemName.toUpperCase().replace(/\s+/g, '_'),
-        name: infoItemName.trim(),
-        category: infoItemCategory,
-        type: 'Parâmetro',
-        value: infoItemValue.trim(),
-        origin: 'Cadastro Manual na Base Interna',
-        version: 1,
-        updatedAt: new Date().toISOString()
-      };
-      updatedInfoItems.push(newObj);
-    }
-
-    onUpdateInfoItems(updatedInfoItems);
-    setShowAddInfoItemModal(false);
-  };
-
-  // Metrics Calculation
+  // General Document Completeness Dashboard Metrics
   const completenessMetrics = useMemo(() => {
-    let totalRequired = 0;
-    let completed = 0;
-    let pending = 0;
-    let inProgress = 0;
-
-    let pendingEvidence = 0;
-    let pendingNarrative = 0;
-    let pendingInfo = 0;
-    let pendingTable = 0;
+    let totalItems = 0;
+    let readyItems = 0;
+    let partialItems = 0;
+    let missingItems = 0;
 
     currentProjectDocs.forEach(doc => {
       doc.chapters?.forEach(chap => {
         chap.items?.forEach(item => {
-          if (item.required) {
-            totalRequired++;
-            if (item.status === 'Concluído') {
-              completed++;
-            } else {
-              pending++;
-              if (item.status === 'Em Andamento') inProgress++;
-
-              if (item.type === 'Evidência') pendingEvidence++;
-              else if (item.type === 'Narrativa') pendingNarrative++;
-              else if (item.type === 'Informação Regulatória') pendingInfo++;
-              else if (item.type === 'Tabela' || item.type === 'Figura') pendingTable++;
-            }
-          }
+          totalItems++;
+          const calc = checkItemCompleteness(item);
+          if (calc.status === 'Pronto') readyItems++;
+          else if (calc.status === 'Em Andamento') partialItems++;
+          else missingItems++;
         });
       });
     });
 
-    const percent = totalRequired > 0 ? Math.round((completed / totalRequired) * 100) : 0;
+    const percent = totalItems > 0 ? Math.round((readyItems / totalItems) * 100) : 0;
 
     return {
-      totalRequired,
-      completed,
-      pending,
-      inProgress,
-      percent,
-      pendingEvidence,
-      pendingNarrative,
-      pendingInfo,
-      pendingTable
+      totalItems,
+      readyItems,
+      partialItems,
+      missingItems,
+      percent
     };
-  }, [currentProjectDocs]);
+  }, [currentProjectDocs, knowledgeRecords, structuredTables, repeatableRecords]);
 
-  // Version bump handler
-  const handleAddDocumentVersion = () => {
-    if (!activeDoc || !newVersionNum.trim()) return;
-
-    const newVerObj: RegulatoryDocumentVersion = {
-      version: newVersionNum.trim(),
-      date: new Date().toISOString(),
-      status: newVersionStatus,
-      author: currentUser,
-      notes: newVersionNotes
-    };
-
-    const updatedDoc: RegulatoryDocument = {
-      ...activeDoc,
-      currentVersion: newVersionNum.trim(),
-      currentVersionStatus: newVersionStatus,
-      versionHistory: [...(activeDoc.versionHistory || []), newVerObj],
-      updatedAt: new Date().toISOString()
-    };
-
-    const updatedList = effectiveDocs.map(d => d.id === updatedDoc.id ? updatedDoc : d);
-    onUpdateDocs(updatedList);
-
-    setShowVersionModal(false);
-    setNewVersionNum('');
-    setNewVersionNotes('');
-  };
-
-  // Toggle or edit item status
-  const handleUpdateItemStatus = (chapterId: string, itemId: string, status: RegulatoryDocItemStatus) => {
-    if (!activeDoc) return;
-
-    const updatedChapters = activeDoc.chapters.map(chap => {
-      if (chap.id !== chapterId) return chap;
-      return {
-        ...chap,
-        items: chap.items.map(item => {
-          if (item.id !== itemId) return item;
-          return { ...item, status };
-        })
-      };
-    });
-
-    const updatedDoc = { ...activeDoc, chapters: updatedChapters, updatedAt: new Date().toISOString() };
-    const updatedList = effectiveDocs.map(d => d.id === updatedDoc.id ? updatedDoc : d);
-    onUpdateDocs(updatedList);
-  };
-
-  // Export Json
-  const handleExportDossierBank = () => {
+  // Export JSON of all Regulatory Knowledge Data
+  const handleExportKnowledgeBank = () => {
     const exportData = {
       metadata: {
         exportedAt: new Date().toISOString(),
         exportedBy: currentUser,
+        systemName: 'Sistema de Gestão do Conhecimento Regulatório',
         projectId: selectedProjectId,
         projectName: activeProject?.name || 'Todos os Projetos'
       },
       completenessMetrics,
       documents: currentProjectDocs,
-      regulatoryInfoItems: projectInfoItems,
-      narratives: projectNarratives,
-      evidenceLibrary: projectEvidences,
-      repeatableRecords: projectRepeatables
+      knowledgeRecords,
+      structuredTables,
+      markerMappings,
+      repeatableRecords
     };
 
     const jsonStr = JSON.stringify(exportData, null, 2);
@@ -679,7 +1017,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Documentos_Regulatorios_${activeProject?.name.replace(/[^a-zA-Z0-9]/g, '_') || 'Projetos'}_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `Conhecimento_Regulatorio_${activeProject?.name.replace(/[^a-zA-Z0-9]/g, '_') || 'Projetos'}_${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -688,332 +1026,358 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
 
   return (
     <div className="space-y-6">
-      {/* Active Project Banner */}
-      <div className="bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-teal-500/10 border border-amber-500/30 p-4 rounded-3xl flex flex-wrap items-center justify-between gap-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 font-black">
-            <BookOpen size={20} />
-          </div>
-          <div>
-            <span className="text-[10px] font-black uppercase text-amber-700 tracking-wider">
-              PROJETO ATIVO EM EXIBIÇÃO:
-            </span>
-            <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
-              {activeProject?.name || 'Todos os Projetos'}
-              <span className="text-[9px] font-bold px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full border border-amber-200">
-                {selectedProjectId === 'all' ? 'Modo Visão Geral' : 'Filtro Ativo'}
+      {/* System Header Card */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-slate-700/60 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-3 py-1 bg-amber-500/20 text-amber-300 rounded-full text-[10px] font-black uppercase tracking-wider border border-amber-500/30">
+                Módulo Regulatório Unificado
               </span>
-            </h2>
+              <span className="px-3 py-1 bg-indigo-500/20 text-indigo-300 rounded-full text-[10px] font-black uppercase tracking-wider border border-indigo-500/30">
+                Single Source of Truth
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white flex items-center gap-3">
+              <FolderTree className="text-amber-400" size={32} />
+              Sistema de Gestão do Conhecimento Regulatório
+            </h1>
+            <p className="text-xs text-slate-300 font-medium max-w-3xl leading-relaxed">
+              Organização dinâmica e centralizada de informações, narrativas técnicas, tabelas e evidências para montagem e acompanhamento contínuo da completude de documentos regulatórios.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            {/* Project Filter Select */}
+            <div className="flex items-center gap-2 bg-slate-800/90 p-2 rounded-2xl border border-slate-700 shadow-inner">
+              <span className="text-[10px] font-black uppercase text-amber-400 px-2">Projeto:</span>
+              <select
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                className="bg-slate-900 text-white font-extrabold px-3 py-1.5 rounded-xl border border-slate-700 outline-none text-xs cursor-pointer"
+              >
+                <option value="all">Todos os Projetos</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={handleExportKnowledgeBank}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition shadow-lg flex items-center gap-2 cursor-pointer active:scale-95"
+            >
+              <Download size={16} /> Exportar Banco (JSON)
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-white/80 p-1.5 rounded-2xl border border-slate-200 shadow-sm">
-          <span className="text-xs font-bold text-slate-600 px-2">Selecionar Projeto:</span>
-          <select
-            value={selectedProjectId}
-            onChange={(e) => setSelectedProjectId(e.target.value)}
-            className="bg-slate-900 text-white font-black px-3.5 py-2 rounded-xl border border-slate-700 outline-none cursor-pointer text-xs"
-          >
-            <option value="all">Todos os Projetos</option>
-            {projects.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
+        {/* Realtime Completeness Progress Bar Banner */}
+        <div className="mt-6 pt-6 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-5 gap-4">
+          <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/50">
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Completude Geral</span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-xl font-black text-amber-400">{completenessMetrics.percent}%</span>
+              <span className="text-[10px] text-slate-400 font-bold">de itens prontos</span>
+            </div>
+          </div>
+
+          <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/50">
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Itens Prontos (✔)</span>
+            <span className="text-xl font-black text-emerald-400 mt-1 block">{completenessMetrics.readyItems}</span>
+          </div>
+
+          <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/50">
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Em Andamento (⚠)</span>
+            <span className="text-xl font-black text-amber-400 mt-1 block">{completenessMetrics.partialItems}</span>
+          </div>
+
+          <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/50">
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Itens Faltando (✖)</span>
+            <span className="text-xl font-black text-rose-400 mt-1 block">{completenessMetrics.missingItems}</span>
+          </div>
+
+          <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/50 col-span-2 sm:col-span-1">
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Contribuições de Projetos</span>
+            <span className="text-xl font-black text-indigo-300 mt-1 block">{projectPendingContributions.length}</span>
+          </div>
         </div>
       </div>
 
-      {/* Top Header Card */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 rounded-3xl p-6 text-white shadow-xl border border-slate-700/60">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-300 shrink-0">
-              <BookOpen size={24} />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
-                Módulo de Documentos Regulatórios
-              </h1>
-              <p className="text-xs text-slate-300 font-medium">
-                Organização, construção, revisão e evolução dos documentos oficiais do projeto.
-              </p>
-            </div>
-          </div>
+      {/* Main Navigation Tabs Bar */}
+      <div className="bg-white p-2 rounded-3xl border border-slate-200 shadow-sm flex flex-wrap gap-2">
+        <button
+          onClick={() => setActiveTab('doc_tree')}
+          className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 cursor-pointer ${
+            activeTab === 'doc_tree'
+              ? 'bg-slate-900 text-white shadow-md'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <FolderTree size={16} />
+          <span>Árvore de Documentos e Itens</span>
+        </button>
 
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Export JSON */}
-            <button
-              onClick={handleExportDossierBank}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-xs flex items-center gap-2 transition shadow-lg active:scale-95 cursor-pointer"
-            >
-              <Download size={15} />
-              <span>Exportar Dossiê</span>
-            </button>
-          </div>
-        </div>
+        <button
+          onClick={() => setActiveTab('knowledge_bank')}
+          className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 cursor-pointer ${
+            activeTab === 'knowledge_bank'
+              ? 'bg-indigo-600 text-white shadow-md'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Database size={16} />
+          <span>Banco de Conhecimento Regulatório</span>
+        </button>
 
-        {/* Primary Document-Centric Navigation Bar */}
-        <div className="mt-6 flex items-center gap-2 border-t border-slate-700/60 pt-4 overflow-x-auto custom-scrollbar">
-          <button
-            onClick={() => setActiveTab('docs')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-black transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'docs'
-                ? 'bg-indigo-600 text-white shadow-lg'
-                : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <FileText size={16} />
-            <span>Documentos Regulatórios</span>
-          </button>
+        <button
+          onClick={() => setActiveTab('repeatable_records')}
+          className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 cursor-pointer ${
+            activeTab === 'repeatable_records'
+              ? 'bg-teal-600 text-white shadow-md'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <TableIcon size={16} />
+          <span>Registros Repetitivos do Projeto</span>
+        </button>
 
-          <button
-            onClick={() => setActiveTab('completeness')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-black transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'completeness'
-                ? 'bg-indigo-600 text-white shadow-lg'
-                : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <ShieldCheck size={16} />
-            <span>Matriz de Completude</span>
-          </button>
+        <button
+          onClick={() => setActiveTab('contributions')}
+          className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 cursor-pointer ${
+            activeTab === 'contributions'
+              ? 'bg-amber-600 text-white shadow-md'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Layers size={16} />
+          <span>Contribuições de Projetos ({projectPendingContributions.length})</span>
+        </button>
 
-          <button
-            onClick={() => setActiveTab('contributions')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-black transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'contributions'
-                ? 'bg-indigo-600 text-white shadow-lg'
-                : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <Layers size={16} />
-            <span>Contribuições Pendentes ({projectPendingContributions.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('internal_db')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-black transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'internal_db'
-                ? 'bg-indigo-600 text-white shadow-lg'
-                : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <Database size={16} />
-            <span>Base de Dados Interna</span>
-          </button>
-
-          {hasAdminAccess && (
-            <button
-              onClick={() => setActiveTab('macro_configs')}
-              className={`px-4 py-2.5 rounded-2xl text-xs font-black transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-                activeTab === 'macro_configs'
-                  ? 'bg-indigo-600 text-white shadow-lg'
-                  : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <Settings size={16} />
-              <span>Modelos Macroatividades</span>
-            </button>
-          )}
-        </div>
+        <button
+          onClick={() => setActiveTab('markers_templates')}
+          className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 cursor-pointer ${
+            activeTab === 'markers_templates'
+              ? 'bg-purple-600 text-white shadow-md'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Tag size={16} />
+          <span>Marcadores & Modelos Word</span>
+        </button>
       </div>
 
       {/* =========================================================================
-          TAB: DOCUMENTOS REGULATÓRIOS (CENTERPIECE OF THE SYSTEM)
+          VIEW 1: ÁRVORE HIERÁRQUICA DE DOCUMENTOS E ITENS
           ========================================================================= */}
-      {activeTab === 'docs' && (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Document Selector Column */}
-          <div className="lg:col-span-1 space-y-4">
-            <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider">
-                  Documentos do Projeto
-                </h3>
-                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                  {currentProjectDocs.length}
-                </span>
-              </div>
+      {activeTab === 'doc_tree' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Documents Selection List (Left Column) */}
+          <div className="lg:col-span-4 space-y-4">
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                <BookOpen size={16} className="text-indigo-600" />
+                Documentos Regulatórios ({currentProjectDocs.length})
+              </h3>
 
               <div className="space-y-2">
                 {currentProjectDocs.map(doc => {
-                  const isSelected = activeDoc?.id === doc.id;
+                  const isActive = activeDoc?.id === doc.id;
+                  
+                  // Calculate document completeness
+                  let totalInDoc = 0;
+                  let readyInDoc = 0;
+                  doc.chapters?.forEach(c => c.items?.forEach(i => {
+                    totalInDoc++;
+                    if (checkItemCompleteness(i).status === 'Pronto') readyInDoc++;
+                  }));
+                  const docPercent = totalInDoc > 0 ? Math.round((readyInDoc / totalInDoc) * 100) : 0;
+
                   return (
                     <button
                       key={doc.id}
                       onClick={() => setSelectedDocId(doc.id)}
-                      className={`w-full p-4 rounded-2xl text-left border transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-indigo-50 border-indigo-300 shadow-md text-indigo-900'
-                          : 'bg-slate-50 border-slate-200/80 hover:bg-white hover:border-slate-300 text-slate-700'
+                      className={`w-full p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+                        isActive 
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-lg scale-[1.01]' 
+                          : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black uppercase truncate">{doc.title}</span>
-                        <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
-                          v{doc.currentVersion || '0.1'}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                          isActive ? 'bg-amber-400 text-slate-950' : 'bg-indigo-100 text-indigo-800'
+                        }`}>
+                          {doc.type}
+                        </span>
+                        <span className={`text-xs font-black ${isActive ? 'text-amber-300' : 'text-slate-600'}`}>
+                          {docPercent}%
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-500 line-clamp-2 mt-1">{doc.description}</p>
+
+                      <h4 className="text-sm font-black mt-2 leading-snug">{doc.title}</h4>
+                      <p className={`text-[10px] font-medium mt-1 line-clamp-2 ${
+                        isActive ? 'text-slate-300' : 'text-slate-500'
+                      }`}>
+                        {doc.description || 'Sem descrição cadastrada'}
+                      </p>
+
+                      <div className="w-full bg-slate-200/50 rounded-full h-1.5 mt-3 overflow-hidden">
+                        <div 
+                          className={`h-full transition-all duration-500 ${
+                            docPercent === 100 ? 'bg-emerald-500' : docPercent > 40 ? 'bg-amber-400' : 'bg-rose-500'
+                          }`}
+                          style={{ width: `${docPercent}%` }}
+                        />
+                      </div>
                     </button>
                   );
                 })}
               </div>
             </div>
-
-            {/* Document Evolution History Widget */}
-            {activeDoc && (
-              <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
-                    <History size={14} className="text-indigo-600" />
-                    Histórico de Versões
-                  </h4>
-                  <button
-                    onClick={() => setShowVersionModal(true)}
-                    className="text-[10px] font-black text-indigo-600 hover:underline uppercase flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus size={12} /> Nova Versão
-                  </button>
-                </div>
-
-                <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                  {(activeDoc.versionHistory || []).map((vh, idx) => (
-                    <div key={idx} className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl text-xs space-y-1">
-                      <div className="flex justify-between items-center">
-                        <span className="font-black text-indigo-800 text-xs">Versão {vh.version}</span>
-                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
-                          {vh.status}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-500">{vh.notes || 'Atualização técnica'}</p>
-                      <span className="text-[8px] font-bold text-slate-400 block">{new Date(vh.date).toLocaleDateString('pt-BR')}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Main Document Display (Chapters & Items) */}
-          <div className="lg:col-span-3 space-y-6">
+          {/* Document Tree Hierarchy View (Right Column) */}
+          <div className="lg:col-span-8 space-y-6">
             {activeDoc ? (
-              <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 space-y-6">
+              <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
                 {/* Active Document Header */}
-                <div className="pb-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-6">
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-[9px] font-black uppercase tracking-widest border border-indigo-200">
-                        {activeDoc.type}
-                      </span>
-                      <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[9px] font-black uppercase tracking-widest">
-                        Versão {activeDoc.currentVersion || '0.1'} • {activeDoc.currentVersionStatus || 'Rascunho'}
-                      </span>
-                    </div>
-                    <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">{activeDoc.title}</h2>
-                    <p className="text-xs font-medium text-slate-500 mt-1">{activeDoc.description}</p>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+                      ESTRUTURA HIERÁRQUICA DO DOCUMENTO
+                    </span>
+                    <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight mt-1 flex items-center gap-2">
+                      {activeDoc.title}
+                    </h2>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">
+                      {activeDoc.description}
+                    </p>
                   </div>
 
-                  <button
-                    onClick={() => setShowVersionModal(true)}
-                    className="px-5 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg hover:bg-indigo-500 transition active:scale-95 flex items-center gap-2 cursor-pointer"
-                  >
-                    <Plus size={16} />
-                    <span>Atualizar Versão</span>
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-slate-500">
+                      Versão: <strong className="text-slate-900">{activeDoc.currentVersion || '0.1'}</strong>
+                    </span>
+                    <span className="px-3 py-1 bg-amber-100 text-amber-800 text-[10px] font-black uppercase rounded-full">
+                      {activeDoc.currentVersionStatus || 'Rascunho'}
+                    </span>
+                  </div>
                 </div>
 
-                {/* Predefined Chapters & Items Tree */}
-                <div className="space-y-6">
+                {/* Hierarchical Chapters & Items Tree */}
+                <div className="space-y-4">
                   {activeDoc.chapters && activeDoc.chapters.length > 0 ? (
-                    activeDoc.chapters.map(chap => (
-                      <div key={chap.id} className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/40">
-                        <div className="bg-slate-100/80 px-5 py-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
-                          <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-2">
-                            <span className="px-2 py-0.5 bg-indigo-600 text-white rounded-md text-[10px]">{chap.code}</span>
-                            {chap.title}
-                          </h3>
-                          <div className="flex items-center gap-3">
-                            <span className="text-[10px] font-bold text-slate-500">
-                              {chap.items?.filter(i => i.status === 'Concluído').length || 0} / {chap.items?.length || 0} itens concluídos
-                            </span>
-                            <button
-                              onClick={() => {
-                                setTargetChapterIdForNewItem(chap.id);
-                                setShowAddItemModal(true);
-                              }}
-                              className="px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg text-[10px] font-black uppercase transition flex items-center gap-1 cursor-pointer"
-                            >
-                              <Plus size={12} />
-                              Cadastrar Item
-                            </button>
-                          </div>
-                        </div>
+                    activeDoc.chapters.map(chap => {
+                      const isExpanded = expandedChapters[chap.id] !== false;
 
-                        {/* Items Table */}
-                        <div className="divide-y divide-slate-100">
-                          {chap.items?.map(item => (
-                            <div key={item.id} className="p-4 bg-white hover:bg-slate-50 transition flex flex-col md:flex-row md:items-start justify-between gap-4">
-                              <div className="space-y-1.5 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-sm font-black text-slate-900">{item.name}</span>
-                                  {item.required && (
-                                    <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded-md text-[8px] font-black uppercase">Obrigatório</span>
-                                  )}
-                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md text-[8px] font-bold uppercase">{item.type}</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 font-medium">Marcador: <code className="bg-slate-100 text-slate-700 px-1 py-0.5 rounded">{item.marker || '[PADRAO]'}</code></p>
-
-                                {/* Render Defined Item Value */}
-                                {item.value && (
-                                  <div className="mt-2 p-3 bg-indigo-50/70 border border-indigo-200/80 rounded-xl text-xs space-y-1">
-                                    <span className="text-[9px] font-black uppercase text-indigo-700 tracking-wider block">Conteúdo / Valor Definido:</span>
-                                    <p className="font-bold text-indigo-950 whitespace-pre-wrap">{item.value}</p>
-                                    {item.evidenceUrl && (
-                                      <a href={item.evidenceUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-600 hover:underline flex items-center gap-1 font-semibold mt-1">
-                                        <Paperclip size={12} /> Ver Anexo de Evidência
-                                      </a>
-                                    )}
-                                  </div>
+                      return (
+                        <div key={chap.id} className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
+                          {/* Chapter Header */}
+                          <div 
+                            onClick={() => setExpandedChapters(prev => ({ ...prev, [chap.id]: !isExpanded }))}
+                            className="bg-slate-100/90 px-5 py-4 border-b border-slate-200 flex items-center justify-between cursor-pointer hover:bg-slate-200/80 transition"
+                          >
+                            <div className="flex items-center gap-3">
+                              <button className="text-slate-600">
+                                {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                              </button>
+                              <div>
+                                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                                  <span className="px-2 py-0.5 bg-slate-900 text-white rounded-md text-[10px] font-bold">{chap.code}</span>
+                                  {chap.title}
+                                </h3>
+                                {chap.description && (
+                                  <p className="text-[10px] text-slate-500 font-medium mt-0.5">{chap.description}</p>
                                 )}
                               </div>
-
-                              {/* Item Controls & Status Actions */}
-                              <div className="flex items-center gap-2 flex-wrap shrink-0">
-                                <select
-                                  value={item.status}
-                                  onChange={(e) => handleUpdateItemStatus(chap.id, item.id, e.target.value as RegulatoryDocItemStatus)}
-                                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border cursor-pointer ${
-                                    item.status === 'Concluído' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' :
-                                    item.status === 'Em Andamento' ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-slate-100 text-slate-600 border-slate-200'
-                                  }`}
-                                >
-                                  <option value="Pendente">Pendente</option>
-                                  <option value="Em Andamento">Em Andamento</option>
-                                  <option value="Concluído">Concluído</option>
-                                </select>
-
-                                <button
-                                  onClick={() => handleOpenItemCompleter(chap.id, item)}
-                                  className="px-3.5 py-1.5 bg-brand-primary text-white hover:bg-brand-accent rounded-xl text-[10px] font-black uppercase tracking-wider transition shadow-sm cursor-pointer"
-                                >
-                                  {item.value ? 'Editar / Preencher' : 'Completar Item'}
-                                </button>
-                              </div>
                             </div>
-                          ))}
+
+                            <span className="text-[10px] font-bold text-slate-500">
+                              {chap.items?.length || 0} itens mapeados
+                            </span>
+                          </div>
+
+                          {/* Items List */}
+                          {isExpanded && (
+                            <div className="divide-y divide-slate-200/70 bg-white">
+                              {chap.items?.map(item => {
+                                const completeness = checkItemCompleteness(item);
+
+                                return (
+                                  <div 
+                                    key={item.id} 
+                                    className="p-5 hover:bg-slate-50 transition flex flex-col md:flex-row md:items-start justify-between gap-4"
+                                  >
+                                    <div className="space-y-2 flex-1">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        {/* Auto calculated Status Badge */}
+                                        {completeness.status === 'Pronto' && (
+                                          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-[10px] font-black uppercase flex items-center gap-1">
+                                            <CheckCircle size={12} className="text-emerald-600" /> ✔ Pronto
+                                          </span>
+                                        )}
+                                        {completeness.status === 'Em Andamento' && (
+                                          <span className="px-2.5 py-1 bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-[10px] font-black uppercase flex items-center gap-1">
+                                            <AlertTriangle size={12} className="text-amber-600" /> ⚠ Parcial ({completeness.available}/{completeness.total})
+                                          </span>
+                                        )}
+                                        {completeness.status === 'Faltando' && (
+                                          <span className="px-2.5 py-1 bg-rose-100 text-rose-800 border border-rose-300 rounded-lg text-[10px] font-black uppercase flex items-center gap-1">
+                                            <XCircle size={12} className="text-rose-600" /> ✖ Faltando (0/{completeness.total})
+                                          </span>
+                                        )}
+
+                                        <span className="text-xs font-black text-slate-900">{item.code ? `${item.code} - ` : ''}{item.name}</span>
+                                        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md text-[8px] font-bold uppercase">{item.type}</span>
+                                      </div>
+
+                                      <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                                        {item.description || 'Sem descrição cadastrada'}
+                                      </p>
+
+                                      {/* Auto Calculated Completeness Summary */}
+                                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-[10px] font-black uppercase text-slate-500">
+                                            Completude do Item: {completeness.available} de {completeness.total} recursos disponíveis
+                                          </span>
+                                          <span className="text-[10px] font-bold text-slate-700">{completeness.percent}%</span>
+                                        </div>
+
+                                        {completeness.missingNames.length > 0 && (
+                                          <p className="text-[10px] font-bold text-rose-600">
+                                            Falta: <span className="font-semibold text-rose-800">{completeness.missingNames.join(', ')}</span>
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      onClick={() => setSelectedTreeItem({ doc: activeDoc, chapter: chap, item })}
+                                      className="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-sm shrink-0 cursor-pointer flex items-center gap-1.5"
+                                    >
+                                      <Eye size={14} /> Detalhes & Recursos
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
-                    <div className="p-12 text-center border-2 border-dashed border-slate-200 rounded-3xl">
-                      <p className="text-slate-400 text-xs font-bold uppercase tracking-widest italic">Nenhum capítulo cadastrado para este documento.</p>
+                    <div className="text-center py-12 text-slate-400 italic text-xs">
+                      Nenhum capítulo cadastrado neste documento.
                     </div>
                   )}
                 </div>
               </div>
             ) : (
-              <div className="p-12 text-center bg-white rounded-3xl border border-slate-200">
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest italic">Selecione um documento no painel lateral.</p>
+              <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 text-slate-400 italic text-sm">
+                Selecione um documento para visualizar a estrutura hierárquica.
               </div>
             )}
           </div>
@@ -1021,82 +1385,158 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
       )}
 
       {/* =========================================================================
-          TAB: MATRIZ DE COMPLETUDE (ASSISTANT METRICS)
+          VIEW 2: BANCO DE CONHECIMENTO REGULATÓRIO (REPLACES BASE DE DADOS INTERNA)
           ========================================================================= */}
-      {activeTab === 'completeness' && (
-        <div className="space-y-6">
-          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
-                  <ShieldCheck className="text-indigo-600" size={24} />
-                  Assistente de Completude dos Documentos
-                </h3>
-                <p className="text-xs text-slate-500 font-medium mt-1">
-                  Acompanhamento consolidado do preenchimento e prontidão dos documentos do projeto.
-                </p>
-              </div>
-
-              <div className="text-right">
-                <span className="text-4xl font-black text-indigo-600">{completenessMetrics.percent}%</span>
-                <p className="text-xs font-bold text-slate-500 mt-0.5">
-                  {completenessMetrics.completed} de {completenessMetrics.totalRequired} itens concluídos
-                </p>
-              </div>
+      {activeTab === 'knowledge_bank' && (
+        <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-6">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                <Database size={20} className="text-indigo-600" />
+                Banco de Conhecimento Regulatório
+              </h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Repositório reutilizável de informações estruturadas, narrativas técnicas, tabelas, evidências e anexos (Single Source of Truth).
+              </p>
             </div>
 
-            {/* Visual Progress Bar */}
-            <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden flex">
-              <div 
-                className="bg-emerald-500 h-full transition-all duration-500"
-                style={{ width: `${completenessMetrics.percent}%` }}
-              />
-            </div>
+            <button
+              onClick={() => handleOpenKbModal()}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow-sm flex items-center gap-2 cursor-pointer self-start sm:self-auto"
+            >
+              <Plus size={16} /> Cadastrar Registro no Banco
+            </button>
+          </div>
 
-            {/* Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-2xl">
-                <span className="text-[10px] font-black uppercase text-emerald-800 tracking-wider">Itens Concluídos</span>
-                <p className="text-3xl font-black text-emerald-700 mt-1">{completenessMetrics.completed}</p>
+          {/* Category Tabs for Knowledge Bank */}
+          <div className="flex gap-2 border-b pb-3 overflow-x-auto">
+            {(['Informações Estruturadas', 'Narrativas Técnicas', 'Tabelas', 'Evidências', 'Anexos'] as KnowledgeCategory[]).map(cat => (
+              <button
+                key={cat}
+                onClick={() => setKbCategoryTab(cat)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                  kbCategoryTab === cat ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Knowledge Bank Records List */}
+          <div className="space-y-4">
+            {knowledgeRecords.filter(r => r.category === kbCategoryTab).map(rec => (
+              <div key={rec.id} className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[9px] font-black uppercase text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200">
+                      ID: {rec.internalId}
+                    </span>
+                    <h4 className="text-sm font-bold text-slate-900">{rec.title}</h4>
+                  </div>
+
+                  <button
+                    onClick={() => handleOpenKbModal(rec)}
+                    className="px-3.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-black text-xs uppercase tracking-wider rounded-xl transition cursor-pointer self-start sm:self-auto shrink-0"
+                  >
+                    Editar Registro
+                  </button>
+                </div>
+
+                {/* Record Value */}
+                <div className="p-3 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 whitespace-pre-wrap">
+                  {rec.value}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between text-[10px] text-slate-500 font-bold gap-2 pt-1 border-t border-slate-200/60">
+                  <span>Origem: {rec.origin}</span>
+                  <span>Versão: v{rec.version} | Atualizado em: {new Date(rec.updatedAt).toLocaleDateString()}</span>
+                </div>
+
+                {/* Used In Documents List */}
+                {rec.usedInDocs && rec.usedInDocs.length > 0 && (
+                  <div className="p-3 bg-indigo-50/70 border border-indigo-200/80 rounded-xl text-xs space-y-1">
+                    <span className="text-[9px] font-black uppercase text-indigo-700 tracking-wider block">
+                      UTILIZADO AUTOMATICAMENTE NOS DOCUMENTOS:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {rec.usedInDocs.map((u, i) => (
+                        <span key={i} className="px-2 py-0.5 bg-indigo-100 text-indigo-900 rounded-md text-[9px] font-bold border border-indigo-200">
+                          {u.docTitle} ({u.itemCode || 'Item'})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl">
-                <span className="text-[10px] font-black uppercase text-amber-800 tracking-wider">Em Andamento</span>
-                <p className="text-3xl font-black text-amber-700 mt-1">{completenessMetrics.inProgress}</p>
-              </div>
-              <div className="bg-rose-50 border border-rose-200 p-5 rounded-2xl">
-                <span className="text-[10px] font-black uppercase text-rose-800 tracking-wider">Itens Pendentes</span>
-                <p className="text-3xl font-black text-rose-700 mt-1">{completenessMetrics.pending}</p>
-              </div>
-              <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl">
-                <span className="text-[10px] font-black uppercase text-slate-600 tracking-wider">Requisitos Totais</span>
-                <p className="text-3xl font-black text-slate-800 mt-1">{completenessMetrics.totalRequired}</p>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       )}
 
       {/* =========================================================================
-          TAB: CONTRIBUIÇÕES PENDENTES DO PROJETO
+          VIEW 3: REGISTROS REPETITIVOS DO PROJETO (PROJECT LEVEL)
+          ========================================================================= */}
+      {activeTab === 'repeatable_records' && (
+        <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-6">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                <TableIcon size={20} className="text-teal-600" />
+                Registros Repetitivos do Projeto
+              </h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Registros técnicos do projeto (Lotes, Apresentações, Doses, Estudos de Estabilidade, Comparabilidade e Controles de Qualidade) mantidos no nível do Projeto.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {repeatableRecords.length > 0 ? (
+              repeatableRecords.map(rec => (
+                <div key={rec.id} className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-black uppercase text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200">
+                      {rec.category}
+                    </span>
+                    <h4 className="text-sm font-bold text-slate-900">{rec.title}</h4>
+                  </div>
+
+                  <div className="p-3 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-700">
+                    {JSON.stringify(rec.data, null, 2)}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-12 text-slate-400 italic text-xs">
+                Nenhum registro repetitivo cadastrado para o projeto selecionado. Os documentos consultarão estes registros automaticamente quando adicionados ao projeto.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          VIEW 4: CONTRIBUIÇÕES PENDENTES DO MÓDULO PROJETOS
           ========================================================================= */}
       {activeTab === 'contributions' && (
         <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
-          <div>
+          <div className="border-b pb-4">
             <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
-              <Layers size={20} className="text-indigo-600" />
+              <Layers size={20} className="text-amber-600" />
               Contribuições Regulatórias Originadas no Módulo Projetos
             </h3>
             <p className="text-xs text-slate-500 font-medium mt-1">
-              Microatividades ou tarefas marcadas como geradoras de conteúdo regulatório ou com evidência cadastrada.
+              Microatividades marcadas como geradoras de conteúdo regulatório ou com evidências registradas nas tarefas do projeto.
             </p>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             {projectPendingContributions.map(contrib => (
               <div key={contrib.id} className="p-5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-black uppercase text-brand-primary bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                    <span className="text-[9px] font-black uppercase text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                       {contrib.projectName}
                     </span>
                     <span className="text-[9px] font-extrabold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
@@ -1104,7 +1544,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                     </span>
                   </div>
                   <h4 className="text-sm font-black text-slate-900 mt-1">{contrib.title}</h4>
-                  <p className="text-xs text-slate-600 font-medium">{contrib.description || 'Sem descrição'}</p>
+                  <p className="text-xs text-slate-600 font-medium">{contrib.description}</p>
                   <span className="text-[10px] text-slate-400 font-bold block mt-1">Responsável: {contrib.assignee}</span>
                 </div>
 
@@ -1116,35 +1556,35 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                       rel="noopener noreferrer"
                       className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-black text-xs uppercase tracking-wider rounded-xl transition flex items-center gap-1.5"
                     >
-                      <Paperclip size={14} /> Anexo
+                      <Paperclip size={14} /> Ver Anexo
                     </a>
                   )}
                   <button
                     onClick={() => {
-                      handleOpenInfoItemModal({
+                      handleOpenKbModal({
                         id: '',
                         projectId: contrib.projectId,
                         internalId: contrib.title.toUpperCase().replace(/\s+/g, '_'),
-                        name: contrib.title,
-                        category: 'Produto',
-                        type: 'Texto',
-                        value: contrib.description || contrib.title,
+                        category: 'Informações Estruturadas',
+                        title: contrib.title,
+                        value: contrib.description,
                         origin: `Microatividade: ${contrib.title}`,
-                        version: 1,
-                        updatedAt: new Date().toISOString()
+                        updatedAt: new Date().toISOString(),
+                        version: 1
                       });
+                      setActiveTab('knowledge_bank');
                     }}
                     className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer"
                   >
-                    <CheckCircle size={14} /> Cadastrar na Base
+                    <CheckCircle size={14} /> Registrar no Banco
                   </button>
                 </div>
               </div>
             ))}
 
             {projectPendingContributions.length === 0 && (
-              <div className="p-12 text-center border-2 border-dashed border-slate-200 rounded-3xl">
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest italic">Nenhuma contribuição regulatória pendente proveniente dos projetos.</p>
+              <div className="text-center py-12 text-slate-400 italic text-xs">
+                Nenhuma contribuição pendente originada de microatividades de projeto.
               </div>
             )}
           </div>
@@ -1152,324 +1592,133 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
       )}
 
       {/* =========================================================================
-          TAB: BASE DE DADOS INTERNA (LIBRARIES)
+          VIEW 5: MARCADORES E MODELOS WORD
           ========================================================================= */}
-      {activeTab === 'internal_db' && (
+      {activeTab === 'markers_templates' && (
         <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
-            <div>
-              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
-                <Database size={20} className="text-indigo-600" />
-                Base de Dados Interna do Dossiê
-              </h3>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Acervo de apoio utilizado como fonte de dados para compor os itens dos documentos regulatórios.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3 flex-wrap">
-              <button
-                onClick={() => handleOpenInfoItemModal()}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer"
-              >
-                <Plus size={14} /> Cadastrar Item
-              </button>
-
-              <div className="flex gap-2 bg-slate-100 p-1 rounded-2xl">
-                <button
-                  onClick={() => setDbSubTab('info_items')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${dbSubTab === 'info_items' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600'}`}
-                >
-                  Informações
-                </button>
-                <button
-                  onClick={() => setDbSubTab('narratives')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${dbSubTab === 'narratives' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600'}`}
-                >
-                  Narrativas
-                </button>
-                <button
-                  onClick={() => setDbSubTab('evidence')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${dbSubTab === 'evidence' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600'}`}
-                >
-                  Evidências
-                </button>
-              </div>
-            </div>
+          <div className="border-b pb-4">
+            <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+              <Tag size={20} className="text-purple-600" />
+              Mapeamento de Marcadores e Modelos Word
+            </h3>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Associação de marcadores de template Word (placeholders ex: <code className="bg-slate-100 px-1 py-0.5 rounded text-purple-700">[NOME_DA_VACINA]</code>) aos registros correspondentes no Banco de Conhecimento Regulatório.
+            </p>
           </div>
 
-          {/* Render Subtab List */}
-          {dbSubTab === 'info_items' && (
-            <div className="space-y-3">
-              {projectInfoItems.map(item => (
-                <div key={item.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <span className="text-[9px] font-black uppercase text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">{item.internalId}</span>
-                    <h4 className="text-sm font-bold text-slate-900">{item.name}</h4>
-                    <p className="text-xs text-slate-700 font-medium whitespace-pre-wrap">{item.value || 'Sem valor preenchido'}</p>
-                    <span className="text-[10px] text-slate-400 font-bold block">Origem: {item.origin}</span>
-                  </div>
-
-                  <button
-                    onClick={() => handleOpenInfoItemModal(item)}
-                    className="px-3.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-black text-xs uppercase tracking-wider rounded-xl transition cursor-pointer shrink-0"
-                  >
-                    Editar Item
-                  </button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {markerMappings.map(map => (
+              <div key={map.id} className="p-4 bg-purple-50/50 border border-purple-200 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-black text-purple-900 bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-300">
+                    {map.marker}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-500">{map.sourceCategory}</span>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {dbSubTab === 'narratives' && (
-            <div className="space-y-3">
-              {projectNarratives.map(nar => (
-                <div key={nar.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
-                  <h4 className="text-sm font-bold text-slate-900">{nar.title}</h4>
-                  <p className="text-xs text-slate-600 line-clamp-2 mt-1">{nar.text}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {dbSubTab === 'evidence' && (
-            <div className="space-y-3">
-              {projectEvidences.map(ev => (
-                <div key={ev.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
-                  <h4 className="text-sm font-bold text-slate-900">{ev.title}</h4>
-                  <p className="text-xs text-slate-600">{ev.description}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Version Bump Modal */}
-      {showVersionModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 max-w-lg w-full space-y-5 animate-in zoom-in-95">
-            <div className="flex justify-between items-center border-b pb-3">
-              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Atualizar Versão do Documento</h3>
-              <button onClick={() => setShowVersionModal(false)} className="p-1 text-slate-400 hover:text-slate-600"><X size={20} /></button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Número da Versão</label>
-                <input
-                  type="text"
-                  placeholder="ex: 0.2, 1.0, 1.1"
-                  value={newVersionNum}
-                  onChange={e => setNewVersionNum(e.target.value)}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
-                />
+                <p className="text-xs font-bold text-slate-800">Origem: <code className="bg-white px-1.5 py-0.5 border rounded text-slate-900">{map.sourceKey}</code></p>
+                <p className="text-[10px] text-slate-500 font-medium">{map.description}</p>
               </div>
-
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Status da Versão</label>
-                <select
-                  value={newVersionStatus}
-                  onChange={e => setNewVersionStatus(e.target.value)}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
-                >
-                  <option value="Rascunho">Rascunho</option>
-                  <option value="Complementação">Complementação</option>
-                  <option value="Revisão Técnica">Revisão Técnica</option>
-                  <option value="Submetido">Submetido</option>
-                  <option value="Aprovado">Aprovado</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Notas do Histórico</label>
-                <textarea
-                  rows={3}
-                  placeholder="Descreva o que mudou nesta versão..."
-                  value={newVersionNotes}
-                  onChange={e => setNewVersionNotes(e.target.value)}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowVersionModal(false)} className="px-5 py-2.5 bg-slate-200 text-slate-700 font-bold text-xs rounded-xl">Cancelar</button>
-              <button onClick={handleAddDocumentVersion} className="px-6 py-2.5 bg-indigo-600 text-white font-black text-xs rounded-xl shadow-lg">Salvar Versão</button>
-            </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Item Completer / Editor Modal */}
-      {showItemCompleterModal && activeItemForModal && (
+      {/* Modal for Item Details and Resources Breakdown */}
+      {selectedTreeItem && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 max-w-lg w-full space-y-5 animate-in zoom-in-95">
-            <div className="flex justify-between items-center border-b pb-3">
+          <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 max-w-2xl w-full space-y-5 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start border-b pb-4">
               <div>
-                <span className="text-[9px] font-black uppercase text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
-                  {activeItemForModal.item.type}
+                <span className="text-[9px] font-black uppercase text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200">
+                  {selectedTreeItem.doc.title} - {selectedTreeItem.chapter.code}
                 </span>
                 <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight mt-1">
-                  Preencher/Editar: {activeItemForModal.item.name}
+                  {selectedTreeItem.item.name}
                 </h3>
               </div>
-              <button onClick={() => setShowItemCompleterModal(false)} className="p-1 text-slate-400 hover:text-slate-600"><X size={20} /></button>
+              <button onClick={() => setSelectedTreeItem(null)} className="p-1 text-slate-400 hover:text-slate-600"><X size={20} /></button>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Valor / Conteúdo Definido (ex: Nome da Vacina, Dosagem, etc.)</label>
-                <textarea
-                  rows={3}
-                  value={modalItemValue}
-                  onChange={e => setModalItemValue(e.target.value)}
-                  placeholder="Informe o conteúdo, nome definido, ou resumo dos dados..."
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
-                />
+                <label className="text-[10px] font-black text-slate-500 uppercase">Descrição do Item</label>
+                <p className="text-xs text-slate-700 font-medium mt-1">
+                  {selectedTreeItem.item.description || 'Sem descrição'}
+                </p>
               </div>
 
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Link ou URL de Evidência Anexa (Opcional)</label>
-                <input
-                  type="text"
-                  value={modalItemEvidenceUrl}
-                  onChange={e => setModalItemEvidenceUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
-                />
-              </div>
+              {/* Required Resources List */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase">
+                  Recursos Necessários e Status de Disponibilidade
+                </label>
 
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Observações Regulatórias</label>
-                <input
-                  type="text"
-                  value={modalItemNotes}
-                  onChange={e => setModalItemNotes(e.target.value)}
-                  placeholder="Notas internas de apoio..."
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
-                />
-              </div>
+                <div className="space-y-2 border border-slate-200 rounded-2xl p-4 bg-slate-50">
+                  {selectedTreeItem.item.requiredResources?.map(res => {
+                    const isAvail = knowledgeRecords.some(k => k.internalId === res.key) || Boolean(selectedTreeItem.item.value);
 
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Status do Item</label>
-                <select
-                  value={modalItemStatus}
-                  onChange={e => setModalItemStatus(e.target.value as RegulatoryDocItemStatus)}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
-                >
-                  <option value="Pendente">Pendente</option>
-                  <option value="Em Andamento">Em Andamento</option>
-                  <option value="Concluído">Concluído</option>
-                </select>
+                    return (
+                      <div key={res.id} className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+                        <div className="space-y-0.5">
+                          <span className="font-bold text-slate-900">{res.name}</span>
+                          <span className="block text-[9px] text-slate-400 font-bold">Tipo: {res.type} | Chave: {res.key || 'N/A'}</span>
+                        </div>
+
+                        {isAvail ? (
+                          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-md text-[10px] font-black uppercase">
+                            ✔ Disponível
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 bg-rose-100 text-rose-800 rounded-md text-[10px] font-black uppercase">
+                            ✖ Faltando
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowItemCompleterModal(false)} className="px-5 py-2.5 bg-slate-200 text-slate-700 font-bold text-xs rounded-xl">Cancelar</button>
-              <button onClick={handleSaveItemDetails} className="px-6 py-2.5 bg-indigo-600 text-white font-black text-xs rounded-xl shadow-lg">Salvar Dados do Item</button>
+            <div className="flex justify-end pt-2">
+              <button onClick={() => setSelectedTreeItem(null)} className="px-6 py-2.5 bg-slate-900 text-white font-black text-xs rounded-xl cursor-pointer">
+                Fechar
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal to Register New Item in a Chapter */}
-      {showAddItemModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 max-w-lg w-full space-y-5 animate-in zoom-in-95">
-            <div className="flex justify-between items-center border-b pb-3">
-              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Cadastrar Novo Item no Capítulo</h3>
-              <button onClick={() => setShowAddItemModal(false)} className="p-1 text-slate-400 hover:text-slate-600"><X size={20} /></button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Nome do Requisito / Item</label>
-                <input
-                  type="text"
-                  placeholder="ex: Especificação de Pureza do IFA"
-                  value={newItemName}
-                  onChange={e => setNewItemName(e.target.value)}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Tipo do Item</label>
-                <select
-                  value={newItemType}
-                  onChange={e => setNewItemType(e.target.value as RegulatoryDocItemType)}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
-                >
-                  <option value="Informação Regulatória">Informação Regulatória</option>
-                  <option value="Narrativa">Narrativa</option>
-                  <option value="Evidência">Evidência</option>
-                  <option value="Tabela">Tabela</option>
-                  <option value="Figura">Figura</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Marcador / Tag Interna</label>
-                <input
-                  type="text"
-                  placeholder="ex: [IFA_PUREZA]"
-                  value={newItemMarker}
-                  onChange={e => setNewItemMarker(e.target.value)}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="newItemReq"
-                  checked={newItemRequired}
-                  onChange={e => setNewItemRequired(e.target.checked)}
-                  className="w-4 h-4 text-indigo-600 rounded"
-                />
-                <label htmlFor="newItemReq" className="text-xs font-bold text-slate-700">Requisito Obrigatório no Dossiê</label>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowAddItemModal(false)} className="px-5 py-2.5 bg-slate-200 text-slate-700 font-bold text-xs rounded-xl">Cancelar</button>
-              <button onClick={handleAddNewItemToChapter} className="px-6 py-2.5 bg-indigo-600 text-white font-black text-xs rounded-xl shadow-lg">Cadastrar Item</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal to Register/Edit Item in Internal Database */}
-      {showAddInfoItemModal && (
+      {/* Modal to Register or Edit Knowledge Bank Record */}
+      {showKbRecordModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 max-w-lg w-full space-y-5 animate-in zoom-in-95">
             <div className="flex justify-between items-center border-b pb-3">
               <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">
-                {editingInfoItemId ? 'Editar Item da Base Interna' : 'Cadastrar Item na Base Interna'}
+                {editingKbId ? 'Editar Registro no Banco' : 'Cadastrar no Banco de Conhecimento'}
               </h3>
-              <button onClick={() => setShowAddInfoItemModal(false)} className="p-1 text-slate-400 hover:text-slate-600"><X size={20} /></button>
+              <button onClick={() => setShowKbRecordModal(false)} className="p-1 text-slate-400 hover:text-slate-600"><X size={20} /></button>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Identificador Interno (ID / Marcador)</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Chave de Identificação Única (ID Interno)</label>
                 <input
                   type="text"
                   placeholder="ex: PRODUCT.NAME"
-                  value={infoItemInternalId}
-                  onChange={e => setInfoItemInternalId(e.target.value)}
+                  value={kbKey}
+                  onChange={e => setKbKey(e.target.value)}
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Nome da Informação</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Título da Informação</label>
                 <input
                   type="text"
-                  placeholder="ex: Nome da Vacina"
-                  value={infoItemName}
-                  onChange={e => setInfoItemName(e.target.value)}
+                  placeholder="ex: Nome Comercial da Vacina"
+                  value={kbTitle}
+                  onChange={e => setKbTitle(e.target.value)}
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
                 />
               </div>
@@ -1477,44 +1726,47 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase">Categoria</label>
                 <select
-                  value={infoItemCategory}
-                  onChange={e => setInfoItemCategory(e.target.value)}
+                  value={kbCategory}
+                  onChange={e => setKbCategory(e.target.value as KnowledgeCategory)}
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
                 >
-                  <option value="Produto">Produto</option>
-                  <option value="IFA">Insumo Farmacêutico Ativo (IFA)</option>
-                  <option value="Adjuvante">Adjuvante</option>
-                  <option value="Processo">Processo de Fabricação</option>
-                  <option value="Ensaio">Ensaio Clínico / Não-Clínico</option>
+                  <option value="Informações Estruturadas">Informações Estruturadas</option>
+                  <option value="Narrativas Técnicas">Narrativas Técnicas</option>
+                  <option value="Tabelas">Tabelas</option>
+                  <option value="Evidências">Evidências</option>
+                  <option value="Anexos">Anexos</option>
                 </select>
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Valor / Conteúdo Preenchido</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Conteúdo / Valor</label>
                 <textarea
-                  rows={3}
-                  placeholder="Informe o conteúdo..."
-                  value={infoItemValue}
-                  onChange={e => setInfoItemValue(e.target.value)}
+                  rows={4}
+                  placeholder="Informe o conteúdo ou link..."
+                  value={kbValue}
+                  onChange={e => setKbValue(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Origem da Informação</label>
+                <input
+                  type="text"
+                  placeholder="ex: Relatório Clínico Fase I / Atividade 2.3"
+                  value={kbOrigin}
+                  onChange={e => setKbOrigin(e.target.value)}
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
                 />
               </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowAddInfoItemModal(false)} className="px-5 py-2.5 bg-slate-200 text-slate-700 font-bold text-xs rounded-xl">Cancelar</button>
-              <button onClick={handleSaveInfoItem} className="px-6 py-2.5 bg-indigo-600 text-white font-black text-xs rounded-xl shadow-lg">Salvar na Base</button>
+              <button onClick={() => setShowKbRecordModal(false)} className="px-5 py-2.5 bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer">Cancelar</button>
+              <button onClick={handleSaveKbRecord} className="px-6 py-2.5 bg-indigo-600 text-white font-black text-xs rounded-xl shadow-lg cursor-pointer">Salvar no Banco</button>
             </div>
           </div>
         </div>
-      )}
-
-      {/* Modal for viewing evidence */}
-      {selectedEvidenceForView && (
-        <EvidenceDetailModal
-          item={selectedEvidenceForView}
-          onClose={() => setSelectedEvidenceForView(null)}
-        />
       )}
     </div>
   );

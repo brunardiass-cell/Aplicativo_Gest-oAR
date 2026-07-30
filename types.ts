@@ -664,12 +664,34 @@ export interface RegulatoryNarrative {
   updatedAt: string;
 }
 
-export type RegulatoryDocItemType = 'Informação Regulatória' | 'Narrativa' | 'Evidência' | 'Tabela' | 'Figura' | 'Referência';
-export type RegulatoryDocItemStatus = 'Pendente' | 'Em Andamento' | 'Concluído';
+export type RegulatoryResourceType = 
+  | 'Informação Estruturada' 
+  | 'Narrativa Técnica' 
+  | 'Registro Repetitivo' 
+  | 'Tabela' 
+  | 'Evidência' 
+  | 'Anexo';
+
+export interface RegulatoryItemResource {
+  id: string;
+  name: string; // ex: "Nome da vacina", "IFA", "Temperatura de armazenamento"
+  type: RegulatoryResourceType;
+  required: boolean;
+  key?: string; // ex: "PRODUCT.NAME", "PRODUCT.STORAGE_TEMP"
+  value?: any;
+  isAvailable?: boolean;
+  sourceOrigin?: string;
+  notes?: string;
+}
+
+export type RegulatoryDocItemType = 'Informação Regulatória' | 'Narrativa' | 'Evidência' | 'Tabela' | 'Figura' | 'Referência' | 'Informação Estruturada' | 'Anexo';
+export type RegulatoryDocItemStatus = 'Pronto' | 'Em Andamento' | 'Faltando' | 'Pendente' | 'Concluído';
 
 export interface RegulatoryDocumentItem {
   id: string;
+  code?: string; // ex: "2.1"
   name: string;
+  description?: string; // ex: "Descrição da forma farmacêutica e apresentação"
   type: RegulatoryDocItemType;
   required: boolean; // Obrigatório ou opcional
   sourceInternalId: string; // Ponteiro para Identificador Interno ou ID de Narrativa/Evidência
@@ -679,12 +701,14 @@ export interface RegulatoryDocumentItem {
   evidenceUrl?: string; // URL da evidencia/arquivo
   evidenceFileName?: string; // Nome do arquivo anexo
   notes?: string;
+  requiredResources?: RegulatoryItemResource[]; // Recursos necessários para preenchimento com cálculo de completude
 }
 
 export interface RegulatoryDocumentChapter {
   id: string;
   code: string;
   title: string;
+  description?: string;
   items: RegulatoryDocumentItem[];
   subchapters?: RegulatoryDocumentChapter[];
 }
@@ -708,4 +732,65 @@ export interface RegulatoryDocument {
   versionHistory?: RegulatoryDocumentVersion[];
   chapters: RegulatoryDocumentChapter[];
   updatedAt: string;
+}
+
+export type KnowledgeCategory = 
+  | 'Informações Estruturadas' 
+  | 'Narrativas Técnicas' 
+  | 'Tabelas' 
+  | 'Evidências' 
+  | 'Anexos';
+
+export interface KnowledgeRecordHistory {
+  version: number;
+  updatedAt: string;
+  author?: string;
+  value: any;
+  notes?: string;
+}
+
+export interface KnowledgeUsedInDoc {
+  docId: string;
+  docTitle: string;
+  itemCode?: string;
+  itemName?: string;
+}
+
+export interface RegulatoryKnowledgeRecord {
+  id: string;
+  projectId: string;
+  internalId: string; // identificador único ex: "PRODUCT.NAME"
+  category: KnowledgeCategory;
+  title: string;
+  value: any; // texto, estrutura de tabela ou URL
+  origin: string; // ex: "Atividade de Caracterização", "Projeto X", "Cadastro Manual"
+  updatedAt: string;
+  version: number;
+  history?: KnowledgeRecordHistory[];
+  usedInDocs?: KnowledgeUsedInDoc[];
+}
+
+export interface RegulatoryStructuredTableColumn {
+  key: string;
+  label: string;
+  type?: 'text' | 'number' | 'date';
+}
+
+export interface RegulatoryStructuredTable {
+  id: string;
+  projectId: string;
+  key: string; // ex: "TABLE_PRESENTATIONS"
+  title: string;
+  description?: string;
+  columns: RegulatoryStructuredTableColumn[];
+  rows: Record<string, any>[];
+  updatedAt: string;
+}
+
+export interface RegulatoryMarkerMapping {
+  id: string;
+  marker: string; // ex: [NOME_DA_VACINA], [TABELAS], [INTRODUÇÃO_PROJETO]
+  sourceCategory: KnowledgeCategory | 'Registro Repetitivo';
+  sourceKey: string;
+  description?: string;
 }
