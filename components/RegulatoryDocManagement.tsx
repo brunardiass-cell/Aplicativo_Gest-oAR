@@ -11,7 +11,8 @@ import {
   RegulatoryDocumentChapter, 
   RegulatoryDocumentItem,
   RegulatoryDocItemType,
-  RegulatoryDocItemStatus
+  RegulatoryDocItemStatus,
+  RegulatoryDocumentVersion
 } from '../types';
 import { 
   FileText, 
@@ -42,8 +43,14 @@ import {
   ListOrdered,
   Eye,
   FileCode,
-  ListPlus
+  ListPlus,
+  ExternalLink,
+  ArrowRight,
+  Info,
+  CheckCircle,
+  HelpCircle
 } from 'lucide-react';
+import { EvidenceDetailModal } from './EvidenceDetailModal';
 
 interface RegulatoryDocManagementProps {
   projects: Project[];
@@ -83,10 +90,15 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
   currentUser = 'Usuário',
   hasAdminAccess = true
 }) => {
-  // Main Tab Selection
+  // Main Tab Selection - Default is 'docs' (Document-Centric Workflow)
   const [activeTab, setActiveTab] = useState<
-    'completeness' | 'info_items' | 'narratives' | 'evidence' | 'repeatable' | 'macro_configs' | 'docs'
-  >('completeness');
+    'docs' | 'completeness' | 'contributions' | 'internal_db' | 'macro_configs'
+  >('docs');
+
+  // Sub-tab for Internal Database
+  const [dbSubTab, setDbSubTab] = useState<
+    'info_items' | 'narratives' | 'evidence' | 'repeatable'
+  >('info_items');
 
   // Selected Project Filter
   const [selectedProjectId, setSelectedProjectId] = useState<string>(
@@ -97,138 +109,140 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
     return projects.find(p => p.id === selectedProjectId) || projects[0];
   }, [projects, selectedProjectId]);
 
-  // Search & Filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('todos');
+  // Selected Active Document inside Project
+  const [selectedDocId, setSelectedDocId] = useState<string>('');
 
-  // Modal States
-  const [showInfoModal, setShowInfoModal] = useState(false);
-  const [editingInfoItem, setEditingInfoItem] = useState<Partial<RegulatoryInfoItem> | null>(null);
-
-  const [showNarrativeModal, setShowNarrativeModal] = useState(false);
-  const [editingNarrative, setEditingNarrative] = useState<Partial<RegulatoryNarrative> | null>(null);
-
-  const [showEvidenceModal, setShowEvidenceModal] = useState(false);
-  const [editingEvidence, setEditingEvidence] = useState<Partial<RegulatoryEvidence> | null>(null);
-
-  const [showRepeatableModal, setShowRepeatableModal] = useState(false);
-  const [editingRepeatable, setEditingRepeatable] = useState<Partial<RepeatableRecord> | null>(null);
-
-  const [showMacroConfigModal, setShowMacroConfigModal] = useState(false);
-  const [editingMacroConfig, setEditingMacroConfig] = useState<Partial<MacroActivityConfig> | null>(null);
-
-  const [showDocModal, setShowDocModal] = useState(false);
-  const [editingDoc, setEditingDoc] = useState<Partial<RegulatoryDocument> | null>(null);
-
-  // Default Document Presets if empty
+  // Default Presets for Regulatory Documents
   const defaultDocs = useMemo<RegulatoryDocument[]>(() => {
     if (regulatoryDocs.length > 0) return regulatoryDocs;
-    const projId = activeProject?.id || 'p1';
-    return [
+    
+    return projects.map(proj => [
       {
-        id: `doc_ddcm_${projId}`,
-        projectId: projId,
-        title: 'DDCM - Dossiê de Desenvolvimento Clínico de Medicamento',
-        type: 'DDCM',
-        description: 'Dossiê regulatório para submissão e acompanhamento clínico do produto.',
+        id: `doc_vacina_${proj.id}`,
+        projectId: proj.id,
+        title: 'Dossiê da Vacina',
+        type: 'Dossiê do Produto Final',
+        description: 'Dossiê regulatório com dados clínicos, estabilidade e formulação do produto acabado.',
+        currentVersion: '0.1',
+        currentVersionStatus: 'Rascunho',
         updatedAt: new Date().toISOString(),
+        versionHistory: [
+          { version: '0.1', date: new Date().toISOString(), status: 'Rascunho', author: currentUser, notes: 'Estruturação inicial do documento' }
+        ],
         chapters: [
           {
             id: 'cap_1',
             code: '1.0',
             title: 'Informações Gerais e Descrição do Produto',
             items: [
-              {
-                id: 'item_1_1',
-                name: 'Nome da Vacina',
-                type: 'Informação Regulatória',
-                required: true,
-                sourceInternalId: 'PRODUCT.NAME',
-                status: 'Concluído',
-                marker: '[NOME_DA_VACINA]'
-              },
-              {
-                id: 'item_1_2',
-                name: 'Indicação Terapêutica / Proposta',
-                type: 'Informação Regulatória',
-                required: true,
-                sourceInternalId: 'PRODUCT.INDICATION',
-                status: 'Concluído',
-                marker: '[INDICACAO]'
-              },
-              {
-                id: 'item_1_3',
-                name: 'Via de Administração e Forma Farmacêutica',
-                type: 'Informação Regulatória',
-                required: true,
-                sourceInternalId: 'PRODUCT.ADMINISTRATION_ROUTE',
-                status: 'Em Andamento',
-                marker: '[FORMA_FARMACEUTICA]'
-              }
+              { id: 'item_1_1', name: 'Nome da Vacina', type: 'Informação Regulatória' as RegulatoryDocItemType, required: true, sourceInternalId: 'PRODUCT.NAME', status: 'Concluído' as RegulatoryDocItemStatus, marker: '[NOME_DA_VACINA]' },
+              { id: 'item_1_2', name: 'Indicação Terapêutica / Proposta', type: 'Informação Regulatória' as RegulatoryDocItemType, required: true, sourceInternalId: 'PRODUCT.INDICATION', status: 'Concluído' as RegulatoryDocItemStatus, marker: '[INDICACAO]' },
+              { id: 'item_1_3', name: 'Via de Administração e Forma Farmacêutica', type: 'Informação Regulatória' as RegulatoryDocItemType, required: true, sourceInternalId: 'PRODUCT.ADMINISTRATION_ROUTE', status: 'Em Andamento' as RegulatoryDocItemStatus, marker: '[FORMA_FARMACEUTICA]' },
+              { id: 'item_1_4', name: 'Apresentações e Conservação', type: 'Informação Regulatória' as RegulatoryDocItemType, required: true, sourceInternalId: 'PRODUCT.PRESENTATION', status: 'Pendente' as RegulatoryDocItemStatus, marker: '[APRESENTACOES]' }
             ]
           },
           {
             id: 'cap_2',
             code: '2.0',
-            title: 'Ingrediente Farmacêutico Ativo (IFA)',
+            title: 'Estudos Pré-clínicos e Clínicos',
             items: [
-              {
-                id: 'item_2_1',
-                name: 'Descrição e Caracterização do IFA',
-                type: 'Narrativa',
-                required: true,
-                sourceInternalId: 'IFA.DESCRIPTION',
-                status: 'Em Andamento',
-                marker: '[DESCRICAO_IFA]'
-              },
-              {
-                id: 'item_2_2',
-                name: 'Esquema do Processo Produtivo do IFA',
-                type: 'Evidência',
-                required: true,
-                sourceInternalId: 'EVID_IFA_PROCESS',
-                status: 'Pendente',
-                marker: '[PROCESSO_IFA_EVIDENCIA]'
-              }
-            ]
-          },
-          {
-            id: 'cap_3',
-            code: '3.0',
-            title: 'Estabilidade e Controle de Qualidade',
-            items: [
-              {
-                id: 'item_3_1',
-                name: 'Tabela Resumo de Estabilidade',
-                type: 'Tabela',
-                required: true,
-                sourceInternalId: 'STABILITY.TABLE',
-                status: 'Pendente',
-                marker: '[TABELA_ESTABILIDADE]'
-              },
-              {
-                id: 'item_3_2',
-                name: 'Resultados do Controle de Qualidade',
-                type: 'Informação Regulatória',
-                required: true,
-                sourceInternalId: 'QC.RESULTS',
-                status: 'Pendente',
-                marker: '[RESULTADOS_CQ]'
-              }
+              { id: 'item_2_1', name: 'Resumo dos Ensaios de Imunogenicidade', type: 'Narrativa' as RegulatoryDocItemType, required: true, sourceInternalId: 'CLINICAL.IMMUNO', status: 'Em Andamento' as RegulatoryDocItemStatus, marker: '[IMUNOGENICIDADE]' },
+              { id: 'item_2_2', name: 'Relatório de Toxicologia Pré-clínica', type: 'Evidência' as RegulatoryDocItemType, required: true, sourceInternalId: 'EVID_TOX', status: 'Pendente' as RegulatoryDocItemStatus, marker: '[RELATORIO_TOX]' }
             ]
           }
         ]
+      },
+      {
+        id: `doc_ifa_${proj.id}`,
+        projectId: proj.id,
+        title: 'Dossiê do IFA',
+        type: 'Dossiê de Insumo Farmacêutico Ativo',
+        description: 'Dados técnicos, rota sintética e controle de qualidade do Insumo Farmacêutico Ativo.',
+        currentVersion: '0.1',
+        currentVersionStatus: 'Rascunho',
+        updatedAt: new Date().toISOString(),
+        versionHistory: [
+          { version: '0.1', date: new Date().toISOString(), status: 'Rascunho', author: currentUser, notes: 'Abertura do dossiê de IFA' }
+        ],
+        chapters: [
+          {
+            id: 'cap_ifa_1',
+            code: '1.0',
+            title: 'Caracterização e Processo do IFA',
+            items: [
+              { id: 'item_ifa_1_1', name: 'Estrutura e Caracterização Físico-Química', type: 'Narrativa' as RegulatoryDocItemType, required: true, sourceInternalId: 'IFA.STRUCTURE', status: 'Em Andamento' as RegulatoryDocItemStatus, marker: '[ESTRUTURA_IFA]' },
+              { id: 'item_ifa_1_2', name: 'Esquema do Processo de Fabricação', type: 'Evidência' as RegulatoryDocItemType, required: true, sourceInternalId: 'EVID_IFA_PROCESS', status: 'Pendente' as RegulatoryDocItemStatus, marker: '[PROCESSO_IFA]' }
+            ]
+          }
+        ]
+      },
+      {
+        id: `doc_adj_${proj.id}`,
+        projectId: proj.id,
+        title: 'Dossiê do Adjuvante',
+        type: 'Dossiê de Adjuvante',
+        description: 'Informações de composição, esterilidade e segurança do sistema adjuvante.',
+        currentVersion: '0.1',
+        currentVersionStatus: 'Rascunho',
+        updatedAt: new Date().toISOString(),
+        chapters: []
+      },
+      {
+        id: `doc_brochura_${proj.id}`,
+        projectId: proj.id,
+        title: 'Brochura do Investigador',
+        type: 'Brochura Clinica',
+        description: 'Compilação de dados clínicos e de segurança para os investigadores do ensaio.',
+        currentVersion: '0.1',
+        currentVersionStatus: 'Rascunho',
+        updatedAt: new Date().toISOString(),
+        chapters: []
+      },
+      {
+        id: `doc_deec_${proj.id}`,
+        projectId: proj.id,
+        title: 'DEEC - Dossier de Ensaio Clínico',
+        type: 'Documento de Submissão DEEC',
+        description: 'Dossiê para submissão à Anvisa / CEUA / CONEP.',
+        currentVersion: '0.1',
+        currentVersionStatus: 'Rascunho',
+        updatedAt: new Date().toISOString(),
+        chapters: []
       }
-    ];
-  }, [regulatoryDocs, activeProject]);
+    ]).flat();
+  }, [regulatoryDocs, projects, currentUser]);
 
+  const effectiveDocs = useMemo(() => {
+    return regulatoryDocs.length > 0 ? regulatoryDocs : defaultDocs;
+  }, [regulatoryDocs, defaultDocs]);
+
+  // Documents for the currently selected project
   const currentProjectDocs = useMemo(() => {
-    const list = regulatoryDocs.length > 0 ? regulatoryDocs : defaultDocs;
-    if (selectedProjectId === 'all') return list;
-    return list.filter(d => d.projectId === selectedProjectId);
-  }, [regulatoryDocs, defaultDocs, selectedProjectId]);
+    if (selectedProjectId === 'all') return effectiveDocs;
+    return effectiveDocs.filter(d => d.projectId === selectedProjectId);
+  }, [effectiveDocs, selectedProjectId]);
 
-  // Filtered collections for selected project
+  // Ensure active doc selected
+  const activeDoc = useMemo(() => {
+    if (selectedDocId) {
+      const found = effectiveDocs.find(d => d.id === selectedDocId);
+      if (found) return found;
+    }
+    return currentProjectDocs.length > 0 ? currentProjectDocs[0] : null;
+  }, [effectiveDocs, currentProjectDocs, selectedDocId]);
+
+  // Modals & Interactivity
+  const [showVersionModal, setShowVersionModal] = useState(false);
+  const [newVersionNum, setNewVersionNum] = useState('');
+  const [newVersionStatus, setNewVersionStatus] = useState('Rascunho');
+  const [newVersionNotes, setNewVersionNotes] = useState('');
+
+  const [showItemCompleterModal, setShowItemCompleterModal] = useState(false);
+  const [activeItemForModal, setActiveItemForModal] = useState<{ chapterId: string; item: RegulatoryDocumentItem } | null>(null);
+
+  const [selectedEvidenceForView, setSelectedEvidenceForView] = useState<any>(null);
+
+  // Collections filtered for active project
   const projectInfoItems = useMemo(() => {
     return regulatoryInfoItems.filter(i => selectedProjectId === 'all' || i.projectId === selectedProjectId);
   }, [regulatoryInfoItems, selectedProjectId]);
@@ -245,7 +259,15 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
     return repeatableRecords.filter(r => selectedProjectId === 'all' || r.projectId === selectedProjectId);
   }, [repeatableRecords, selectedProjectId]);
 
-  // Completeness Metrics Calculation
+  // Pending Contributions coming from Projects execution
+  const projectPendingContributions = useMemo(() => {
+    return tasks.filter(t => 
+      (selectedProjectId === 'all' || t.project === activeProject?.name || t.project === selectedProjectId) &&
+      (t.generatesRegulatoryContent || t.dossierContribution)
+    );
+  }, [tasks, selectedProjectId, activeProject]);
+
+  // Metrics Calculation
   const completenessMetrics = useMemo(() => {
     let totalRequired = 0;
     let completed = 0;
@@ -258,8 +280,8 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
     let pendingTable = 0;
 
     currentProjectDocs.forEach(doc => {
-      doc.chapters.forEach(chap => {
-        chap.items.forEach(item => {
+      doc.chapters?.forEach(chap => {
+        chap.items?.forEach(item => {
           if (item.required) {
             totalRequired++;
             if (item.status === 'Concluído') {
@@ -293,23 +315,69 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
     };
   }, [currentProjectDocs]);
 
-  // Export Dossier Bank Function
+  // Version bump handler
+  const handleAddDocumentVersion = () => {
+    if (!activeDoc || !newVersionNum.trim()) return;
+
+    const newVerObj: RegulatoryDocumentVersion = {
+      version: newVersionNum.trim(),
+      date: new Date().toISOString(),
+      status: newVersionStatus,
+      author: currentUser,
+      notes: newVersionNotes
+    };
+
+    const updatedDoc: RegulatoryDocument = {
+      ...activeDoc,
+      currentVersion: newVersionNum.trim(),
+      currentVersionStatus: newVersionStatus,
+      versionHistory: [...(activeDoc.versionHistory || []), newVerObj],
+      updatedAt: new Date().toISOString()
+    };
+
+    const updatedList = effectiveDocs.map(d => d.id === updatedDoc.id ? updatedDoc : d);
+    onUpdateDocs(updatedList);
+
+    setShowVersionModal(false);
+    setNewVersionNum('');
+    setNewVersionNotes('');
+  };
+
+  // Toggle or edit item status
+  const handleUpdateItemStatus = (chapterId: string, itemId: string, status: RegulatoryDocItemStatus) => {
+    if (!activeDoc) return;
+
+    const updatedChapters = activeDoc.chapters.map(chap => {
+      if (chap.id !== chapterId) return chap;
+      return {
+        ...chap,
+        items: chap.items.map(item => {
+          if (item.id !== itemId) return item;
+          return { ...item, status };
+        })
+      };
+    });
+
+    const updatedDoc = { ...activeDoc, chapters: updatedChapters, updatedAt: new Date().toISOString() };
+    const updatedList = effectiveDocs.map(d => d.id === updatedDoc.id ? updatedDoc : d);
+    onUpdateDocs(updatedList);
+  };
+
+  // Export Json
   const handleExportDossierBank = () => {
     const exportData = {
       metadata: {
         exportedAt: new Date().toISOString(),
         exportedBy: currentUser,
         projectId: selectedProjectId,
-        projectName: activeProject?.name || 'Todos os Projetos',
-        systemVersion: '1.0.0-REG'
+        projectName: activeProject?.name || 'Todos os Projetos'
       },
       completenessMetrics,
       documents: currentProjectDocs,
       regulatoryInfoItems: projectInfoItems,
       narratives: projectNarratives,
       evidenceLibrary: projectEvidences,
-      repeatableRecords: projectRepeatables,
-      macroActivityConfigs: macroActivityConfigs
+      repeatableRecords: projectRepeatables
     };
 
     const jsonStr = JSON.stringify(exportData, null, 2);
@@ -317,166 +385,40 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Banco_Dossie_${activeProject?.name.replace(/[^a-zA-Z0-0]/g, '_') || 'Projetos'}_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `Documentos_Regulatorios_${activeProject?.name.replace(/[^a-zA-Z0-9]/g, '_') || 'Projetos'}_${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
-  // Handlers for Info Items
-  const handleSaveInfoItem = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingInfoItem?.name || !editingInfoItem?.internalId) return;
-
-    const newItem: RegulatoryInfoItem = {
-      id: editingInfoItem.id || `info_${Date.now()}`,
-      internalId: editingInfoItem.internalId.toUpperCase().replace(/\s+/g, '_'),
-      name: editingInfoItem.name,
-      category: editingInfoItem.category || 'Geral',
-      type: editingInfoItem.type || 'Texto',
-      value: editingInfoItem.value || '',
-      origin: editingInfoItem.origin || 'Manual',
-      version: editingInfoItem.version || 1,
-      supportingEvidenceId: editingInfoItem.supportingEvidenceId,
-      supportingEvidenceTitle: editingInfoItem.supportingEvidenceTitle,
-      updatedAt: new Date().toISOString(),
-      projectId: editingInfoItem.projectId || activeProject?.id || 'p1'
-    };
-
-    const exists = regulatoryInfoItems.some(i => i.id === newItem.id);
-    const updated = exists 
-      ? regulatoryInfoItems.map(i => i.id === newItem.id ? newItem : i)
-      : [...regulatoryInfoItems, newItem];
-
-    onUpdateInfoItems(updated);
-    setShowInfoModal(false);
-    setEditingInfoItem(null);
-  };
-
-  const handleDeleteInfoItem = (id: string) => {
-    onUpdateInfoItems(regulatoryInfoItems.filter(i => i.id !== id));
-  };
-
-  // Handlers for Narratives
-  const handleSaveNarrative = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingNarrative?.title || !editingNarrative?.text) return;
-
-    const prevHistory = editingNarrative.revisionHistory || [];
-    const currentVer = editingNarrative.version || 1;
-
-    const newRevision = {
-      version: currentVer,
-      date: new Date().toISOString(),
-      author: currentUser,
-      text: editingNarrative.text
-    };
-
-    const newNarrative: RegulatoryNarrative = {
-      id: editingNarrative.id || `narrative_${Date.now()}`,
-      projectId: editingNarrative.projectId || activeProject?.id || 'p1',
-      title: editingNarrative.title,
-      category: editingNarrative.category || 'Geral',
-      text: editingNarrative.text,
-      version: editingNarrative.id ? currentVer + 1 : 1,
-      revisionHistory: editingNarrative.id ? [...prevHistory, newRevision] : [newRevision],
-      approvalStatus: editingNarrative.approvalStatus || 'Rascunho',
-      updatedAt: new Date().toISOString()
-    };
-
-    const exists = regulatoryNarratives.some(n => n.id === newNarrative.id);
-    const updated = exists 
-      ? regulatoryNarratives.map(n => n.id === newNarrative.id ? newNarrative : n)
-      : [...regulatoryNarratives, newNarrative];
-
-    onUpdateNarratives(updated);
-    setShowNarrativeModal(false);
-    setEditingNarrative(null);
-  };
-
-  const handleDeleteNarrative = (id: string) => {
-    onUpdateNarratives(regulatoryNarratives.filter(n => n.id !== id));
-  };
-
-  // Handlers for Repeatable Records
-  const handleSaveRepeatable = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingRepeatable?.title || !editingRepeatable?.category) return;
-
-    const newRec: RepeatableRecord = {
-      id: editingRepeatable.id || `rec_${Date.now()}`,
-      projectId: editingRepeatable.projectId || activeProject?.id || 'p1',
-      category: editingRepeatable.category || 'Lotes',
-      title: editingRepeatable.title,
-      data: editingRepeatable.data || {},
-      updatedAt: new Date().toISOString()
-    };
-
-    const exists = repeatableRecords.some(r => r.id === newRec.id);
-    const updated = exists 
-      ? repeatableRecords.map(r => r.id === newRec.id ? newRec : r)
-      : [...repeatableRecords, newRec];
-
-    onUpdateRepeatableRecords(updated);
-    setShowRepeatableModal(false);
-    setEditingRepeatable(null);
-  };
-
-  const handleDeleteRepeatable = (id: string) => {
-    onUpdateRepeatableRecords(repeatableRecords.filter(r => r.id !== id));
-  };
-
-  // Handlers for Item Status in Document Requirements Matrix
-  const handleToggleItemStatus = (docId: string, chapterId: string, itemId: string, newStatus: RegulatoryDocItemStatus) => {
-    const list = regulatoryDocs.length > 0 ? regulatoryDocs : defaultDocs;
-    const updated = list.map(doc => {
-      if (doc.id !== docId) return doc;
-      return {
-        ...doc,
-        updatedAt: new Date().toISOString(),
-        chapters: doc.chapters.map(chap => {
-          if (chap.id !== chapterId) return chap;
-          return {
-            ...chap,
-            items: chap.items.map(item => {
-              if (item.id !== itemId) return item;
-              return { ...item, status: newStatus };
-            })
-          };
-        })
-      };
-    });
-    onUpdateDocs(updated);
-  };
-
   return (
     <div className="space-y-6">
       {/* Top Header Card */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 rounded-2xl p-6 text-white shadow-xl border border-slate-700/60">
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 rounded-3xl p-6 text-white shadow-xl border border-slate-700/60">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-xl bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-300 shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-300 shrink-0">
               <BookOpen size={24} />
             </div>
             <div>
               <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
-                Gestão de Documentos Regulatórios
+                Módulo de Documentos Regulatórios
               </h1>
               <p className="text-xs text-slate-300 font-medium">
-                Organização, rastreabilidade e matriz de completude das informações técnicas para dossiês regulatórios.
+                Organização, construção, revisão e evolução dos documentos oficiais do projeto.
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {/* Select Project Filter */}
-            <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-600 text-xs font-semibold">
+            {/* Project Filter */}
+            <div className="flex items-center gap-2 bg-slate-800/80 px-3.5 py-2 rounded-2xl border border-slate-600 text-xs font-bold">
               <span className="text-slate-400">Projeto:</span>
               <select
                 value={selectedProjectId}
                 onChange={(e) => setSelectedProjectId(e.target.value)}
-                className="bg-transparent text-white font-bold focus:outline-none cursor-pointer"
+                className="bg-transparent text-white font-extrabold focus:outline-none cursor-pointer"
               >
                 <option value="all" className="bg-slate-800 text-white">Todos os Projetos</option>
                 {projects.map(p => (
@@ -485,37 +427,24 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
               </select>
             </div>
 
-            {/* Export Dossier Bank Button */}
+            {/* Export JSON */}
             <button
               onClick={handleExportDossierBank}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs flex items-center gap-2 transition shadow-lg active:scale-95 cursor-pointer"
-              title="Exportar arquivo JSON completo com todo o Banco do Dossiê"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-xs flex items-center gap-2 transition shadow-lg active:scale-95 cursor-pointer"
             >
               <Download size={15} />
-              <span>Exportar Banco do Dossiê</span>
+              <span>Exportar Dossiê</span>
             </button>
           </div>
         </div>
 
-        {/* Sub Navigation Bar */}
-        <div className="mt-6 flex items-center gap-2 border-t border-slate-700/60 pt-4 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('completeness')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'completeness'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <ShieldCheck size={16} />
-            <span>Matriz de Completude</span>
-          </button>
-
+        {/* Primary Document-Centric Navigation Bar */}
+        <div className="mt-6 flex items-center gap-2 border-t border-slate-700/60 pt-4 overflow-x-auto custom-scrollbar">
           <button
             onClick={() => setActiveTab('docs')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+            className={`px-4 py-2.5 rounded-2xl text-xs font-black transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
               activeTab === 'docs'
-                ? 'bg-indigo-600 text-white shadow-md'
+                ? 'bg-indigo-600 text-white shadow-lg'
                 : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800'
             }`}
           >
@@ -524,849 +453,526 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
           </button>
 
           <button
-            onClick={() => setActiveTab('info_items')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'info_items'
-                ? 'bg-indigo-600 text-white shadow-md'
+            onClick={() => setActiveTab('completeness')}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-black transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+              activeTab === 'completeness'
+                ? 'bg-indigo-600 text-white shadow-lg'
                 : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800'
             }`}
           >
-            <Tag size={16} />
-            <span>Informações Regulatórias ({projectInfoItems.length})</span>
+            <ShieldCheck size={16} />
+            <span>Matriz de Completude</span>
           </button>
 
           <button
-            onClick={() => setActiveTab('narratives')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'narratives'
-                ? 'bg-indigo-600 text-white shadow-md'
+            onClick={() => setActiveTab('contributions')}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-black transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+              activeTab === 'contributions'
+                ? 'bg-indigo-600 text-white shadow-lg'
                 : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800'
             }`}
           >
-            <FileCode size={16} />
-            <span>Narrativas Técnicas ({projectNarratives.length})</span>
+            <Layers size={16} />
+            <span>Contribuições Pendentes ({projectPendingContributions.length})</span>
           </button>
 
           <button
-            onClick={() => setActiveTab('evidence')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'evidence'
-                ? 'bg-indigo-600 text-white shadow-md'
+            onClick={() => setActiveTab('internal_db')}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-black transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+              activeTab === 'internal_db'
+                ? 'bg-indigo-600 text-white shadow-lg'
                 : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800'
             }`}
           >
-            <Paperclip size={16} />
-            <span>Biblioteca de Evidências ({projectEvidences.length})</span>
+            <Database size={16} />
+            <span>Base de Dados Interna</span>
           </button>
 
-          <button
-            onClick={() => setActiveTab('repeatable')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'repeatable'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <ListOrdered size={16} />
-            <span>Registros Repetíveis ({projectRepeatables.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('macro_configs')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'macro_configs'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <Settings size={16} />
-            <span>Modelos Macroatividades</span>
-          </button>
+          {hasAdminAccess && (
+            <button
+              onClick={() => setActiveTab('macro_configs')}
+              className={`px-4 py-2.5 rounded-2xl text-xs font-black transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+                activeTab === 'macro_configs'
+                  ? 'bg-indigo-600 text-white shadow-lg'
+                  : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Settings size={16} />
+              <span>Modelos Macroatividades</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* --- TAB 1: MATRIZ DE COMPLETUDE --- */}
-      {activeTab === 'completeness' && (
-        <div className="space-y-6">
-          {/* Progress Overview Bar */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-              <div>
-                <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                  <ShieldCheck className="text-indigo-600" size={20} />
-                  Status de Completude do Dossiê Regulatório
-                </h3>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  Cálculo automático do percentual de conclusão baseado nos itens obrigatórios definidos nos documentos.
-                </p>
-              </div>
-
-              <div className="text-right">
-                <span className="text-3xl font-black text-indigo-600">{completenessMetrics.percent}%</span>
-                <p className="text-xs font-bold text-slate-500">
-                  {completenessMetrics.completed} de {completenessMetrics.totalRequired} itens obrigatórios concluídos
-                </p>
-              </div>
-            </div>
-
-            {/* Progress Bar Visual */}
-            <div className="w-full bg-slate-100 h-3.5 rounded-full overflow-hidden flex">
-              <div 
-                className="bg-emerald-500 h-full transition-all duration-500"
-                style={{ width: `${completenessMetrics.percent}%` }}
-                title={`${completenessMetrics.completed} concluídos`}
-              />
-              <div 
-                className="bg-amber-400 h-full transition-all duration-500"
-                style={{ width: `${completenessMetrics.totalRequired > 0 ? (completenessMetrics.inProgress / completenessMetrics.totalRequired) * 100 : 0}%` }}
-                title={`${completenessMetrics.inProgress} em andamento`}
-              />
-            </div>
-
-            {/* Metric Cards Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-              <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl">
-                <span className="text-xs font-bold uppercase text-emerald-800 tracking-wider">Concluídos</span>
-                <p className="text-2xl font-black text-emerald-700 mt-1">{completenessMetrics.completed}</p>
-              </div>
-
-              <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl">
-                <span className="text-xs font-bold uppercase text-amber-800 tracking-wider">Em Andamento</span>
-                <p className="text-2xl font-black text-amber-700 mt-1">{completenessMetrics.inProgress}</p>
-              </div>
-
-              <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl">
-                <span className="text-xs font-bold uppercase text-rose-800 tracking-wider">Pendentes Total</span>
-                <p className="text-2xl font-black text-rose-700 mt-1">{completenessMetrics.pending}</p>
-              </div>
-
-              <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
-                <span className="text-xs font-bold uppercase text-slate-600 tracking-wider">Total Requisitos</span>
-                <p className="text-2xl font-black text-slate-800 mt-1">{completenessMetrics.totalRequired}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Pending Dependencies Breakdown */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <h4 className="text-md font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <AlertCircle size={18} className="text-amber-500" />
-              Detalhamento de Pendências por Tipo de Recurso
-            </h4>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-700">Evidências Pendentes</span>
-                  <Paperclip size={16} className="text-slate-400" />
-                </div>
-                <p className="text-2xl font-black text-slate-900">{completenessMetrics.pendingEvidence}</p>
-                <p className="text-[11px] text-slate-500 mt-1">Aguardando geração/upload de arquivo de suporte nas atividades.</p>
-              </div>
-
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-700">Narrativas Pendentes</span>
-                  <FileCode size={16} className="text-slate-400" />
-                </div>
-                <p className="text-2xl font-black text-slate-900">{completenessMetrics.pendingNarrative}</p>
-                <p className="text-[11px] text-slate-500 mt-1">Aguardando elaboração ou revisão dos textos técnicos.</p>
-              </div>
-
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-700">Informações Regulatórias</span>
-                  <Tag size={16} className="text-slate-400" />
-                </div>
-                <p className="text-2xl font-black text-slate-900">{completenessMetrics.pendingInfo}</p>
-                <p className="text-[11px] text-slate-500 mt-1">Dependem de parâmetros cadastrados na Biblioteca Regulatória.</p>
-              </div>
-
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-700">Tabelas / Figuras</span>
-                  <FileSpreadsheet size={16} className="text-slate-400" />
-                </div>
-                <p className="text-2xl font-black text-slate-900">{completenessMetrics.pendingTable}</p>
-                <p className="text-[11px] text-slate-500 mt-1">Dependem de compilação de dados experimentais ou estabilidade.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- TAB 2: INFORMAÇÕES REGULATÓRIAS --- */}
-      {activeTab === 'info_items' && (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Biblioteca de Informações Regulatórias</h3>
-              <p className="text-xs text-slate-500">Parâmetros e dados oficiais reutilizáveis do projeto (existem apenas uma vez por projeto).</p>
-            </div>
-
-            <button
-              onClick={() => {
-                setEditingInfoItem({
-                  category: 'Produto',
-                  type: 'Texto',
-                  projectId: activeProject?.id || 'p1'
-                });
-                setShowInfoModal(true);
-              }}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm"
-            >
-              <Plus size={16} />
-              <span>Nova Informação Regulatória</span>
-            </button>
-          </div>
-
-          {/* Table */}
-          <div className="overflow-x-auto border border-slate-200 rounded-xl">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-extrabold uppercase text-[10px]">
-                  <th className="p-3">ID Interno</th>
-                  <th className="p-3">Nome da Informação</th>
-                  <th className="p-3">Categoria</th>
-                  <th className="p-3">Tipo</th>
-                  <th className="p-3">Valor / Conteúdo</th>
-                  <th className="p-3">Origem</th>
-                  <th className="p-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {projectInfoItems.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-6 text-center text-slate-400 italic">
-                      Nenhuma informação regulatória cadastrada ainda.
-                    </td>
-                  </tr>
-                ) : (
-                  projectInfoItems.map(item => (
-                    <tr key={item.id} className="hover:bg-slate-50/80">
-                      <td className="p-3 font-mono font-bold text-indigo-700 bg-indigo-50/50 rounded-md">
-                        {item.internalId}
-                      </td>
-                      <td className="p-3 font-bold text-slate-800">{item.name}</td>
-                      <td className="p-3 text-slate-600">
-                        <span className="px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 font-semibold text-[10px]">
-                          {item.category}
-                        </span>
-                      </td>
-                      <td className="p-3 text-slate-600">{item.type}</td>
-                      <td className="p-3 font-medium text-slate-700 max-w-xs truncate">{item.value || '---'}</td>
-                      <td className="p-3 text-slate-500">{item.origin || 'Sistema'}</td>
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingInfoItem(item);
-                              setShowInfoModal(true);
-                            }}
-                            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition cursor-pointer"
-                            title="Editar"
-                          >
-                            <Edit3 size={15} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteInfoItem(item.id)}
-                            className="p-1.5 hover:bg-rose-50 text-rose-600 rounded-lg transition cursor-pointer"
-                            title="Excluir"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* --- TAB 3: NARRATIVAS TÉCNICAS --- */}
-      {activeTab === 'narratives' && (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Biblioteca de Narrativas Técnicas</h3>
-              <p className="text-xs text-slate-500">Textos descritivos, históricos e conclusões técnicas para composição do dossiê.</p>
-            </div>
-
-            <button
-              onClick={() => {
-                setEditingNarrative({
-                  category: 'Geral',
-                  approvalStatus: 'Rascunho',
-                  projectId: activeProject?.id || 'p1'
-                });
-                setShowNarrativeModal(true);
-              }}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm"
-            >
-              <Plus size={16} />
-              <span>Nova Narrativa</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {projectNarratives.length === 0 ? (
-              <div className="col-span-2 p-8 text-center text-slate-400 italic bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                Nenhuma narrativa cadastrada. Clique em "Nova Narrativa" para registrar a primeira introdução ou histórico técnico.
-              </div>
-            ) : (
-              projectNarratives.map(nar => (
-                <div key={nar.id} className="p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 transition shadow-sm space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
-                        {nar.category}
-                      </span>
-                      <h4 className="text-sm font-bold text-slate-900 mt-1">{nar.title}</h4>
-                    </div>
-
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                      nar.approvalStatus === 'Aprovado' ? 'bg-emerald-100 text-emerald-800' :
-                      nar.approvalStatus === 'Em Revisão' ? 'bg-amber-100 text-amber-800' :
-                      'bg-slate-100 text-slate-700'
-                    }`}>
-                      v{nar.version} - {nar.approvalStatus}
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-slate-600 line-clamp-3 bg-slate-50 p-3 rounded-lg font-mono">
-                    {nar.text}
-                  </p>
-
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100 pt-2">
-                    <span>{nar.revisionHistory?.length || 1} revisões registradas</span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          setEditingNarrative(nar);
-                          setShowNarrativeModal(true);
-                        }}
-                        className="p-1 hover:bg-slate-100 rounded text-slate-600 cursor-pointer"
-                      >
-                        <Edit3 size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteNarrative(nar.id)}
-                        className="p-1 hover:bg-rose-50 rounded text-rose-600 cursor-pointer"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* --- TAB 4: BIBLIOTECA DE EVIDÊNCIAS --- */}
-      {activeTab === 'evidence' && (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Biblioteca de Evidências Regulatórias</h3>
-              <p className="text-xs text-slate-500">Evidências e arquivos de suporte capturados durante a execução das atividades do projeto.</p>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto border border-slate-200 rounded-xl">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-extrabold uppercase text-[10px]">
-                  <th className="p-3">Título da Evidência</th>
-                  <th className="p-3">Atividade de Origem</th>
-                  <th className="p-3">Uso Regulatório?</th>
-                  <th className="p-3">Responsável</th>
-                  <th className="p-3">Data</th>
-                  <th className="p-3">Arquivo</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {projectEvidences.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="p-6 text-center text-slate-400 italic">
-                      Nenhuma evidência registrada ainda. Ao concluir uma atividade com a opção "Gerar Evidência", ela aparecerá aqui.
-                    </td>
-                  </tr>
-                ) : (
-                  projectEvidences.map(ev => (
-                    <tr key={ev.id} className="hover:bg-slate-50">
-                      <td className="p-3 font-bold text-slate-800">{ev.title}</td>
-                      <td className="p-3 text-slate-600">{ev.originActivityName || 'Atividade'}</td>
-                      <td className="p-3">
-                        {ev.useInRegulatoryDoc ? (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                            Sim (Enviado)
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px]">
-                            Não
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 text-slate-600">{ev.responsible}</td>
-                      <td className="p-3 text-slate-500">{new Date(ev.date).toLocaleDateString('pt-BR')}</td>
-                      <td className="p-3">
-                        {ev.fileUrl ? (
-                          <a href={ev.fileUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-center gap-1 font-semibold">
-                            <Paperclip size={13} /> {ev.fileName || 'Anexo'}
-                          </a>
-                        ) : (
-                          <span className="text-slate-400 italic">Sem arquivo</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* --- TAB 5: REGISTROS REPETÍVEIS --- */}
-      {activeTab === 'repeatable' && (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Registros Repetíveis</h3>
-              <p className="text-xs text-slate-500">
-                Registros ilimitados de lotes, doses, apresentações, ensaios e estabilidades sem campos fixos engessados.
-              </p>
-            </div>
-
-            <button
-              onClick={() => {
-                setEditingRepeatable({
-                  category: 'Lotes',
-                  data: {},
-                  projectId: activeProject?.id || 'p1'
-                });
-                setShowRepeatableModal(true);
-              }}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-sm"
-            >
-              <Plus size={16} />
-              <span>Novo Registro Repetível</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {projectRepeatables.length === 0 ? (
-              <div className="col-span-3 p-8 text-center text-slate-400 italic bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                Nenhum registro repetível cadastrado ainda (Lotes, Doses, Estabilidades, etc.).
-              </div>
-            ) : (
-              projectRepeatables.map(rec => (
-                <div key={rec.id} className="p-4 rounded-xl border border-slate-200 bg-white space-y-2">
-                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700">
-                    {rec.category}
-                  </span>
-                  <h4 className="text-sm font-bold text-slate-900">{rec.title}</h4>
-
-                  <div className="text-xs text-slate-600 space-y-1 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                    {Object.entries(rec.data || {}).map(([k, v]) => (
-                      <div key={k} className="flex justify-between">
-                        <span className="font-semibold text-slate-500">{k}:</span>
-                        <span className="font-bold text-slate-800">{String(v)}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                    <button onClick={() => handleDeleteRepeatable(rec.id)} className="p-1 hover:bg-rose-50 text-rose-600 rounded cursor-pointer">
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* --- TAB 6: MODELOS DE MACROATIVIDADES --- */}
-      {activeTab === 'macro_configs' && (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Configuração de Modelos por Macroatividade</h3>
-              <p className="text-xs text-slate-500">
-                Defina os campos obrigatórios e formulários dinâmicos configuráveis pelo administrador para cada macroatividade.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 border rounded-xl bg-slate-50 space-y-2">
-              <h4 className="font-bold text-slate-900 text-sm">Produção de Lote</h4>
-              <p className="text-xs text-slate-500">Campos obrigatórios: Número do lote, Data, Escala, Quantidade produzida, Rendimento.</p>
-            </div>
-
-            <div className="p-4 border rounded-xl bg-slate-50 space-y-2">
-              <h4 className="font-bold text-slate-900 text-sm">Controle de Qualidade</h4>
-              <p className="text-xs text-slate-500">Campos obrigatórios: Lote, Método analítico, Especificação, Resultado obtido.</p>
-            </div>
-
-            <div className="p-4 border rounded-xl bg-slate-50 space-y-2">
-              <h4 className="font-bold text-slate-900 text-sm">Estabilidade</h4>
-              <p className="text-xs text-slate-500">Campos obrigatórios: Lote, Temperatura, Tempo, Condição, Resultado.</p>
-            </div>
-
-            <div className="p-4 border rounded-xl bg-slate-50 space-y-2">
-              <h4 className="font-bold text-slate-900 text-sm">Ensaios Clínicos</h4>
-              <p className="text-xs text-slate-500">Campos obrigatórios: Dose, Grupo, Número de participantes, Protocolo aprovado.</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- TAB 7: ESTRUTURA E MATRIZ DE REQUISITOS DE DOCUMENTOS --- */}
+      {/* =========================================================================
+          TAB: DOCUMENTOS REGULATÓRIOS (CENTERPIECE OF THE SYSTEM)
+          ========================================================================= */}
       {activeTab === 'docs' && (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">Documentos Regulatórios & Matriz de Requisitos</h3>
-            <p className="text-xs text-slate-500">
-              Gerenciamento dos dossiês (DDCM, Dossiê da Vacina, Dossiê do IFA, Dossiê do Adjuvante, Brochura do Investigador, DEEC) com marcadores e origem dos dados.
-            </p>
-          </div>
-
-          {currentProjectDocs.map(doc => (
-            <div key={doc.id} className="border border-slate-200 rounded-xl overflow-hidden space-y-3 p-4 bg-slate-50/50">
-              <div className="flex items-center justify-between bg-slate-900 text-white p-3 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <BookOpen size={18} className="text-indigo-400" />
-                  <h4 className="font-bold text-sm">{doc.title}</h4>
-                </div>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500 text-white">
-                  {doc.type}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Document Selector Column */}
+          <div className="lg:col-span-1 space-y-4">
+            <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                  Documentos do Projeto
+                </h3>
+                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                  {currentProjectDocs.length}
                 </span>
               </div>
 
-              {/* Chapters Tree & Requirements Matrix */}
-              <div className="space-y-4 pt-2">
-                {doc.chapters.map(chap => (
-                  <div key={chap.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
-                    <h5 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                      <span className="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded font-mono text-xs">
-                        {chap.code}
-                      </span>
-                      {chap.title}
-                    </h5>
+              <div className="space-y-2">
+                {currentProjectDocs.map(doc => {
+                  const isSelected = activeDoc?.id === doc.id;
+                  return (
+                    <button
+                      key={doc.id}
+                      onClick={() => setSelectedDocId(doc.id)}
+                      className={`w-full p-4 rounded-2xl text-left border transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-indigo-50 border-indigo-300 shadow-md text-indigo-900'
+                          : 'bg-slate-50 border-slate-200/80 hover:bg-white hover:border-slate-300 text-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black uppercase truncate">{doc.title}</span>
+                        <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
+                          v{doc.currentVersion || '0.1'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 line-clamp-2 mt-1">{doc.description}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-                    {/* Table of Items */}
-                    <div className="overflow-x-auto border border-slate-200 rounded-lg">
-                      <table className="w-full text-left text-xs border-collapse">
-                        <thead>
-                          <tr className="bg-slate-100 text-slate-600 font-extrabold uppercase text-[9px] border-b border-slate-200">
-                            <th className="p-2.5">Item do Capítulo</th>
-                            <th className="p-2.5">Tipo</th>
-                            <th className="p-2.5">Marcador Lógico</th>
-                            <th className="p-2.5">Origem (ID Interno)</th>
-                            <th className="p-2.5">Obrigatório?</th>
-                            <th className="p-2.5">Situação</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-200">
-                          {chap.items.map(item => (
-                            <tr key={item.id} className="hover:bg-slate-50">
-                              <td className="p-2.5 font-bold text-slate-800">{item.name}</td>
-                              <td className="p-2.5 text-slate-600">{item.type}</td>
-                              <td className="p-2.5 font-mono text-indigo-600 text-[11px]">{item.marker || '---'}</td>
-                              <td className="p-2.5 font-mono text-slate-500 text-[11px]">{item.sourceInternalId}</td>
-                              <td className="p-2.5 font-bold">
-                                {item.required ? (
-                                  <span className="text-rose-600">Sim</span>
-                                ) : (
-                                  <span className="text-slate-400">Opcional</span>
-                                )}
-                              </td>
-                              <td className="p-2.5">
+            {/* Document Evolution History Widget */}
+            {activeDoc && (
+              <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+                    <History size={14} className="text-indigo-600" />
+                    Histórico de Versões
+                  </h4>
+                  <button
+                    onClick={() => setShowVersionModal(true)}
+                    className="text-[10px] font-black text-indigo-600 hover:underline uppercase flex items-center gap-1"
+                  >
+                    <Plus size={12} /> Nova Versão
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                  {(activeDoc.versionHistory || []).map((vh, idx) => (
+                    <div key={idx} className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl text-xs space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="font-black text-indigo-800 text-xs">Versão {vh.version}</span>
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                          {vh.status}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500">{vh.notes || 'Atualização técnica'}</p>
+                      <span className="text-[8px] font-bold text-slate-400 block">{new Date(vh.date).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Main Document Display (Chapters & Items) */}
+          <div className="lg:col-span-3 space-y-6">
+            {activeDoc ? (
+              <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 space-y-6">
+                {/* Active Document Header */}
+                <div className="pb-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-[9px] font-black uppercase tracking-widest border border-indigo-200">
+                        {activeDoc.type}
+                      </span>
+                      <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[9px] font-black uppercase tracking-widest">
+                        Versão {activeDoc.currentVersion || '0.1'} • {activeDoc.currentVersionStatus || 'Rascunho'}
+                      </span>
+                    </div>
+                    <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">{activeDoc.title}</h2>
+                    <p className="text-xs font-medium text-slate-500 mt-1">{activeDoc.description}</p>
+                  </div>
+
+                  <button
+                    onClick={() => setShowVersionModal(true)}
+                    className="px-5 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg hover:bg-indigo-500 transition active:scale-95 flex items-center gap-2"
+                  >
+                    <Plus size={16} />
+                    <span>Atualizar Versão</span>
+                  </button>
+                </div>
+
+                {/* Predefined Chapters & Items Tree */}
+                <div className="space-y-6">
+                  {activeDoc.chapters && activeDoc.chapters.length > 0 ? (
+                    activeDoc.chapters.map(chap => (
+                      <div key={chap.id} className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/40">
+                        <div className="bg-slate-100/80 px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
+                          <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-2">
+                            <span className="px-2 py-0.5 bg-indigo-600 text-white rounded-md text-[10px]">{chap.code}</span>
+                            {chap.title}
+                          </h3>
+                          <span className="text-[10px] font-bold text-slate-500">
+                            {chap.items?.filter(i => i.status === 'Concluído').length || 0} / {chap.items?.length || 0} itens concluídos
+                          </span>
+                        </div>
+
+                        {/* Items Table */}
+                        <div className="divide-y divide-slate-100">
+                          {chap.items?.map(item => (
+                            <div key={item.id} className="p-4 bg-white hover:bg-slate-50 transition flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <div className="space-y-1 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-black text-slate-900">{item.name}</span>
+                                  {item.required && (
+                                    <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded-md text-[8px] font-black uppercase">Obrigatório</span>
+                                  )}
+                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md text-[8px] font-bold uppercase">{item.type}</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 font-medium">Marcador: <code className="bg-slate-100 text-slate-700 px-1 py-0.5 rounded">{item.marker || '[PADRAO]'}</code></p>
+                              </div>
+
+                              {/* Item Controls & Status Actions */}
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <select
                                   value={item.status}
-                                  onChange={(e) => handleToggleItemStatus(doc.id, chap.id, item.id, e.target.value as RegulatoryDocItemStatus)}
-                                  className={`px-2 py-1 rounded text-xs font-bold cursor-pointer focus:outline-none ${
-                                    item.status === 'Concluído' ? 'bg-emerald-100 text-emerald-800' :
-                                    item.status === 'Em Andamento' ? 'bg-amber-100 text-amber-800' :
-                                    'bg-rose-100 text-rose-800'
+                                  onChange={(e) => handleUpdateItemStatus(chap.id, item.id, e.target.value as RegulatoryDocItemStatus)}
+                                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border cursor-pointer ${
+                                    item.status === 'Concluído' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' :
+                                    item.status === 'Em Andamento' ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-slate-100 text-slate-600 border-slate-200'
                                   }`}
                                 >
                                   <option value="Pendente">Pendente</option>
                                   <option value="Em Andamento">Em Andamento</option>
                                   <option value="Concluído">Concluído</option>
                                 </select>
-                              </td>
-                            </tr>
+
+                                <button
+                                  onClick={() => {
+                                    setActiveItemForModal({ chapterId: chap.id, item });
+                                    setShowItemCompleterModal(true);
+                                  }}
+                                  className="px-3.5 py-1.5 bg-brand-primary text-white hover:bg-brand-accent rounded-xl text-[10px] font-black uppercase tracking-wider transition shadow-sm"
+                                >
+                                  Completar Item
+                                </button>
+                              </div>
+                            </div>
                           ))}
-                        </tbody>
-                      </table>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-12 text-center border-2 border-dashed border-slate-200 rounded-3xl">
+                      <p className="text-slate-400 text-xs font-bold uppercase tracking-widest italic">Nenhum capítulo cadastrado para este documento.</p>
                     </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="p-12 text-center bg-white rounded-3xl border border-slate-200">
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest italic">Selecione um documento no painel lateral.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          TAB: MATRIZ DE COMPLETUDE (ASSISTANT METRICS)
+          ========================================================================= */}
+      {activeTab === 'completeness' && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                  <ShieldCheck className="text-indigo-600" size={24} />
+                  Assistente de Completude dos Documentos
+                </h3>
+                <p className="text-xs text-slate-500 font-medium mt-1">
+                  Acompanhamento consolidado do preenchimento e prontidão dos documentos do projeto.
+                </p>
+              </div>
+
+              <div className="text-right">
+                <span className="text-4xl font-black text-indigo-600">{completenessMetrics.percent}%</span>
+                <p className="text-xs font-bold text-slate-500 mt-0.5">
+                  {completenessMetrics.completed} de {completenessMetrics.totalRequired} itens concluídos
+                </p>
+              </div>
+            </div>
+
+            {/* Visual Progress Bar */}
+            <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden flex">
+              <div 
+                className="bg-emerald-500 h-full transition-all duration-500"
+                style={{ width: `${completenessMetrics.percent}%` }}
+              />
+            </div>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-2xl">
+                <span className="text-[10px] font-black uppercase text-emerald-800 tracking-wider">Itens Concluídos</span>
+                <p className="text-3xl font-black text-emerald-700 mt-1">{completenessMetrics.completed}</p>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl">
+                <span className="text-[10px] font-black uppercase text-amber-800 tracking-wider">Em Andamento</span>
+                <p className="text-3xl font-black text-amber-700 mt-1">{completenessMetrics.inProgress}</p>
+              </div>
+              <div className="bg-rose-50 border border-rose-200 p-5 rounded-2xl">
+                <span className="text-[10px] font-black uppercase text-rose-800 tracking-wider">Itens Pendentes</span>
+                <p className="text-3xl font-black text-rose-700 mt-1">{completenessMetrics.pending}</p>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl">
+                <span className="text-[10px] font-black uppercase text-slate-600 tracking-wider">Requisitos Totais</span>
+                <p className="text-3xl font-black text-slate-800 mt-1">{completenessMetrics.totalRequired}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          TAB: CONTRIBUIÇÕES PENDENTES DO PROJETO
+          ========================================================================= */}
+      {activeTab === 'contributions' && (
+        <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
+          <div>
+            <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+              <Layers size={20} className="text-indigo-600" />
+              Contribuições Regulatórias Originadas no Módulo Projetos
+            </h3>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Atividades concluídas no gerenciamento de execução que foram marcadas como geradoras de conteúdo regulatório.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {projectPendingContributions.map(task => (
+              <div key={task.id} className="p-5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <span className="text-[9px] font-black uppercase text-brand-primary bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                    {task.project}
+                  </span>
+                  <h4 className="text-sm font-black text-slate-900 mt-1">{task.activity}</h4>
+                  <p className="text-xs text-slate-500 font-medium">{task.description || 'Sem descrição'}</p>
+                  <span className="text-[10px] text-slate-400 font-bold block mt-1">Líder: {task.projectLead}</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSelectedEvidenceForView(task)}
+                    className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-black text-xs uppercase tracking-wider rounded-xl transition flex items-center gap-1.5"
+                  >
+                    <Eye size={14} /> Ver Evidência
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab('docs');
+                    }}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow-sm flex items-center gap-1.5"
+                  >
+                    <CheckCircle size={14} /> Vincular ao Documento
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {projectPendingContributions.length === 0 && (
+              <div className="p-12 text-center border-2 border-dashed border-slate-200 rounded-3xl">
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest italic">Nenhuma contribuição regulatória pendente proveniente dos projetos.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          TAB: BASE DE DADOS INTERNA (LIBRARIES)
+          ========================================================================= */}
+      {activeTab === 'internal_db' && (
+        <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
+          <div className="flex items-center justify-between border-b pb-4">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                <Database size={20} className="text-indigo-600" />
+                Base de Dados Interna do Dossiê
+              </h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Acervo de apoio utilizado como fonte de dados para compor os itens dos documentos regulatórios.
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDbSubTab('info_items')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${dbSubTab === 'info_items' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+              >
+                Informações
+              </button>
+              <button
+                onClick={() => setDbSubTab('narratives')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${dbSubTab === 'narratives' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+              >
+                Narrativas
+              </button>
+              <button
+                onClick={() => setDbSubTab('evidence')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${dbSubTab === 'evidence' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+              >
+                Evidências
+              </button>
+            </div>
+          </div>
+
+          {/* Render Subtab List */}
+          {dbSubTab === 'info_items' && (
+            <div className="space-y-3">
+              {projectInfoItems.map(item => (
+                <div key={item.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex justify-between items-center">
+                  <div>
+                    <span className="text-[9px] font-black uppercase text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">{item.internalId}</span>
+                    <h4 className="text-sm font-bold text-slate-900 mt-1">{item.name}</h4>
+                    <p className="text-xs text-slate-600 font-medium">{item.value || 'Sem valor preenchido'}</p>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
+
+          {dbSubTab === 'narratives' && (
+            <div className="space-y-3">
+              {projectNarratives.map(nar => (
+                <div key={nar.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <h4 className="text-sm font-bold text-slate-900">{nar.title}</h4>
+                  <p className="text-xs text-slate-600 line-clamp-2 mt-1">{nar.text}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {dbSubTab === 'evidence' && (
+            <div className="space-y-3">
+              {projectEvidences.map(ev => (
+                <div key={ev.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <h4 className="text-sm font-bold text-slate-900">{ev.title}</h4>
+                  <p className="text-xs text-slate-600">{ev.description}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* --- MODAL: INFORMAÇÃO REGULATÓRIA --- */}
-      {showInfoModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg p-6 space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="font-bold text-slate-900 text-base">
-                {editingInfoItem?.id ? 'Editar Informação Regulatória' : 'Nova Informação Regulatória'}
-              </h3>
-              <button onClick={() => setShowInfoModal(false)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
-                <X size={18} />
-              </button>
+      {/* Version Bump Modal */}
+      {showVersionModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 max-w-lg w-full space-y-5 animate-in zoom-in-95">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Atualizar Versão do Documento</h3>
+              <button onClick={() => setShowVersionModal(false)} className="p-1 text-slate-400 hover:text-slate-600"><X size={20} /></button>
             </div>
 
-            <form onSubmit={handleSaveInfoItem} className="space-y-3">
+            <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Identificador Interno (ex: PRODUCT.NAME)</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Número da Versão</label>
                 <input
                   type="text"
-                  required
-                  placeholder="EX: PRODUCT.NAME"
-                  value={editingInfoItem?.internalId || ''}
-                  onChange={(e) => setEditingInfoItem({ ...editingInfoItem, internalId: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-xl text-xs font-mono uppercase bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="ex: 0.2, 1.0, 1.1"
+                  value={newVersionNum}
+                  onChange={e => setNewVersionNum(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Nome Descritivo</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="ex: Nome Comercial da Vacina"
-                  value={editingInfoItem?.name || ''}
-                  onChange={(e) => setEditingInfoItem({ ...editingInfoItem, name: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Categoria</label>
-                  <select
-                    value={editingInfoItem?.category || 'Produto'}
-                    onChange={(e) => setEditingInfoItem({ ...editingInfoItem, category: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-xl text-xs focus:outline-none"
-                  >
-                    <option value="Produto">Produto</option>
-                    <option value="IFA">IFA</option>
-                    <option value="Adjuvante">Adjuvante</option>
-                    <option value="Processo">Processo</option>
-                    <option value="Estabilidade">Estabilidade</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Tipo</label>
-                  <select
-                    value={editingInfoItem?.type || 'Texto'}
-                    onChange={(e) => setEditingInfoItem({ ...editingInfoItem, type: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-xl text-xs focus:outline-none"
-                  >
-                    <option value="Texto">Texto</option>
-                    <option value="Parâmetro">Parâmetro</option>
-                    <option value="Tabela">Tabela</option>
-                    <option value="Especificação">Especificação</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Valor / Conteúdo Oficial</label>
-                <textarea
-                  rows={3}
-                  required
-                  placeholder="Insira o valor oficial desta informação..."
-                  value={editingInfoItem?.value || ''}
-                  onChange={(e) => setEditingInfoItem({ ...editingInfoItem, value: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t">
-                <button
-                  type="button"
-                  onClick={() => setShowInfoModal(false)}
-                  className="px-4 py-2 text-slate-600 bg-slate-100 rounded-xl text-xs font-bold hover:bg-slate-200 cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-white bg-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-500 cursor-pointer shadow-sm"
-                >
-                  Salvar Informação
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* --- MODAL: NARRATIVA TÉCNICA --- */}
-      {showNarrativeModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl p-6 space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="font-bold text-slate-900 text-base">
-                {editingNarrative?.id ? 'Editar Narrativa Técnica' : 'Nova Narrativa Técnica'}
-              </h3>
-              <button onClick={() => setShowNarrativeModal(false)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveNarrative} className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Título da Narrativa</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="ex: Histórico de Desenvolvimento do IFA Sm29"
-                  value={editingNarrative?.title || ''}
-                  onChange={(e) => setEditingNarrative({ ...editingNarrative, title: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Categoria</label>
-                  <select
-                    value={editingNarrative?.category || 'Geral'}
-                    onChange={(e) => setEditingNarrative({ ...editingNarrative, category: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-xl text-xs focus:outline-none"
-                  >
-                    <option value="Introdução">Introdução</option>
-                    <option value="Histórico">Histórico de Desenvolvimento</option>
-                    <option value="Desenvolvimento IFA">Desenvolvimento do IFA</option>
-                    <option value="Desenvolvimento Adjuvante">Desenvolvimento do Adjuvante</option>
-                    <option value="Análise de Risco">Análise de Risco</option>
-                    <option value="Conclusão">Conclusão</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Status de Aprovação</label>
-                  <select
-                    value={editingNarrative?.approvalStatus || 'Rascunho'}
-                    onChange={(e) => setEditingNarrative({ ...editingNarrative, approvalStatus: e.target.value as any })}
-                    className="w-full px-3 py-2 border rounded-xl text-xs focus:outline-none"
-                  >
-                    <option value="Rascunho">Rascunho</option>
-                    <option value="Em Revisão">Em Revisão</option>
-                    <option value="Aprovado">Aprovado</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Texto da Narrativa Técnica</label>
-                <textarea
-                  rows={6}
-                  required
-                  placeholder="Escreva o texto descritivo técnico..."
-                  value={editingNarrative?.text || ''}
-                  onChange={(e) => setEditingNarrative({ ...editingNarrative, text: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t">
-                <button
-                  type="button"
-                  onClick={() => setShowNarrativeModal(false)}
-                  className="px-4 py-2 text-slate-600 bg-slate-100 rounded-xl text-xs font-bold hover:bg-slate-200 cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-white bg-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-500 cursor-pointer shadow-sm"
-                >
-                  Salvar Narrativa
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* --- MODAL: REGISTRO REPETÍVEL --- */}
-      {showRepeatableModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="font-bold text-slate-900 text-base">
-                Novo Registro Repetível
-              </h3>
-              <button onClick={() => setShowRepeatableModal(false)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveRepeatable} className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Categoria</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Status da Versão</label>
                 <select
-                  value={editingRepeatable?.category || 'Lotes'}
-                  onChange={(e) => setEditingRepeatable({ ...editingRepeatable, category: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-xl text-xs focus:outline-none"
+                  value={newVersionStatus}
+                  onChange={e => setNewVersionStatus(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
                 >
-                  <option value="Lotes">Lotes</option>
-                  <option value="Doses">Doses</option>
-                  <option value="Apresentações">Apresentações</option>
-                  <option value="Estabilidades">Estabilidades</option>
-                  <option value="ControleQualidade">Controle de Qualidade</option>
-                  <option value="Comparabilidade">Comparabilidade</option>
+                  <option value="Rascunho">Rascunho</option>
+                  <option value="Complementação">Complementação</option>
+                  <option value="Revisão Técnica">Revisão Técnica</option>
+                  <option value="Submetido">Submetido</option>
+                  <option value="Aprovado">Aprovado</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Identificação / Título</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="ex: Lote Pilot-2026-01"
-                  value={editingRepeatable?.title || ''}
-                  onChange={(e) => setEditingRepeatable({ ...editingRepeatable, title: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-xl text-xs focus:outline-none"
+                <label className="text-[10px] font-black text-slate-500 uppercase">Notas do Histórico</label>
+                <textarea
+                  rows={3}
+                  placeholder="Descreva o que mudou nesta versão..."
+                  value={newVersionNotes}
+                  onChange={e => setNewVersionNotes(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
                 />
               </div>
+            </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t">
-                <button
-                  type="button"
-                  onClick={() => setShowRepeatableModal(false)}
-                  className="px-4 py-2 text-slate-600 bg-slate-100 rounded-xl text-xs font-bold hover:bg-slate-200 cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-white bg-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-500 cursor-pointer shadow-sm"
-                >
-                  Salvar Registro
-                </button>
-              </div>
-            </form>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setShowVersionModal(false)} className="px-5 py-2.5 bg-slate-200 text-slate-700 font-bold text-xs rounded-xl">Cancelar</button>
+              <button onClick={handleAddDocumentVersion} className="px-6 py-2.5 bg-indigo-600 text-white font-black text-xs rounded-xl shadow-lg">Salvar Versão</button>
+            </div>
           </div>
         </div>
+      )}
+
+      {/* Item Completer Modal */}
+      {showItemCompleterModal && activeItemForModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 max-w-lg w-full space-y-5 animate-in zoom-in-95">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Completar Item: {activeItemForModal.item.name}</h3>
+              <button onClick={() => setShowItemCompleterModal(false)} className="p-1 text-slate-400 hover:text-slate-600"><X size={20} /></button>
+            </div>
+
+            <p className="text-xs text-slate-600 font-medium">
+              Ajuste o status e os dados de suporte deste requisito obrigatório do documento.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black text-slate-500 uppercase">Status do Item</label>
+                <select
+                  value={activeItemForModal.item.status}
+                  onChange={e => {
+                    handleUpdateItemStatus(activeItemForModal.chapterId, activeItemForModal.item.id, e.target.value as RegulatoryDocItemStatus);
+                    setShowItemCompleterModal(false);
+                  }}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                >
+                  <option value="Pendente">Pendente</option>
+                  <option value="Em Andamento">Em Andamento</option>
+                  <option value="Concluído">Concluído</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button onClick={() => setShowItemCompleterModal(false)} className="px-6 py-2.5 bg-slate-900 text-white font-black text-xs rounded-xl">Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal for viewing evidence */}
+      {selectedEvidenceForView && (
+        <EvidenceDetailModal
+          item={selectedEvidenceForView}
+          onClose={() => setSelectedEvidenceForView(null)}
+        />
       )}
     </div>
   );

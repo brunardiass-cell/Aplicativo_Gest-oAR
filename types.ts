@@ -632,12 +632,23 @@ export interface RegulatoryDocumentChapter {
   subchapters?: RegulatoryDocumentChapter[];
 }
 
+export interface RegulatoryDocumentVersion {
+  version: string; // ex: "0.1", "0.2", "1.0", "1.1"
+  date: string;
+  status: 'Rascunho' | 'Complementação' | 'Revisão Técnica' | 'Submetido' | 'Aprovado' | string;
+  author?: string;
+  notes?: string;
+}
+
 export interface RegulatoryDocument {
   id: string;
   projectId: string;
   title: string; // DDCM, Dossiê da Vacina, Dossiê do IFA, Dossiê do Adjuvante, Brochura do Investigador, DEEC
   type: string;
   description?: string;
+  currentVersion?: string; // ex: "0.1"
+  currentVersionStatus?: string; // ex: "Rascunho", "Submetido"
+  versionHistory?: RegulatoryDocumentVersion[];
   chapters: RegulatoryDocumentChapter[];
   updatedAt: string;
 }

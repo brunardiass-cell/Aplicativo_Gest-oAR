@@ -1,7 +1,7 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 import { Task } from '../types';
-import { Edit2, Trash2, MoreVertical, Eye } from 'lucide-react';
+import { Edit2, Trash2, Eye, CheckCircle2, Clock, ShieldCheck } from 'lucide-react';
+import { EvidenceDetailModal } from './EvidenceDetailModal';
 
 interface TaskTableProps {
   tasks: Task[];
@@ -12,76 +12,129 @@ interface TaskTableProps {
 }
 
 const TaskTable: React.FC<TaskTableProps> = ({ tasks, canEdit, onEdit, onViewDetails, onDelete }) => {
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'Urgente': return 'bg-red-100 text-red-700 border-red-200';
-      case 'Alta': return 'bg-orange-100 text-orange-700 border-orange-200';
-      case 'Média': return 'bg-amber-100 text-amber-700 border-amber-200';
-      default: return 'bg-teal-100 text-teal-700 border-teal-200';
-    }
-  };
+  const [selectedTaskForEvidence, setSelectedTaskForEvidence] = useState<Task | null>(null);
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Concluída': return 'bg-emerald-100 text-emerald-700';
-      case 'Em Andamento': return 'bg-teal-100 text-teal-700';
-      case 'Bloqueada': return 'bg-slate-200 text-slate-700';
-      default: return 'bg-slate-100 text-slate-500';
+      case 'Concluída': return 'bg-emerald-100 text-emerald-800 font-bold';
+      case 'Em Andamento': return 'bg-teal-100 text-teal-800 font-bold';
+      case 'Pausado': return 'bg-amber-100 text-amber-800 font-bold';
+      case 'Não Aplicável': return 'bg-slate-200 text-slate-600 font-bold';
+      default: return 'bg-slate-100 text-slate-600 font-bold';
     }
   };
 
+  const getEvidenceStatus = (task: Task) => {
+    const hasLink = Boolean(task.fileLocation && task.fileLocation.trim());
+    const hasObs = Boolean(task.description && task.description.trim());
+    
+    // If has link or obs -> Registered (🟢)
+    if (hasLink || hasObs) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+          <CheckCircle2 size={11} className="text-emerald-600" />
+          🟢 Evidência registrada
+        </span>
+      );
+    }
+
+    // If flagged for regulatory or evidence but missing link & obs -> Pending (🟡)
+    if (task.generatesRegulatoryContent) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200">
+          <Clock size={11} className="text-amber-600" />
+          🟡 Evidência pendente
+        </span>
+      );
+    }
+
+    // Otherwise: Sem evidência
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">
+        Sem evidência
+      </span>
+    );
+  };
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden animate-in fade-in duration-300">
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-slate-50 border-bottom border-slate-200">
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Atividade / Projeto</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Responsável</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Prioridade</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Ações</th>
+            <tr className="bg-slate-50 border-b border-slate-200">
+              <th className="px-6 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Atividade / Projeto</th>
+              <th className="px-6 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Responsável</th>
+              <th className="px-6 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+              <th className="px-6 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Evidência</th>
+              <th className="px-6 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Doc. Regulatório?</th>
+              <th className="px-6 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {tasks.map((task) => (
-              <tr key={task.id} className="hover:bg-slate-50/50 transition group">
-                <td className="px-6 py-4">
+              <tr key={task.id} className="hover:bg-slate-50/80 transition group">
+                {/* Atividade / Projeto */}
+                <td className="px-6 py-3.5">
                   <div className="flex flex-col">
                     <button 
                       onClick={() => onViewDetails(task)}
-                      className="text-left font-bold text-slate-900 group-hover:text-brand-primary transition truncate max-w-[250px] hover:underline decoration-2"
+                      className="text-left font-bold text-slate-900 group-hover:text-brand-primary transition truncate max-w-[280px] hover:underline"
                     >
                       {task.activity}
                     </button>
-                    <span className="text-[10px] font-black text-brand-primary uppercase mt-1 tracking-tight">{task.project}</span>
-                    <span className="text-[11px] text-slate-400 truncate max-w-[250px] mt-1 line-clamp-1">{task.description}</span>
+                    <span className="text-[10px] font-black text-brand-primary uppercase mt-0.5">{task.project}</span>
                   </div>
                 </td>
-                <td className="px-6 py-4">
+
+                {/* Responsável */}
+                <td className="px-6 py-3.5">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-[10px] font-black text-teal-600">
-                      {task.projectLead.charAt(0)}
+                    <div className="w-7 h-7 rounded-full bg-teal-100 flex items-center justify-center text-[10px] font-black text-teal-800">
+                      {(task.projectLead || 'U').charAt(0)}
                     </div>
-                    <span className="text-sm font-medium text-slate-600">{task.projectLead}</span>
+                    <span className="text-xs font-bold text-slate-700">{task.projectLead}</span>
                   </div>
                 </td>
-                <td className="px-6 py-4">
-                  <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter border ${getPriorityColor(task.priority)}`}>
-                    {task.priority}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter ${getStatusColor(task.status)}`}>
+
+                {/* Status */}
+                <td className="px-6 py-3.5">
+                  <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${getStatusColor(task.status)}`}>
                     {task.status}
                   </span>
                 </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex items-center justify-end gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-200">
+
+                {/* Evidência */}
+                <td className="px-6 py-3.5">
+                  <button
+                    onClick={() => setSelectedTaskForEvidence(task)}
+                    className="hover:opacity-80 transition cursor-pointer text-left"
+                    title="Clique para visualizar detalhes da evidência"
+                  >
+                    {getEvidenceStatus(task)}
+                  </button>
+                </td>
+
+                {/* Utilizada em Documento Regulatório? */}
+                <td className="px-6 py-3.5">
+                  {task.generatesRegulatoryContent ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-black bg-teal-50 text-teal-800 border border-teal-200">
+                      <ShieldCheck size={12} className="text-brand-primary" />
+                      Sim
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-1 rounded-full text-[9px] font-bold bg-slate-100 text-slate-400">
+                      Não
+                    </span>
+                  )}
+                </td>
+
+                {/* Ações */}
+                <td className="px-6 py-3.5 text-right">
+                  <div className="flex items-center justify-end gap-1">
                     <button 
-                      onClick={() => onViewDetails(task)}
-                      className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-lg transition"
-                      title="Ver Detalhes"
+                      onClick={() => setSelectedTaskForEvidence(task)}
+                      className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-lg transition"
+                      title="Visualizar Detalhes da Evidência (Olho)"
                     >
                       <Eye size={18} />
                     </button>
@@ -89,15 +142,15 @@ const TaskTable: React.FC<TaskTableProps> = ({ tasks, canEdit, onEdit, onViewDet
                       <>
                         <button 
                           onClick={() => onEdit(task)}
-                          className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-lg transition"
-                          title="Editar"
+                          className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-lg transition"
+                          title="Editar Atividade"
                         >
                           <Edit2 size={18} />
                         </button>
                         <button 
                           onClick={() => onDelete(task.id)}
-                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                          title="Excluir"
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                          title="Excluir Atividade"
                         >
                           <Trash2 size={18} />
                         </button>
@@ -109,15 +162,20 @@ const TaskTable: React.FC<TaskTableProps> = ({ tasks, canEdit, onEdit, onViewDet
             ))}
           </tbody>
         </table>
+
         {tasks.length === 0 && (
-          <div className="p-16 text-center">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-50 text-slate-300 mb-4">
-              <Eye size={24} />
-            </div>
-            <p className="text-slate-400 text-sm font-medium italic">Nenhuma atividade registrada neste filtro.</p>
+          <div className="p-12 text-center">
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest italic">Nenhuma atividade cadastrada neste projeto.</p>
           </div>
         )}
       </div>
+
+      {selectedTaskForEvidence && (
+        <EvidenceDetailModal
+          item={selectedTaskForEvidence}
+          onClose={() => setSelectedTaskForEvidence(null)}
+        />
+      )}
     </div>
   );
 };
