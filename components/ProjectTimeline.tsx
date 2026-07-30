@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Project, MacroActivity, MicroActivity, MicroActivityStatus, TeamMember, Prerequisite, BudgetInfo, PrerequisiteType, PrerequisiteStatus, BudgetStatus, RegulatoryStandard, DDCMChapterDef } from '../types';
+import { Project, MacroActivity, MicroActivity, MicroActivityStatus, TeamMember, Prerequisite, BudgetInfo, PrerequisiteType, PrerequisiteStatus, BudgetStatus, RegulatoryStandard, DDCMChapterDef, Meeting } from '../types';
 import { ChevronDown, Plus, Trash2, MessageSquare, Link as LinkIcon, Edit, Save, X, AlertTriangle, Layers, GripVertical, ListTodo, DollarSign, Calendar, User, CheckCircle2, Clock, ShieldCheck, ClipboardCheck, Activity, BadgeAlert, Paperclip, Eye } from 'lucide-react';
 import { PrerequisitesModal } from './PrerequisitesModal';
 import { DossierContributionSection } from './DossierContributionSection';
@@ -31,6 +31,7 @@ interface ProjectTimelineProps {
   onClearTargetMicroId?: () => void;
   regulatoryStandards: RegulatoryStandard[];
   onOpenRegulatoryModal: (activityName: string) => void;
+  meetings?: Meeting[];
 }
 
 const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ 
@@ -41,7 +42,8 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({
   targetMicroId,
   onClearTargetMicroId,
   regulatoryStandards,
-  onOpenRegulatoryModal
+  onOpenRegulatoryModal,
+  meetings = []
 }) => {
   const [editingMicro, setEditingMicro] = useState<string | null>(null);
   const [isAddingMacroForPhase, setIsAddingMacroForPhase] = useState<string | null>(null);
@@ -235,6 +237,10 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({
   
   const phasesToRender = Array.from(macrosByPhase.keys());
 
+  const projectMeetings = useMemo(() => {
+    return meetings.filter(m => m.projectId === project.id);
+  }, [meetings, project.id]);
+
   return (
     <div className="space-y-6">
       <DndContext 
@@ -273,6 +279,41 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({
           ))}
         </SortableContext>
       </DndContext>
+
+      {/* Integrated Project Meetings Timeline */}
+      {projectMeetings.length > 0 && (
+        <div className="bg-slate-900 text-white p-6 rounded-3xl border border-slate-800 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Calendar size={20} className="text-indigo-400" />
+              <h3 className="text-sm font-black uppercase tracking-wider">
+                Reuniões & Decisões Regulatórias do Projeto ({projectMeetings.length})
+              </h3>
+            </div>
+            <span className="text-[10px] font-bold uppercase text-slate-400 bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
+              Linha do Tempo
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {projectMeetings.map(mtg => (
+              <div key={mtg.id} className="p-4 bg-slate-800/80 border border-slate-700/80 rounded-2xl space-y-2 text-xs">
+                <div className="flex items-center justify-between text-[10px] font-bold text-indigo-300 uppercase">
+                  <span>{mtg.type} • {mtg.date.split('-').reverse().join('/')}</span>
+                  <span className="px-2 py-0.5 bg-indigo-500/20 rounded-md">{mtg.status}</span>
+                </div>
+                <h4 className="font-black text-sm text-white">{mtg.title}</h4>
+                <p className="text-slate-300 text-[11px]">Moderador: {mtg.moderator} | Participantes: {mtg.participants.join(', ')}</p>
+                {mtg.generalConclusions && (
+                  <p className="text-slate-400 text-[11px] italic bg-slate-900/50 p-2 rounded-xl">
+                    "{mtg.generalConclusions}"
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

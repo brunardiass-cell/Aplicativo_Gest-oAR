@@ -75,9 +75,60 @@ export interface Task {
   dossierContribution?: DossierContribution;
 }
 
-export type ViewMode = 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceability' | 'regulatory' | 'dossier_contributions' | 'dossier_assembler' | 'regulatory_docs';
+export type ViewMode = 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceability' | 'regulatory' | 'dossier_contributions' | 'dossier_assembler' | 'regulatory_docs' | 'meetings';
 
-export type SystemModule = 'activities_projects' | 'regulatory_standards' | 'vaccines_components' | 'dossier_contributions' | 'dossier_assembler';
+export type SystemModule = 'activities_projects' | 'regulatory_standards' | 'vaccines_components' | 'dossier_contributions' | 'dossier_assembler' | 'meetings';
+
+export type MeetingType = 'Técnica' | 'Regulatória' | 'Desenvolvimento' | 'Alinhamento' | 'Comitê Gestor' | 'Qualidade' | 'Submissão';
+export type MeetingStatus = 'Agendada' | 'Em Andamento' | 'Concluída' | 'Cancelada';
+
+export interface MeetingActionItem {
+  id: string;
+  action: string;
+  responsible: string;
+  dueDate: string;
+  status: 'Pendente' | 'Em Andamento' | 'Concluído';
+  convertedToActivity?: boolean;
+  convertedActivityId?: string;
+  targetMacroId?: string;
+}
+
+export interface MeetingAgendaItem {
+  id: string;
+  title: string;
+  description?: string;
+  phase?: string;
+  macroActivityId?: string;
+  microActivityId?: string;
+  regulatoryDocId?: string;
+  linkedRegulatoryStandardIds?: string[];
+  linkedPostItIds?: string[];
+  discussions?: string;
+  decisions?: string;
+  hasRegulatoryImpact?: boolean;
+  regulatoryImpactDetails?: string;
+  actionItems?: MeetingActionItem[];
+}
+
+export interface Meeting {
+  id: string;
+  title: string;
+  projectId: string;
+  projectName?: string;
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:mm
+  location?: string;
+  type: MeetingType;
+  status: MeetingStatus;
+  moderator: string;
+  participants: string[];
+  agendaItems: MeetingAgendaItem[];
+  generalConclusions?: string;
+  minutesTemplate?: string;
+  minutesDocument?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export type DossierChapterId = 
   | 'cap_1' 

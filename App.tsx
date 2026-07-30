@@ -3,8 +3,9 @@
 // Versão corrigida para sincronização
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity, RegulatoryEvidence, MacroActivityConfig, RegulatoryInfoItem, RepeatableRecord, RegulatoryNarrative, RegulatoryDocument } from './types';
-import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES } from './constants';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity, RegulatoryEvidence, MacroActivityConfig, RegulatoryInfoItem, RepeatableRecord, RegulatoryNarrative, RegulatoryDocument, Meeting, DossierContribution } from './types';
+import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES, DEFAULT_MEETINGS } from './constants';
+import { MeetingsManager } from './components/MeetingsManager';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
 import Sidebar from './components/Sidebar';
@@ -80,6 +81,8 @@ const App: React.FC = () => {
   const [repeatableRecords, setRepeatableRecords] = useState<RepeatableRecord[]>([]);
   const [regulatoryNarratives, setRegulatoryNarratives] = useState<RegulatoryNarrative[]>([]);
   const [regulatoryDocs, setRegulatoryDocs] = useState<RegulatoryDocument[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>(DEFAULT_MEETINGS);
+  const [dossierContributions, setDossierContributions] = useState<DossierContribution[]>([]);
   const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
   const [dataVersion, setDataVersion] = useState<string | null>(null);
   const [isDataDirty, setIsDataDirty] = useState(false);
@@ -1539,6 +1542,7 @@ const App: React.FC = () => {
               regulatoryStandards={regulatoryStandards}
               onOpenRegulatoryModal={openRegulatoryModal}
               currentUser={selectedProfile}
+              meetings={meetings}
             />
           )
         )}
@@ -1583,6 +1587,22 @@ const App: React.FC = () => {
             onUpdateDocs={(docs) => { setRegulatoryDocs(docs); setDataDirty(); }}
             currentUser={selectedProfile?.name || 'Usuário'}
             hasAdminAccess={hasFullAccess}
+          />
+        )}
+        {view === 'meetings' && (
+          <MeetingsManager
+            meetings={meetings}
+            projects={activeProjects}
+            teamMembers={teamMembers}
+            regulatoryStandards={regulatoryStandards}
+            regulatorySubjects={regulatorySubjects}
+            onUpdateMeetings={(m) => { setMeetings(m); setDataDirty(); }}
+            onUpdateProjects={(p) => { setProjects(p); setDataDirty(); }}
+            onAddDossierContribution={(contrib) => {
+              setDossierContributions(prev => [contrib, ...prev]);
+              setDataDirty();
+            }}
+            currentUser={selectedProfile}
           />
         )}
           </>

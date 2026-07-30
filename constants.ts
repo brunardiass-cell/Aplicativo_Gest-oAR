@@ -1,5 +1,5 @@
 
-import { ActivityPlanTemplate, TeamMember, AppUser, RegulatoryStandard } from './types';
+import { ActivityPlanTemplate, TeamMember, AppUser, RegulatoryStandard, Meeting } from './types';
 
 export const DEFAULT_APP_USERS: AppUser[] = [
   {
@@ -570,5 +570,153 @@ export const DEFAULT_REGULATORY_STANDARDS: RegulatoryStandard[] = [
     notebookLMLink: '',
     keywords: ['Dossiê', 'Submissão', 'ANVISA'],
     appliesTo: 'Dossiês de Ensaios Clínicos (DDCM)'
+  }
+];
+
+export const DEFAULT_MINUTES_TEMPLATE = `===================================================================
+                       ATA DE REUNIÃO TÉCNICA E REGULATÓRIA
+===================================================================
+
+PROJETO: [NOME_DO_PROJETO]
+TÍTULO DA REUNIÃO: [TITULO_REUNIAO]
+TIPO: [TIPO_REUNIAO]
+DATA: [DATA_REUNIAO] às [HORA_REUNIAO]
+LOCAL/CANAL: [LOCAL_REUNIAO]
+MODERADOR: [MODERADOR]
+PARTICIPANTES: [PARTICIPANTES]
+
+-------------------------------------------------------------------
+1. PAUTAS, DISCUSSÕES E DECISÕES
+-------------------------------------------------------------------
+[PAUTAS_E_DECISOES]
+
+-------------------------------------------------------------------
+2. REGISTRO DE IMPACTOS REGULATÓRIOS
+-------------------------------------------------------------------
+[IMPACTOS_REGULATORIOS]
+
+-------------------------------------------------------------------
+3. ENCAMINHAMENTOS E PLANO DE AÇÃO
+-------------------------------------------------------------------
+[ENCAMINHAMENTOS]
+
+-------------------------------------------------------------------
+4. CONCLUSÕES GERAIS E PRÓXIMOS PASSOS
+-------------------------------------------------------------------
+[CONCLUSOES_GERAIS]
+
+===================================================================
+Documento gerado automaticamente via Módulo de Reuniões CTVacinas.
+`;
+
+export const DEFAULT_MEETINGS: Meeting[] = [
+  {
+    id: 'mtg_101',
+    title: 'Alinhamento Regulatório do Dossiê DIFA - Vacina Proteica',
+    projectId: 'p_proteina',
+    projectName: 'Vacina Proteína Recombinante',
+    date: '2026-07-15',
+    time: '14:00',
+    location: 'Sala de Reuniões Principal / MS Teams',
+    type: 'Regulatória',
+    status: 'Concluída',
+    moderator: 'Graziella',
+    participants: ['Graziella', 'Bruna Dias', 'Ester', 'Marjorie'],
+    generalConclusions: 'Definida a estratégia de validação do processo de purificação e submissão dos laços de estabilidade prévia para o DDCM.',
+    createdAt: '2026-07-10T10:00:00.000Z',
+    updatedAt: '2026-07-15T16:30:00.000Z',
+    agendaItems: [
+      {
+        id: 'pauta_1',
+        title: 'Análise de Impurezas e Validação do Lote Piloto de Proteína',
+        description: 'Revisão dos dados de perfil cromatográfico e especificação de pureza para inclusão no capítulo 3 do DDCM.',
+        phase: 'Fase 1: Prova de Conceito',
+        macroActivityId: 'macro_1',
+        microActivityId: 'micro_1_1',
+        regulatoryDocId: 'cap_3',
+        linkedRegulatoryStandardIds: ['std_rdc_9', 'std_guia_42'],
+        linkedPostItIds: ['postit_pureza_1'],
+        discussions: 'Bruna Dias apresentou os gráficos de pureza obtidos por SEC-HPLC (>98%). Graziella recomendou detalhar os métodos de inativação e remoção de reagentes residuais.',
+        decisions: 'Aprovado o critério de aceitação de pureza em >95%. O laudo analítico do Lote #03 será incorporado como anexo oficial ao Dossiê.',
+        hasRegulatoryImpact: true,
+        regulatoryImpactDetails: 'Criação de seção específica no DDCM Capítulo 3 com especificação do limite de proteína residual de hospedeiro.',
+        actionItems: [
+          {
+            id: 'act_1',
+            action: 'Compilar laudos analíticos do lote piloto #03 e enviar para revisão da Assessoria Regulatória',
+            responsible: 'Bruna Dias',
+            dueDate: '2026-07-25',
+            status: 'Concluído',
+            convertedToActivity: true
+          }
+        ]
+      },
+      {
+        id: 'pauta_2',
+        title: 'Acompanhamento do Protocolo de Estabilidade Acelerada (40°C)',
+        description: 'Verificação dos pontos de 30 e 60 dias para inclusão no dossiê de submissão.',
+        phase: 'Fase 1: Prova de Conceito',
+        macroActivityId: 'macro_2',
+        microActivityId: 'micro_2_1',
+        regulatoryDocId: 'cap_4',
+        linkedRegulatoryStandardIds: ['std_in_429'],
+        discussions: 'Ester reportou ausência de degradação significativa no ponto de 30 dias mantido a 5°C e 25°C.',
+        decisions: 'Continuar amostragem até 180 dias. Incluir os dados preliminares na Seção de Estabilidade do Dossiê.',
+        hasRegulatoryImpact: true,
+        regulatoryImpactDetails: 'Atualização do cronograma de protocolo de estabilidade no Dossiê de Desenvolvimento Clínico (DDCM).',
+        actionItems: [
+          {
+            id: 'act_2',
+            action: 'Elaborar relatório intermediário de estabilidade físico-química de 60 dias',
+            responsible: 'Ester',
+            dueDate: '2026-08-10',
+            status: 'Em Andamento',
+            convertedToActivity: false
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'mtg_102',
+    title: 'Comitê de Avaliação de Lote Viral Mestre (MCB)',
+    projectId: 'p_virus',
+    projectName: 'Vacina Vírus Recombinante',
+    date: '2026-07-28',
+    time: '10:00',
+    location: 'Auditório CTVacinas Bloco B',
+    type: 'Técnica',
+    status: 'Concluída',
+    moderator: 'Ana Terzian',
+    participants: ['Ana Terzian', 'Ana Luiza', 'Marjorie'],
+    generalConclusions: 'Aprovados os ensaios de esterilidade e sequenciamento do Banco Viral Mestre (MCB).',
+    createdAt: '2026-07-20T09:00:00.000Z',
+    updatedAt: '2026-07-28T12:00:00.000Z',
+    agendaItems: [
+      {
+        id: 'pauta_3',
+        title: 'Verificação de Agentes Adventícios e Micoplasmas',
+        description: 'Análise dos laudos de contaminação viral e bacteriana do MCB.',
+        phase: 'Fase 1: Prova de Conceito',
+        macroActivityId: 'macro_v1',
+        microActivityId: 'micro_v1_1',
+        regulatoryDocId: 'cap_2',
+        linkedRegulatoryStandardIds: ['std_in_429'],
+        discussions: 'Ana Luiza confirmou resultado negativo para ausência de bacteriófagos e mycoplasma por PCR quantitativo.',
+        decisions: 'Banco viral declarado livre de adventícios e apto para estocagem no Biobanco Nível 2.',
+        hasRegulatoryImpact: true,
+        regulatoryImpactDetails: 'Laudo de segurança virológica anexado à Ficha de Segurança Biológica do Projeto.',
+        actionItems: [
+          {
+            id: 'act_3',
+            action: 'Cadastrar laudo no sistema de rastreabilidade de insumos',
+            responsible: 'Ana Luiza',
+            dueDate: '2026-08-05',
+            status: 'Pendente',
+            convertedToActivity: false
+          }
+        ]
+      }
+    ]
   }
 ];

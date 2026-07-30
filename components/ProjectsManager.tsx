@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember, AppUser, RegulatoryStandard, MicroActivityStatus } from '../types';
+import { Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember, AppUser, RegulatoryStandard, MicroActivityStatus, Meeting } from '../types';
 import { 
   X, ChevronDown, ListPlus, FolderPlus, Search, 
   Settings, Save, Plus, ChevronRight, LayoutDashboard, 
@@ -38,6 +38,7 @@ interface ProjectsManagerProps {
   regulatoryStandards: RegulatoryStandard[];
   onOpenRegulatoryModal: (activityName: string) => void;
   currentUser: TeamMember | null;
+  meetings?: Meeting[];
 }
 
 const ProjectsManager: React.FC<ProjectsManagerProps> = ({ 
@@ -53,7 +54,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   onClearTargetMicroId,
   regulatoryStandards,
   onOpenRegulatoryModal,
-  currentUser
+  currentUser,
+  meetings = []
 }) => {
   const [viewMode, setViewMode] = useState<'initial' | 'selection' | 'dashboard'>('selection');
   const [projectDetailView, setProjectDetailView] = useState<'dashboard' | 'timeline' | 'kanban' | 'phases' | 'gantt'>('dashboard');
@@ -1221,6 +1223,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                  onClearTargetMicroId={onClearTargetMicroId}
                  regulatoryStandards={regulatoryStandards}
                  onOpenRegulatoryModal={onOpenRegulatoryModal}
+                 meetings={meetings}
                />
              )}
              {projectDetailView === 'kanban' && selectedProject && (

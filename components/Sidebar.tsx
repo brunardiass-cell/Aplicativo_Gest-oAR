@@ -24,7 +24,8 @@ import {
   Layers,
   ArrowRightLeft,
   FileCheck2,
-  BookOpen
+  BookOpen,
+  Calendar
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -224,6 +225,13 @@ const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => { onViewChange('regulatory_docs'); onClose?.(); }} 
               icon={<FileCheck2 size={18} />} 
               label="Documentos Regulatórios" 
+            />
+
+            <SidebarButton 
+              active={currentView === 'meetings'} 
+              onClick={() => { onViewChange('meetings'); onClose?.(); }} 
+              icon={<Calendar size={18} />} 
+              label="Reuniões" 
             />
             
             {hasFullAccess && !selectedProfile?.isComiteGestor && (
