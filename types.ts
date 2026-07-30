@@ -685,7 +685,7 @@ export interface RegulatoryItemResource {
 }
 
 export type RegulatoryDocItemType = 'Informação Regulatória' | 'Narrativa' | 'Evidência' | 'Tabela' | 'Figura' | 'Referência' | 'Informação Estruturada' | 'Anexo';
-export type RegulatoryDocItemStatus = 'Pronto' | 'Em Andamento' | 'Faltando' | 'Pendente' | 'Concluído';
+export type RegulatoryDocItemStatus = 'Vazio' | 'Em preenchimento' | 'Preenchido' | 'Aprovado' | 'Divergente' | 'Pronto' | 'Em Andamento' | 'Faltando' | 'Pendente' | 'Concluído';
 
 export interface RegulatoryDocumentItem {
   id: string;

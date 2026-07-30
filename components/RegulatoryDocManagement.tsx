@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 import { 
   Project, 
   Task, 
@@ -64,9 +65,16 @@ import {
   Grid,
   Link as LinkIcon,
   Maximize2,
-  RefreshCw
+  RefreshCw,
+  Upload,
+  Layers3,
+  Copy,
+  Sliders,
+  Send,
+  FileUp,
+  FileText as FileTextIcon,
+  ListCheck
 } from 'lucide-react';
-import { EvidenceDetailModal } from './EvidenceDetailModal';
 
 interface RegulatoryDocManagementProps {
   projects: Project[];
@@ -106,17 +114,12 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
   currentUser = 'Usuário',
   hasAdminAccess = true
 }) => {
-  // Main Navigation View Tabs
+  // Main User Navigation Tabs focused on Regulatory Document Templates
   const [activeTab, setActiveTab] = useState<
-    'doc_tree' | 'knowledge_bank' | 'repeatable_records' | 'contributions' | 'markers_templates'
-  >('doc_tree');
+    'dossier_viewer' | 'pending_contributions' | 'template_manager' | 'tables_and_attachments' | 'export_and_traceability'
+  >('dossier_viewer');
 
-  // Sub-tab for Knowledge Bank (Banco de Conhecimento Regulatório)
-  const [kbCategoryTab, setKbCategoryTab] = useState<KnowledgeCategory>(
-    'Informações Estruturadas'
-  );
-
-  // Active Selected Project Filter
+  // Selected Project Filter
   const [selectedProjectId, setSelectedProjectId] = useState<string>(
     projects.length > 0 ? projects[0].id : 'all'
   );
@@ -125,25 +128,60 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
     return projects.find(p => p.id === selectedProjectId) || projects[0];
   }, [projects, selectedProjectId]);
 
-  // Selected Active Document inside Project
+  // Selected Document ID in Dossier Viewer
   const [selectedDocId, setSelectedDocId] = useState<string>('');
 
-  // Search filter inside tree view and knowledge bank
+  // Search Query Filter
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Expand / Collapse state for tree view chapters
+  // Chapter Accordion Expand/Collapse State
   const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({
     'cap_1': true,
     'cap_2': true,
-    'cap_3': true
+    'cap_3': true,
+    'cap_ifa_1': true,
+    'cap_adj_1': true,
+    'cap_ib_1': true,
+    'cap_deec_1': true,
+    'cap_ddcm_1': true
   });
 
-  // Selected item detail state for drawer / modal
-  const [selectedTreeItem, setSelectedTreeItem] = useState<{
+  // Selected item state for fill / edit modal
+  const [selectedItemForFill, setSelectedItemForFill] = useState<{
     doc: RegulatoryDocument;
     chapter: RegulatoryDocumentChapter;
     item: RegulatoryDocumentItem;
   } | null>(null);
+
+  // Fill Modal Form State
+  const [fillValue, setFillValue] = useState('');
+  const [fillEvidenceUrl, setFillEvidenceUrl] = useState('');
+  const [fillEvidenceFileName, setFillEvidenceFileName] = useState('');
+  const [fillNotes, setFillNotes] = useState('');
+
+  // Pending Contribution Classification Drawer/Modal State
+  const [activeContribution, setActiveContribution] = useState<any | null>(null);
+  const [selectedMarkersForContribution, setSelectedMarkersForContribution] = useState<string[]>([]);
+  const [contributionContentType, setContributionContentType] = useState<'text_short' | 'text_long' | 'table' | 'link' | 'file'>('text_long');
+  const [contributionContentValue, setContributionContentValue] = useState('');
+
+  // Conflict Resolution Modal State
+  const [conflictModalData, setConflictModalData] = useState<{
+    marker: string;
+    itemName: string;
+    currentValue: string;
+    currentOrigin: string;
+    newValue: string;
+    newOrigin: string;
+    targetDocIds: string[];
+  } | null>(null);
+
+  // Import Word Template Modal State
+  const [showImportTemplateModal, setShowImportTemplateModal] = useState(false);
+  const [templateTitle, setTemplateTitle] = useState('');
+  const [templateType, setTemplateType] = useState('Dossiê Regulatório');
+  const [templateDescription, setTemplateDescription] = useState('');
+  const [templateText, setTemplateText] = useState('');
 
   // Independent Structured Tables State
   const [structuredTables, setStructuredTables] = useState<RegulatoryStructuredTable[]>([
@@ -162,7 +200,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
       ],
       rows: [
         { apresentacao: 'Frasco Multidose Líquido', dose: 25, volume: 2.5, embalagem: 'Vidro Tipo I de 5mL', num_doses: 5 },
-        { apresentacao: 'Monodose Monodose Seringa', dose: 25, volume: 0.5, embalagem: 'Seringa Pré-enchida Luer Lock', num_doses: 1 }
+        { apresentacao: 'Monodose Seringa Pré-enchida', dose: 25, volume: 0.5, embalagem: 'Seringa Luer Lock 1mL', num_doses: 1 }
       ],
       updatedAt: new Date().toISOString()
     },
@@ -171,7 +209,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
       projectId: activeProject?.id || 'p1',
       key: 'TABLE_STABILITY_SUMMARY',
       title: 'Tabela de Resumo dos Estudos de Estabilidade',
-      description: 'Lotes testados, condições de temperatura, tempo de acompanhamento e resultados',
+      description: 'Lotes testados, condições de temperatura, tempo e resultados',
       columns: [
         { key: 'lote', label: 'Lote Testado', type: 'text' },
         { key: 'condicao', label: 'Condição de Temperatura', type: 'text' },
@@ -186,39 +224,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
     }
   ]);
 
-  // Word Template Markers Mapping State
-  const [markerMappings, setMarkerMappings] = useState<RegulatoryMarkerMapping[]>([
-    {
-      id: 'm1',
-      marker: '[NOME_DA_VACINA]',
-      sourceCategory: 'Informações Estruturadas',
-      sourceKey: 'PRODUCT.NAME',
-      description: 'Substituído pelo Nome Comercial / Técnico da Vacina'
-    },
-    {
-      id: 'm2',
-      marker: '[INDICACAO_TERAPEUTICA]',
-      sourceCategory: 'Informações Estruturadas',
-      sourceKey: 'PRODUCT.INDICATION',
-      description: 'Substituído pelo texto da Indicação Terapêutica'
-    },
-    {
-      id: 'm3',
-      marker: '[TABELA_APRESENTACOES]',
-      sourceCategory: 'Tabelas',
-      sourceKey: 'TABLE_PRESENTATIONS',
-      description: 'Insere a tabela dinâmica de apresentações e embalagem'
-    },
-    {
-      id: 'm4',
-      marker: '[INTRODUÇÃO_PROJETO]',
-      sourceCategory: 'Narrativas Técnicas',
-      sourceKey: 'NARRATIVE.INTRO',
-      description: 'Substituído pelo texto completo da narrativa de Introdução'
-    }
-  ]);
-
-  // Default Presets for Regulatory Documents
+  // Default Presets for Regulatory Document Templates
   const defaultDocs = useMemo<RegulatoryDocument[]>(() => {
     if (regulatoryDocs.length > 0) return regulatoryDocs;
     
@@ -239,7 +245,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
           {
             id: 'cap_1',
             code: '1.0',
-            title: '1. Informações Gerais e Descrição do Produto',
+            title: '1. Introdução e Identificação do Produto',
             description: 'Visão geral da vacina, indicação, forma farmacêutica e apresentações',
             items: [
               { 
@@ -250,12 +256,9 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                 type: 'Informação Estruturada' as RegulatoryDocItemType, 
                 required: true, 
                 sourceInternalId: 'PRODUCT.NAME', 
-                status: 'Pronto' as RegulatoryDocItemStatus, 
-                marker: '[NOME_DA_VACINA]',
-                requiredResources: [
-                  { id: 'r1', name: 'Nome da vacina', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'PRODUCT.NAME' },
-                  { id: 'r2', name: 'Código interno do produto', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'PRODUCT.CODE' }
-                ]
+                status: 'Preenchido' as RegulatoryDocItemStatus, 
+                marker: '[NOME DA VACINA]',
+                value: 'Vacina Malária Recombinante - UniMaV-01'
               },
               { 
                 id: 'item_1_2', 
@@ -265,11 +268,9 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                 type: 'Informação Estruturada' as RegulatoryDocItemType, 
                 required: true, 
                 sourceInternalId: 'PRODUCT.INDICATION', 
-                status: 'Pronto' as RegulatoryDocItemStatus, 
-                marker: '[INDICACAO]',
-                requiredResources: [
-                  { id: 'r3', name: 'Texto de indicação terapêutica', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'PRODUCT.INDICATION' }
-                ]
+                status: 'Preenchido' as RegulatoryDocItemStatus, 
+                marker: '[INDICAÇÃO]',
+                value: 'Imunização ativa para prevenção da malária clínica por Plasmodium falciparum em indivíduos a partir de 2 anos de idade.'
               },
               { 
                 id: 'item_1_3', 
@@ -279,16 +280,9 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                 type: 'Informação Estruturada' as RegulatoryDocItemType, 
                 required: true, 
                 sourceInternalId: 'PRODUCT.ADMINISTRATION_ROUTE', 
-                status: 'Em Andamento' as RegulatoryDocItemStatus, 
-                marker: '[FORMA_FARMACEUTICA]',
-                requiredResources: [
-                  { id: 'r4', name: 'Nome da vacina', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'PRODUCT.NAME' },
-                  { id: 'r5', name: 'Descrição da vacina', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'PRODUCT.DESC' },
-                  { id: 'r6', name: 'Insumo Farmacêutico Ativo (IFA)', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'IFA.NAME' },
-                  { id: 'r7', name: 'Adjuvante utilizado', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'ADJUVANT.NAME' },
-                  { id: 'r8', name: 'Via de administração', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'PRODUCT.ADMINISTRATION_ROUTE' },
-                  { id: 'r9', name: 'Temperatura de armazenamento', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'PRODUCT.STORAGE_TEMP' }
-                ]
+                status: 'Em preenchimento' as RegulatoryDocItemStatus, 
+                marker: '[VIA DE ADM]',
+                value: 'Intramuscular (IM), aplicada no músculo deltoide na dose de 0.5 mL.'
               },
               { 
                 id: 'item_1_4', 
@@ -298,77 +292,105 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                 type: 'Tabela' as RegulatoryDocItemType, 
                 required: true, 
                 sourceInternalId: 'TABLE_PRESENTATIONS', 
-                status: 'Pronto' as RegulatoryDocItemStatus, 
-                marker: '[TABELA_APRESENTACOES]',
-                requiredResources: [
-                  { id: 'r10', name: 'Apresentações', type: 'Tabela' as RegulatoryResourceType, required: true, key: 'TABLE_PRESENTATIONS' },
-                  { id: 'r11', name: 'Dose', type: 'Tabela' as RegulatoryResourceType, required: true, key: 'TABLE_PRESENTATIONS' },
-                  { id: 'r12', name: 'Volume', type: 'Tabela' as RegulatoryResourceType, required: true, key: 'TABLE_PRESENTATIONS' },
-                  { id: 'r13', name: 'Embalagem', type: 'Tabela' as RegulatoryResourceType, required: true, key: 'TABLE_PRESENTATIONS' },
-                  { id: 'r14', name: 'Número de doses', type: 'Tabela' as RegulatoryResourceType, required: true, key: 'TABLE_PRESENTATIONS' }
-                ]
+                status: 'Aprovado' as RegulatoryDocItemStatus, 
+                marker: '[APRESENTAÇÕES DA VACINA]',
+                value: 'Tabela de Apresentações (2 apresentações cadastradas)'
               }
             ]
           },
           {
             id: 'cap_2',
             code: '2.0',
-            title: '2. Controle de Qualidade e Estudos de Estabilidade',
-            description: 'Resultados analíticos, liberação de lotes e acompanhamento de validade',
+            title: '2. Descrição e Composição',
+            description: 'Caracterização do Insumo Farmacêutico Ativo e do Adjuvante',
             items: [
               { 
                 id: 'item_2_1', 
                 code: '2.1',
-                name: 'Relatório de Estabilidade do Produto Terminado', 
-                description: 'Acompanhamento do prazo de validade em condições refrigeradas e aceleradas',
-                type: 'Narrativa' as RegulatoryDocItemType, 
+                name: 'Descrição e Nome do IFA', 
+                description: 'Identificação e caracterização do Insumo Farmacêutico Ativo',
+                type: 'Informação Estruturada' as RegulatoryDocItemType, 
                 required: true, 
-                sourceInternalId: 'STABILITY.REPORT', 
-                status: 'Em Andamento' as RegulatoryDocItemStatus, 
-                marker: '[ESTABILIDADE]',
-                requiredResources: [
-                  { id: 'r15', name: 'Narrativa técnica do estudo de estabilidade', type: 'Narrativa Técnica' as RegulatoryResourceType, required: true, key: 'NARRATIVE.STABILITY' },
-                  { id: 'r16', name: 'Tabela resumo dos ensaios de estabilidade', type: 'Tabela' as RegulatoryResourceType, required: true, key: 'TABLE_STABILITY_SUMMARY' },
-                  { id: 'r17', name: 'Registro dos lotes de estabilidade do projeto', type: 'Registro Repetitivo' as RegulatoryResourceType, required: true, key: 'PROJECT.STABILITY_BATCHES' },
-                  { id: 'r18', name: 'Certificado de Análise de Liberação de Lote', type: 'Anexo' as RegulatoryResourceType, required: true, key: 'ATTACHMENT.COA' }
-                ]
+                sourceInternalId: 'IFA.NAME', 
+                status: 'Preenchido' as RegulatoryDocItemStatus, 
+                marker: '[DESCRIÇÃO E NOME DO IFA]',
+                value: 'Proteína Recombinante Pfs25 / MSP1-19 expressa em Pichia pastoris'
               },
               { 
                 id: 'item_2_2', 
                 code: '2.2',
-                name: 'Laudo de Esterilidade e Endotoxinas', 
-                description: 'Comprovação de segurança microbiológica do lote piloto',
-                type: 'Evidência' as RegulatoryDocItemType, 
+                name: 'Nome do Adjuvante e Emulsão', 
+                description: 'Identificação do sistema imunoadjuvante',
+                type: 'Informação Estruturada' as RegulatoryDocItemType, 
                 required: true, 
-                sourceInternalId: 'EVID_STERILITY', 
-                status: 'Faltando' as RegulatoryDocItemStatus, 
-                marker: '[LAUDO_ESTERILIDADE]',
-                requiredResources: [
-                  { id: 'r19', name: 'Relatório do ensaio de esterilidade (Anexo)', type: 'Evidência' as RegulatoryResourceType, required: true, key: 'EVID.STERILITY' }
-                ]
+                sourceInternalId: 'ADJUVANT.NAME', 
+                status: 'Preenchido' as RegulatoryDocItemStatus, 
+                marker: '[NOME DO ADJUVANTE]',
+                value: 'Emulsão de Esqualeno com QS-21 (Adjuvante L30-Adjuv)'
               }
             ]
           },
           {
             id: 'cap_3',
             code: '3.0',
-            title: '3. Avaliação de Segurança Pré-Clínica e Imunogenicidade',
-            description: 'Resultados de modelos animais e caracterização da resposta imune',
+            title: '3. Desenvolvimento e Controle de Qualidade',
+            description: 'Processo de fabricação e liberação de lotes',
             items: [
               { 
                 id: 'item_3_1', 
                 code: '3.1',
-                name: 'Resumo dos Ensaios de Imunogenicidade', 
-                description: 'Títulos de anticorpos neutralizantes e resposta celular',
+                name: 'Texto Desenvolvimento do IFA', 
+                description: 'Etapas de fermentação e purificação cromatográfica',
                 type: 'Narrativa' as RegulatoryDocItemType, 
                 required: true, 
-                sourceInternalId: 'CLINICAL.IMMUNO', 
-                status: 'Pronto' as RegulatoryDocItemStatus, 
-                marker: '[IMUNOGENICIDADE]',
-                requiredResources: [
-                  { id: 'r20', name: 'Narrativa técnica de imunogenicidade', type: 'Narrativa Técnica' as RegulatoryResourceType, required: true, key: 'NARRATIVE.IMMUNO' },
-                  { id: 'r21', name: 'Relatório do modelo animal (Evidência)', type: 'Evidência' as RegulatoryResourceType, required: false, key: 'EVID.ANIMAL_MODEL' }
-                ]
+                sourceInternalId: 'NARRATIVE.IFA_DEV', 
+                status: 'Em preenchimento' as RegulatoryDocItemStatus, 
+                marker: '[TEXTO DESENVOLVIMENTO DO IFA]',
+                value: 'Desenvolvimento do bioprocesso em biorreator de 50L com purificação por afinidade.'
+              },
+              { 
+                id: 'item_3_2', 
+                code: '3.2',
+                name: 'Relatório de Controle de Qualidade', 
+                description: 'Laudos microbiológicos e de esterilidade',
+                type: 'Anexo' as RegulatoryDocItemType, 
+                required: true, 
+                sourceInternalId: 'QC.REPORT', 
+                status: 'Vazio' as RegulatoryDocItemStatus, 
+                marker: '[RELATÓRIO DE CONTROLE DE QUALIDADE]',
+                value: ''
+              }
+            ]
+          },
+          {
+            id: 'cap_4',
+            code: '4.0',
+            title: '4. Estabilidade e Conservação',
+            description: 'Acompanhamento de validade e condições de refrigeração',
+            items: [
+              { 
+                id: 'item_4_1', 
+                code: '4.1',
+                name: 'Temperatura de Armazenamento', 
+                description: 'Condições recomendadas de estocagem',
+                type: 'Informação Estruturada' as RegulatoryDocItemType, 
+                required: true, 
+                sourceInternalId: 'PRODUCT.STORAGE_TEMP', 
+                status: 'Preenchido' as RegulatoryDocItemStatus, 
+                marker: '[TEMPERATURA DE ARMAZENAMENTO]',
+                value: 'Conservar sob refrigeração entre +2°C e +8°C, protegido da luz. Não congelar.'
+              },
+              { 
+                id: 'item_4_2', 
+                code: '4.2',
+                name: 'Tabela de Estabilidade', 
+                description: 'Resumo dos ensaios sob refrigeração e acelerado',
+                type: 'Tabela' as RegulatoryDocItemType, 
+                required: true, 
+                sourceInternalId: 'STABILITY.TABLE', 
+                status: 'Preenchido' as RegulatoryDocItemStatus, 
+                marker: '[TABELA DE ESTABILIDADE]',
+                value: 'Tabela de Resumo de Estabilidade (2 lotes testados)'
               }
             ]
           }
@@ -378,7 +400,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
         id: `doc_ifa_${proj.id}`,
         projectId: proj.id,
         title: 'Dossiê do IFA',
-        type: 'Dossiê de Insumo Farmacêutico Ativo',
+        type: 'Dossiê do IFA',
         description: 'Dados técnicos, rota sintética e controle de qualidade do Insumo Farmacêutico Ativo.',
         currentVersion: '0.1',
         currentVersionStatus: 'Rascunho',
@@ -390,36 +412,32 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
           {
             id: 'cap_ifa_1',
             code: '1.0',
-            title: '1. Caracterização e Processo de Fabricação do IFA',
-            description: 'Estrutura, linhagem de expressão, meio de cultura e purification flow',
+            title: '1. Caracterização do IFA',
+            description: 'Estrutura, linhagem de expressão e massa molecular',
             items: [
               { 
                 id: 'item_ifa_1_1', 
                 code: '1.1',
-                name: 'Estrutura e Caracterização Físico-Química do IFA', 
-                description: 'Sequência primária, modificações pós-traducionais e massa molecular',
-                type: 'Narrativa' as RegulatoryDocItemType, 
+                name: 'Descrição e Nome do IFA', 
+                description: 'Sequência primária e caracterização físico-química',
+                type: 'Informação Estruturada' as RegulatoryDocItemType, 
                 required: true, 
-                sourceInternalId: 'IFA.STRUCTURE', 
-                status: 'Pronto' as RegulatoryDocItemStatus, 
-                marker: '[ESTRUTURA_IFA]',
-                requiredResources: [
-                  { id: 'r22', name: 'Caracterização do IFA', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'IFA.STRUCTURE' }
-                ]
+                sourceInternalId: 'IFA.NAME', 
+                status: 'Preenchido' as RegulatoryDocItemStatus, 
+                marker: '[DESCRIÇÃO E NOME DO IFA]',
+                value: 'Proteína Recombinante Pfs25 / MSP1-19 expressa em Pichia pastoris'
               },
               { 
                 id: 'item_ifa_1_2', 
                 code: '1.2',
-                name: 'Fluxograma e Descrição do Processo de Purificação', 
-                description: 'Etapas cromatográficas, ultrafiltração e inativação viral',
-                type: 'Anexo' as RegulatoryDocItemType, 
+                name: 'Texto Desenvolvimento do IFA', 
+                description: 'Fluxograma de purificação e inativação viral',
+                type: 'Narrativa' as RegulatoryDocItemType, 
                 required: true, 
-                sourceInternalId: 'EVID_IFA_PROCESS', 
-                status: 'Faltando' as RegulatoryDocItemStatus, 
-                marker: '[PROCESSO_IFA]',
-                requiredResources: [
-                  { id: 'r23', name: 'Fluxograma de purificação em alta resolução (Anexo)', type: 'Anexo' as RegulatoryResourceType, required: true, key: 'ATTACHMENT.IFA_FLOWCHART' }
-                ]
+                sourceInternalId: 'NARRATIVE.IFA_DEV', 
+                status: 'Em preenchimento' as RegulatoryDocItemStatus, 
+                marker: '[TEXTO DESENVOLVIMENTO DO IFA]',
+                value: 'Desenvolvimento do bioprocesso em biorreator de 50L com purificação por afinidade.'
               }
             ]
           }
@@ -429,7 +447,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
         id: `doc_adj_${proj.id}`,
         projectId: proj.id,
         title: 'Dossiê do Adjuvante',
-        type: 'Dossiê de Adjuvante',
+        type: 'Dossiê do Adjuvante',
         description: 'Informações de composição, esterilidade e segurança do sistema adjuvante.',
         currentVersion: '0.1',
         currentVersionStatus: 'Rascunho',
@@ -438,22 +456,20 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
           {
             id: 'cap_adj_1',
             code: '1.0',
-            title: '1. Especificações e Origem do Sistema Adjuvante',
+            title: '1. Especificações do Adjuvante',
             description: 'Identificação química, emulsão e testes de segurança',
             items: [
               {
                 id: 'item_adj_1_1',
                 code: '1.1',
-                name: 'Composição Química e Razão Adjuvante/Antígeno',
+                name: 'Nome do Adjuvante',
                 description: 'Identificação dos lipídios / sais de alumínio e proporção por dose',
                 type: 'Informação Estruturada' as RegulatoryDocItemType,
                 required: true,
                 sourceInternalId: 'ADJUVANT.NAME',
-                status: 'Pronto' as RegulatoryDocItemStatus,
-                marker: '[COMPOSICAO_ADJUVANTE]',
-                requiredResources: [
-                  { id: 'r24', name: 'Nome e código do adjuvante', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'ADJUVANT.NAME' }
-                ]
+                status: 'Preenchido' as RegulatoryDocItemStatus,
+                marker: '[NOME DO ADJUVANTE]',
+                value: 'Emulsão de Esqualeno com QS-21 (Adjuvante L30-Adjuv)'
               }
             ]
           }
@@ -463,7 +479,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
         id: `doc_brochura_${proj.id}`,
         projectId: proj.id,
         title: 'Brochura do Investigador',
-        type: 'Brochura Clínica (IB)',
+        type: 'Brochura do Investigador',
         description: 'Compilação de dados clínicos e de segurança para os investigadores do ensaio.',
         currentVersion: '0.1',
         currentVersionStatus: 'Rascunho',
@@ -478,16 +494,26 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
               {
                 id: 'item_ib_1_1',
                 code: '1.1',
-                name: 'Racional da Formulação e Dose Selecionada',
-                description: 'Justificativa da escolha do antígeno e adjuvante',
-                type: 'Narrativa' as RegulatoryDocItemType,
+                name: 'Nome e Identificação da Vacina',
+                description: 'Denominação da vacina',
+                type: 'Informação Estruturada' as RegulatoryDocItemType,
                 required: true,
-                sourceInternalId: 'NARRATIVE.INTRO',
-                status: 'Pronto' as RegulatoryDocItemStatus,
-                marker: '[RACIONAL_FORMULACAO]',
-                requiredResources: [
-                  { id: 'r25', name: 'Narrativa de introdução e racional', type: 'Narrativa Técnica' as RegulatoryResourceType, required: true, key: 'NARRATIVE.INTRO' }
-                ]
+                sourceInternalId: 'PRODUCT.NAME',
+                status: 'Preenchido' as RegulatoryDocItemStatus,
+                marker: '[NOME DA VACINA]',
+                value: 'Vacina Malária Recombinante - UniMaV-01'
+              },
+              {
+                id: 'item_ib_1_2',
+                code: '1.2',
+                name: 'Indicação Terapêutica',
+                description: 'Alvo clínico e indicação',
+                type: 'Informação Estruturada' as RegulatoryDocItemType,
+                required: true,
+                sourceInternalId: 'PRODUCT.INDICATION',
+                status: 'Preenchido' as RegulatoryDocItemStatus,
+                marker: '[INDICAÇÃO]',
+                value: 'Imunização ativa para prevenção da malária clínica por Plasmodium falciparum em indivíduos a partir de 2 anos de idade.'
               }
             ]
           }
@@ -497,7 +523,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
         id: `doc_deec_${proj.id}`,
         projectId: proj.id,
         title: 'DEEC - Dossiê de Ensaio Clínico',
-        type: 'Documento de Submissão DEEC / Anvisa',
+        type: 'DEEC',
         description: 'Dossiê para submissão à Anvisa / CEUA / CONEP.',
         currentVersion: '0.1',
         currentVersionStatus: 'Rascunho',
@@ -512,16 +538,26 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
               {
                 id: 'item_deec_1_1',
                 code: '1.1',
-                name: 'Identificação e Objetivos do Protocolo',
-                description: 'Objetivos primários, secundários e endpoint de eficácia',
+                name: 'Nome e Identificação da Vacina',
+                description: 'Identificação comercial',
                 type: 'Informação Estruturada' as RegulatoryDocItemType,
                 required: true,
-                sourceInternalId: 'PRODUCT.INDICATION',
-                status: 'Pronto' as RegulatoryDocItemStatus,
-                marker: '[PROTOCOLO_CLINICO]',
-                requiredResources: [
-                  { id: 'r26', name: 'Indicação e objetivo clínico', type: 'Informação Estruturada' as RegulatoryResourceType, required: true, key: 'PRODUCT.INDICATION' }
-                ]
+                sourceInternalId: 'PRODUCT.NAME',
+                status: 'Preenchido' as RegulatoryDocItemStatus,
+                marker: '[NOME DA VACINA]',
+                value: 'Vacina Malária Recombinante - UniMaV-01'
+              },
+              {
+                id: 'item_deec_1_2',
+                code: '1.2',
+                name: 'Via de Administração',
+                description: 'Modo de aplicação',
+                type: 'Informação Estruturada' as RegulatoryDocItemType,
+                required: true,
+                sourceInternalId: 'PRODUCT.ADMINISTRATION_ROUTE',
+                status: 'Em preenchimento' as RegulatoryDocItemStatus,
+                marker: '[VIA DE ADM]',
+                value: 'Intramuscular (IM), aplicada no músculo deltoide na dose de 0.5 mL.'
               }
             ]
           }
@@ -530,8 +566,8 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
       {
         id: `doc_ddcm_${proj.id}`,
         projectId: proj.id,
-        title: 'DDCM - Dossiê de Desenvolvimento Clínico de Medicamento',
-        type: 'Dossiê Regulatório Estratégico',
+        title: 'DDCM - Dossiê de Desenvolvimento Clínico',
+        type: 'DDCM',
         description: 'Mapeamento consolidado de todas as fases do desenvolvimento para submissão Anvisa.',
         currentVersion: '0.1',
         currentVersionStatus: 'Rascunho',
@@ -546,17 +582,26 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
               {
                 id: 'item_ddcm_1_1',
                 code: '1.1',
-                name: 'Resumo do Programa de Desenvolvimento Qualitativo',
-                description: 'Histórico de lotes fabricados e consistência do processo',
-                type: 'Narrativa' as RegulatoryDocItemType,
+                name: 'Nome da Vacina',
+                description: 'Denominação comercial',
+                type: 'Informação Estruturada' as RegulatoryDocItemType,
                 required: true,
-                sourceInternalId: 'NARRATIVE.INTRO',
-                status: 'Em Andamento' as RegulatoryDocItemStatus,
-                marker: '[PROGRAMA_DESENVOLVIMENTO]',
-                requiredResources: [
-                  { id: 'r27', name: 'Narrativa do desenvolvimento', type: 'Narrativa Técnica' as RegulatoryResourceType, required: true, key: 'NARRATIVE.INTRO' },
-                  { id: 'r28', name: 'Tabela de apresentações', type: 'Tabela' as RegulatoryResourceType, required: true, key: 'TABLE_PRESENTATIONS' }
-                ]
+                sourceInternalId: 'PRODUCT.NAME',
+                status: 'Preenchido' as RegulatoryDocItemStatus,
+                marker: '[NOME DA VACINA]',
+                value: 'Vacina Malária Recombinante - UniMaV-01'
+              },
+              {
+                id: 'item_ddcm_1_2',
+                code: '1.2',
+                name: 'Indicação',
+                description: 'Descrição da indicação',
+                type: 'Informação Estruturada' as RegulatoryDocItemType,
+                required: true,
+                sourceInternalId: 'PRODUCT.INDICATION',
+                status: 'Preenchido' as RegulatoryDocItemStatus,
+                marker: '[INDICAÇÃO]',
+                value: 'Imunização ativa para prevenção da malária clínica por Plasmodium falciparum em indivíduos a partir de 2 anos de idade.'
               }
             ]
           }
@@ -565,17 +610,20 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
     ]).flat();
   }, [regulatoryDocs, projects, currentUser]);
 
-  const effectiveDocs = useMemo(() => {
-    return regulatoryDocs.length > 0 ? regulatoryDocs : defaultDocs;
-  }, [regulatoryDocs, defaultDocs]);
+  // Effective Documents State
+  const [docState, setDocState] = useState<RegulatoryDocument[]>(defaultDocs);
 
-  // Documents filtered for the currently selected project
+  const effectiveDocs = useMemo(() => {
+    return docState.length > 0 ? docState : defaultDocs;
+  }, [docState, defaultDocs]);
+
+  // Filter Documents by Selected Project
   const currentProjectDocs = useMemo(() => {
     if (selectedProjectId === 'all') return effectiveDocs;
     return effectiveDocs.filter(d => d.projectId === selectedProjectId);
   }, [effectiveDocs, selectedProjectId]);
 
-  // Ensure active doc selected
+  // Selected Active Document
   const activeDoc = useMemo(() => {
     if (selectedDocId) {
       const found = effectiveDocs.find(d => d.id === selectedDocId);
@@ -584,339 +632,102 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
     return currentProjectDocs.length > 0 ? currentProjectDocs[0] : null;
   }, [effectiveDocs, currentProjectDocs, selectedDocId]);
 
-  // Default Knowledge Records for Knowledge Bank (Banco de Conhecimento Regulatório)
-  const defaultKnowledgeRecords = useMemo<RegulatoryKnowledgeRecord[]>(() => {
-    const currentProjId = activeProject?.id || 'p1';
-    
-    // Seed initial structured info, narratives, evidence and attachments
-    return [
-      {
-        id: 'kb_1',
-        projectId: currentProjId,
-        internalId: 'PRODUCT.NAME',
-        category: 'Informações Estruturadas',
-        title: 'Nome Comercial / Técnico da Vacina',
-        value: 'Vacina Malária Recombinante - UniMaV-01',
-        origin: 'Definição Estratégica da Liderança do Projeto',
-        updatedAt: new Date().toISOString(),
-        version: 1,
-        history: [{ version: 1, updatedAt: new Date().toISOString(), author: currentUser, value: 'Vacina Malária Recombinante - UniMaV-01' }],
-        usedInDocs: [
-          { docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.1', itemName: 'Nome e Identificação da Vacina' },
-          { docId: 'doc_ddcm', docTitle: 'DDCM', itemCode: '1.1', itemName: 'Resumo do Programa de Desenvolvimento' },
-          { docId: 'doc_brochura', docTitle: 'Brochura do Investigador', itemCode: '1.1', itemName: 'Racional da Formulação' },
-          { docId: 'doc_deec', docTitle: 'DEEC', itemCode: '1.1', itemName: 'Identificação e Objetivos' }
-        ]
-      },
-      {
-        id: 'kb_2',
-        projectId: currentProjId,
-        internalId: 'PRODUCT.CODE',
-        category: 'Informações Estruturadas',
-        title: 'Código Interno do Produto',
-        value: 'CTVAC-MAL-2026',
-        origin: 'Cadastro de Projeto no CTVacinas',
-        updatedAt: new Date().toISOString(),
-        version: 1,
-        usedInDocs: [{ docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.1', itemName: 'Nome e Identificação' }]
-      },
-      {
-        id: 'kb_3',
-        projectId: currentProjId,
-        internalId: 'PRODUCT.INDICATION',
-        category: 'Informações Estruturadas',
-        title: 'Indicação Terapêutica Proposta',
-        value: 'Imunização ativa para prevenção da malária clínica por Plasmodium falciparum em indivíduos a partir de 2 anos de idade.',
-        origin: 'Protocolo da Fase I / Comitê Científico',
-        updatedAt: new Date().toISOString(),
-        version: 1,
-        usedInDocs: [
-          { docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.2', itemName: 'Indicação Terapêutica' },
-          { docId: 'doc_deec', docTitle: 'DEEC', itemCode: '1.1', itemName: 'Identificação e Objetivos' }
-        ]
-      },
-      {
-        id: 'kb_4',
-        projectId: currentProjId,
-        internalId: 'PRODUCT.DESC',
-        category: 'Informações Estruturadas',
-        title: 'Descrição Organoléptica do Produto',
-        value: 'Suspensão injetável, homogênea, de coloração branco-opalescente, isenta de partículas estranhas visíveis.',
-        origin: 'Relatório do Lote Piloto LP-001',
-        updatedAt: new Date().toISOString(),
-        version: 1,
-        usedInDocs: [{ docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.3', itemName: 'Descrição da Forma Farmacêutica' }]
-      },
-      {
-        id: 'kb_5',
-        projectId: currentProjId,
-        internalId: 'IFA.NAME',
-        category: 'Informações Estruturadas',
-        title: 'Nome do Insumo Farmacêutico Ativo (IFA)',
-        value: 'Proteína Recombinante Pfs25 / MSP1-19',
-        origin: 'Bancada de Biologia Molecular',
-        updatedAt: new Date().toISOString(),
-        version: 1,
-        usedInDocs: [
-          { docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.3', itemName: 'Descrição da Forma Farmacêutica' },
-          { docId: 'doc_ifa', docTitle: 'Dossiê do IFA', itemCode: '1.1', itemName: 'Estrutura do IFA' }
-        ]
-      },
-      {
-        id: 'kb_6',
-        projectId: currentProjId,
-        internalId: 'ADJUVANT.NAME',
-        category: 'Informações Estruturadas',
-        title: 'Adjuvante e Sistema Imunoadjuvante',
-        value: 'Emulsão de Esqualeno com QS-21 (Adjuvante L30-Adjuv)',
-        origin: 'Formulação de Adjuvante',
-        updatedAt: new Date().toISOString(),
-        version: 1,
-        usedInDocs: [
-          { docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.3', itemName: 'Descrição da Forma Farmacêutica' },
-          { docId: 'doc_adj', docTitle: 'Dossiê do Adjuvante', itemCode: '1.1', itemName: 'Composição Química' }
-        ]
-      },
-      {
-        id: 'kb_7',
-        projectId: currentProjId,
-        internalId: 'PRODUCT.ADMINISTRATION_ROUTE',
-        category: 'Informações Estruturadas',
-        title: 'Via de Administração e Posologia',
-        value: 'Intramuscular (IM), aplicada no músculo deltoide na dose de 0.5 mL.',
-        origin: 'Manual de Procedimentos Clínicos',
-        updatedAt: new Date().toISOString(),
-        version: 1,
-        usedInDocs: [{ docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.3', itemName: 'Descrição da Forma Farmacêutica' }]
-      },
-      {
-        id: 'kb_8',
-        projectId: currentProjId,
-        internalId: 'PRODUCT.STORAGE_TEMP',
-        category: 'Informações Estruturadas',
-        title: 'Temperatura de Armazenamento e Conservação',
-        value: 'Conservar sob refrigeração entre +2°C e +8°C, protegido da luz. Não congelar.',
-        origin: 'Estudo de Estabilidade de 12 Meses',
-        updatedAt: new Date().toISOString(),
-        version: 1,
-        usedInDocs: [{ docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.3', itemName: 'Descrição da Forma Farmacêutica' }]
-      },
-      {
-        id: 'kb_9',
-        projectId: currentProjId,
-        internalId: 'NARRATIVE.INTRO',
-        category: 'Narrativas Técnicas',
-        title: 'Introdução e Racional do Desenvolvimento',
-        value: 'A malária representa um importante desafio de saúde pública global. O presente projeto visa desenvolver uma vacina altamente eficaz baseada em antígenos recombinantes expressos em Pichia pastoris formulados com adjuvante esqualênico. Os testes pré-clínicos demonstraram elevada indução de anticorpos neutralizantes e excelente perfil de tolerabilidade.',
-        origin: 'Elaboração Técnica / Equipe de Redação Regulatória',
-        updatedAt: new Date().toISOString(),
-        version: 1,
-        usedInDocs: [
-          { docId: 'doc_brochura', docTitle: 'Brochura do Investigador', itemCode: '1.1', itemName: 'Racional da Formulação' },
-          { docId: 'doc_ddcm', docTitle: 'DDCM', itemCode: '1.1', itemName: 'Resumo do Programa' }
-        ]
-      },
-      {
-        id: 'kb_10',
-        projectId: currentProjId,
-        internalId: 'NARRATIVE.IMMUNO',
-        category: 'Narrativas Técnicas',
-        title: 'Narrativa de Resumo dos Ensaios de Imunogenicidade',
-        value: 'Em modelos murinos e primatas não humanos, a imunização com 3 doses da vacina UniMaV-01 produziu resposta humoral sustentada com títulos de IgG superiores a 1:100.000, além de resposta celular do tipo Th1 com secreção de IFN-gama por esplenócitos.',
-        origin: 'Relatório do Ensaio de Imunogenicidade Murina',
-        updatedAt: new Date().toISOString(),
-        version: 1,
-        usedInDocs: [{ docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '3.1', itemName: 'Resumo dos Ensaios de Imunogenicidade' }]
-      },
-      {
-        id: 'kb_11',
-        projectId: currentProjId,
-        internalId: 'NARRATIVE.STABILITY',
-        category: 'Narrativas Técnicas',
-        title: 'Narrativa do Estudo de Estabilidade Acelerada e Longa Duração',
-        value: 'Foram avaliados 3 lotes piloto mantidos nas temperaturas de 2-8°C e 25°C/60%UR. Após 12 meses sob refrigeração, não foram observadas alterações no pH, teor de antígeno ou esterilidade.',
-        origin: 'Laboratório de Controle de Qualidade',
-        updatedAt: new Date().toISOString(),
-        version: 1,
-        usedInDocs: [{ docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '2.1', itemName: 'Relatório de Estabilidade' }]
-      },
-      {
-        id: 'kb_12',
-        projectId: currentProjId,
-        internalId: 'EVID.STERILITY',
-        category: 'Evidências',
-        title: 'Certificado de Ensaio de Esterilidade e Endotoxinas',
-        value: 'https://sharepoint.ctvacinas.org/laudos/esterilidade_LP001.pdf',
-        origin: 'Laudo Microbiológico nº 2026-88',
-        updatedAt: new Date().toISOString(),
-        version: 1,
-        usedInDocs: [{ docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '2.2', itemName: 'Laudo de Esterilidade' }]
-      },
-      {
-        id: 'kb_13',
-        projectId: currentProjId,
-        internalId: 'ATTACHMENT.COA',
-        category: 'Anexos',
-        title: 'Certificado de Análise (CoA) do Lote Piloto LP-001',
-        value: 'https://sharepoint.ctvacinas.org/anexos/CoA_Lote_LP001.pdf',
-        origin: 'Controle de Qualidade Central',
-        updatedAt: new Date().toISOString(),
-        version: 1,
-        usedInDocs: [{ docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '2.1', itemName: 'Relatório de Estabilidade' }]
-      }
-    ];
-  }, [activeProject, currentUser]);
-
-  // Knowledge Bank State
-  const [knowledgeRecords, setKnowledgeRecords] = useState<RegulatoryKnowledgeRecord[]>(defaultKnowledgeRecords);
-
-  // Sync / Edit Knowledge Record Modal
-  const [showKbRecordModal, setShowKbRecordModal] = useState(false);
-  const [editingKbId, setEditingKbId] = useState<string | null>(null);
-  const [kbKey, setKbKey] = useState('');
-  const [kbTitle, setKbTitle] = useState('');
-  const [kbCategory, setKbCategory] = useState<KnowledgeCategory>('Informações Estruturadas');
-  const [kbValue, setKbValue] = useState('');
-  const [kbOrigin, setKbOrigin] = useState('');
-
-  // Auto completeness checker for item
-  const checkItemCompleteness = (item: RegulatoryDocumentItem) => {
-    const requiredResources = item.requiredResources || [];
-    if (requiredResources.length === 0) {
-      // Fallback simple check
-      if (item.value || item.evidenceUrl) {
-        return { available: 1, total: 1, percent: 100, missingNames: [], status: 'Pronto' as const };
-      }
-      return { available: 0, total: 1, percent: 0, missingNames: [item.name], status: 'Faltando' as const };
+  // Central Knowledge Base (Background Single Source of Truth)
+  const [knowledgeRecords, setKnowledgeRecords] = useState<RegulatoryKnowledgeRecord[]>([
+    {
+      id: 'kb_1',
+      projectId: activeProject?.id || 'p1',
+      internalId: 'PRODUCT.NAME',
+      category: 'Informações Estruturadas',
+      title: 'Nome e Identificação da Vacina',
+      value: 'Vacina Malária Recombinante - UniMaV-01',
+      origin: 'Definição Estratégica da Liderança do Projeto',
+      updatedAt: new Date().toISOString(),
+      version: 1,
+      history: [{ version: 1, updatedAt: new Date().toISOString(), author: currentUser, value: 'Vacina Malária Recombinante - UniMaV-01' }],
+      usedInDocs: [
+        { docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.1', itemName: 'Nome e Identificação da Vacina' },
+        { docId: 'doc_brochura', docTitle: 'Brochura do Investigador', itemCode: '1.1', itemName: 'Nome da Vacina' },
+        { docId: 'doc_deec', docTitle: 'DEEC', itemCode: '1.1', itemName: 'Nome da Vacina' },
+        { docId: 'doc_ddcm', docTitle: 'DDCM', itemCode: '1.1', itemName: 'Nome da Vacina' }
+      ]
+    },
+    {
+      id: 'kb_2',
+      projectId: activeProject?.id || 'p1',
+      internalId: 'PRODUCT.INDICATION',
+      category: 'Informações Estruturadas',
+      title: 'Indicação Terapêutica / Alvo Clínico',
+      value: 'Imunização ativa para prevenção da malária clínica por Plasmodium falciparum em indivíduos a partir de 2 anos de idade.',
+      origin: 'Protocolo da Fase I / Comitê Científico',
+      updatedAt: new Date().toISOString(),
+      version: 1,
+      usedInDocs: [
+        { docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '1.2', itemName: 'Indicação Terapêutica' },
+        { docId: 'doc_brochura', docTitle: 'Brochura do Investigador', itemCode: '1.2', itemName: 'Indicação' },
+        { docId: 'doc_ddcm', docTitle: 'DDCM', itemCode: '1.2', itemName: 'Indicação' }
+      ]
+    },
+    {
+      id: 'kb_3',
+      projectId: activeProject?.id || 'p1',
+      internalId: 'IFA.NAME',
+      category: 'Informações Estruturadas',
+      title: 'Descrição e Nome do IFA',
+      value: 'Proteína Recombinante Pfs25 / MSP1-19 expressa em Pichia pastoris',
+      origin: 'Bancada de Biologia Molecular',
+      updatedAt: new Date().toISOString(),
+      version: 1,
+      usedInDocs: [
+        { docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '2.1', itemName: 'Descrição e Nome do IFA' },
+        { docId: 'doc_ifa', docTitle: 'Dossiê do IFA', itemCode: '1.1', itemName: 'Descrição e Nome do IFA' }
+      ]
+    },
+    {
+      id: 'kb_4',
+      projectId: activeProject?.id || 'p1',
+      internalId: 'ADJUVANT.NAME',
+      category: 'Informações Estruturadas',
+      title: 'Nome do Adjuvante e Emulsão',
+      value: 'Emulsão de Esqualeno com QS-21 (Adjuvante L30-Adjuv)',
+      origin: 'Formulação de Adjuvante',
+      updatedAt: new Date().toISOString(),
+      version: 1,
+      usedInDocs: [
+        { docId: 'doc_vacina', docTitle: 'Dossiê da Vacina', itemCode: '2.2', itemName: 'Nome do Adjuvante' },
+        { docId: 'doc_adj', docTitle: 'Dossiê do Adjuvante', itemCode: '1.1', itemName: 'Nome do Adjuvante' }
+      ]
     }
+  ]);
 
-    let availableCount = 0;
-    const missingNames: string[] = [];
+  // Extract All Unique Bracket Markers Across All Models
+  const allAvailableMarkers = useMemo(() => {
+    const map = new Map<string, { marker: string; name: string; docTitles: string[] }>();
 
-    requiredResources.forEach(res => {
-      let found = false;
-      if (res.key) {
-        // Check Knowledge Bank
-        const rec = knowledgeRecords.find(k => k.internalId === res.key && (k.value !== undefined && k.value !== ''));
-        if (rec) found = true;
-
-        // Check structured tables if table type
-        if (!found && res.type === 'Tabela') {
-          const tbl = structuredTables.find(t => t.key === res.key && t.rows.length > 0);
-          if (tbl) found = true;
-        }
-
-        // Check repeatable records
-        if (!found && res.type === 'Registro Repetitivo') {
-          if (repeatableRecords.length > 0) found = true;
-        }
-      }
-
-      if (!found && item.value && item.value.trim().length > 0) {
-        found = true;
-      }
-
-      if (found) {
-        availableCount++;
-      } else {
-        missingNames.push(res.name);
-      }
+    effectiveDocs.forEach(doc => {
+      doc.chapters?.forEach(chap => {
+        chap.items?.forEach(item => {
+          const markerKey = item.marker || `[${item.name.toUpperCase().replace(/\s+/g, '_')}]`;
+          if (!map.has(markerKey)) {
+            map.set(markerKey, { marker: markerKey, name: item.name, docTitles: [doc.title] });
+          } else {
+            const existing = map.get(markerKey)!;
+            if (!existing.docTitles.includes(doc.title)) {
+              existing.docTitles.push(doc.title);
+            }
+          }
+        });
+      });
     });
 
-    const total = requiredResources.length;
-    const percent = Math.round((availableCount / total) * 100);
+    return Array.from(map.values());
+  }, [effectiveDocs]);
 
-    let calculatedStatus: 'Pronto' | 'Em Andamento' | 'Faltando' = 'Faltando';
-    if (availableCount === total) {
-      calculatedStatus = 'Pronto';
-    } else if (availableCount > 0) {
-      calculatedStatus = 'Em Andamento';
-    }
-
-    return {
-      available: availableCount,
-      total,
-      percent,
-      missingNames,
-      status: calculatedStatus
-    };
-  };
-
-  // Open modal to create / edit knowledge bank record
-  const handleOpenKbModal = (rec?: RegulatoryKnowledgeRecord) => {
-    if (rec) {
-      setEditingKbId(rec.id);
-      setKbKey(rec.internalId);
-      setKbTitle(rec.title);
-      setKbCategory(rec.category);
-      setKbValue(typeof rec.value === 'string' ? rec.value : JSON.stringify(rec.value));
-      setKbOrigin(rec.origin);
-    } else {
-      setEditingKbId(null);
-      setKbKey('');
-      setKbTitle('');
-      setKbCategory(kbCategoryTab);
-      setKbValue('');
-      setKbOrigin('Cadastro Direto no Banco de Conhecimento');
-    }
-    setShowKbRecordModal(true);
-  };
-
-  // Save Knowledge Bank Record with Single Source of Truth update!
-  const handleSaveKbRecord = () => {
-    if (!kbKey.trim() || !kbTitle.trim()) return;
-
-    const currentProjId = activeProject?.id || 'p1';
-    let updatedList = [...knowledgeRecords];
-
-    if (editingKbId) {
-      updatedList = updatedList.map(item => {
-        if (item.id !== editingKbId) return item;
-
-        const newVersion = item.version + 1;
-        const newHistory = [
-          ...(item.history || []),
-          { version: newVersion, updatedAt: new Date().toISOString(), author: currentUser, value: kbValue.trim() }
-        ];
-
-        return {
-          ...item,
-          internalId: kbKey.trim().toUpperCase().replace(/\s+/g, '_'),
-          title: kbTitle.trim(),
-          category: kbCategory,
-          value: kbValue.trim(),
-          origin: kbOrigin.trim() || item.origin,
-          version: newVersion,
-          history: newHistory,
-          updatedAt: new Date().toISOString()
-        };
-      });
-    } else {
-      const newRec: RegulatoryKnowledgeRecord = {
-        id: `kb_custom_${Date.now()}`,
-        projectId: currentProjId,
-        internalId: kbKey.trim().toUpperCase().replace(/\s+/g, '_'),
-        category: kbCategory,
-        title: kbTitle.trim(),
-        value: kbValue.trim(),
-        origin: kbOrigin.trim() || 'Cadastro Manual',
-        updatedAt: new Date().toISOString(),
-        version: 1,
-        history: [{ version: 1, updatedAt: new Date().toISOString(), author: currentUser, value: kbValue.trim() }],
-        usedInDocs: []
-      };
-      updatedList.push(newRec);
-    }
-
-    setKnowledgeRecords(updatedList);
-    setShowKbRecordModal(false);
-  };
-
-  // Pending Contributions coming from Projects execution
+  // Pending Contributions List from Projects module
   const projectPendingContributions = useMemo(() => {
     const list: any[] = [];
 
-    // 1. Gather from microactivities inside project macroactivities
+    // 1. Microactivities with regulatory contributions
     projects.forEach(proj => {
       if (selectedProjectId !== 'all' && proj.id !== selectedProjectId) return;
 
@@ -930,10 +741,10 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
               macroName: macro.name,
               phase: macro.phase,
               title: micro.name,
-              description: micro.evidenceDescription || `Microatividade: ${micro.name} na macroatividade ${macro.name}`,
+              description: micro.evidenceDescription || micro.observations || `Contribuição gerada pela microatividade: ${micro.name}`,
               status: micro.status,
               assignee: micro.assignee || 'Não atribuído',
-              evidenceUrl: micro.evidenceUrl,
+              evidenceUrl: micro.evidenceUrl || micro.reportLink,
               evidenceFileName: micro.evidenceFileName,
               updatedAt: micro.dueDate || new Date().toISOString()
             });
@@ -942,7 +753,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
       });
     });
 
-    // 2. Gather from standalone tasks
+    // 2. Standalone tasks with regulatory contributions
     tasks.filter(t => 
       (selectedProjectId === 'all' || t.project === activeProject?.name || t.project === selectedProjectId) &&
       (t.generatesRegulatoryContent || t.dossierContribution)
@@ -964,93 +775,470 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
     return list;
   }, [projects, tasks, selectedProjectId, activeProject]);
 
-  // General Document Completeness Dashboard Metrics
+  // Completeness Metrics for Dashboard
   const completenessMetrics = useMemo(() => {
     let totalItems = 0;
-    let readyItems = 0;
-    let partialItems = 0;
-    let missingItems = 0;
+    let emptyItems = 0; // Vazio
+    let inProgressItems = 0; // Em preenchimento
+    let filledItems = 0; // Preenchido
+    let approvedItems = 0; // Aprovado
+    let divergentItems = 0; // Divergente
 
     currentProjectDocs.forEach(doc => {
       doc.chapters?.forEach(chap => {
         chap.items?.forEach(item => {
           totalItems++;
-          const calc = checkItemCompleteness(item);
-          if (calc.status === 'Pronto') readyItems++;
-          else if (calc.status === 'Em Andamento') partialItems++;
-          else missingItems++;
+          const status = item.status || 'Vazio';
+          if (status === 'Vazio' || status === 'Faltando' || (!item.value && !item.evidenceUrl)) {
+            emptyItems++;
+          } else if (status === 'Em preenchimento' || status === 'Em Andamento' || status === 'Pendente') {
+            inProgressItems++;
+          } else if (status === 'Preenchido' || status === 'Concluído') {
+            filledItems++;
+          } else if (status === 'Aprovado' || status === 'Pronto') {
+            approvedItems++;
+          } else if (status === 'Divergente') {
+            divergentItems++;
+          } else {
+            filledItems++;
+          }
         });
       });
     });
 
-    const percent = totalItems > 0 ? Math.round((readyItems / totalItems) * 100) : 0;
+    const readyOrFilled = filledItems + approvedItems;
+    const percent = totalItems > 0 ? Math.round((readyOrFilled / totalItems) * 100) : 0;
 
     return {
       totalItems,
-      readyItems,
-      partialItems,
-      missingItems,
+      emptyItems,
+      inProgressItems,
+      filledItems,
+      approvedItems,
+      divergentItems,
+      readyOrFilled,
       percent
     };
-  }, [currentProjectDocs, knowledgeRecords, structuredTables, repeatableRecords]);
+  }, [currentProjectDocs]);
 
-  // Export JSON of all Regulatory Knowledge Data
-  const handleExportKnowledgeBank = () => {
-    const exportData = {
+  // Handle Fill/Update Item in Document (Reusable across documents)
+  const handleSaveFillItem = (overrideValue?: string, targetDocs?: string[]) => {
+    if (!selectedItemForFill) return;
+
+    const valToSave = overrideValue !== undefined ? overrideValue : fillValue;
+    const marker = selectedItemForFill.item.marker || `[${selectedItemForFill.item.name.toUpperCase().replace(/\s+/g, '_')}]`;
+
+    // Update state of all or selected documents using this marker
+    const updatedDocs = docState.map(doc => {
+      if (targetDocs && !targetDocs.includes(doc.id) && doc.id !== selectedItemForFill.doc.id) {
+        return doc;
+      }
+
+      const updatedChapters = doc.chapters.map(chap => {
+        const updatedItems = chap.items.map(item => {
+          const itemMarker = item.marker || `[${item.name.toUpperCase().replace(/\s+/g, '_')}]`;
+          if (itemMarker === marker || item.id === selectedItemForFill.item.id) {
+            return {
+              ...item,
+              value: valToSave,
+              status: 'Preenchido' as RegulatoryDocItemStatus,
+              evidenceUrl: fillEvidenceUrl || item.evidenceUrl,
+              evidenceFileName: fillEvidenceFileName || item.evidenceFileName,
+              notes: fillNotes || item.notes
+            };
+          }
+          return item;
+        });
+        return { ...chap, items: updatedItems };
+      });
+
+      return { ...doc, chapters: updatedChapters, updatedAt: new Date().toISOString() };
+    });
+
+    setDocState(updatedDocs);
+    onUpdateDocs(updatedDocs);
+
+    // Also update Central Knowledge Bank
+    const updatedKb = [...knowledgeRecords];
+    const existingRecIndex = updatedKb.findIndex(k => k.internalId === selectedItemForFill.item.sourceInternalId || k.title === selectedItemForFill.item.name);
+
+    if (existingRecIndex >= 0) {
+      updatedKb[existingRecIndex] = {
+        ...updatedKb[existingRecIndex],
+        value: valToSave,
+        updatedAt: new Date().toISOString(),
+        version: updatedKb[existingRecIndex].version + 1,
+        history: [
+          ...(updatedKb[existingRecIndex].history || []),
+          { version: updatedKb[existingRecIndex].version + 1, updatedAt: new Date().toISOString(), author: currentUser, value: valToSave }
+        ]
+      };
+    } else {
+      updatedKb.push({
+        id: `kb_${Date.now()}`,
+        projectId: activeProject?.id || 'p1',
+        internalId: selectedItemForFill.item.sourceInternalId || marker.replace(/[^a-zA-Z0-9_]/g, '_'),
+        category: 'Informações Estruturadas',
+        title: selectedItemForFill.item.name,
+        value: valToSave,
+        origin: 'Preenchimento Direto no Dossiê',
+        updatedAt: new Date().toISOString(),
+        version: 1,
+        history: [{ version: 1, updatedAt: new Date().toISOString(), author: currentUser, value: valToSave }],
+        usedInDocs: [{ docId: selectedItemForFill.doc.id, docTitle: selectedItemForFill.doc.title, itemCode: selectedItemForFill.item.code, itemName: selectedItemForFill.item.name }]
+      });
+    }
+
+    setKnowledgeRecords(updatedKb);
+    setSelectedItemForFill(null);
+  };
+
+  // Open Fill Modal
+  const handleOpenFillModal = (doc: RegulatoryDocument, chapter: RegulatoryDocumentChapter, item: RegulatoryDocumentItem) => {
+    setSelectedItemForFill({ doc, chapter, item });
+    setFillValue(item.value || '');
+    setFillEvidenceUrl(item.evidenceUrl || '');
+    setFillEvidenceFileName(item.evidenceFileName || '');
+    setFillNotes(item.notes || '');
+  };
+
+  // Save Contribution with Conflict Resolution check
+  const handleApplyContributionToSelectedMarkers = () => {
+    if (!activeContribution || selectedMarkersForContribution.length === 0) return;
+
+    const newValue = contributionContentValue.trim();
+    if (!newValue) return;
+
+    // Check if any selected marker already has a conflicting value
+    let hasConflict = false;
+    let conflictingMarker = '';
+    let existingVal = '';
+
+    for (const marker of selectedMarkersForContribution) {
+      // Find current value in documents or KB
+      for (const doc of effectiveDocs) {
+        for (const chap of doc.chapters) {
+          for (const item of chap.items) {
+            const itemMarker = item.marker || `[${item.name.toUpperCase().replace(/\s+/g, '_')}]`;
+            if (itemMarker === marker && item.value && item.value.trim() !== '' && item.value.trim() !== newValue) {
+              hasConflict = true;
+              conflictingMarker = marker;
+              existingVal = item.value;
+              break;
+            }
+          }
+          if (hasConflict) break;
+        }
+        if (hasConflict) break;
+      }
+      if (hasConflict) break;
+    }
+
+    if (hasConflict) {
+      // Show Conflict Modal!
+      setConflictModalData({
+        marker: conflictingMarker,
+        itemName: conflictingMarker,
+        currentValue: existingVal,
+        currentOrigin: 'Registro Anterior no Dossiê',
+        newValue: newValue,
+        newOrigin: `${activeContribution.projectName} / ${activeContribution.title} (${activeContribution.assignee})`,
+        targetDocIds: effectiveDocs.map(d => d.id)
+      });
+      return;
+    }
+
+    // Direct apply if no conflict
+    applyContributionValue(selectedMarkersForContribution, newValue, activeContribution);
+  };
+
+  const applyContributionValue = (markers: string[], val: string, contributionObj: any, docIdsToUpdate?: string[]) => {
+    const updatedDocs = docState.map(doc => {
+      if (docIdsToUpdate && !docIdsToUpdate.includes(doc.id)) return doc;
+
+      const updatedChapters = doc.chapters.map(chap => {
+        const updatedItems = chap.items.map(item => {
+          const itemMarker = item.marker || `[${item.name.toUpperCase().replace(/\s+/g, '_')}]`;
+          if (markers.includes(itemMarker)) {
+            return {
+              ...item,
+              value: val,
+              status: 'Preenchido' as RegulatoryDocItemStatus,
+              evidenceUrl: contributionObj?.evidenceUrl || item.evidenceUrl,
+              evidenceFileName: contributionObj?.evidenceFileName || item.evidenceFileName,
+              notes: `Preenchido via contribuição da atividade: ${contributionObj?.title || 'Atividade do Projeto'}`
+            };
+          }
+          return item;
+        });
+        return { ...chap, items: updatedItems };
+      });
+
+      return { ...doc, chapters: updatedChapters, updatedAt: new Date().toISOString() };
+    });
+
+    setDocState(updatedDocs);
+    onUpdateDocs(updatedDocs);
+
+    setActiveContribution(null);
+    setSelectedMarkersForContribution([]);
+    setContributionContentValue('');
+    setConflictModalData(null);
+  };
+
+  // Import Word Template with Markers Parsing
+  const handleImportWordTemplate = () => {
+    if (!templateTitle.trim()) return;
+
+    // Parse all bracketed tags inside text like [NOME DA VACINA], [INDICAÇÃO], etc.
+    const markerMatches = templateText.match(/\[([^\]]+)\]/g) || [];
+    const uniqueMarkers = Array.from(new Set(markerMatches));
+
+    const defaultItems: RegulatoryDocumentItem[] = uniqueMarkers.map((marker, idx) => {
+      const cleanName = marker.replace(/[\[\]]/g, '');
+      return {
+        id: `item_imp_${Date.now()}_${idx}`,
+        code: `1.${idx + 1}`,
+        name: cleanName,
+        type: 'Informação Estruturada' as RegulatoryDocItemType,
+        required: true,
+        sourceInternalId: cleanName.toUpperCase().replace(/\s+/g, '_'),
+        status: 'Vazio' as RegulatoryDocItemStatus,
+        marker: marker,
+        value: ''
+      };
+    });
+
+    const newDoc: RegulatoryDocument = {
+      id: `doc_imported_${Date.now()}`,
+      projectId: activeProject?.id || 'p1',
+      title: templateTitle.trim(),
+      type: templateType,
+      description: templateDescription.trim() || 'Modelo regulatório criado por importação de marcadores entre colchetes.',
+      currentVersion: '0.1',
+      currentVersionStatus: 'Rascunho',
+      updatedAt: new Date().toISOString(),
+      chapters: [
+        {
+          id: `cap_imp_${Date.now()}`,
+          code: '1.0',
+          title: '1. Itens e Conteúdos do Modelo',
+          description: 'Estrutura gerada a partir dos marcadores identificados',
+          items: defaultItems.length > 0 ? defaultItems : [
+            {
+              id: `item_def_${Date.now()}`,
+              code: '1.1',
+              name: 'Nome do Produto',
+              type: 'Informação Estruturada',
+              required: true,
+              sourceInternalId: 'PRODUCT.NAME',
+              status: 'Vazio',
+              marker: '[NOME DA VACINA]',
+              value: ''
+            }
+          ]
+        }
+      ]
+    };
+
+    const updated = [newDoc, ...docState];
+    setDocState(updated);
+    onUpdateDocs(updated);
+
+    setShowImportTemplateModal(false);
+    setTemplateTitle('');
+    setTemplateText('');
+    setTemplateDescription('');
+  };
+
+  // Export Full Regulatory Database to Excel (.xlsx) with 5 Sheets
+  const handleExportExcelDatabase = () => {
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Itens Regulatórios
+    const itemsData = knowledgeRecords.map(r => ({
+      'Identificador Interno': r.internalId,
+      'Marcador': r.internalId ? `[${r.internalId}]` : '-',
+      'Nome do Item': r.title,
+      'Valor': typeof r.value === 'object' ? JSON.stringify(r.value) : (r.value || ''),
+      'Tipo': r.category,
+      'Status': r.usedInDocs && r.usedInDocs.length > 0 ? 'Preenchido' : 'Vazio',
+      'Versão': r.version,
+      'Origem': r.origin,
+      'Responsável': currentUser,
+      'Data de Atualização': new Date(r.updatedAt).toLocaleString('pt-BR')
+    }));
+    const wsItems = XLSX.utils.json_to_sheet(itemsData);
+    XLSX.utils.book_append_sheet(wb, wsItems, 'Itens Regulatórios');
+
+    // Sheet 2: Uso nos Documentos
+    const docUsageData: any[] = [];
+    currentProjectDocs.forEach(doc => {
+      doc.chapters?.forEach(chap => {
+        chap.items?.forEach(item => {
+          docUsageData.push({
+            'Identificador Interno': item.sourceInternalId || item.code || '-',
+            'Documento': doc.title,
+            'Capítulo': chap.title,
+            'Subcapítulo': chap.code || '-',
+            'Posição no Modelo': item.code || '-',
+            'Marcador': item.marker || `[${item.name.toUpperCase().replace(/\s+/g, '_')}]`,
+            'Status no Documento': item.status || 'Vazio'
+          });
+        });
+      });
+    });
+    const wsDocUsage = XLSX.utils.json_to_sheet(docUsageData);
+    XLSX.utils.book_append_sheet(wb, wsDocUsage, 'Uso nos Documentos');
+
+    // Sheet 3: Evidências e Anexos
+    const evidenceData = projectPendingContributions.map(c => ({
+      'Título': c.title,
+      'Tipo': c.evidenceFileName ? 'Arquivo / Anexo' : 'Link / Evidência',
+      'Link ou Nome do Arquivo': c.evidenceUrl || c.evidenceFileName || '-',
+      'Projeto': c.projectName,
+      'Macroatividade': c.macroName,
+      'Microatividade': c.title,
+      'Responsável': c.assignee,
+      'Data': new Date(c.updatedAt).toLocaleDateString('pt-BR')
+    }));
+    const wsEvidence = XLSX.utils.json_to_sheet(evidenceData.length > 0 ? evidenceData : [
+      { 'Título': 'Laudo Microbiológico LP-001', 'Tipo': 'Arquivo', 'Link ou Nome do Arquivo': 'laudo_esterilidade.pdf', 'Projeto': activeProject?.name || 'Projeto', 'Macroatividade': 'Controle de Qualidade', 'Microatividade': 'Esterilidade', 'Responsável': currentUser, 'Data': new Date().toLocaleDateString('pt-BR') }
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsEvidence, 'Evidências e Anexos');
+
+    // Sheet 4: Tabelas
+    const tablesData = structuredTables.map(t => ({
+      'Nome da Tabela': t.title,
+      'Arquivo / Chave': t.key ? `${t.key}.xlsx` : 'Tabela Estruturada',
+      'Categoria': 'Dados Estruturados',
+      'Origem': t.description || 'Cadastro Interno',
+      'Versão': '1.0',
+      'Documentos Vinculados': 'Dossiê da Vacina, DDCM'
+    }));
+    const wsTables = XLSX.utils.json_to_sheet(tablesData);
+    XLSX.utils.book_append_sheet(wb, wsTables, 'Tabelas');
+
+    // Sheet 5: Histórico de Alterações
+    const historyData: any[] = [];
+    knowledgeRecords.forEach(rec => {
+      (rec.history || []).forEach(h => {
+        historyData.push({
+          'Item': rec.title,
+          'Valor Anterior': '-',
+          'Valor Novo': typeof h.value === 'object' ? JSON.stringify(h.value) : String(h.value),
+          'Data': new Date(h.updatedAt).toLocaleString('pt-BR'),
+          'Usuário': h.author || 'Usuário',
+          'Justificativa': h.notes || 'Atualização de conteúdo regulatório',
+          'Documentos Afetados': (rec.usedInDocs || []).map(d => d.docTitle).join(', ') || 'Todos os Documentos'
+        });
+      });
+    });
+    const wsHistory = XLSX.utils.json_to_sheet(historyData.length > 0 ? historyData : [
+      { 'Item': 'Nome da Vacina', 'Valor Anterior': 'Vacina Malária R-01', 'Valor Novo': 'Vacina Malária Recombinante - UniMaV-01', 'Data': new Date().toLocaleString('pt-BR'), 'Usuário': currentUser, 'Justificativa': 'Ajuste de denominação oficial', 'Documentos Afetados': 'Dossiê da Vacina, DDCM, Brochura' }
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsHistory, 'Histórico de Alterações');
+
+    // Download File
+    XLSX.writeFile(wb, `Banco_Regulatorio_${activeProject?.name.replace(/[^a-zA-Z0-9]/g, '_') || 'Projetos'}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  // Export JSON Database
+  const handleExportJSONDatabase = () => {
+    const payload = {
       metadata: {
         exportedAt: new Date().toISOString(),
         exportedBy: currentUser,
-        systemName: 'Sistema de Gestão do Conhecimento Regulatório',
-        projectId: selectedProjectId,
-        projectName: activeProject?.name || 'Todos os Projetos'
+        system: 'Assistente do Preenchimento de Modelos Regulatórios',
+        project: activeProject?.name || 'Todos os Projetos'
       },
       completenessMetrics,
       documents: currentProjectDocs,
       knowledgeRecords,
-      structuredTables,
-      markerMappings,
-      repeatableRecords
+      structuredTables
     };
 
-    const jsonStr = JSON.stringify(exportData, null, 2);
+    const jsonStr = JSON.stringify(payload, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Conhecimento_Regulatorio_${activeProject?.name.replace(/[^a-zA-Z0-9]/g, '_') || 'Projetos'}_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `Banco_Regulatorio_${activeProject?.name.replace(/[^a-zA-Z0-9]/g, '_') || 'Projetos'}_${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
+  // Render Status Badge for Document Items
+  const renderItemStatusBadge = (status: RegulatoryDocItemStatus) => {
+    switch (status) {
+      case 'Preenchido':
+      case 'Concluído':
+        return (
+          <span className="px-2.5 py-1 bg-blue-100 text-blue-800 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border border-blue-200">
+            <CheckCircle2 size={12} className="text-blue-600" /> Preenchido
+          </span>
+        );
+      case 'Aprovado':
+      case 'Pronto':
+        return (
+          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border border-emerald-200">
+            <CheckCircle size={12} className="text-emerald-600" /> Aprovado
+          </span>
+        );
+      case 'Em preenchimento':
+      case 'Em Andamento':
+      case 'Pendente':
+        return (
+          <span className="px-2.5 py-1 bg-amber-100 text-amber-800 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border border-amber-200">
+            <Clock size={12} className="text-amber-600" /> Em preenchimento
+          </span>
+        );
+      case 'Divergente':
+        return (
+          <span className="px-2.5 py-1 bg-rose-100 text-rose-800 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border border-rose-200">
+            <AlertTriangle size={12} className="text-rose-600" /> Divergente
+          </span>
+        );
+      case 'Vazio':
+      case 'Faltando':
+      default:
+        return (
+          <span className="px-2.5 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border border-slate-200">
+            <XCircle size={12} className="text-slate-400" /> Vazio
+          </span>
+        );
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* System Header Card */}
+      {/* Header Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-slate-700/60 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
         
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
           <div className="space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-3 py-1 bg-amber-500/20 text-amber-300 rounded-full text-[10px] font-black uppercase tracking-wider border border-amber-500/30">
-                Módulo Regulatório Unificado
-              </span>
               <span className="px-3 py-1 bg-indigo-500/20 text-indigo-300 rounded-full text-[10px] font-black uppercase tracking-wider border border-indigo-500/30">
-                Single Source of Truth
+                Assistente de Preenchimento Regulatório
+              </span>
+              <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 rounded-full text-[10px] font-black uppercase tracking-wider border border-emerald-500/30">
+                Reutilização Automática Multi-Documentos
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white flex items-center gap-3">
-              <FolderTree className="text-amber-400" size={32} />
-              Sistema de Gestão do Conhecimento Regulatório
+              <FileText className="text-amber-400" size={32} />
+              Modelos e Dossiês Regulatórios
             </h1>
             <p className="text-xs text-slate-300 font-medium max-w-3xl leading-relaxed">
-              Organização dinâmica e centralizada de informações, narrativas técnicas, tabelas e evidências para montagem e acompanhamento contínuo da completude de documentos regulatórios.
+              Gerencie modelos de documentos (Dossiê da Vacina, IFA, Adjuvante, DDCM, Brochura e DEEC), acompanhe o preenchimento por capítulos/marcadores e vincule contribuições diretas das atividades dos projetos.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 shrink-0">
-            {/* Project Filter Select */}
+            {/* Project Selector */}
             <div className="flex items-center gap-2 bg-slate-800/90 p-2 rounded-2xl border border-slate-700 shadow-inner">
               <span className="text-[10px] font-black uppercase text-amber-400 px-2">Projeto:</span>
               <select
@@ -1066,132 +1254,141 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
             </div>
 
             <button
-              onClick={handleExportKnowledgeBank}
-              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition shadow-lg flex items-center gap-2 cursor-pointer active:scale-95"
+              onClick={handleExportExcelDatabase}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition shadow-lg flex items-center gap-2 cursor-pointer active:scale-95"
             >
-              <Download size={16} /> Exportar Banco (JSON)
+              <FileSpreadsheet size={16} /> Exportar Banco (Excel)
             </button>
           </div>
         </div>
 
-        {/* Realtime Completeness Progress Bar Banner */}
-        <div className="mt-6 pt-6 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-5 gap-4">
+        {/* Realtime Completeness Metrics Row */}
+        <div className="mt-6 pt-6 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-6 gap-3">
           <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/50">
             <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Completude Geral</span>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-xl font-black text-amber-400">{completenessMetrics.percent}%</span>
-              <span className="text-[10px] text-slate-400 font-bold">de itens prontos</span>
             </div>
           </div>
 
           <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/50">
-            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Itens Prontos (✔)</span>
-            <span className="text-xl font-black text-emerald-400 mt-1 block">{completenessMetrics.readyItems}</span>
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Total de Itens</span>
+            <span className="text-xl font-black text-white mt-1 block">{completenessMetrics.totalItems}</span>
           </div>
 
           <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/50">
-            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Em Andamento (⚠)</span>
-            <span className="text-xl font-black text-amber-400 mt-1 block">{completenessMetrics.partialItems}</span>
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Vazios (✖)</span>
+            <span className="text-xl font-black text-rose-400 mt-1 block">{completenessMetrics.emptyItems}</span>
           </div>
 
           <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/50">
-            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Itens Faltando (✖)</span>
-            <span className="text-xl font-black text-rose-400 mt-1 block">{completenessMetrics.missingItems}</span>
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Em Preenchimento (⚠)</span>
+            <span className="text-xl font-black text-amber-400 mt-1 block">{completenessMetrics.inProgressItems}</span>
           </div>
 
-          <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/50 col-span-2 sm:col-span-1">
-            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Contribuições de Projetos</span>
+          <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/50">
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Preenchidos (✔)</span>
+            <span className="text-xl font-black text-blue-400 mt-1 block">{completenessMetrics.filledItems}</span>
+          </div>
+
+          <div className="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/50">
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Contribuições Pendentes</span>
             <span className="text-xl font-black text-indigo-300 mt-1 block">{projectPendingContributions.length}</span>
           </div>
         </div>
       </div>
 
-      {/* Main Navigation Tabs Bar */}
+      {/* Primary Navigation Tabs */}
       <div className="bg-white p-2 rounded-3xl border border-slate-200 shadow-sm flex flex-wrap gap-2">
         <button
-          onClick={() => setActiveTab('doc_tree')}
+          onClick={() => setActiveTab('dossier_viewer')}
           className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 cursor-pointer ${
-            activeTab === 'doc_tree'
+            activeTab === 'dossier_viewer'
               ? 'bg-slate-900 text-white shadow-md'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <FolderTree size={16} />
-          <span>Árvore de Documentos e Itens</span>
+          <span>Visualizador do Dossiê</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('knowledge_bank')}
-          className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 cursor-pointer ${
-            activeTab === 'knowledge_bank'
+          onClick={() => setActiveTab('pending_contributions')}
+          className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 cursor-pointer relative ${
+            activeTab === 'pending_contributions'
               ? 'bg-indigo-600 text-white shadow-md'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Database size={16} />
-          <span>Banco de Conhecimento Regulatório</span>
+          <Layers size={16} />
+          <span>Contribuições Pendentes</span>
+          {projectPendingContributions.length > 0 && (
+            <span className="px-2 py-0.5 bg-amber-400 text-slate-950 rounded-full text-[10px] font-black">
+              {projectPendingContributions.length}
+            </span>
+          )}
         </button>
 
         <button
-          onClick={() => setActiveTab('repeatable_records')}
+          onClick={() => setActiveTab('template_manager')}
           className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 cursor-pointer ${
-            activeTab === 'repeatable_records'
+            activeTab === 'template_manager'
+              ? 'bg-slate-800 text-white shadow-md'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <FileCode size={16} />
+          <span>Modelos & Importação Word</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('tables_and_attachments')}
+          className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 cursor-pointer ${
+            activeTab === 'tables_and_attachments'
               ? 'bg-teal-600 text-white shadow-md'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <TableIcon size={16} />
-          <span>Registros Repetitivos do Projeto</span>
+          <span>Tabelas & Anexos</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('contributions')}
+          onClick={() => setActiveTab('export_and_traceability')}
           className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 cursor-pointer ${
-            activeTab === 'contributions'
+            activeTab === 'export_and_traceability'
               ? 'bg-amber-600 text-white shadow-md'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Layers size={16} />
-          <span>Contribuições de Projetos ({projectPendingContributions.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('markers_templates')}
-          className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 cursor-pointer ${
-            activeTab === 'markers_templates'
-              ? 'bg-purple-600 text-white shadow-md'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Tag size={16} />
-          <span>Marcadores & Modelos Word</span>
+          <Download size={16} />
+          <span>Exportação & Rastreabilidade</span>
         </button>
       </div>
 
-      {/* =========================================================================
-          VIEW 1: ÁRVORE HIERÁRQUICA DE DOCUMENTOS E ITENS
-          ========================================================================= */}
-      {activeTab === 'doc_tree' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Documents Selection List (Left Column) */}
-          <div className="lg:col-span-4 space-y-4">
+      {/* =================================================================== */}
+      {/* TAB 1: VISUALIZADOR DO DOSSIÊ (CENTRAL DOCUMENT VIEW) */}
+      {/* =================================================================== */}
+      {activeTab === 'dossier_viewer' && (
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Left Column: Document Models Selector */}
+          <div className="space-y-4 lg:col-span-1">
             <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                <BookOpen size={16} className="text-indigo-600" />
-                Documentos Regulatórios ({currentProjectDocs.length})
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center justify-between">
+                <span>Modelos de Documento</span>
+                <span className="text-[10px] text-slate-400 font-bold">{currentProjectDocs.length} disponíveis</span>
               </h3>
 
               <div className="space-y-2">
                 {currentProjectDocs.map(doc => {
                   const isActive = activeDoc?.id === doc.id;
                   
-                  // Calculate document completeness
+                  // Calculate doc completeness
                   let totalInDoc = 0;
                   let readyInDoc = 0;
                   doc.chapters?.forEach(c => c.items?.forEach(i => {
                     totalInDoc++;
-                    if (checkItemCompleteness(i).status === 'Pronto') readyInDoc++;
+                    if (i.value && i.value.trim() !== '' && i.status !== 'Vazio') readyInDoc++;
                   }));
                   const docPercent = totalInDoc > 0 ? Math.round((readyInDoc / totalInDoc) * 100) : 0;
 
@@ -1199,35 +1396,26 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                     <button
                       key={doc.id}
                       onClick={() => setSelectedDocId(doc.id)}
-                      className={`w-full p-4 rounded-2xl border text-left transition-all cursor-pointer ${
-                        isActive 
-                          ? 'bg-slate-900 text-white border-slate-900 shadow-lg scale-[1.01]' 
-                          : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
+                      className={`w-full text-left p-4 rounded-2xl border transition cursor-pointer ${
+                        isActive
+                          ? 'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-500/20 shadow-sm'
+                          : 'bg-white border-slate-200 hover:bg-slate-50'
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                          isActive ? 'bg-amber-400 text-slate-950' : 'bg-indigo-100 text-indigo-800'
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-extrabold text-xs text-slate-900 block leading-snug">{doc.title}</span>
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                          docPercent === 100 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
                         }`}>
-                          {doc.type}
-                        </span>
-                        <span className={`text-xs font-black ${isActive ? 'text-amber-300' : 'text-slate-600'}`}>
                           {docPercent}%
                         </span>
                       </div>
+                      <span className="text-[10px] text-slate-500 block mt-1 font-medium">{doc.type}</span>
 
-                      <h4 className="text-sm font-black mt-2 leading-snug">{doc.title}</h4>
-                      <p className={`text-[10px] font-medium mt-1 line-clamp-2 ${
-                        isActive ? 'text-slate-300' : 'text-slate-500'
-                      }`}>
-                        {doc.description || 'Sem descrição cadastrada'}
-                      </p>
-
-                      <div className="w-full bg-slate-200/50 rounded-full h-1.5 mt-3 overflow-hidden">
+                      {/* Progress bar */}
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3 overflow-hidden">
                         <div 
-                          className={`h-full transition-all duration-500 ${
-                            docPercent === 100 ? 'bg-emerald-500' : docPercent > 40 ? 'bg-amber-400' : 'bg-rose-500'
-                          }`}
+                          className="bg-indigo-600 h-full rounded-full transition-all duration-300"
                           style={{ width: `${docPercent}%` }}
                         />
                       </div>
@@ -1238,532 +1426,684 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
             </div>
           </div>
 
-          {/* Document Tree Hierarchy View (Right Column) */}
-          <div className="lg:col-span-8 space-y-6">
+          {/* Right Column: Active Document Viewer (Document -> Chapters -> Subchapters -> Items) */}
+          <div className="lg:col-span-3 space-y-4">
             {activeDoc ? (
-              <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
                 {/* Active Document Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-6">
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
-                      ESTRUTURA HIERÁRQUICA DO DOCUMENTO
-                    </span>
-                    <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight mt-1 flex items-center gap-2">
-                      {activeDoc.title}
-                    </h2>
-                    <p className="text-xs text-slate-500 font-medium mt-0.5">
-                      {activeDoc.description}
-                    </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 bg-indigo-100 text-indigo-800 text-[10px] font-black uppercase rounded-full border border-indigo-200">
+                        {activeDoc.type}
+                      </span>
+                      <span className="text-xs text-slate-400 font-bold">Versão {activeDoc.currentVersion} ({activeDoc.currentVersionStatus})</span>
+                    </div>
+                    <h2 className="text-xl sm:text-2xl font-black text-slate-900">{activeDoc.title}</h2>
+                    <p className="text-xs text-slate-500 font-medium">{activeDoc.description}</p>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-slate-500">
-                      Versão: <strong className="text-slate-900">{activeDoc.currentVersion || '0.1'}</strong>
-                    </span>
-                    <span className="px-3 py-1 bg-amber-100 text-amber-800 text-[10px] font-black uppercase rounded-full">
-                      {activeDoc.currentVersionStatus || 'Rascunho'}
-                    </span>
+                  {/* Search filter inside document */}
+                  <div className="relative w-full sm:w-64">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input
+                      type="text"
+                      placeholder="Buscar marcadores..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                    />
                   </div>
                 </div>
 
-                {/* Hierarchical Chapters & Items Tree */}
-                <div className="space-y-4">
-                  {activeDoc.chapters && activeDoc.chapters.length > 0 ? (
-                    activeDoc.chapters.map(chap => {
-                      const isExpanded = expandedChapters[chap.id] !== false;
+                {/* Chapters & Items List in exact Model Order */}
+                <div className="space-y-6">
+                  {activeDoc.chapters.map((chapter) => {
+                    const isExpanded = expandedChapters[chapter.id] ?? true;
 
-                      return (
-                        <div key={chap.id} className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
-                          {/* Chapter Header */}
-                          <div 
-                            onClick={() => setExpandedChapters(prev => ({ ...prev, [chap.id]: !isExpanded }))}
-                            className="bg-slate-100/90 px-5 py-4 border-b border-slate-200 flex items-center justify-between cursor-pointer hover:bg-slate-200/80 transition"
-                          >
-                            <div className="flex items-center gap-3">
-                              <button className="text-slate-600">
-                                {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                              </button>
-                              <div>
-                                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
-                                  <span className="px-2 py-0.5 bg-slate-900 text-white rounded-md text-[10px] font-bold">{chap.code}</span>
-                                  {chap.title}
-                                </h3>
-                                {chap.description && (
-                                  <p className="text-[10px] text-slate-500 font-medium mt-0.5">{chap.description}</p>
-                                )}
-                              </div>
-                            </div>
+                    // Filter items by search
+                    const filteredItems = chapter.items.filter(item => 
+                      !searchQuery.trim() || 
+                      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      (item.marker && item.marker.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                      (item.value && item.value.toLowerCase().includes(searchQuery.toLowerCase()))
+                    );
 
-                            <span className="text-[10px] font-bold text-slate-500">
-                              {chap.items?.length || 0} itens mapeados
-                            </span>
+                    if (searchQuery.trim() && filteredItems.length === 0) return null;
+
+                    return (
+                      <div key={chapter.id} className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+                        {/* Chapter Title Bar */}
+                        <button
+                          onClick={() => setExpandedChapters(prev => ({ ...prev, [chapter.id]: !isExpanded }))}
+                          className="w-full p-4 bg-slate-50 hover:bg-slate-100/80 transition flex items-center justify-between cursor-pointer border-b border-slate-200/60"
+                        >
+                          <div className="flex items-center gap-3">
+                            {isExpanded ? <ChevronDown size={18} className="text-slate-500" /> : <ChevronRight size={18} className="text-slate-500" />}
+                            <span className="font-extrabold text-sm text-slate-900">{chapter.title}</span>
                           </div>
+                          <span className="text-[10px] font-black text-slate-500 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
+                            {filteredItems.length} itens
+                          </span>
+                        </button>
 
-                          {/* Items List */}
-                          {isExpanded && (
-                            <div className="divide-y divide-slate-200/70 bg-white">
-                              {chap.items?.map(item => {
-                                const completeness = checkItemCompleteness(item);
+                        {/* Items inside Chapter */}
+                        {isExpanded && (
+                          <div className="p-4 sm:p-6 space-y-4 bg-white">
+                            {filteredItems.map((item) => {
+                              const isFilled = item.value && item.value.trim() !== '' && item.status !== 'Vazio';
+                              const markerTag = item.marker || `[${item.name.toUpperCase().replace(/\s+/g, '_')}]`;
 
-                                return (
-                                  <div 
-                                    key={item.id} 
-                                    className="p-5 hover:bg-slate-50 transition flex flex-col md:flex-row md:items-start justify-between gap-4"
-                                  >
-                                    <div className="space-y-2 flex-1">
+                              return (
+                                <div
+                                  key={item.id}
+                                  className={`p-4 sm:p-5 rounded-2xl border transition ${
+                                    isFilled
+                                      ? 'bg-slate-50/50 border-slate-200'
+                                      : 'bg-amber-50/30 border-dashed border-amber-300'
+                                  }`}
+                                >
+                                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                                    <div className="space-y-1.5 flex-1">
                                       <div className="flex items-center gap-2 flex-wrap">
-                                        {/* Auto calculated Status Badge */}
-                                        {completeness.status === 'Pronto' && (
-                                          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-[10px] font-black uppercase flex items-center gap-1">
-                                            <CheckCircle size={12} className="text-emerald-600" /> ✔ Pronto
-                                          </span>
-                                        )}
-                                        {completeness.status === 'Em Andamento' && (
-                                          <span className="px-2.5 py-1 bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-[10px] font-black uppercase flex items-center gap-1">
-                                            <AlertTriangle size={12} className="text-amber-600" /> ⚠ Parcial ({completeness.available}/{completeness.total})
-                                          </span>
-                                        )}
-                                        {completeness.status === 'Faltando' && (
-                                          <span className="px-2.5 py-1 bg-rose-100 text-rose-800 border border-rose-300 rounded-lg text-[10px] font-black uppercase flex items-center gap-1">
-                                            <XCircle size={12} className="text-rose-600" /> ✖ Faltando (0/{completeness.total})
-                                          </span>
-                                        )}
-
-                                        <span className="text-xs font-black text-slate-900">{item.code ? `${item.code} - ` : ''}{item.name}</span>
-                                        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md text-[8px] font-bold uppercase">{item.type}</span>
+                                        <span className="text-xs font-black text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-md border border-indigo-100 font-mono">
+                                          {markerTag}
+                                        </span>
+                                        {renderItemStatusBadge(item.status)}
                                       </div>
-
-                                      <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                                        {item.description || 'Sem descrição cadastrada'}
-                                      </p>
-
-                                      {/* Auto Calculated Completeness Summary */}
-                                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-[10px] font-black uppercase text-slate-500">
-                                            Completude do Item: {completeness.available} de {completeness.total} recursos disponíveis
-                                          </span>
-                                          <span className="text-[10px] font-bold text-slate-700">{completeness.percent}%</span>
-                                        </div>
-
-                                        {completeness.missingNames.length > 0 && (
-                                          <p className="text-[10px] font-bold text-rose-600">
-                                            Falta: <span className="font-semibold text-rose-800">{completeness.missingNames.join(', ')}</span>
-                                          </p>
-                                        )}
-                                      </div>
+                                      <h4 className="font-extrabold text-sm text-slate-900">{item.code ? `${item.code} - ` : ''}{item.name}</h4>
+                                      {item.description && (
+                                        <p className="text-xs text-slate-500 font-medium">{item.description}</p>
+                                      )}
                                     </div>
 
                                     <button
-                                      onClick={() => setSelectedTreeItem({ doc: activeDoc, chapter: chap, item })}
-                                      className="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-sm shrink-0 cursor-pointer flex items-center gap-1.5"
+                                      onClick={() => handleOpenFillModal(activeDoc, chapter, item)}
+                                      className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs active:scale-95"
                                     >
-                                      <Eye size={14} /> Detalhes & Recursos
+                                      <Edit3 size={14} />
+                                      <span>{isFilled ? 'Editar Conteúdo' : 'Preencher Item'}</span>
                                     </button>
                                   </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="text-center py-12 text-slate-400 italic text-xs">
-                      Nenhum capítulo cadastrado neste documento.
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 text-slate-400 italic text-sm">
-                Selecione um documento para visualizar a estrutura hierárquica.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
-      {/* =========================================================================
-          VIEW 2: BANCO DE CONHECIMENTO REGULATÓRIO (REPLACES BASE DE DADOS INTERNA)
-          ========================================================================= */}
-      {activeTab === 'knowledge_bank' && (
-        <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-6">
-            <div>
-              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
-                <Database size={20} className="text-indigo-600" />
-                Banco de Conhecimento Regulatório
-              </h3>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Repositório reutilizável de informações estruturadas, narrativas técnicas, tabelas, evidências e anexos (Single Source of Truth).
-              </p>
-            </div>
-
-            <button
-              onClick={() => handleOpenKbModal()}
-              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow-sm flex items-center gap-2 cursor-pointer self-start sm:self-auto"
-            >
-              <Plus size={16} /> Cadastrar Registro no Banco
-            </button>
-          </div>
-
-          {/* Category Tabs for Knowledge Bank */}
-          <div className="flex gap-2 border-b pb-3 overflow-x-auto">
-            {(['Informações Estruturadas', 'Narrativas Técnicas', 'Tabelas', 'Evidências', 'Anexos'] as KnowledgeCategory[]).map(cat => (
-              <button
-                key={cat}
-                onClick={() => setKbCategoryTab(cat)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
-                  kbCategoryTab === cat ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          {/* Knowledge Bank Records List */}
-          <div className="space-y-4">
-            {knowledgeRecords.filter(r => r.category === kbCategoryTab).map(rec => (
-              <div key={rec.id} className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[9px] font-black uppercase text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200">
-                      ID: {rec.internalId}
-                    </span>
-                    <h4 className="text-sm font-bold text-slate-900">{rec.title}</h4>
-                  </div>
-
-                  <button
-                    onClick={() => handleOpenKbModal(rec)}
-                    className="px-3.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-black text-xs uppercase tracking-wider rounded-xl transition cursor-pointer self-start sm:self-auto shrink-0"
-                  >
-                    Editar Registro
-                  </button>
-                </div>
-
-                {/* Record Value */}
-                <div className="p-3 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 whitespace-pre-wrap">
-                  {rec.value}
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between text-[10px] text-slate-500 font-bold gap-2 pt-1 border-t border-slate-200/60">
-                  <span>Origem: {rec.origin}</span>
-                  <span>Versão: v{rec.version} | Atualizado em: {new Date(rec.updatedAt).toLocaleDateString()}</span>
-                </div>
-
-                {/* Used In Documents List */}
-                {rec.usedInDocs && rec.usedInDocs.length > 0 && (
-                  <div className="p-3 bg-indigo-50/70 border border-indigo-200/80 rounded-xl text-xs space-y-1">
-                    <span className="text-[9px] font-black uppercase text-indigo-700 tracking-wider block">
-                      UTILIZADO AUTOMATICAMENTE NOS DOCUMENTOS:
-                    </span>
-                    <div className="flex flex-wrap gap-1.5 mt-1">
-                      {rec.usedInDocs.map((u, i) => (
-                        <span key={i} className="px-2 py-0.5 bg-indigo-100 text-indigo-900 rounded-md text-[9px] font-bold border border-indigo-200">
-                          {u.docTitle} ({u.itemCode || 'Item'})
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* =========================================================================
-          VIEW 3: REGISTROS REPETITIVOS DO PROJETO (PROJECT LEVEL)
-          ========================================================================= */}
-      {activeTab === 'repeatable_records' && (
-        <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-6">
-            <div>
-              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
-                <TableIcon size={20} className="text-teal-600" />
-                Registros Repetitivos do Projeto
-              </h3>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Registros técnicos do projeto (Lotes, Apresentações, Doses, Estudos de Estabilidade, Comparabilidade e Controles de Qualidade) mantidos no nível do Projeto.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {repeatableRecords.length > 0 ? (
-              repeatableRecords.map(rec => (
-                <div key={rec.id} className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-black uppercase text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200">
-                      {rec.category}
-                    </span>
-                    <h4 className="text-sm font-bold text-slate-900">{rec.title}</h4>
-                  </div>
-
-                  <div className="p-3 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-700">
-                    {JSON.stringify(rec.data, null, 2)}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-12 text-slate-400 italic text-xs">
-                Nenhum registro repetitivo cadastrado para o projeto selecionado. Os documentos consultarão estes registros automaticamente quando adicionados ao projeto.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* =========================================================================
-          VIEW 4: CONTRIBUIÇÕES PENDENTES DO MÓDULO PROJETOS
-          ========================================================================= */}
-      {activeTab === 'contributions' && (
-        <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
-          <div className="border-b pb-4">
-            <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
-              <Layers size={20} className="text-amber-600" />
-              Contribuições Regulatórias Originadas no Módulo Projetos
-            </h3>
-            <p className="text-xs text-slate-500 font-medium mt-1">
-              Microatividades marcadas como geradoras de conteúdo regulatório ou com evidências registradas nas tarefas do projeto.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            {projectPendingContributions.map(contrib => (
-              <div key={contrib.id} className="p-5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-black uppercase text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                      {contrib.projectName}
-                    </span>
-                    <span className="text-[9px] font-extrabold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
-                      Macro: {contrib.macroName}
-                    </span>
-                  </div>
-                  <h4 className="text-sm font-black text-slate-900 mt-1">{contrib.title}</h4>
-                  <p className="text-xs text-slate-600 font-medium">{contrib.description}</p>
-                  <span className="text-[10px] text-slate-400 font-bold block mt-1">Responsável: {contrib.assignee}</span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {contrib.evidenceUrl && (
-                    <a
-                      href={contrib.evidenceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-black text-xs uppercase tracking-wider rounded-xl transition flex items-center gap-1.5"
-                    >
-                      <Paperclip size={14} /> Ver Anexo
-                    </a>
-                  )}
-                  <button
-                    onClick={() => {
-                      handleOpenKbModal({
-                        id: '',
-                        projectId: contrib.projectId,
-                        internalId: contrib.title.toUpperCase().replace(/\s+/g, '_'),
-                        category: 'Informações Estruturadas',
-                        title: contrib.title,
-                        value: contrib.description,
-                        origin: `Microatividade: ${contrib.title}`,
-                        updatedAt: new Date().toISOString(),
-                        version: 1
-                      });
-                      setActiveTab('knowledge_bank');
-                    }}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <CheckCircle size={14} /> Registrar no Banco
-                  </button>
-                </div>
-              </div>
-            ))}
-
-            {projectPendingContributions.length === 0 && (
-              <div className="text-center py-12 text-slate-400 italic text-xs">
-                Nenhuma contribuição pendente originada de microatividades de projeto.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* =========================================================================
-          VIEW 5: MARCADORES E MODELOS WORD
-          ========================================================================= */}
-      {activeTab === 'markers_templates' && (
-        <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6">
-          <div className="border-b pb-4">
-            <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
-              <Tag size={20} className="text-purple-600" />
-              Mapeamento de Marcadores e Modelos Word
-            </h3>
-            <p className="text-xs text-slate-500 font-medium mt-1">
-              Associação de marcadores de template Word (placeholders ex: <code className="bg-slate-100 px-1 py-0.5 rounded text-purple-700">[NOME_DA_VACINA]</code>) aos registros correspondentes no Banco de Conhecimento Regulatório.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {markerMappings.map(map => (
-              <div key={map.id} className="p-4 bg-purple-50/50 border border-purple-200 rounded-2xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono font-black text-purple-900 bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-300">
-                    {map.marker}
-                  </span>
-                  <span className="text-[10px] font-bold text-slate-500">{map.sourceCategory}</span>
-                </div>
-                <p className="text-xs font-bold text-slate-800">Origem: <code className="bg-white px-1.5 py-0.5 border rounded text-slate-900">{map.sourceKey}</code></p>
-                <p className="text-[10px] text-slate-500 font-medium">{map.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Modal for Item Details and Resources Breakdown */}
-      {selectedTreeItem && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 max-w-2xl w-full space-y-5 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-start border-b pb-4">
-              <div>
-                <span className="text-[9px] font-black uppercase text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200">
-                  {selectedTreeItem.doc.title} - {selectedTreeItem.chapter.code}
-                </span>
-                <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight mt-1">
-                  {selectedTreeItem.item.name}
-                </h3>
-              </div>
-              <button onClick={() => setSelectedTreeItem(null)} className="p-1 text-slate-400 hover:text-slate-600"><X size={20} /></button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Descrição do Item</label>
-                <p className="text-xs text-slate-700 font-medium mt-1">
-                  {selectedTreeItem.item.description || 'Sem descrição'}
-                </p>
-              </div>
-
-              {/* Required Resources List */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase">
-                  Recursos Necessários e Status de Disponibilidade
-                </label>
-
-                <div className="space-y-2 border border-slate-200 rounded-2xl p-4 bg-slate-50">
-                  {selectedTreeItem.item.requiredResources?.map(res => {
-                    const isAvail = knowledgeRecords.some(k => k.internalId === res.key) || Boolean(selectedTreeItem.item.value);
-
-                    return (
-                      <div key={res.id} className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between text-xs">
-                        <div className="space-y-0.5">
-                          <span className="font-bold text-slate-900">{res.name}</span>
-                          <span className="block text-[9px] text-slate-400 font-bold">Tipo: {res.type} | Chave: {res.key || 'N/A'}</span>
-                        </div>
-
-                        {isAvail ? (
-                          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-md text-[10px] font-black uppercase">
-                            ✔ Disponível
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-1 bg-rose-100 text-rose-800 rounded-md text-[10px] font-black uppercase">
-                            ✖ Faltando
-                          </span>
+                                  {/* Filled Content Preview or Empty Highlight */}
+                                  <div className="mt-4 pt-3 border-t border-slate-100">
+                                    {isFilled ? (
+                                      <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 space-y-2">
+                                        <span className="text-[10px] font-black uppercase text-slate-400 block tracking-wider">Conteúdo Atual:</span>
+                                        <p className="text-xs text-slate-800 font-medium whitespace-pre-wrap leading-relaxed">
+                                          {item.value}
+                                        </p>
+                                        {item.evidenceUrl && (
+                                          <div className="flex items-center gap-2 mt-2 text-xs font-extrabold text-indigo-600">
+                                            <Paperclip size={14} />
+                                            <a href={item.evidenceUrl} target="_blank" rel="noreferrer" className="underline hover:text-indigo-800">
+                                              Anexo: {item.evidenceFileName || 'Visualizar Evidência / Documento'}
+                                            </a>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="p-3 bg-amber-100/50 rounded-xl border border-amber-200 text-amber-900 flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-xs font-semibold">
+                                          <AlertCircle size={16} className="text-amber-600 shrink-0" />
+                                          <span>Item vazio. Aguardando preenchimento ou contribuição de atividade.</span>
+                                        </div>
+                                        <button
+                                          onClick={() => handleOpenFillModal(activeDoc, chapter, item)}
+                                          className="text-xs font-black text-amber-800 hover:underline cursor-pointer"
+                                        >
+                                          Preencher agora →
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
                     );
                   })}
                 </div>
               </div>
+            ) : (
+              <div className="bg-white p-12 rounded-3xl border border-slate-200 text-center space-y-3">
+                <FileText size={48} className="mx-auto text-slate-300" />
+                <h3 className="font-extrabold text-slate-800 text-base">Nenhum Modelo Selecionado</h3>
+                <p className="text-xs text-slate-500">Selecione um modelo na coluna ao lado para visualizar a estrutura.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* TAB 2: CONTRIBUIÇÕES PENDENTES (PROJECT ACTIVITIES TO DOSSIER) */}
+      {/* =================================================================== */}
+      {activeTab === 'pending_contributions' && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+          <div className="space-y-1">
+            <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+              <Layers className="text-indigo-600" size={24} />
+              Contribuições Regulatórias Pendentes
+            </h2>
+            <p className="text-xs text-slate-500 font-medium">
+              Abaixo estão listadas todas as microatividades e tarefas marcadas com contribuição regulatória. Ao abrir uma contribuição, selecione quais itens do documento ela permite preencher.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {projectPendingContributions.map((contrib) => (
+              <div key={contrib.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-4 hover:border-indigo-300 transition">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="px-2.5 py-1 bg-amber-100 text-amber-800 text-[10px] font-black uppercase rounded-full">
+                    {contrib.phase || 'Atividade'}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-bold">{contrib.projectName}</span>
+                </div>
+
+                <div className="space-y-1">
+                  <h4 className="font-extrabold text-sm text-slate-900 leading-snug">{contrib.title}</h4>
+                  <p className="text-xs text-slate-500 line-clamp-2">{contrib.description}</p>
+                </div>
+
+                <div className="text-[11px] text-slate-600 space-y-1 pt-2 border-t border-slate-200/80">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 font-bold">Responsável:</span>
+                    <span className="font-semibold text-slate-800">{contrib.assignee}</span>
+                  </div>
+                  {contrib.evidenceUrl && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400 font-bold">Evidência:</span>
+                      <a href={contrib.evidenceUrl} target="_blank" rel="noreferrer" className="text-indigo-600 font-bold underline truncate max-w-[150px]">
+                        {contrib.evidenceFileName || 'Abrir Anexo'}
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => {
+                    setActiveContribution(contrib);
+                    setSelectedMarkersForContribution([]);
+                    setContributionContentValue(contrib.description || '');
+                  }}
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-xs"
+                >
+                  <ListCheck size={16} />
+                  <span>Classificar & Preencher Documento</span>
+                </button>
+              </div>
+            ))}
+
+            {projectPendingContributions.length === 0 && (
+              <div className="col-span-full py-12 text-center text-slate-400 space-y-2">
+                <CheckCircle size={40} className="mx-auto text-emerald-500" />
+                <h4 className="font-extrabold text-slate-700 text-sm">Nenhuma contribuição pendente no momento</h4>
+                <p className="text-xs text-slate-500">Todas as microatividades com contribuição regulatória já foram classificadas ou preenchidas.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* TAB 3: MODELOS & IMPORTAÇÃO WORD */}
+      {/* =================================================================== */}
+      {activeTab === 'template_manager' && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div className="space-y-1">
+              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                <FileCode className="text-indigo-600" size={24} />
+                Modelos do Documento Regulatório
+              </h2>
+              <p className="text-xs text-slate-500 font-medium">
+                Importe arquivos Word contendo marcadores entre colchetes (ex: [NOME DA VACINA], [INDICAÇÃO]) para transformar em modelos de documentos regulatórios.
+              </p>
             </div>
 
-            <div className="flex justify-end pt-2">
-              <button onClick={() => setSelectedTreeItem(null)} className="px-6 py-2.5 bg-slate-900 text-white font-black text-xs rounded-xl cursor-pointer">
-                Fechar
+            <button
+              onClick={() => setShowImportTemplateModal(true)}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer shadow-md active:scale-95 shrink-0"
+            >
+              <FileUp size={16} />
+              <span>Importar Modelo Word / Marcadores</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {effectiveDocs.map(doc => {
+              let totalItems = 0;
+              doc.chapters?.forEach(c => totalItems += (c.items?.length || 0));
+
+              return (
+                <div key={doc.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2.5 py-1 bg-indigo-100 text-indigo-800 rounded-full text-[10px] font-black uppercase">
+                      {doc.type}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-bold">v{doc.currentVersion}</span>
+                  </div>
+
+                  <h3 className="font-extrabold text-sm text-slate-900">{doc.title}</h3>
+                  <p className="text-xs text-slate-500 font-medium line-clamp-2">{doc.description}</p>
+
+                  <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 font-bold">
+                    <span>{doc.chapters?.length || 0} capítulos</span>
+                    <span>{totalItems} marcadores</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* TAB 4: TABELAS & ANEXOS */}
+      {/* =================================================================== */}
+      {activeTab === 'tables_and_attachments' && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+          <div className="space-y-1">
+            <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+              <TableIcon className="text-teal-600" size={24} />
+              Tabelas Estruturadas e Anexos de Apoio
+            </h2>
+            <p className="text-xs text-slate-500 font-medium">
+              Gerencie tabelas estruturadas (apresentações, estabilidade, lotes) e relatórios/certificados vinculados aos marcadores dos documentos regulatórios.
+            </p>
+          </div>
+
+          <div className="space-y-6">
+            {structuredTables.map(tbl => (
+              <div key={tbl.id} className="p-5 border border-slate-200 rounded-2xl space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h4 className="font-extrabold text-sm text-slate-900">{tbl.title}</h4>
+                    <p className="text-xs text-slate-500">{tbl.description}</p>
+                  </div>
+                  <span className="text-[10px] font-mono px-2.5 py-1 bg-slate-100 text-slate-700 font-black rounded-lg border border-slate-200">
+                    [{tbl.key}]
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 font-extrabold text-slate-700">
+                      <tr>
+                        {tbl.columns.map(c => (
+                          <th key={c.key} className="p-3 border-b border-slate-200">{c.label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {tbl.rows.map((row, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 font-medium text-slate-800">
+                          {tbl.columns.map(c => (
+                            <td key={c.key} className="p-3">{row[c.key]}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* TAB 5: EXPORTAÇÃO & RASTREABILIDADE */}
+      {/* =================================================================== */}
+      {activeTab === 'export_and_traceability' && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+          <div className="space-y-1">
+            <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+              <Download className="text-amber-600" size={24} />
+              Exportação do Banco de Dados Regulatório
+            </h2>
+            <p className="text-xs text-slate-500 font-medium">
+              Exporte todos os itens, históricos, origens e tabelas do banco de dados regulatório em formato Excel multi-abas ou JSON para automação.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
+              <FileSpreadsheet className="text-emerald-600" size={32} />
+              <div>
+                <h4 className="font-extrabold text-slate-900 text-sm">Exportar Banco em Excel (.xlsx)</h4>
+                <p className="text-xs text-slate-500 mt-1">
+                  Gera arquivo Excel organizado em 5 abas: Itens Regulatórios, Uso nos Documentos, Evidências e Anexos, Tabelas e Histórico de Alterações.
+                </p>
+              </div>
+              <button
+                onClick={handleExportExcelDatabase}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow-sm cursor-pointer"
+              >
+                Baixar Excel Regulatório
+              </button>
+            </div>
+
+            <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
+              <FileCode className="text-indigo-600" size={32} />
+              <div>
+                <h4 className="font-extrabold text-slate-900 text-sm">Exportar Banco em JSON</h4>
+                <p className="text-xs text-slate-500 mt-1">
+                  Exporta toda a estrutura de relacionamentos e conteúdos para integrações e backups estruturados.
+                </p>
+              </div>
+              <button
+                onClick={handleExportJSONDatabase}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow-sm cursor-pointer"
+              >
+                Baixar JSON Completo
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal to Register or Edit Knowledge Bank Record */}
-      {showKbRecordModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 max-w-lg w-full space-y-5 animate-in zoom-in-95">
-            <div className="flex justify-between items-center border-b pb-3">
-              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">
-                {editingKbId ? 'Editar Registro no Banco' : 'Cadastrar no Banco de Conhecimento'}
-              </h3>
-              <button onClick={() => setShowKbRecordModal(false)} className="p-1 text-slate-400 hover:text-slate-600"><X size={20} /></button>
+      {/* =================================================================== */}
+      {/* MODAL 1: FILL / EDIT DOCUMENT ITEM */}
+      {/* =================================================================== */}
+      {selectedItemForFill && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden space-y-4 p-6 sm:p-8 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-start justify-between pb-4 border-b border-slate-100">
+              <div className="space-y-1">
+                <span className="text-[10px] font-mono px-2.5 py-0.5 bg-indigo-50 text-indigo-700 rounded-md font-bold">
+                  {selectedItemForFill.item.marker || `[${selectedItemForFill.item.name.toUpperCase().replace(/\s+/g, '_')}]`}
+                </span>
+                <h3 className="font-black text-base text-slate-900">{selectedItemForFill.item.name}</h3>
+                <p className="text-xs text-slate-500">{selectedItemForFill.doc.title} • {selectedItemForFill.chapter.title}</p>
+              </div>
+              <button onClick={() => setSelectedItemForFill(null)} className="p-2 text-slate-400 hover:text-slate-600 rounded-xl cursor-pointer">
+                <X size={20} />
+              </button>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Chave de Identificação Única (ID Interno)</label>
-                <input
-                  type="text"
-                  placeholder="ex: PRODUCT.NAME"
-                  value={kbKey}
-                  onChange={e => setKbKey(e.target.value)}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Título da Informação</label>
-                <input
-                  type="text"
-                  placeholder="ex: Nome Comercial da Vacina"
-                  value={kbTitle}
-                  onChange={e => setKbTitle(e.target.value)}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Categoria</label>
-                <select
-                  value={kbCategory}
-                  onChange={e => setKbCategory(e.target.value as KnowledgeCategory)}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
-                >
-                  <option value="Informações Estruturadas">Informações Estruturadas</option>
-                  <option value="Narrativas Técnicas">Narrativas Técnicas</option>
-                  <option value="Tabelas">Tabelas</option>
-                  <option value="Evidências">Evidências</option>
-                  <option value="Anexos">Anexos</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Conteúdo / Valor</label>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Conteúdo / Valor do Marcador:</label>
                 <textarea
                   rows={4}
-                  placeholder="Informe o conteúdo ou link..."
-                  value={kbValue}
-                  onChange={e => setKbValue(e.target.value)}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                  value={fillValue}
+                  onChange={(e) => setFillValue(e.target.value)}
+                  placeholder="Digite o texto, valor ou narrativa correspondente..."
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-black uppercase text-slate-700 block mb-1">Link da Evidência / Anexo:</label>
+                  <input
+                    type="text"
+                    value={fillEvidenceUrl}
+                    onChange={(e) => setFillEvidenceUrl(e.target.value)}
+                    placeholder="https://sharepoint..."
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-black uppercase text-slate-700 block mb-1">Nome do Arquivo:</label>
+                  <input
+                    type="text"
+                    value={fillEvidenceFileName}
+                    onChange={(e) => setFillEvidenceFileName(e.target.value)}
+                    placeholder="laudo_esterilidade.pdf"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100 text-[11px] text-indigo-900 space-y-1">
+                <span className="font-extrabold block">ⓘ Reutilização Automática Multi-Documentos:</span>
+                <p>
+                  Ao salvar este valor, o sistema atualizará automaticamente todos os outros documentos vinculados que utilizam o mesmo marcador <code className="font-mono bg-indigo-100 px-1 rounded">{selectedItemForFill.item.marker || selectedItemForFill.item.name}</code>.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setSelectedItemForFill(null)}
+                className="px-4 py-2.5 text-xs font-extrabold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleSaveFillItem()}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black rounded-xl transition cursor-pointer shadow-md"
+              >
+                Salvar Conteúdo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* MODAL 2: CLASSIFY PENDING CONTRIBUTION */}
+      {/* =================================================================== */}
+      {activeContribution && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden space-y-4 p-6 sm:p-8 animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-4 border-b border-slate-100">
               <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase">Origem da Informação</label>
-                <input
-                  type="text"
-                  placeholder="ex: Relatório Clínico Fase I / Atividade 2.3"
-                  value={kbOrigin}
-                  onChange={e => setKbOrigin(e.target.value)}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                <span className="text-[10px] font-black uppercase text-amber-600 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200">
+                  Contribuição do Projeto
+                </span>
+                <h3 className="font-black text-lg text-slate-900 mt-1">{activeContribution.title}</h3>
+                <p className="text-xs text-slate-500">{activeContribution.projectName} • {activeContribution.assignee}</p>
+              </div>
+              <button onClick={() => setActiveContribution(null)} className="p-2 text-slate-400 hover:text-slate-600 rounded-xl cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-[10px] font-black uppercase text-slate-400 block tracking-wider">Pergunta Regulatória:</span>
+                <h4 className="font-extrabold text-xs text-indigo-950 mt-0.5">Quais itens dos documentos esta atividade permite preencher?</h4>
+              </div>
+
+              {/* Marker Selection Checklist */}
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase text-slate-700 block">Selecione os marcadores correspondentes:</label>
+                <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-2xl p-3 space-y-2 bg-slate-50/50">
+                  {allAvailableMarkers.map(m => {
+                    const isChecked = selectedMarkersForContribution.includes(m.marker);
+                    return (
+                      <label key={m.marker} className="flex items-start gap-3 p-2 bg-white rounded-xl border border-slate-200 hover:border-indigo-300 transition cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedMarkersForContribution(prev => [...prev, m.marker]);
+                            } else {
+                              setSelectedMarkersForContribution(prev => prev.filter(x => x !== m.marker));
+                            }
+                          }}
+                          className="mt-1 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <div className="text-xs">
+                          <span className="font-black text-indigo-700 font-mono block">{m.marker}</span>
+                          <span className="text-slate-800 font-bold block">{m.name}</span>
+                          <span className="text-[10px] text-slate-400 font-medium">Presente em: {m.docTitles.join(', ')}</span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Conteúdo a ser Gravado:</label>
+                <textarea
+                  rows={4}
+                  value={contributionContentValue}
+                  onChange={(e) => setContributionContentValue(e.target.value)}
+                  placeholder="Insira o texto ou narrativa..."
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowKbRecordModal(false)} className="px-5 py-2.5 bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer">Cancelar</button>
-              <button onClick={handleSaveKbRecord} className="px-6 py-2.5 bg-indigo-600 text-white font-black text-xs rounded-xl shadow-lg cursor-pointer">Salvar no Banco</button>
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setActiveContribution(null)}
+                className="px-4 py-2.5 text-xs font-extrabold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleApplyContributionToSelectedMarkers}
+                disabled={selectedMarkersForContribution.length === 0 || !contributionContentValue.trim()}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-300 text-white text-xs font-black rounded-xl transition cursor-pointer shadow-md"
+              >
+                Gravar e Atualizar Dossiês ({selectedMarkersForContribution.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* MODAL 3: CONFLICT COMPARISON DIALOG */}
+      {/* =================================================================== */}
+      {conflictModalData && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl border border-rose-200 overflow-hidden space-y-4 p-6 sm:p-8 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-start gap-3 pb-4 border-b border-slate-100">
+              <div className="p-3 bg-rose-100 text-rose-700 rounded-2xl">
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <h3 className="font-black text-lg text-slate-900">Conflito de Valor Detectado</h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  O marcador <code className="font-mono bg-rose-50 text-rose-800 font-bold px-1.5 py-0.5 rounded">{conflictModalData.marker}</code> já possui um valor cadastrado diferente. Como deseja proceder?
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                <span className="text-[10px] font-black uppercase text-slate-400 block">Valor Atual Registrado:</span>
+                <p className="text-xs font-bold text-slate-900">{conflictModalData.currentValue}</p>
+                <span className="text-[10px] text-slate-500 block italic">{conflictModalData.currentOrigin}</span>
+              </div>
+
+              <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-200 space-y-1">
+                <span className="text-[10px] font-black uppercase text-indigo-600 block">Novo Valor Proposto:</span>
+                <p className="text-xs font-bold text-indigo-950">{conflictModalData.newValue}</p>
+                <span className="text-[10px] text-indigo-600 block italic">{conflictModalData.newOrigin}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={() => applyContributionValue(selectedMarkersForContribution, conflictModalData.newValue, activeContribution, conflictModalData.targetDocIds)}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-xs"
+              >
+                Substituir em todos os documentos
+              </button>
+              <button
+                onClick={() => applyContributionValue(selectedMarkersForContribution, conflictModalData.newValue, activeContribution, [selectedDocId || effectiveDocs[0].id])}
+                className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-xs"
+              >
+                Substituir apenas no documento selecionado
+              </button>
+              <button
+                onClick={() => setConflictModalData(null)}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black transition cursor-pointer"
+              >
+                Manter valor atual (Cancelar)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* MODAL 4: IMPORT WORD TEMPLATE MODAL */}
+      {/* =================================================================== */}
+      {showImportTemplateModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden space-y-4 p-6 sm:p-8 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-start justify-between pb-4 border-b border-slate-100">
+              <div className="space-y-1">
+                <h3 className="font-black text-lg text-slate-900 flex items-center gap-2">
+                  <FileUp className="text-indigo-600" size={20} />
+                  Importar Modelo com Marcadores
+                </h3>
+                <p className="text-xs text-slate-500">Cole o texto do modelo Word contendo marcadores entre colchetes como [NOME DA VACINA], [INDICAÇÃO], etc.</p>
+              </div>
+              <button onClick={() => setShowImportTemplateModal(false)} className="p-2 text-slate-400 hover:text-slate-600 rounded-xl cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Título do Documento / Modelo:</label>
+                <input
+                  type="text"
+                  value={templateTitle}
+                  onChange={(e) => setTemplateTitle(e.target.value)}
+                  placeholder="Ex: Dossiê da Vacina Dengue"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Tipo de Documento:</label>
+                <input
+                  type="text"
+                  value={templateType}
+                  onChange={(e) => setTemplateType(e.target.value)}
+                  placeholder="Dossiê do Produto Final / DDCM / etc"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Texto do Modelo com Marcadores [COLCHETES]:</label>
+                <textarea
+                  rows={6}
+                  value={templateText}
+                  onChange={(e) => setTemplateText(e.target.value)}
+                  placeholder={`1. Introdução
+- [NOME DA VACINA]
+- [INDICAÇÃO]
+
+2. Descrição
+- [DESCRIÇÃO E NOME DO IFA]
+- [NOME DO ADJUVANTE]`}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setShowImportTemplateModal(false)}
+                className="px-4 py-2.5 text-xs font-extrabold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleImportWordTemplate}
+                disabled={!templateTitle.trim()}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-300 text-white text-xs font-black rounded-xl transition cursor-pointer shadow-md"
+              >
+                Criar Modelo Regulatório
+              </button>
             </div>
           </div>
         </div>
