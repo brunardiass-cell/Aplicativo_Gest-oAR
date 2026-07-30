@@ -726,6 +726,7 @@ export interface RegulatoryDocument {
   projectId: string;
   title: string; // DDCM, Dossiê da Vacina, Dossiê do IFA, Dossiê do Adjuvante, Brochura do Investigador, DEEC
   type: string;
+  group?: string; // Ex: "Dossiê do IFA - Proteína Recombinante", "Dossiê do IFA - Proteína Recombinante Liofilizada", "Dossiê da Vacina com Adjuvante"
   description?: string;
   currentVersion?: string; // ex: "0.1"
   currentVersionStatus?: string; // ex: "Rascunho", "Submetido"
