@@ -533,10 +533,62 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
 
   // Effective Documents State
   const [docState, setDocState] = useState<RegulatoryDocument[]>(defaultDocs);
+  const [hasUserModifiedDocs, setHasUserModifiedDocs] = useState(false);
 
   const effectiveDocs = useMemo(() => {
+    if (hasUserModifiedDocs) return docState;
     return docState.length > 0 ? docState : defaultDocs;
-  }, [docState, defaultDocs]);
+  }, [docState, defaultDocs, hasUserModifiedDocs]);
+
+  const updateDocState = (nextDocs: RegulatoryDocument[]) => {
+    setDocState(nextDocs);
+    setHasUserModifiedDocs(true);
+    onUpdateDocs(nextDocs);
+  };
+
+  // Model Editing State
+  const [editingModelDoc, setEditingModelDoc] = useState<RegulatoryDocument | null>(null);
+  const [editModelTitle, setEditModelTitle] = useState('');
+  const [editModelGroup, setEditModelGroup] = useState('');
+  const [editModelType, setEditModelType] = useState('');
+  const [editModelDesc, setEditModelDesc] = useState('');
+
+  // Contribution Deletion and Editing State
+  const [deletedContributionIds, setDeletedContributionIds] = useState<string[]>([]);
+  const [editedContributionsMap, setEditedContributionsMap] = useState<Record<string, any>>({});
+  const [editingContribution, setEditingContribution] = useState<any | null>(null);
+  const [customContributions, setCustomContributions] = useState<any[]>([]);
+
+  // Add Custom Contribution State
+  const [showAddContributionModal, setShowAddContributionModal] = useState(false);
+  const [newContribTitle, setNewContribTitle] = useState('');
+  const [newContribDesc, setNewContribDesc] = useState('');
+  const [newContribAssignee, setNewContribAssignee] = useState('');
+  const [newContribPhase, setNewContribPhase] = useState('Desenvolvimento');
+  const [newContribEvidenceUrl, setNewContribEvidenceUrl] = useState('');
+  const [newContribEvidenceFileName, setNewContribEvidenceFileName] = useState('');
+
+  // Add Chapter / Item State
+  const [showAddChapterModal, setShowAddChapterModal] = useState(false);
+  const [targetDocForNewChapter, setTargetDocForNewChapter] = useState<RegulatoryDocument | null>(null);
+  const [newChapterCode, setNewChapterCode] = useState('');
+  const [newChapterTitle, setNewChapterTitle] = useState('');
+  const [newChapterDesc, setNewChapterDesc] = useState('');
+
+  const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [targetDocForNewItem, setTargetDocForNewItem] = useState<RegulatoryDocument | null>(null);
+  const [targetChapterForNewItem, setTargetChapterForNewItem] = useState<RegulatoryDocumentChapter | null>(null);
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemMarker, setNewItemMarker] = useState('');
+  const [newItemDesc, setNewItemDesc] = useState('');
+  const [newItemType, setNewItemType] = useState<RegulatoryDocItemType>('Informação Estruturada');
+  const [newItemPresetKey, setNewItemPresetKey] = useState('');
+
+  // Edit Table Item Directly in Dossier State
+  const [editingTableItem, setEditingTableItem] = useState<{ doc: RegulatoryDocument; chapter: RegulatoryDocumentChapter; item: RegulatoryDocumentItem } | null>(null);
+  const [itemTableTitle, setItemTableTitle] = useState('');
+  const [itemTableCols, setItemTableCols] = useState<{ key: string; label: string; type: 'text' | 'number' | 'date' }[]>([]);
+  const [itemTableRows, setItemTableRows] = useState<Record<string, any>[]>([]);
 
   // Filter Documents by Selected Project
   const currentProjectDocs = useMemo(() => {
@@ -633,8 +685,13 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
       );
     }
 
-    return list;
-  }, [tasks, selectedProjectId, activeProject]);
+    // Merge custom contributions with tasks list
+    const mergedList = [...customContributions, ...list];
+
+    return mergedList
+      .filter(c => !deletedContributionIds.includes(c.id))
+      .map(c => editedContributionsMap[c.id] ? { ...c, ...editedContributionsMap[c.id] } : c);
+  }, [tasks, selectedProjectId, activeProject, customContributions, deletedContributionIds, editedContributionsMap]);
 
   // All Available Markers across documents
   const allAvailableMarkers = useMemo(() => {
@@ -960,6 +1017,339 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
     setShowTableModal(true);
   };
 
+  // Delete Model Handler
+  const handleDeleteModel = (docId: string) => {
+    if (!window.confirm('Tem certeza de que deseja excluir este modelo de documento regulatório?')) return;
+    const nextDocs = docState.filter(d => d.id !== docId);
+    updateDocState(nextDocs);
+    if (selectedDocId === docId) {
+      setSelectedDocId('');
+    }
+  };
+
+  // Open Edit Model Modal
+  const handleOpenEditModel = (doc: RegulatoryDocument) => {
+    setEditingModelDoc(doc);
+    setEditModelTitle(doc.title);
+    setEditModelGroup(doc.group || modelGroups[0] || 'Geral');
+    setEditModelType(doc.type || 'Dossiê Regulatório');
+    setEditModelDesc(doc.description || '');
+  };
+
+  // Save Edited Model
+  const handleSaveEditedModel = () => {
+    if (!editingModelDoc) return;
+    const nextDocs = docState.map(d => {
+      if (d.id === editingModelDoc.id) {
+        return {
+          ...d,
+          title: editModelTitle.trim() || d.title,
+          group: editModelGroup.trim() || d.group,
+          type: editModelType.trim() || d.type,
+          description: editModelDesc.trim() || d.description,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      return d;
+    });
+    updateDocState(nextDocs);
+    setEditingModelDoc(null);
+  };
+
+  // Delete Contribution Handler
+  const handleDeleteContribution = (id: string) => {
+    if (!window.confirm('Tem certeza de que deseja excluir esta contribuição regulatória?')) return;
+    setDeletedContributionIds(prev => [...prev, id]);
+    setCustomContributions(prev => prev.filter(c => c.id !== id));
+  };
+
+  // Open Edit Contribution Modal
+  const handleOpenEditContribution = (contrib: any) => {
+    setEditingContribution({ ...contrib });
+  };
+
+  // Save Edited Contribution
+  const handleSaveEditedContribution = () => {
+    if (!editingContribution) return;
+    setEditedContributionsMap(prev => ({
+      ...prev,
+      [editingContribution.id]: editingContribution
+    }));
+    setEditingContribution(null);
+  };
+
+  // Create Custom Contribution
+  const handleCreateCustomContribution = () => {
+    if (!newContribTitle.trim()) return;
+    const newC = {
+      id: `contrib_custom_${Date.now()}`,
+      title: newContribTitle.trim(),
+      description: newContribDesc.trim() || 'Contribuição regulatória adicionada manualmente.',
+      assignee: newContribAssignee.trim() || currentUser || 'Responsável Técnico',
+      projectName: activeProject?.name || 'Projeto',
+      phase: newContribPhase || 'Desenvolvimento',
+      evidenceUrl: newContribEvidenceUrl.trim(),
+      evidenceFileName: newContribEvidenceFileName.trim(),
+      updatedAt: new Date().toISOString()
+    };
+    setCustomContributions(prev => [newC, ...prev]);
+    setShowAddContributionModal(false);
+    setNewContribTitle('');
+    setNewContribDesc('');
+    setNewContribAssignee('');
+    setNewContribEvidenceUrl('');
+    setNewContribEvidenceFileName('');
+  };
+
+  // Chapter Management (Add / Delete)
+  const handleOpenAddChapterModal = (doc: RegulatoryDocument) => {
+    setTargetDocForNewChapter(doc);
+    const nextNum = (doc.chapters?.length || 0) + 1;
+    setNewChapterCode(`${nextNum}.0`);
+    setNewChapterTitle(`${nextNum}. Novo Capítulo`);
+    setNewChapterDesc('');
+    setShowAddChapterModal(true);
+  };
+
+  const handleSaveNewChapter = () => {
+    if (!targetDocForNewChapter || !newChapterTitle.trim()) return;
+
+    const newChapter: RegulatoryDocumentChapter = {
+      id: `cap_${Date.now()}`,
+      code: newChapterCode.trim() || '1.0',
+      title: newChapterTitle.trim(),
+      description: newChapterDesc.trim(),
+      items: []
+    };
+
+    const nextDocs = docState.map(d => {
+      if (d.id === targetDocForNewChapter.id) {
+        return {
+          ...d,
+          chapters: [...(d.chapters || []), newChapter],
+          updatedAt: new Date().toISOString()
+        };
+      }
+      return d;
+    });
+
+    updateDocState(nextDocs);
+    setShowAddChapterModal(false);
+    setTargetDocForNewChapter(null);
+  };
+
+  const handleDeleteChapter = (docId: string, chapterId: string) => {
+    if (!window.confirm('Tem certeza de que deseja excluir este capítulo e todos os seus itens?')) return;
+    const nextDocs = docState.map(d => {
+      if (d.id === docId) {
+        return {
+          ...d,
+          chapters: d.chapters.filter(c => c.id !== chapterId),
+          updatedAt: new Date().toISOString()
+        };
+      }
+      return d;
+    });
+    updateDocState(nextDocs);
+  };
+
+  // Item & Custom Table Addition to Chapter/Model
+  const handleOpenAddItemModal = (doc: RegulatoryDocument, chapter: RegulatoryDocumentChapter) => {
+    setTargetDocForNewItem(doc);
+    setTargetChapterForNewItem(chapter);
+    const nextItemNum = (chapter.items?.length || 0) + 1;
+    setNewItemName(`Novo Item / Marcador ${nextItemNum}`);
+    setNewItemMarker(`[MARCADOR_${nextItemNum}]`);
+    setNewItemDesc('');
+    setNewItemType('Informação Estruturada');
+    setNewItemPresetKey('');
+    setShowAddItemModal(true);
+  };
+
+  const handleSaveNewItem = () => {
+    if (!targetDocForNewItem || !targetChapterForNewItem || !newItemName.trim()) return;
+
+    let initialValue = '';
+    if (newItemType === 'Tabela') {
+      const preset = tableTemplates.find(t => t.key === newItemPresetKey);
+      if (preset) {
+        initialValue = JSON.stringify({
+          columns: preset.columns,
+          rows: [
+            preset.columns.reduce((acc, col) => ({ ...acc, [col.key]: '' }), {})
+          ]
+        });
+      } else {
+        initialValue = JSON.stringify({
+          columns: [
+            { key: 'col1', label: 'Item / Parâmetro', type: 'text' },
+            { key: 'col2', label: 'Valor / Especificação', type: 'text' }
+          ],
+          rows: [{ col1: '', col2: '' }]
+        });
+      }
+    }
+
+    const cleanMarker = newItemMarker.trim() 
+      ? (newItemMarker.trim().startsWith('[') ? newItemMarker.trim() : `[${newItemMarker.trim().toUpperCase()}]`)
+      : `[${newItemName.trim().toUpperCase().replace(/\s+/g, '_')}]`;
+
+    const newItem: RegulatoryDocumentItem = {
+      id: `item_${Date.now()}`,
+      code: `${targetChapterForNewItem.code || '1'}.${(targetChapterForNewItem.items?.length || 0) + 1}`,
+      name: newItemName.trim(),
+      description: newItemDesc.trim(),
+      type: newItemType,
+      required: true,
+      sourceInternalId: cleanMarker.replace(/[^a-zA-Z0-9_]/g, '_'),
+      status: initialValue ? 'Preenchido' : 'Vazio',
+      marker: cleanMarker,
+      value: initialValue
+    };
+
+    const nextDocs = docState.map(d => {
+      if (d.id === targetDocForNewItem.id) {
+        const nextChapters = d.chapters.map(c => {
+          if (c.id === targetChapterForNewItem.id) {
+            return {
+              ...c,
+              items: [...(c.items || []), newItem]
+            };
+          }
+          return c;
+        });
+        return { ...d, chapters: nextChapters, updatedAt: new Date().toISOString() };
+      }
+      return d;
+    });
+
+    updateDocState(nextDocs);
+    setShowAddItemModal(false);
+    setTargetDocForNewItem(null);
+    setTargetChapterForNewItem(null);
+  };
+
+  const handleDeleteItem = (docId: string, chapterId: string, itemId: string) => {
+    if (!window.confirm('Tem certeza de que deseja excluir este item/marcador do modelo?')) return;
+    const nextDocs = docState.map(d => {
+      if (d.id === docId) {
+        const nextChapters = d.chapters.map(c => {
+          if (c.id === chapterId) {
+            return {
+              ...c,
+              items: c.items.filter(i => i.id !== itemId)
+            };
+          }
+          return c;
+        });
+        return { ...d, chapters: nextChapters, updatedAt: new Date().toISOString() };
+      }
+      return d;
+    });
+    updateDocState(nextDocs);
+  };
+
+  // Free Editing of Table Data on Dossier Item
+  const handleOpenEditTableItem = (doc: RegulatoryDocument, chapter: RegulatoryDocumentChapter, item: RegulatoryDocumentItem) => {
+    setEditingTableItem({ doc, chapter, item });
+    setItemTableTitle(item.name);
+
+    if (item.value) {
+      try {
+        const parsed = JSON.parse(item.value);
+        if (parsed && Array.isArray(parsed.columns) && Array.isArray(parsed.rows)) {
+          setItemTableCols(parsed.columns);
+          setItemTableRows(parsed.rows);
+          return;
+        }
+      } catch (e) {
+        // Fallback to default structure
+      }
+    }
+
+    setItemTableCols([
+      { key: 'col1', label: 'Item / Parâmetro', type: 'text' },
+      { key: 'col2', label: 'Especificação / Valor', type: 'text' }
+    ]);
+    setItemTableRows([{ col1: '', col2: '' }]);
+  };
+
+  const handleSaveEditTableItem = () => {
+    if (!editingTableItem) return;
+
+    const tableDataString = JSON.stringify({
+      columns: itemTableCols,
+      rows: itemTableRows
+    });
+
+    const nextDocs = docState.map(d => {
+      if (d.id === editingTableItem.doc.id) {
+        const nextChapters = d.chapters.map(c => {
+          if (c.id === editingTableItem.chapter.id) {
+            const nextItems = c.items.map(i => {
+              if (i.id === editingTableItem.item.id) {
+                return {
+                  ...i,
+                  name: itemTableTitle.trim() || i.name,
+                  value: tableDataString,
+                  status: 'Preenchido' as RegulatoryDocItemStatus
+                };
+              }
+              return i;
+            });
+            return { ...c, items: nextItems };
+          }
+          return c;
+        });
+        return { ...d, chapters: nextChapters, updatedAt: new Date().toISOString() };
+      }
+      return d;
+    });
+
+    updateDocState(nextDocs);
+    setEditingTableItem(null);
+  };
+
+  // Helper to Render Formatted Table or Plain Text inside Dossier Items
+  const renderItemContentValue = (val: string) => {
+    if (!val) return null;
+    try {
+      const parsed = JSON.parse(val);
+      if (parsed && Array.isArray(parsed.columns) && Array.isArray(parsed.rows)) {
+        return (
+          <div className="overflow-x-auto border border-slate-200 rounded-xl my-1 bg-white shadow-xs">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-100 font-extrabold text-slate-700">
+                <tr>
+                  {parsed.columns.map((c: any, i: number) => (
+                    <th key={c.key || i} className="p-2 border-b border-slate-200">{c.label || c.name || c.key}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {parsed.rows.map((row: any, rIdx: number) => (
+                  <tr key={rIdx} className="hover:bg-slate-50 font-medium text-slate-800">
+                    {parsed.columns.map((c: any, cIdx: number) => (
+                      <td key={c.key || cIdx} className="p-2">{row[c.key] !== undefined ? String(row[c.key]) : '-'}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+    } catch (e) {
+      // Plain text
+    }
+
+    return (
+      <p className="text-xs text-slate-800 font-medium whitespace-pre-wrap">
+        {val}
+      </p>
+    );
+  };
+
   // Export Excel Database
   const handleExportExcelDatabase = () => {
     const wb = XLSX.utils.book_new();
@@ -1261,16 +1651,42 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                     <p className="text-xs text-slate-500 font-medium">{activeDoc.description}</p>
                   </div>
 
-                  {/* Search filter inside document */}
-                  <div className="relative w-full sm:w-60">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
-                    <input
-                      type="text"
-                      placeholder="Buscar marcadores..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-500"
-                    />
+                  <div className="flex flex-wrap items-center gap-2 justify-end">
+                    <button
+                      onClick={() => handleOpenAddChapterModal(activeDoc)}
+                      className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-black transition flex items-center gap-1 cursor-pointer border border-indigo-200"
+                    >
+                      <Plus size={14} />
+                      <span>+ Capítulo</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleOpenEditModel(activeDoc)}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-black transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <Edit3 size={14} />
+                      <span>Editar Modelo</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleDeleteModel(activeDoc.id)}
+                      className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-black transition flex items-center gap-1 cursor-pointer border border-rose-200"
+                    >
+                      <Trash2 size={14} />
+                      <span>Excluir Modelo</span>
+                    </button>
+
+                    {/* Search filter inside document */}
+                    <div className="relative w-full sm:w-48 mt-1 sm:mt-0">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                      <input
+                        type="text"
+                        placeholder="Buscar marcadores..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -1290,18 +1706,38 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
 
                     return (
                       <div key={chapter.id} className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                        <button
-                          onClick={() => setExpandedChapters(prev => ({ ...prev, [chapter.id]: !isExpanded }))}
-                          className="w-full p-3.5 bg-slate-50 hover:bg-slate-100 transition flex items-center justify-between cursor-pointer border-b border-slate-200/60"
-                        >
-                          <div className="flex items-center gap-2">
+                        <div className="w-full p-3.5 bg-slate-50 border-b border-slate-200/60 flex items-center justify-between flex-wrap gap-2">
+                          <button
+                            onClick={() => setExpandedChapters(prev => ({ ...prev, [chapter.id]: !isExpanded }))}
+                            className="flex items-center gap-2 cursor-pointer hover:text-indigo-600 transition"
+                          >
                             {isExpanded ? <ChevronDown size={16} className="text-slate-500" /> : <ChevronRight size={16} className="text-slate-500" />}
                             <span className="font-extrabold text-xs sm:text-sm text-slate-900">{chapter.title}</span>
+                          </button>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black text-slate-500 px-2 py-0.5 bg-white rounded-md border border-slate-200">
+                              {filteredItems.length} itens
+                            </span>
+
+                            <button
+                              onClick={() => handleOpenAddItemModal(activeDoc, chapter)}
+                              className="px-2.5 py-1 bg-white hover:bg-indigo-50 text-indigo-700 rounded-lg text-[11px] font-black transition flex items-center gap-1 cursor-pointer border border-indigo-200 shadow-2xs"
+                              title="Adicionar Item ou Tabela Customizada neste Capítulo"
+                            >
+                              <Plus size={13} />
+                              <span>+ Item / Tabela</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteChapter(activeDoc.id, chapter.id)}
+                              className="p-1 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
+                              title="Excluir Capítulo"
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           </div>
-                          <span className="text-[10px] font-black text-slate-500 px-2 py-0.5 bg-white rounded-md border border-slate-200">
-                            {filteredItems.length} itens
-                          </span>
-                        </button>
+                        </div>
 
                         {isExpanded && (
                           <div className="p-4 space-y-3 bg-white">
@@ -1325,6 +1761,11 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                                           {markerTag}
                                         </span>
                                         {renderItemStatusBadge(item.status)}
+                                        {item.type === 'Tabela' && (
+                                          <span className="px-2 py-0.5 bg-teal-50 text-teal-800 text-[10px] font-black uppercase rounded-md border border-teal-200">
+                                            Tabela
+                                          </span>
+                                        )}
                                       </div>
                                       <h4 className="font-extrabold text-xs sm:text-sm text-slate-900">{item.code ? `${item.code} - ` : ''}{item.name}</h4>
                                       {item.description && (
@@ -1332,24 +1773,42 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                                       )}
                                     </div>
 
-                                    <button
-                                      onClick={() => handleOpenFillModal(activeDoc, chapter, item)}
-                                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs active:scale-95"
-                                    >
-                                      <Edit3 size={13} />
-                                      <span>{isFilled ? 'Editar' : 'Preencher'}</span>
-                                    </button>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      {item.type === 'Tabela' ? (
+                                        <button
+                                          onClick={() => handleOpenEditTableItem(activeDoc, chapter, item)}
+                                          className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                                        >
+                                          <TableIcon size={13} />
+                                          <span>{isFilled ? 'Editar Tabela' : 'Preencher Tabela'}</span>
+                                        </button>
+                                      ) : (
+                                        <button
+                                          onClick={() => handleOpenFillModal(activeDoc, chapter, item)}
+                                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                                        >
+                                          <Edit3 size={13} />
+                                          <span>{isFilled ? 'Editar' : 'Preencher'}</span>
+                                        </button>
+                                      )}
+
+                                      <button
+                                        onClick={() => handleDeleteItem(activeDoc.id, chapter.id, item.id)}
+                                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
+                                        title="Excluir Item do Modelo"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
                                   </div>
 
                                   <div className="mt-3 pt-2 border-t border-slate-100">
                                     {isFilled ? (
                                       <div className="bg-white p-3 rounded-lg border border-slate-200/80 space-y-1">
                                         <span className="text-[9px] font-black uppercase text-slate-400 block">Conteúdo Registrado:</span>
-                                        <p className="text-xs text-slate-800 font-medium whitespace-pre-wrap">
-                                          {item.value}
-                                        </p>
+                                        {renderItemContentValue(item.value || '')}
                                         {item.evidenceUrl && (
-                                          <div className="flex items-center gap-1.5 mt-1 text-xs font-extrabold text-indigo-600">
+                                          <div className="flex items-center gap-1.5 mt-2 text-xs font-extrabold text-indigo-600 pt-1 border-t border-slate-100">
                                             <Paperclip size={13} />
                                             <a href={item.evidenceUrl} target="_blank" rel="noreferrer" className="underline hover:text-indigo-800">
                                               Anexo: {item.evidenceFileName || 'Evidência'}
@@ -1363,12 +1822,21 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                                           <AlertCircle size={15} className="text-amber-600 shrink-0" />
                                           <span>Item vazio.</span>
                                         </div>
-                                        <button
-                                          onClick={() => handleOpenFillModal(activeDoc, chapter, item)}
-                                          className="font-black text-amber-800 hover:underline cursor-pointer"
-                                        >
-                                          Preencher →
-                                        </button>
+                                        {item.type === 'Tabela' ? (
+                                          <button
+                                            onClick={() => handleOpenEditTableItem(activeDoc, chapter, item)}
+                                            className="font-black text-teal-800 hover:underline cursor-pointer"
+                                          >
+                                            Preencher Tabela →
+                                          </button>
+                                        ) : (
+                                          <button
+                                            onClick={() => handleOpenFillModal(activeDoc, chapter, item)}
+                                            className="font-black text-amber-800 hover:underline cursor-pointer"
+                                          >
+                                            Preencher →
+                                          </button>
+                                        )}
                                       </div>
                                     )}
                                   </div>
@@ -1398,24 +1866,50 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
       {/* =================================================================== */}
       {activeTab === 'pending_contributions' && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-5">
-          <div className="space-y-1">
-            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-              <Layers className="text-indigo-600" size={22} />
-              Contribuições Regulatórias das Atividades
-            </h2>
-            <p className="text-xs text-slate-500 font-medium">
-              Atividades dos projetos com contribuições regulatórias. Selecione uma atividade para mapear marcadores e preencher valores diretamente nos dossiês.
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div className="space-y-1">
+              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <Layers className="text-indigo-600" size={22} />
+                Contribuições Regulatórias das Atividades
+              </h2>
+              <p className="text-xs text-slate-500 font-medium">
+                Atividades dos projetos com contribuições regulatórias. Selecione uma atividade para mapear marcadores e preencher valores diretamente nos dossiês.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowAddContributionModal(true)}
+              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs active:scale-95"
+            >
+              <Plus size={15} />
+              <span>Nova Contribuição</span>
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {projectPendingContributions.map((contrib) => (
-              <div key={contrib.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3 hover:border-indigo-300 transition">
+              <div key={contrib.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3 hover:border-indigo-300 transition relative group">
                 <div className="flex items-start justify-between gap-2">
                   <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-black uppercase rounded-md">
                     {contrib.phase || 'Atividade'}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-bold">{contrib.projectName}</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-slate-400 font-bold">{contrib.projectName}</span>
+                    <button
+                      onClick={() => handleOpenEditContribution(contrib)}
+                      className="p-1 text-slate-400 hover:text-indigo-600 rounded-md transition cursor-pointer ml-1"
+                      title="Editar Contribuição"
+                    >
+                      <Edit3 size={13} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteContribution(contrib.id)}
+                      className="p-1 text-slate-400 hover:text-rose-600 rounded-md transition cursor-pointer"
+                      title="Excluir Contribuição"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-1">
@@ -1491,7 +1985,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                 className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
               >
                 <FileUp size={15} />
-                <span>Importar Modelo Word</span>
+                <span>Importar / Criar Modelo</span>
               </button>
             </div>
           </div>
@@ -1518,20 +2012,51 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                       doc.chapters?.forEach(c => totalItems += (c.items?.length || 0));
 
                       return (
-                        <div key={doc.id} className="p-4 bg-white rounded-xl border border-slate-200 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[10px] font-black uppercase">
-                              {doc.type}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-bold">v{doc.currentVersion}</span>
+                        <div key={doc.id} className="p-4 bg-white rounded-xl border border-slate-200 space-y-3 flex flex-col justify-between">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-[10px] font-black uppercase">
+                                {doc.type}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] text-slate-400 font-bold mr-1">v{doc.currentVersion}</span>
+                                <button
+                                  onClick={() => handleOpenEditModel(doc)}
+                                  className="p-1 text-slate-400 hover:text-indigo-600 rounded-md transition cursor-pointer"
+                                  title="Editar Modelo"
+                                >
+                                  <Edit3 size={13} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteModel(doc.id)}
+                                  className="p-1 text-slate-400 hover:text-rose-600 rounded-md transition cursor-pointer"
+                                  title="Excluir Modelo"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </div>
+
+                            <h4 className="font-extrabold text-xs sm:text-sm text-slate-900">{doc.title}</h4>
+                            <p className="text-xs text-slate-500 line-clamp-2">{doc.description}</p>
                           </div>
 
-                          <h4 className="font-extrabold text-xs sm:text-sm text-slate-900">{doc.title}</h4>
-                          <p className="text-xs text-slate-500 line-clamp-2">{doc.description}</p>
+                          <div className="pt-2 border-t border-slate-100 space-y-2">
+                            <div className="flex items-center justify-between text-[11px] text-slate-500 font-bold">
+                              <span>{doc.chapters?.length || 0} capítulos</span>
+                              <span>{totalItems} marcadores</span>
+                            </div>
 
-                          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-bold">
-                            <span>{doc.chapters?.length || 0} capítulos</span>
-                            <span>{totalItems} marcadores</span>
+                            <button
+                              onClick={() => {
+                                setSelectedDocId(doc.id);
+                                setActiveTab('dossier_viewer');
+                              }}
+                              className="w-full py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-black transition flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              <FileText size={13} />
+                              <span>Visualizar / Preencher Dossiê</span>
+                            </button>
                           </div>
                         </div>
                       );
@@ -2109,6 +2634,640 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
                 className="px-5 py-2 bg-teal-600 hover:bg-teal-500 disabled:bg-slate-300 text-white text-xs font-black rounded-xl transition cursor-pointer shadow-xs"
               >
                 Salvar Tabela
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* =================================================================== */}
+      {/* MODAL: EDIT MODEL */}
+      {/* =================================================================== */}
+      {editingModelDoc && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden space-y-4 p-6 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-black text-base text-slate-900">Editar Modelo de Documento</h3>
+                <p className="text-xs text-slate-500">Altere as informações cadastrais e o grupo do modelo.</p>
+              </div>
+              <button onClick={() => setEditingModelDoc(null)} className="p-2 text-slate-400 hover:text-slate-600 rounded-xl cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Título do Modelo:</label>
+                <input
+                  type="text"
+                  value={editModelTitle}
+                  onChange={(e) => setEditModelTitle(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-black uppercase text-slate-700 block mb-1">Grupo:</label>
+                  <select
+                    value={editModelGroup}
+                    onChange={(e) => setEditModelGroup(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-indigo-500"
+                  >
+                    {modelGroups.map(g => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-black uppercase text-slate-700 block mb-1">Tipo:</label>
+                  <input
+                    type="text"
+                    value={editModelType}
+                    onChange={(e) => setEditModelType(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Descrição:</label>
+                <textarea
+                  rows={3}
+                  value={editModelDesc}
+                  onChange={(e) => setEditModelDesc(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => setEditingModelDoc(null)}
+                className="px-4 py-2 text-xs font-extrabold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveEditedModel}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black rounded-xl transition cursor-pointer shadow-xs"
+              >
+                Salvar Alterações
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* MODAL: EDIT CONTRIBUTION */}
+      {/* =================================================================== */}
+      {editingContribution && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden space-y-4 p-6 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-black text-base text-slate-900">Editar Contribuição Regulatória</h3>
+                <p className="text-xs text-slate-500">Altere dados da atividade/contribuição do projeto.</p>
+              </div>
+              <button onClick={() => setEditingContribution(null)} className="p-2 text-slate-400 hover:text-slate-600 rounded-xl cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Título da Atividade:</label>
+                <input
+                  type="text"
+                  value={editingContribution.title || ''}
+                  onChange={(e) => setEditingContribution({ ...editingContribution, title: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Descrição do Impacto Regulatório:</label>
+                <textarea
+                  rows={3}
+                  value={editingContribution.description || ''}
+                  onChange={(e) => setEditingContribution({ ...editingContribution, description: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-black uppercase text-slate-700 block mb-1">Responsável:</label>
+                  <input
+                    type="text"
+                    value={editingContribution.assignee || ''}
+                    onChange={(e) => setEditingContribution({ ...editingContribution, assignee: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-black uppercase text-slate-700 block mb-1">Fase / Etapa:</label>
+                  <input
+                    type="text"
+                    value={editingContribution.phase || ''}
+                    onChange={(e) => setEditingContribution({ ...editingContribution, phase: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-black uppercase text-slate-700 block mb-1">URL da Evidência:</label>
+                  <input
+                    type="text"
+                    value={editingContribution.evidenceUrl || ''}
+                    onChange={(e) => setEditingContribution({ ...editingContribution, evidenceUrl: e.target.value })}
+                    placeholder="https://..."
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-black uppercase text-slate-700 block mb-1">Nome do Anexo:</label>
+                  <input
+                    type="text"
+                    value={editingContribution.evidenceFileName || ''}
+                    onChange={(e) => setEditingContribution({ ...editingContribution, evidenceFileName: e.target.value })}
+                    placeholder="Laudo_LP01.pdf"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => setEditingContribution(null)}
+                className="px-4 py-2 text-xs font-extrabold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveEditedContribution}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black rounded-xl transition cursor-pointer shadow-xs"
+              >
+                Salvar Alterações
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* MODAL: ADD CUSTOM CONTRIBUTION */}
+      {/* =================================================================== */}
+      {showAddContributionModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden space-y-4 p-6 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-black text-base text-slate-900">Nova Contribuição Regulatória</h3>
+                <p className="text-xs text-slate-500">Registre uma nova atividade para preenchimento de dossiê.</p>
+              </div>
+              <button onClick={() => setShowAddContributionModal(false)} className="p-2 text-slate-400 hover:text-slate-600 rounded-xl cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Título da Atividade / Contribuição:</label>
+                <input
+                  type="text"
+                  value={newContribTitle}
+                  onChange={(e) => setNewContribTitle(e.target.value)}
+                  placeholder="Ex: Resultados do Ensaio de Potência do Lote LP-003"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Descrição das Alterações Regulatórias:</label>
+                <textarea
+                  rows={3}
+                  value={newContribDesc}
+                  onChange={(e) => setNewContribDesc(e.target.value)}
+                  placeholder="Detalhamento do impacto regulatório e novos dados coletados..."
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-black uppercase text-slate-700 block mb-1">Responsável:</label>
+                  <input
+                    type="text"
+                    value={newContribAssignee}
+                    onChange={(e) => setNewContribAssignee(e.target.value)}
+                    placeholder={currentUser || 'Responsável Técnico'}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-black uppercase text-slate-700 block mb-1">Fase / Etapa:</label>
+                  <input
+                    type="text"
+                    value={newContribPhase}
+                    onChange={(e) => setNewContribPhase(e.target.value)}
+                    placeholder="Desenvolvimento"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-black uppercase text-slate-700 block mb-1">Link da Evidência (URL):</label>
+                  <input
+                    type="text"
+                    value={newContribEvidenceUrl}
+                    onChange={(e) => setNewContribEvidenceUrl(e.target.value)}
+                    placeholder="https://sharepoint..."
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-black uppercase text-slate-700 block mb-1">Nome do Arquivo:</label>
+                  <input
+                    type="text"
+                    value={newContribEvidenceFileName}
+                    onChange={(e) => setNewContribEvidenceFileName(e.target.value)}
+                    placeholder="Laudo_LP003.pdf"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => setShowAddContributionModal(false)}
+                className="px-4 py-2 text-xs font-extrabold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCreateCustomContribution}
+                disabled={!newContribTitle.trim()}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-300 text-white text-xs font-black rounded-xl transition cursor-pointer shadow-xs"
+              >
+                Cadastrar Contribuição
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* MODAL: ADD CHAPTER */}
+      {/* =================================================================== */}
+      {showAddChapterModal && targetDocForNewChapter && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden space-y-4 p-6 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-black text-base text-slate-900">Novo Capítulo no Modelo</h3>
+                <p className="text-xs text-slate-500">Adicione um novo capítulo ao documento "{targetDocForNewChapter.title}".</p>
+              </div>
+              <button onClick={() => setShowAddChapterModal(false)} className="p-2 text-slate-400 hover:text-slate-600 rounded-xl cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-black uppercase text-slate-700 block mb-1">Código:</label>
+                  <input
+                    type="text"
+                    value={newChapterCode}
+                    onChange={(e) => setNewChapterCode(e.target.value)}
+                    placeholder="2.0"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs font-black uppercase text-slate-700 block mb-1">Título do Capítulo:</label>
+                  <input
+                    type="text"
+                    value={newChapterTitle}
+                    onChange={(e) => setNewChapterTitle(e.target.value)}
+                    placeholder="Ex: 2. Controle do Insumo Farmacêutico Ativo"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Descrição (Opcional):</label>
+                <textarea
+                  rows={2}
+                  value={newChapterDesc}
+                  onChange={(e) => setNewChapterDesc(e.target.value)}
+                  placeholder="Orientações técnicas sobre este capítulo..."
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => setShowAddChapterModal(false)}
+                className="px-4 py-2 text-xs font-extrabold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveNewChapter}
+                disabled={!newChapterTitle.trim()}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-300 text-white text-xs font-black rounded-xl transition cursor-pointer shadow-xs"
+              >
+                Adicionar Capítulo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* MODAL: ADD ITEM OR CUSTOM TABLE TO CHAPTER */}
+      {/* =================================================================== */}
+      {showAddItemModal && targetDocForNewItem && targetChapterForNewItem && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden space-y-4 p-6 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-black text-base text-slate-900">Adicionar Item ou Tabela Customizada</h3>
+                <p className="text-xs text-slate-500">Capítulo: {targetChapterForNewItem.title}</p>
+              </div>
+              <button onClick={() => setShowAddItemModal(false)} className="p-2 text-slate-400 hover:text-slate-600 rounded-xl cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Tipo de Elemento:</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewItemType('Informação Estruturada')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                      newItemType === 'Informação Estruturada'
+                        ? 'bg-indigo-50 border-indigo-500 text-indigo-700 ring-2 ring-indigo-500/20'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    Texto / Marcador
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewItemType('Tabela')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                      newItemType === 'Tabela'
+                        ? 'bg-teal-50 border-teal-500 text-teal-700 ring-2 ring-teal-500/20'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    Tabela Estruturada
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewItemType('Narrativa')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                      newItemType === 'Narrativa'
+                        ? 'bg-purple-50 border-purple-500 text-purple-700 ring-2 ring-purple-500/20'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    Narrativa / Texto Longo
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Nome do Item / Seção:</label>
+                <input
+                  type="text"
+                  value={newItemName}
+                  onChange={(e) => setNewItemName(e.target.value)}
+                  placeholder="Ex: Tabela de Resultados de Potência"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Identificador / Marcador entre Colchetes:</label>
+                <input
+                  type="text"
+                  value={newItemMarker}
+                  onChange={(e) => setNewItemMarker(e.target.value.toUpperCase())}
+                  placeholder="[TABELA_POTENCIA]"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {newItemType === 'Tabela' && (
+                <div>
+                  <label className="text-xs font-black uppercase text-slate-700 block mb-1">Modelo de Tabela Pré-existente (Opcional):</label>
+                  <select
+                    value={newItemPresetKey}
+                    onChange={(e) => setNewItemPresetKey(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="">-- Criar Tabela Genérica (2 Colunas) --</option>
+                    {tableTemplates.map(t => (
+                      <option key={t.key} value={t.key}>{t.title}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Orientações de Preenchimento:</label>
+                <textarea
+                  rows={2}
+                  value={newItemDesc}
+                  onChange={(e) => setNewItemDesc(e.target.value)}
+                  placeholder="Instruções para a pessoa que for preencher..."
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => setShowAddItemModal(false)}
+                className="px-4 py-2 text-xs font-extrabold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveNewItem}
+                disabled={!newItemName.trim()}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-300 text-white text-xs font-black rounded-xl transition cursor-pointer shadow-xs"
+              >
+                Adicionar ao Modelo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* MODAL: EDIT DOSSIER ITEM TABLE DATA DIRECTLY */}
+      {/* =================================================================== */}
+      {editingTableItem && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden space-y-4 p-6 animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-black text-base text-slate-900">Preencher / Editar Tabela no Dossiê</h3>
+                <p className="text-xs text-slate-500">Edite o título, adicione colunas e preencha as linhas livremente.</p>
+              </div>
+              <button onClick={() => setEditingTableItem(null)} className="p-2 text-slate-400 hover:text-slate-600 rounded-xl cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-black uppercase text-slate-700 block mb-1">Título da Tabela:</label>
+                <input
+                  type="text"
+                  value={itemTableTitle}
+                  onChange={(e) => setItemTableTitle(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {/* Colunas */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black uppercase text-slate-700">Colunas da Tabela:</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextKey = `col_${Date.now()}`;
+                      setItemTableCols(prev => [...prev, { key: nextKey, label: `Nova Coluna ${prev.length + 1}`, type: 'text' }]);
+                    }}
+                    className="text-xs font-extrabold text-teal-600 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus size={13} />
+                    <span>Adicionar Coluna</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                  {itemTableCols.map((col, cIdx) => (
+                    <div key={col.key || cIdx} className="p-2 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={col.label}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setItemTableCols(prev => prev.map((c, i) => i === cIdx ? { ...c, label: val } : c));
+                        }}
+                        className="w-full p-1 bg-white border border-slate-200 rounded text-xs font-bold"
+                        placeholder="Nome da coluna"
+                      />
+                      {itemTableCols.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setItemTableCols(prev => prev.filter((_, i) => i !== cIdx))}
+                          className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Linhas */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black uppercase text-slate-700">Linhas de Dados:</label>
+                  <button
+                    type="button"
+                    onClick={() => setItemTableRows(prev => [...prev, {}])}
+                    className="text-xs font-extrabold text-teal-600 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus size={13} />
+                    <span>Adicionar Linha</span>
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 font-extrabold text-slate-700">
+                      <tr>
+                        {itemTableCols.map(col => (
+                          <th key={col.key} className="p-2 border-b border-slate-200">{col.label}</th>
+                        ))}
+                        <th className="p-2 border-b border-slate-200 w-10 text-center">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {itemTableRows.map((row, rIdx) => (
+                        <tr key={rIdx}>
+                          {itemTableCols.map(col => (
+                            <td key={col.key} className="p-2">
+                              <input
+                                type="text"
+                                value={row[col.key] || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setItemTableRows(prev => prev.map((r, i) => i === rIdx ? { ...r, [col.key]: val } : r));
+                                }}
+                                placeholder="Preencha..."
+                                className="w-full p-1 bg-white border border-slate-200 rounded text-xs font-medium focus:outline-none focus:border-teal-500"
+                              />
+                            </td>
+                          ))}
+                          <td className="p-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => setItemTableRows(prev => prev.filter((_, i) => i !== rIdx))}
+                              className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setEditingTableItem(null)}
+                className="px-4 py-2 text-xs font-extrabold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEditTableItem}
+                className="px-5 py-2 bg-teal-600 hover:bg-teal-500 text-white text-xs font-black rounded-xl transition cursor-pointer shadow-xs"
+              >
+                Salvar Tabela no Dossiê
               </button>
             </div>
           </div>
