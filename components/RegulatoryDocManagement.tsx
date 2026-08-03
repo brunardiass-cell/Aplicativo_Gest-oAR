@@ -96,6 +96,7 @@ interface RegulatoryDocManagementProps {
   onUpdateDocs: (docs: RegulatoryDocument[]) => void;
   currentUser?: string;
   hasAdminAccess?: boolean;
+  selectedProjectId?: string;
 }
 
 export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = ({
@@ -114,7 +115,8 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
   onUpdateNarratives,
   onUpdateDocs,
   currentUser = 'Usuário',
-  hasAdminAccess = true
+  hasAdminAccess = true,
+  selectedProjectId: initialSelectedProjectId
 }) => {
   // Navigation Tabs
   const [activeTab, setActiveTab] = useState<
@@ -123,8 +125,14 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
 
   // Selected Project Filter
   const [selectedProjectId, setSelectedProjectId] = useState<string>(
-    projects.length > 0 ? projects[0].id : 'all'
+    initialSelectedProjectId || (projects.length > 0 ? projects[0].id : 'all')
   );
+
+  React.useEffect(() => {
+    if (initialSelectedProjectId) {
+      setSelectedProjectId(initialSelectedProjectId);
+    }
+  }, [initialSelectedProjectId]);
 
   const activeProject = useMemo(() => {
     return projects.find(p => p.id === selectedProjectId) || projects[0];

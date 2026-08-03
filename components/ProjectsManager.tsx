@@ -1,6 +1,9 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember, AppUser, RegulatoryStandard, MicroActivityStatus, Meeting } from '../types';
+import { 
+  Project, MacroActivity, MicroActivity, ActivityPlanTemplate, TeamMember, AppUser, RegulatoryStandard, MicroActivityStatus, Meeting,
+  Task, RegulatoryEvidence, MacroActivityConfig, RegulatoryInfoItem, RepeatableRecord, RegulatoryNarrative, RegulatoryDocument, RegulatoryDocumentItem, RegulatoryDocItemType, RegulatoryDocItemStatus
+} from '../types';
 import { 
   X, ChevronDown, ListPlus, FolderPlus, Search, 
   Settings, Save, Plus, ChevronRight, LayoutDashboard, 
@@ -9,7 +12,8 @@ import {
   ShieldAlert, CheckCircle2, Workflow, DollarSign, User,
   FolderKanban, GanttChartSquare, Kanban, ClipboardCheck,
   Printer, BarChart3, TrendingUp, Layers, Folder, Play,
-  SlidersHorizontal, MoreVertical, ArrowRight, ListOrdered
+  SlidersHorizontal, MoreVertical, ArrowRight, ListOrdered,
+  ShieldCheck, FilePlus, FileText
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -23,6 +27,7 @@ import ProjectFlowView from './ProjectFlowView';
 import RegulatoryChecklistModal from './RegulatoryChecklistModal';
 import ProjectGanttView from './ProjectGanttView';
 import ProjectActivityMap from './ProjectActivityMap';
+import { RegulatoryDocManagement } from './RegulatoryDocManagement';
 
 interface ProjectsManagerProps {
   projects: Project[];
@@ -39,6 +44,20 @@ interface ProjectsManagerProps {
   onOpenRegulatoryModal: (activityName: string) => void;
   currentUser: TeamMember | null;
   meetings?: Meeting[];
+
+  tasks?: Task[];
+  regulatoryEvidence?: RegulatoryEvidence[];
+  macroActivityConfigs?: MacroActivityConfig[];
+  regulatoryInfoItems?: RegulatoryInfoItem[];
+  repeatableRecords?: RepeatableRecord[];
+  regulatoryNarratives?: RegulatoryNarrative[];
+  regulatoryDocs?: RegulatoryDocument[];
+  onUpdateEvidence?: (items: RegulatoryEvidence[]) => void;
+  onUpdateMacroConfigs?: (configs: MacroActivityConfig[]) => void;
+  onUpdateInfoItems?: (items: RegulatoryInfoItem[]) => void;
+  onUpdateRepeatableRecords?: (records: RepeatableRecord[]) => void;
+  onUpdateNarratives?: (narratives: RegulatoryNarrative[]) => void;
+  onUpdateDocs?: (docs: RegulatoryDocument[]) => void;
 }
 
 const ProjectsManager: React.FC<ProjectsManagerProps> = ({ 
@@ -55,13 +74,35 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   regulatoryStandards,
   onOpenRegulatoryModal,
   currentUser,
-  meetings = []
+  meetings = [],
+  tasks = [],
+  regulatoryEvidence = [],
+  macroActivityConfigs = [],
+  regulatoryInfoItems = [],
+  repeatableRecords = [],
+  regulatoryNarratives = [],
+  regulatoryDocs = [],
+  onUpdateEvidence = () => {},
+  onUpdateMacroConfigs = () => {},
+  onUpdateInfoItems = () => {},
+  onUpdateRepeatableRecords = () => {},
+  onUpdateNarratives = () => {},
+  onUpdateDocs = () => {}
 }) => {
   const [viewMode, setViewMode] = useState<'initial' | 'selection' | 'dashboard'>('selection');
-  const [projectDetailView, setProjectDetailView] = useState<'dashboard' | 'timeline' | 'kanban' | 'phases' | 'gantt'>('dashboard');
+  const [projectDetailView, setProjectDetailView] = useState<'dashboard' | 'timeline' | 'kanban' | 'phases' | 'gantt' | 'regulatory_docs'>('dashboard');
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
+  const [isNewModelModalOpen, setIsNewModelModalOpen] = useState(false);
+
+  // Form state for creating a new regulatory model
+  const [newModelTitle, setNewModelTitle] = useState('');
+  const [newModelGroup, setNewModelGroup] = useState('Dossiê do IFA - Proteína Recombinante');
+  const [newModelType, setNewModelType] = useState('Dossiê Regulatório');
+  const [newModelDesc, setNewModelDesc] = useState('');
+  const [newModelText, setNewModelText] = useState('');
+
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [isEditingProject, setIsEditingProject] = useState(false);
   const [editedProjectData, setEditedProjectData] = useState<Partial<Project>>({});
@@ -470,12 +511,22 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
           <div className="flex items-center gap-2.5 self-start md:self-auto">
             {canCreatePlan && (
-              <button 
-                onClick={() => setIsPlanModalOpen(true)}
-                className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 rounded-2xl text-xs font-bold uppercase tracking-wider transition shadow-2xs flex items-center gap-2 active:scale-95"
-              >
-                <Plus size={16} className="text-slate-500" /> Criar Novo Plano
-              </button>
+              <>
+                <button 
+                  onClick={() => setIsPlanModalOpen(true)}
+                  className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 rounded-2xl text-xs font-bold uppercase tracking-wider transition shadow-2xs flex items-center gap-2 active:scale-95"
+                >
+                  <Plus size={16} className="text-slate-500" /> Criar Novo Plano
+                </button>
+
+                <button 
+                  onClick={() => setIsNewModelModalOpen(true)}
+                  className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-2xl text-xs font-bold uppercase tracking-wider transition shadow-2xs flex items-center gap-2 active:scale-95 cursor-pointer"
+                  title="Criar um novo modelo de dossiê regulatório (Exclusivo para Líderes e Administradores)"
+                >
+                  <FilePlus size={16} className="text-indigo-600" /> Criar Modelo de Dossiê
+                </button>
+              </>
             )}
 
             <button 
@@ -1143,6 +1194,18 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
               >
                 <LayoutGrid size={14} /> Fases
               </button>
+
+              <button 
+                onClick={() => setProjectDetailView('regulatory_docs')} 
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                  projectDetailView === 'regulatory_docs' 
+                    ? 'bg-indigo-600 text-white shadow-sm font-black' 
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Documentação Regulatória do Projeto"
+              >
+                <ShieldCheck size={14} /> Doc. Regulatórios
+              </button>
             </div>
 
             {/* Other View Options (Gantt & Kanban) */}
@@ -1404,6 +1467,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                    {projectDetailView === 'gantt' && <><GanttChartSquare size={20} className="text-brand-primary"/> Visualização Gantt</>}
                    {projectDetailView === 'kanban' && <><Kanban size={20} className="text-brand-primary"/> Kanban do Projeto</>}
                    {projectDetailView === 'phases' && <><LayoutGrid size={20} className="text-brand-primary"/> Fluxo de Fases</>}
+                   {projectDetailView === 'regulatory_docs' && <><ShieldCheck size={20} className="text-indigo-600"/> Documentação Regulatória do Projeto</>}
                  </h2>
                </div>
                <div className="flex gap-2 no-print">
@@ -1412,6 +1476,28 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                  <button onClick={handlePrint} className="p-3 bg-slate-50 text-slate-500 rounded-xl hover:bg-slate-100 transition"><Printer size={16}/></button>
                </div>
              </div>
+
+             {projectDetailView === 'regulatory_docs' && (
+                <RegulatoryDocManagement 
+                  projects={projects}
+                  tasks={tasks}
+                  regulatoryEvidence={regulatoryEvidence}
+                  macroActivityConfigs={macroActivityConfigs}
+                  regulatoryInfoItems={regulatoryInfoItems}
+                  repeatableRecords={repeatableRecords}
+                  regulatoryNarratives={regulatoryNarratives}
+                  regulatoryDocs={regulatoryDocs}
+                  onUpdateEvidence={onUpdateEvidence}
+                  onUpdateMacroConfigs={onUpdateMacroConfigs}
+                  onUpdateInfoItems={onUpdateInfoItems}
+                  onUpdateRepeatableRecords={onUpdateRepeatableRecords}
+                  onUpdateNarratives={onUpdateNarratives}
+                  onUpdateDocs={onUpdateDocs}
+                  currentUser={currentUser?.name || 'Usuário'}
+                  hasAdminAccess={canCreatePlan}
+                  selectedProjectId={selectedProject?.id}
+                />
+              )}
 
              {projectDetailView === 'gantt' && selectedProject && (
                <ProjectGanttView 
@@ -1452,6 +1538,173 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                  onOpenRegulatoryModal={onOpenRegulatoryModal} 
                />
              )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal para Líderes e Administradores criarem novos Modelos de Dossiê */}
+      {isNewModelModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-8 space-y-6">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+                <div className="space-y-1">
+                  <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                    <FilePlus className="text-indigo-600" size={22} /> Criar Novo Modelo de Dossiê Regulatório
+                  </h2>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Defina um novo modelo ou padrão de documento regulatório (Exclusivo para Líderes e Administradores).
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setIsNewModelModalOpen(false)} 
+                  className="p-2 hover:bg-slate-100 rounded-xl transition text-slate-400"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-left max-h-[60vh] overflow-y-auto pr-1">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">Título do Modelo *</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: Dossiê do IFA - Proteína Recombinante Liofilizada"
+                    value={newModelTitle}
+                    onChange={e => setNewModelTitle(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">Grupo do Modelo</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: Dossiê do IFA - Proteína Recombinante"
+                      value={newModelGroup}
+                      onChange={e => setNewModelGroup(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">Tipo de Documento</label>
+                    <select 
+                      value={newModelType}
+                      onChange={e => setNewModelType(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    >
+                      <option value="Dossiê Regulatório">Dossiê Regulatório</option>
+                      <option value="DDCM">DDCM</option>
+                      <option value="Brochura do Investigador">Brochura do Investigador</option>
+                      <option value="DEEC">DEEC</option>
+                      <option value="Outro Modelo">Outro Modelo</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">Descrição</label>
+                  <textarea 
+                    rows={2}
+                    placeholder="Descrição breve do objetivo do modelo..."
+                    value={newModelDesc}
+                    onChange={e => setNewModelDesc(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">
+                    Texto / Marcadores Iniciais [MARCADOR] (Opcional)
+                  </label>
+                  <textarea 
+                    rows={4}
+                    placeholder="Cole ou insira o modelo com marcadores entre colchetes, por exemplo:&#10;Vacina [NOME DA VACINA] indicada para [INDICAÇÃO TERAPÊUTICA] com lote [LOTE DO PRODUTO]."
+                    value={newModelText}
+                    onChange={e => setNewModelText(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <button 
+                  onClick={() => setIsNewModelModalOpen(false)}
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase transition"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={() => {
+                    if (!newModelTitle.trim()) {
+                      alert('Por favor, informe o título do modelo.');
+                      return;
+                    }
+                    const markerMatches = newModelText.match(/\[([^\]]+)\]/g) || [];
+                    const uniqueMarkers = Array.from(new Set(markerMatches));
+                    const defaultItems: RegulatoryDocumentItem[] = uniqueMarkers.map((marker, idx) => {
+                      const cleanName = marker.replace(/[\[\]]/g, '');
+                      return {
+                        id: `item_m_${Date.now()}_${idx}`,
+                        code: `1.${idx + 1}`,
+                        name: cleanName,
+                        type: 'Informação Estruturada' as RegulatoryDocItemType,
+                        required: true,
+                        sourceInternalId: cleanName.toUpperCase().replace(/\s+/g, '_'),
+                        status: 'Vazio' as RegulatoryDocItemStatus,
+                        marker: marker,
+                        value: ''
+                      };
+                    });
+
+                    const newDoc: RegulatoryDocument = {
+                      id: `doc_model_${Date.now()}`,
+                      projectId: selectedProject?.id || projects[0]?.id || 'p1',
+                      title: newModelTitle.trim(),
+                      type: newModelType,
+                      group: newModelGroup.trim(),
+                      description: newModelDesc.trim() || 'Modelo regulatório customizado.',
+                      currentVersion: '1.0',
+                      currentVersionStatus: 'Ativo',
+                      updatedAt: new Date().toISOString(),
+                      chapters: [
+                        {
+                          id: `cap_m_${Date.now()}`,
+                          code: '1.0',
+                          title: '1. Estrutura e Marcadores do Modelo',
+                          description: 'Itens gerados a partir do modelo',
+                          items: defaultItems.length > 0 ? defaultItems : [
+                            {
+                              id: `item_def_${Date.now()}`,
+                              code: '1.1',
+                              name: 'Nome da Vacina / Candidato',
+                              type: 'Informação Estruturada',
+                              required: true,
+                              sourceInternalId: 'PRODUCT_NAME',
+                              status: 'Vazio',
+                              marker: '[NOME DA VACINA]',
+                              value: ''
+                            }
+                          ]
+                        }
+                      ]
+                    };
+
+                    onUpdateDocs([...regulatoryDocs, newDoc]);
+                    setIsNewModelModalOpen(false);
+                    setNewModelTitle('');
+                    setNewModelDesc('');
+                    setNewModelText('');
+                    alert(`Modelo "${newDoc.title}" criado com sucesso!`);
+                  }}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase transition shadow-md"
+                >
+                  Salvar Modelo
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

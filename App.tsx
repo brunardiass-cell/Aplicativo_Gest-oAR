@@ -1543,6 +1543,19 @@ const App: React.FC = () => {
               onOpenRegulatoryModal={openRegulatoryModal}
               currentUser={selectedProfile}
               meetings={meetings}
+              tasks={tasks}
+              regulatoryEvidence={regulatoryEvidence}
+              macroActivityConfigs={macroActivityConfigs}
+              regulatoryInfoItems={regulatoryInfoItems}
+              repeatableRecords={repeatableRecords}
+              regulatoryNarratives={regulatoryNarratives}
+              regulatoryDocs={regulatoryDocs}
+              onUpdateEvidence={(ev) => { setRegulatoryEvidence(ev); setDataDirty(); }}
+              onUpdateMacroConfigs={(mc) => { setMacroActivityConfigs(mc); setDataDirty(); }}
+              onUpdateInfoItems={(info) => { setRegulatoryInfoItems(info); setDataDirty(); }}
+              onUpdateRepeatableRecords={(rep) => { setRepeatableRecords(rep); setDataDirty(); }}
+              onUpdateNarratives={(nar) => { setRegulatoryNarratives(nar); setDataDirty(); }}
+              onUpdateDocs={(docs) => { setRegulatoryDocs(docs); setDataDirty(); }}
             />
           )
         )}
