@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Meeting, MeetingAgendaItem, MeetingActionItem, Project, TeamMember, RegulatoryStandard, DossierContribution } from '../types';
-import { X, Plus, Trash2, Calendar, Clock, MapPin, Users, ShieldCheck, CheckCircle2, FileText, ArrowRight, Layers, Sparkles, MessageSquare, AlertCircle, Link as LinkIcon, Check } from 'lucide-react';
+import { X, Plus, Trash2, Calendar, Clock, MapPin, Users, ShieldCheck, CheckCircle2, FileText, ArrowRight, Layers, Sparkles, MessageSquare, AlertCircle, Link as LinkIcon, Check, BookOpen, UserCheck, UserX } from 'lucide-react';
 
 interface MeetingModalProps {
   meeting?: Meeting | null;
@@ -34,6 +34,12 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
   const [status, setStatus] = useState<Meeting['status']>(meeting?.status || 'Agendada');
   const [moderator, setModerator] = useState(meeting?.moderator || (teamMembers[0]?.name || ''));
   const [participants, setParticipants] = useState<string[]>(meeting?.participants || []);
+  const [presentParticipants, setPresentParticipants] = useState<string[]>(
+    meeting?.presentParticipants || meeting?.participants || []
+  );
+  const [absentParticipants, setAbsentParticipants] = useState<string[]>(
+    meeting?.absentParticipants || []
+  );
   const [newParticipant, setNewParticipant] = useState('');
   const [generalConclusions, setGeneralConclusions] = useState(meeting?.generalConclusions || '');
   const [agendaItems, setAgendaItems] = useState<MeetingAgendaItem[]>(meeting?.agendaItems || []);
@@ -181,6 +187,8 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
       status: status,
       moderator: moderator,
       participants: participants,
+      presentParticipants: presentParticipants,
+      absentParticipants: absentParticipants,
       agendaItems: agendaItems,
       generalConclusions: generalConclusions,
       minutesTemplate: meeting?.minutesTemplate,
@@ -190,6 +198,63 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
     };
 
     onSave(updatedMeeting, createdContributions);
+  };
+
+  const handleFinalizeMeetingAndOpenMinutes = () => {
+    if (!title.trim()) {
+      alert('Por favor, informe o título da reunião antes de finalizar.');
+      return;
+    }
+
+    const createdContributions: DossierContribution[] = [];
+    agendaItems.forEach(agenda => {
+      if (agenda.hasRegulatoryImpact) {
+        const contrib: DossierContribution = {
+          id: `contrib_mtg_${meeting?.id || Date.now()}_${agenda.id}`,
+          projectId: projectId,
+          projectName: selectedProject?.name || 'Projeto',
+          macroActivityId: agenda.macroActivityId,
+          macroActivityName: selectedProject?.macroActivities.find(m => m.id === agenda.macroActivityId)?.name,
+          activityId: agenda.id,
+          activityName: `[Reunião: ${title}] ${agenda.title}`,
+          chapterId: (agenda.regulatoryDocId as any) || 'cap_1',
+          chapterTitle: 'Registro de Decisão de Reunião com Impacto Regulatório',
+          type: 'texto',
+          content: `Decisão tomada na reunião "${title}" em ${date}:\n\n${agenda.decisions || agenda.description || ''}\n\nDetalhes Regulatórios: ${agenda.regulatoryImpactDetails || ''}`,
+          status: 'Em Revisão',
+          version: 1,
+          author: moderator || 'Moderador',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        createdContributions.push(contrib);
+      }
+    });
+
+    const finalizedMeeting: Meeting = {
+      id: meeting?.id || 'mtg_' + Date.now(),
+      title: title.trim(),
+      projectId: projectId,
+      projectName: selectedProject?.name || 'Geral',
+      date: date,
+      time: time,
+      location: location,
+      type: type,
+      status: 'Concluída',
+      moderator: moderator,
+      participants: participants,
+      presentParticipants: presentParticipants,
+      absentParticipants: absentParticipants,
+      agendaItems: agendaItems,
+      generalConclusions: generalConclusions,
+      minutesTemplate: meeting?.minutesTemplate,
+      minutesDocument: meeting?.minutesDocument,
+      createdAt: meeting?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    onSave(finalizedMeeting, createdContributions);
+    onOpenMinutes(finalizedMeeting);
   };
 
   return (
@@ -568,6 +633,70 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                         />
                       </div>
 
+                      {/* Vinculação de Normas Regulatórias */}
+                      <div className="p-3 bg-indigo-50/60 border border-indigo-200/80 rounded-2xl space-y-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
+                            <BookOpen size={13} className="text-indigo-600" /> Normas Regulatórias Vinculadas a esta Pauta
+                          </label>
+                          <select
+                            onChange={e => {
+                              const selectedId = e.target.value;
+                              if (selectedId) {
+                                const currentNorms = agenda.linkedRegulatoryStandardIds || [];
+                                if (!currentNorms.includes(selectedId)) {
+                                  handleUpdateAgendaItem(agenda.id, {
+                                    linkedRegulatoryStandardIds: [...currentNorms, selectedId]
+                                  });
+                                }
+                                e.target.value = '';
+                              }
+                            }}
+                            className="p-1.5 bg-white border border-indigo-300 rounded-xl text-xs font-bold text-indigo-900 outline-none cursor-pointer"
+                          >
+                            <option value="">+ Vincular Norma cadastrada...</option>
+                            {regulatoryStandards.map(std => (
+                              <option key={std.id} value={std.id}>
+                                [{std.type || 'Norma'}] {std.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* List of Linked Norms */}
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {(agenda.linkedRegulatoryStandardIds || []).map(stdId => {
+                            const std = regulatoryStandards.find(s => s.id === stdId);
+                            if (!std) return null;
+                            return (
+                              <span 
+                                key={stdId}
+                                className="px-2.5 py-1 bg-white border border-indigo-300 text-indigo-900 rounded-xl text-[11px] font-bold flex items-center gap-1.5 shadow-sm"
+                              >
+                                <BookOpen size={11} className="text-indigo-600 shrink-0" />
+                                <span><strong>[{std.type || 'Norma'}]</strong> {std.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const currentNorms = agenda.linkedRegulatoryStandardIds || [];
+                                    handleUpdateAgendaItem(agenda.id, {
+                                      linkedRegulatoryStandardIds: currentNorms.filter(id => id !== stdId)
+                                    });
+                                  }}
+                                  className="text-slate-400 hover:text-rose-600 ml-1 transition"
+                                  title="Remover vínculo"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </span>
+                            );
+                          })}
+                          {(!agenda.linkedRegulatoryStandardIds || agenda.linkedRegulatoryStandardIds.length === 0) && (
+                            <span className="text-[11px] text-indigo-400 italic">Nenhuma norma vinculada a esta pauta ainda.</span>
+                          )}
+                        </div>
+                      </div>
+
                       {/* Discussions & Decisions Textareas */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                         <div className="space-y-1">
@@ -744,10 +873,71 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
             </div>
           )}
 
-          {/* TAB 4: CONCLUSÕES */}
+          {/* TAB 4: CONCLUSÕES & VALIDAÇÃO DE PRESENÇAS */}
           {activeTab === 'conclusoes' && (
             <div className="max-w-3xl mx-auto space-y-6">
               
+              {/* Confirmação de Participantes */}
+              <div className="p-6 bg-white border border-slate-200 rounded-3xl space-y-4 shadow-sm">
+                <div>
+                  <h3 className="text-sm font-black uppercase text-slate-800 tracking-tight flex items-center gap-2">
+                    <UserCheck size={18} className="text-indigo-600" /> Confirmação de Presença de Convidados
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    Marque quem realmente participou da reunião e quem esteve ausente, ou inclua novos participantes de última hora.
+                  </p>
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  {participants.map(p => {
+                    const isPresent = presentParticipants.includes(p);
+                    return (
+                      <div 
+                        key={p} 
+                        className={`p-3 rounded-2xl border flex items-center justify-between gap-3 transition ${
+                          isPresent 
+                            ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' 
+                            : 'bg-rose-50/50 border-rose-200 text-rose-950'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 text-xs font-bold">
+                          {isPresent ? (
+                            <UserCheck size={16} className="text-emerald-600 shrink-0" />
+                          ) : (
+                            <UserX size={16} className="text-rose-500 shrink-0" />
+                          )}
+                          <span>{p}</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isPresent) {
+                                setPresentParticipants(presentParticipants.filter(x => x !== p));
+                                if (!absentParticipants.includes(p)) setAbsentParticipants([...absentParticipants, p]);
+                              } else {
+                                setAbsentParticipants(absentParticipants.filter(x => x !== p));
+                                if (!presentParticipants.includes(p)) setPresentParticipants([...presentParticipants, p]);
+                              }
+                            }}
+                            className={`px-3 py-1 rounded-xl font-black text-[10px] uppercase tracking-wider transition ${
+                              isPresent ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                            }`}
+                          >
+                            {isPresent ? 'Presente' : 'Marcar Ausente'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {participants.length === 0 && (
+                    <p className="text-xs text-slate-400 italic">Nenhum convidado cadastrado na reunião.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Conclusões Gerais */}
               <div className="space-y-2">
                 <h3 className="text-sm font-black uppercase text-slate-800 tracking-tight">Conclusões Gerais e Próximos Passos</h3>
                 <p className="text-xs text-slate-500 font-medium">
@@ -755,12 +945,32 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                 </p>
 
                 <textarea
-                  rows={6}
+                  rows={5}
                   value={generalConclusions}
                   onChange={e => setGeneralConclusions(e.target.value)}
                   placeholder="Insira as conclusões gerais, encaminhamentos institucionais ou data prevista para o próximo alinhamento..."
                   className="w-full p-4 bg-white border border-slate-300 rounded-3xl text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
                 />
+              </div>
+
+              {/* Banner de Finalização */}
+              <div className="p-6 bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+                <div>
+                  <span className="text-[10px] font-black uppercase text-emerald-400 tracking-wider block">Conclusão de Reunião</span>
+                  <h4 className="text-base font-black uppercase tracking-tight">Reunião Finalizada?</h4>
+                  <p className="text-xs text-slate-300 font-medium">
+                    Clique abaixo para concluir o status e gerar a Ata Prévia para validação.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleFinalizeMeetingAndOpenMinutes}
+                  className="px-6 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl flex items-center gap-2 transition shadow-lg shrink-0 active:scale-95"
+                >
+                  <CheckCircle2 size={18} />
+                  <span>Reunião Finalizada & Gerar Ata</span>
+                </button>
               </div>
 
             </div>

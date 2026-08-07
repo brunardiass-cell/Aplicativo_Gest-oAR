@@ -122,6 +122,12 @@ export interface Meeting {
   status: MeetingStatus;
   moderator: string;
   participants: string[];
+  presentParticipants?: string[];
+  absentParticipants?: string[];
+  participantEmails?: string[];
+  headerText?: string;
+  footerText?: string;
+  headerLogoUrl?: string;
   agendaItems: MeetingAgendaItem[];
   generalConclusions?: string;
   minutesTemplate?: string;
