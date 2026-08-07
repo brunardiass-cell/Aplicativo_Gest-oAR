@@ -23,7 +23,6 @@ import {
   AlertTriangle,
   Layers,
   ArrowRightLeft,
-  FileCheck2,
   BookOpen,
   Calendar
 } from 'lucide-react';
@@ -220,12 +219,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               label="Projetos" 
             />
 
-            <SidebarButton 
-              active={currentView === 'regulatory_docs' || currentView === 'dossier_assembler' || currentView === 'dossier_contributions'} 
-              onClick={() => { onViewChange('regulatory_docs'); onClose?.(); }} 
-              icon={<FileCheck2 size={18} />} 
-              label="Documentos Regulatórios" 
-            />
 
             <SidebarButton 
               active={currentView === 'meetings'} 
