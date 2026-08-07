@@ -100,6 +100,15 @@ export interface MeetingAgendaNote {
   text: string;
 }
 
+export interface MeetingAgendaFile {
+  id: string;
+  name: string;
+  size?: string;
+  type?: string;
+  dataUrl?: string;
+  url?: string;
+}
+
 export interface MeetingAgendaItem {
   id: string;
   title: string;
@@ -116,6 +125,7 @@ export interface MeetingAgendaItem {
   hasRegulatoryImpact?: boolean;
   regulatoryImpactDetails?: string;
   actionItems?: MeetingActionItem[];
+  attachedFiles?: MeetingAgendaFile[];
 }
 
 export interface Meeting {

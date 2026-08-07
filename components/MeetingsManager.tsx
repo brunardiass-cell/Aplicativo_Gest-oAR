@@ -233,13 +233,14 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
 
           <button
             onClick={() => setActiveTab('list')}
-            className={`px-5 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider transition ${
+            className={`px-5 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider transition flex items-center gap-2 ${
               activeTab === 'list' 
                 ? 'bg-white text-slate-900 shadow-md' 
                 : 'text-slate-300 hover:text-white hover:bg-white/5'
             }`}
           >
-            Todas as Reuniões ({meetings.length})
+            <CheckCircle2 size={16} className={activeTab === 'list' ? 'text-emerald-500' : 'text-slate-400'} />
+            <span>Reuniões Concluídas ({meetings.filter(m => m.status === 'Concluída').length})</span>
           </button>
 
           <button

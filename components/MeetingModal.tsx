@@ -23,7 +23,8 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
   onConvertToActivity,
   onOpenMinutes
 }) => {
-  const isEditing = Boolean(meeting);
+  // Only show conducting tabs (encaminhamentos, conclusoes) if meeting is already conducted or completed
+  const isEditing = Boolean(meeting && meeting.status === 'Concluída');
 
   const [projectId, setProjectId] = useState(meeting?.projectId || (projects[0]?.id || ''));
   const [title, setTitle] = useState(meeting?.title || '');

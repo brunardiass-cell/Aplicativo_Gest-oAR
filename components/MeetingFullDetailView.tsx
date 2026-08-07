@@ -47,21 +47,14 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
 
   // Comments inputs per agenda item
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
+  const [commentAuthors, setCommentAuthors] = useState<Record<string, string>>({});
 
   // Action item inputs per agenda item
   const [newActionText, setNewActionText] = useState<Record<string, string>>({});
   const [newActionResp, setNewActionResp] = useState<Record<string, string>>({});
   const [newActionDate, setNewActionDate] = useState<Record<string, string>>({});
 
-  // Mock Attached Files per agenda item
-  const [pautaFiles, setPautaFiles] = useState<Record<string, { id: string; name: string; size: string; type: string }[]>>({
-    [meeting.agendaItems[0]?.id || 'ag_1']: [
-      { id: 'f1', name: 'Plano de Trabalho 2026 v1.2.pdf', size: '1.2 MB', type: 'pdf' },
-      { id: 'f2', name: 'Cronograma Eixo 2.xlsx', size: '845 KB', type: 'xlsx' }
-    ]
-  });
-
-  // Email modal
+  // Email modal and saved state
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [emailSubject, setEmailSubject] = useState(`[Ata de Reunião] ${meetingState.title} - ${meetingState.projectName || 'CTVacinas'}`);
   const [selectedEmails, setSelectedEmails] = useState<string[]>(
@@ -146,15 +139,15 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
   };
 
   // Add Comment to Discussion
-  const handleAddComment = (agendaId: string) => {
-    const text = commentInputs[agendaId]?.trim();
+  const handleAddComment = (agendaId: string, customAuthor?: string, customText?: string) => {
+    const text = (customText !== undefined ? customText : commentInputs[agendaId])?.trim();
     if (!text) return;
 
-    const timeFormatted = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const author = customAuthor || commentAuthors[agendaId] || currentUser || 'Participante';
     const newNote = {
-      id: 'note_' + Date.now(),
-      author: currentUser || 'Participante',
-      time: timeFormatted,
+      id: 'note_' + Date.now() + Math.random().toString(36).substr(2, 4),
+      author: author,
+      time: '', // Sem exibição de horário na ata oficial
       text: text
     };
 
@@ -163,7 +156,7 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
       agendaItems: prev.agendaItems.map(ag => {
         if (ag.id === agendaId) {
           const existingNotes = ag.discussionNotes || [];
-          const updatedDiscussions = (ag.discussions ? ag.discussions + '\n' : '') + `${newNote.author} (${newNote.time}): ${newNote.text}`;
+          const updatedDiscussions = (ag.discussions ? ag.discussions + '\n' : '') + `${newNote.author}: ${newNote.text}`;
           return {
             ...ag,
             discussionNotes: [...existingNotes, newNote],
@@ -174,7 +167,98 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
       })
     }));
 
-    setCommentInputs(prev => ({ ...prev, [agendaId]: '' }));
+    if (customText === undefined) {
+      setCommentInputs(prev => ({ ...prev, [agendaId]: '' }));
+    }
+  };
+
+  // Delete comment from discussion
+  const handleDeleteComment = (agendaId: string, noteId: string) => {
+    setMeetingState(prev => ({
+      ...prev,
+      agendaItems: prev.agendaItems.map(ag => {
+        if (ag.id === agendaId) {
+          const updatedNotes = (ag.discussionNotes || []).filter(n => n.id !== noteId);
+          const updatedDiscussions = updatedNotes.map(n => `${n.author}: ${n.text}`).join('\n');
+          return {
+            ...ag,
+            discussionNotes: updatedNotes,
+            discussions: updatedDiscussions
+          };
+        }
+        return ag;
+      })
+    }));
+  };
+
+  // Handle Real File Upload for Pauta
+  const handleFileUploadForPauta = (agendaId: string, filesList: FileList | null) => {
+    if (!filesList || filesList.length === 0) return;
+
+    Array.from(filesList).forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        const sizeFormatted = file.size > 1024 * 1024
+          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+          : `${Math.round(file.size / 1024)} KB`;
+
+        const newFileObj = {
+          id: 'file_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+          name: file.name,
+          size: sizeFormatted,
+          type: file.type || file.name.split('.').pop() || 'documento',
+          dataUrl: dataUrl
+        };
+
+        setMeetingState(prev => ({
+          ...prev,
+          agendaItems: prev.agendaItems.map(ag => {
+            if (ag.id === agendaId) {
+              const currentFiles = ag.attachedFiles || [];
+              return {
+                ...ag,
+                attachedFiles: [...currentFiles, newFileObj]
+              };
+            }
+            return ag;
+          })
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Rename attached file
+  const handleRenamePautaFile = (agendaId: string, fileId: string, newName: string) => {
+    setMeetingState(prev => ({
+      ...prev,
+      agendaItems: prev.agendaItems.map(ag => {
+        if (ag.id === agendaId) {
+          return {
+            ...ag,
+            attachedFiles: (ag.attachedFiles || []).map(f => f.id === fileId ? { ...f, name: newName } : f)
+          };
+        }
+        return ag;
+      })
+    }));
+  };
+
+  // Delete attached file
+  const handleDeletePautaFile = (agendaId: string, fileId: string) => {
+    setMeetingState(prev => ({
+      ...prev,
+      agendaItems: prev.agendaItems.map(ag => {
+        if (ag.id === agendaId) {
+          return {
+            ...ag,
+            attachedFiles: (ag.attachedFiles || []).filter(f => f.id !== fileId)
+          };
+        }
+        return ag;
+      })
+    }));
   };
 
   // Add Encaminhamento (Action Item)
@@ -606,7 +690,7 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
               {meetingState.agendaItems.map((agenda, idx) => {
                 const notes = agenda.discussionNotes || [];
                 const actions = agenda.actionItems || [];
-                const files = pautaFiles[agenda.id] || [];
+                const files = agenda.attachedFiles || [];
 
                 return (
                   <div key={agenda.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-6 space-y-5">
@@ -661,10 +745,16 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
                         {/* Discussion Notes list */}
                         <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
                           {notes.map(note => (
-                            <div key={note.id} className="p-3 bg-emerald-50/60 border border-emerald-200/80 rounded-2xl text-xs space-y-1">
+                            <div key={note.id} className="p-3 bg-emerald-50/60 border border-emerald-200/80 rounded-2xl text-xs space-y-1 relative group">
                               <div className="flex items-center justify-between text-[10px] font-bold text-emerald-800">
-                                <span>{note.author}</span>
-                                <span>{note.time}</span>
+                                <span className="font-black text-emerald-900">{note.author}</span>
+                                <button
+                                  onClick={() => handleDeleteComment(agenda.id, note.id)}
+                                  className="text-slate-400 hover:text-rose-600 transition p-0.5 rounded opacity-0 group-hover:opacity-100"
+                                  title="Excluir comentário"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
                               </div>
                               <p className="text-slate-700 leading-snug">{note.text}</p>
                             </div>
@@ -676,8 +766,23 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
                           )}
                         </div>
 
-                        {/* Input Box to add Comment */}
+                        {/* Input Box to add Comment with Author List Selector */}
                         <div className="flex items-center gap-2 pt-1">
+                          <select
+                            value={commentAuthors[agenda.id] || currentUser}
+                            onChange={e => setCommentAuthors({ ...commentAuthors, [agenda.id]: e.target.value })}
+                            className="p-2 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 outline-none max-w-[130px] shrink-0 cursor-pointer"
+                            title="Selecione quem está fazendo este comentário"
+                          >
+                            <option value={currentUser}>{currentUser} (Você)</option>
+                            {teamMembers.map(m => (
+                              <option key={m.id} value={m.name}>{m.name}</option>
+                            ))}
+                            {meetingState.participants.filter(p => p !== currentUser && !teamMembers.some(tm => tm.name === p)).map(p => (
+                              <option key={p} value={p}>{p}</option>
+                            ))}
+                          </select>
+
                           <input
                             type="text"
                             placeholder="Adicionar comentário..."
@@ -690,12 +795,124 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
                           />
                           <button
                             onClick={() => handleAddComment(agenda.id)}
-                            className="p-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-2xl transition shadow-sm"
+                            className="p-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-2xl transition shadow-sm shrink-0"
                             title="Enviar Comentário"
                           >
                             <Send size={14} />
                           </button>
                         </div>
+
+                        {/* Linked Regulatory Standards Section with Post-it and Access Links */}
+                        <div className="space-y-2 pt-3 border-t border-slate-100">
+                          <h5 className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                            <BookOpen size={13} className="text-indigo-600" /> Normas Regulatórias Vinculadas
+                          </h5>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            {(agenda.linkedRegulatoryStandardIds || []).map(normId => {
+                              const std = regulatoryStandards.find(s => s.id === normId);
+                              if (!std) return null;
+
+                              const hasPostIt = Boolean(std.keyNotes && std.keyNotes.trim().length > 0) || Boolean(std.summary && std.summary.trim().length > 0);
+                              const normLink = std.documentLink || std.notebookLMLink;
+
+                              return (
+                                <div key={normId} className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-2xl text-xs font-bold text-amber-900 shadow-xs">
+                                  {hasPostIt ? (
+                                    <span
+                                      className="px-2 py-0.5 bg-amber-300 text-amber-950 font-black text-[10px] rounded-md flex items-center gap-1 shrink-0"
+                                      title={std.keyNotes || std.summary}
+                                    >
+                                      📌 {std.keyNotes || std.summary}
+                                    </span>
+                                  ) : (
+                                    <span>[{std.type || 'Norma'}] {std.name}</span>
+                                  )}
+
+                                  {normLink && (
+                                    <a
+                                      href={normLink.startsWith('http') ? normLink : `https://${normLink}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-2 py-0.5 bg-teal-100 hover:bg-teal-200 text-teal-800 rounded-lg transition inline-flex items-center gap-1 text-[10px] font-black"
+                                      title="Acessar documento da norma"
+                                    >
+                                      <ExternalLink size={10} />
+                                      <span>Link de Acesso</span>
+                                    </a>
+                                  )}
+                                </div>
+                              );
+                            })}
+
+                            {(!agenda.linkedRegulatoryStandardIds || agenda.linkedRegulatoryStandardIds.length === 0) && (
+                              <span className="text-[11px] text-slate-400 italic">Nenhuma norma especificamente vinculada.</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Attached Files Section */}
+                        <div className="space-y-2 pt-3 border-t border-slate-100">
+                          <div className="flex items-center justify-between">
+                            <h5 className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                              <Paperclip size={13} className="text-teal-600" /> Arquivos da Pauta ({(agenda.attachedFiles || []).length})
+                            </h5>
+
+                            <label className="cursor-pointer px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded-xl font-bold text-[10px] flex items-center gap-1 transition">
+                              <Plus size={12} />
+                              <span>Anexar Arquivo</span>
+                              <input
+                                type="file"
+                                multiple
+                                className="hidden"
+                                onChange={e => handleFileUploadForPauta(agenda.id, e.target.files)}
+                              />
+                            </label>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            {(agenda.attachedFiles || []).map(file => (
+                              <div key={file.id} className="p-2 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-2 text-xs">
+                                <div className="flex items-center gap-2 overflow-hidden flex-1">
+                                  <FileText size={14} className="text-teal-600 shrink-0" />
+                                  <input
+                                    type="text"
+                                    value={file.name}
+                                    onChange={e => handleRenamePautaFile(agenda.id, file.id, e.target.value)}
+                                    className="font-bold text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-teal-500 outline-none truncate w-full text-xs"
+                                    title="Clique para editar nome do arquivo"
+                                  />
+                                  {file.size && <span className="text-[10px] text-slate-400 shrink-0">({file.size})</span>}
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {file.dataUrl && (
+                                    <a
+                                      href={file.dataUrl}
+                                      download={file.name}
+                                      className="p-1 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition"
+                                      title="Baixar arquivo"
+                                    >
+                                      <Download size={13} />
+                                    </a>
+                                  )}
+                                  <button
+                                    onClick={() => handleDeletePautaFile(agenda.id, file.id)}
+                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                                    title="Excluir arquivo"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+
+                            {(!agenda.attachedFiles || agenda.attachedFiles.length === 0) && (
+                              <p className="text-[11px] text-slate-400 italic">Nenhum arquivo anexado a esta pauta ainda.</p>
+                            )}
+                          </div>
+                        </div>
+
                       </div>
 
                       {/* Right Sub-Column: Decisão Final & Encaminhamentos */}
@@ -849,15 +1066,18 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
               </div>
 
               <div className="space-y-2">
-                {Object.values(pautaFiles).flat().map(file => (
+                {meetingState.agendaItems.flatMap(ag => ag.attachedFiles || []).map(file => (
                   <div key={file.id} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between gap-2 text-xs">
                     <div className="flex items-center gap-2 overflow-hidden">
-                      {file.type === 'pdf' ? <FileText size={16} className="text-rose-600 shrink-0" /> : <FileSpreadsheet size={16} className="text-emerald-600 shrink-0" />}
+                      <FileText size={16} className="text-teal-600 shrink-0" />
                       <span className="font-bold text-slate-800 truncate">{file.name}</span>
                     </div>
-                    <span className="text-[10px] text-slate-400 shrink-0">{file.size}</span>
+                    {file.size && <span className="text-[10px] text-slate-400 shrink-0">{file.size}</span>}
                   </div>
                 ))}
+                {meetingState.agendaItems.flatMap(ag => ag.attachedFiles || []).length === 0 && (
+                  <p className="text-xs text-slate-400 italic">Nenhum arquivo anexado a nenhuma pauta ainda.</p>
+                )}
               </div>
             </div>
 
@@ -984,14 +1204,14 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
               </div>
 
               {/* DOCUMENT CONTENT */}
-              <div className="flex-1 whitespace-pre-wrap font-mono text-xs leading-relaxed text-slate-800">
+              <div className="flex-1 whitespace-pre-wrap font-serif text-sm leading-relaxed text-slate-900 text-justify">
                 {buildOfficialAtaText(meetingState, headerTitle, headerSubtitle, footerText)}
               </div>
 
               {/* RODAPÉ OFICIAL (3.0 cm spacing) */}
               <div className="border-t border-slate-300 pt-4 mt-8 text-center space-y-1">
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{footerText}</p>
-                <p className="text-[9px] font-bold text-teal-700 tracking-wider">RODAPÉ OFICIAL (3,0 cm)</p>
+                <p className="text-[9px] font-bold text-teal-700 tracking-wider">RODAPÉ OFICIAL (3,0 cm) • PÁGINA 1 DE 1</p>
               </div>
 
             </div>
@@ -1000,13 +1220,13 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
         </div>
       )}
 
-      {/* PROJECTION MODE OVERLAY (Projetar Pauta) */}
+      {/* PROJECTION MODE OVERLAY (Projetar Pauta Editável) */}
       {isProjecting && (
-        <div className="fixed inset-0 bg-slate-950 z-[200] flex flex-col text-white p-8 animate-in fade-in duration-200">
-          <header className="flex items-center justify-between pb-6 border-b border-slate-800">
+        <div className="fixed inset-0 bg-slate-950 z-[200] flex flex-col text-white p-6 md:p-8 animate-in fade-in duration-200 overflow-y-auto">
+          <header className="flex items-center justify-between pb-4 border-b border-slate-800 shrink-0">
             <div>
               <span className="text-xs font-black uppercase tracking-widest text-teal-400 block">Modo Projeção em Reunião</span>
-              <h2 className="text-2xl font-black tracking-tight">{meetingState.title}</h2>
+              <h2 className="text-xl md:text-2xl font-black tracking-tight">{meetingState.title}</h2>
             </div>
 
             <div className="flex items-center gap-3">
@@ -1022,38 +1242,160 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
             </div>
           </header>
 
-          <main className="flex-1 flex flex-col justify-center max-w-5xl mx-auto w-full py-8 space-y-8">
+          <main className="flex-1 max-w-5xl mx-auto w-full py-6 space-y-6">
             {meetingState.agendaItems[projectionIndex] ? (
-              <div className="p-10 bg-slate-900 border border-slate-800 rounded-3xl space-y-6 shadow-2xl">
-                <span className="px-3 py-1 bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded-full text-xs font-black uppercase">
-                  Pauta N.º {projectionIndex + 1}
-                </span>
+              (() => {
+                const projAg = meetingState.agendaItems[projectionIndex];
+                const projNotes = projAg.discussionNotes || [];
 
-                <h3 className="text-3xl font-black tracking-tight text-white">
-                  {meetingState.agendaItems[projectionIndex].title}
-                </h3>
+                return (
+                  <div className="p-6 md:p-8 bg-slate-900 border border-slate-800 rounded-3xl space-y-6 shadow-2xl">
+                    
+                    {/* Header Badge & Title */}
+                    <div className="space-y-2">
+                      <span className="px-3 py-1 bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded-full text-xs font-black uppercase">
+                        Pauta N.º {projectionIndex + 1}
+                      </span>
+                      <h3 className="text-2xl md:text-3xl font-black tracking-tight text-white">
+                        {projAg.title}
+                      </h3>
+                      {projAg.description && (
+                        <p className="text-sm md:text-base text-slate-300 font-light">
+                          {projAg.description}
+                        </p>
+                      )}
+                    </div>
 
-                {meetingState.agendaItems[projectionIndex].description && (
-                  <p className="text-lg text-slate-300 leading-relaxed font-light">
-                    {meetingState.agendaItems[projectionIndex].description}
-                  </p>
-                )}
+                    {/* Linked Norms in Projection */}
+                    {(projAg.linkedRegulatoryStandardIds && projAg.linkedRegulatoryStandardIds.length > 0) && (
+                      <div className="pt-4 border-t border-slate-800 space-y-2">
+                        <span className="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
+                          <BookOpen size={15} /> Normas Regulatórias Aplicadas nesta Pauta
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {projAg.linkedRegulatoryStandardIds.map(normId => {
+                            const std = regulatoryStandards.find(s => s.id === normId);
+                            if (!std) return null;
+                            const hasPostIt = Boolean(std.keyNotes && std.keyNotes.trim().length > 0) || Boolean(std.summary && std.summary.trim().length > 0);
+                            const normLink = std.documentLink || std.notebookLMLink;
 
-                {meetingState.agendaItems[projectionIndex].linkedRegulatoryStandardIds && meetingState.agendaItems[projectionIndex].linkedRegulatoryStandardIds!.length > 0 && (
-                  <div className="pt-4 border-t border-slate-800 flex items-center gap-2">
-                    <BookOpen size={18} className="text-amber-400" />
-                    <span className="text-sm font-bold text-amber-300">
-                      Normas Associadas: {meetingState.agendaItems[projectionIndex].linkedRegulatoryStandardIds!.length} norma(s) cadastrada(s)
-                    </span>
+                            return (
+                              <div key={normId} className="flex items-center gap-2 bg-amber-950/60 border border-amber-800/80 px-3 py-1.5 rounded-2xl text-xs font-bold text-amber-200">
+                                {hasPostIt ? (
+                                  <span className="px-2 py-0.5 bg-amber-400 text-amber-950 font-black text-[10px] rounded flex items-center gap-1">
+                                    📌 {std.keyNotes || std.summary}
+                                  </span>
+                                ) : (
+                                  <span>[{std.type || 'Norma'}] {std.name}</span>
+                                )}
+
+                                {normLink && (
+                                  <a
+                                    href={normLink.startsWith('http') ? normLink : `https://${normLink}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-2 py-0.5 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/40 rounded-lg transition inline-flex items-center gap-1 text-[10px] font-bold"
+                                  >
+                                    <ExternalLink size={10} />
+                                    <span>Link de Acesso</span>
+                                  </a>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Two Column Interactive Projection Area */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-800">
+                      
+                      {/* Left: Discussions/Comments */}
+                      <div className="space-y-3">
+                        <h4 className="text-xs font-black uppercase text-slate-300 tracking-wider flex items-center gap-1.5">
+                          <MessageSquare size={14} className="text-teal-400" /> Discussões em Tempo Real
+                        </h4>
+
+                        <div className="space-y-2 max-h-52 overflow-y-auto custom-scrollbar pr-1">
+                          {projNotes.map(n => (
+                            <div key={n.id} className="p-3 bg-slate-800/90 border border-slate-700/80 rounded-2xl text-xs space-y-1">
+                              <span className="font-bold text-teal-300 block">{n.author}</span>
+                              <p className="text-slate-200 leading-snug">{n.text}</p>
+                            </div>
+                          ))}
+                          {projNotes.length === 0 && (
+                            <p className="text-xs text-slate-500 italic p-3 bg-slate-950/40 rounded-2xl">
+                              Nenhum comentário registrado nesta pauta. Adicione abaixo durante a discussão.
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Comment Input in Projection Mode */}
+                        <div className="flex items-center gap-2 pt-1">
+                          <select
+                            value={commentAuthors[projAg.id] || currentUser}
+                            onChange={e => setCommentAuthors({ ...commentAuthors, [projAg.id]: e.target.value })}
+                            className="p-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-slate-200 outline-none max-w-[120px] shrink-0"
+                          >
+                            <option value={currentUser}>{currentUser}</option>
+                            {teamMembers.map(m => (
+                              <option key={m.id} value={m.name}>{m.name}</option>
+                            ))}
+                            {meetingState.participants.filter(p => p !== currentUser && !teamMembers.some(tm => tm.name === p)).map(p => (
+                              <option key={p} value={p}>{p}</option>
+                            ))}
+                          </select>
+
+                          <input
+                            type="text"
+                            placeholder="Registrar fala/comentário..."
+                            value={commentInputs[projAg.id] || ''}
+                            onChange={e => setCommentInputs({ ...commentInputs, [projAg.id]: e.target.value })}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleAddComment(projAg.id);
+                            }}
+                            className="flex-1 p-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                          <button
+                            onClick={() => handleAddComment(projAg.id)}
+                            className="px-3 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs rounded-xl transition shrink-0"
+                          >
+                            + Adicionar
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Right: Decisão Final Live Textarea */}
+                      <div className="space-y-3">
+                        <h4 className="text-xs font-black uppercase text-slate-300 tracking-wider flex items-center gap-1.5">
+                          <CheckCircle2 size={14} className="text-emerald-400" /> Decisão Final do Comitê
+                        </h4>
+                        <textarea
+                          rows={6}
+                          value={projAg.decisions || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setMeetingState(prev => ({
+                              ...prev,
+                              agendaItems: prev.agendaItems.map(ag => ag.id === projAg.id ? { ...ag, decisions: val } : ag)
+                            }));
+                          }}
+                          placeholder="Digite aqui o texto da decisão final da pauta..."
+                          className="w-full p-3.5 bg-slate-800/80 border border-slate-700 rounded-2xl text-xs text-emerald-300 font-medium outline-none focus:ring-2 focus:ring-emerald-500 leading-relaxed"
+                        />
+                      </div>
+
+                    </div>
+
                   </div>
-                )}
-              </div>
+                );
+              })()
             ) : (
               <p className="text-center text-slate-500">Nenhuma pauta cadastrada nesta reunião.</p>
             )}
           </main>
 
-          <footer className="flex items-center justify-between pt-6 border-t border-slate-800">
+          <footer className="flex items-center justify-between pt-4 border-t border-slate-800 shrink-0">
             <button
               disabled={projectionIndex === 0}
               onClick={() => setProjectionIndex(prev => Math.max(0, prev - 1))}
