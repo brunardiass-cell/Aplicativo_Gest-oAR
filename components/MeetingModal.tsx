@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Meeting, MeetingAgendaItem, MeetingActionItem, Project, TeamMember, RegulatoryStandard, DossierContribution } from '../types';
-import { X, Plus, Trash2, Calendar, Clock, MapPin, Users, ShieldCheck, CheckCircle2, FileText, ArrowRight, Layers, Sparkles, MessageSquare, AlertCircle, Link as LinkIcon, Check, BookOpen, UserCheck, UserX } from 'lucide-react';
+import { X, Plus, Trash2, Calendar, Clock, MapPin, Users, ShieldCheck, CheckCircle2, FileText, ArrowRight, Layers, Sparkles, MessageSquare, AlertCircle, Link as LinkIcon, Check, BookOpen, UserCheck, UserX, Paperclip, Download } from 'lucide-react';
 
 interface MeetingModalProps {
   meeting?: Meeting | null;
@@ -143,9 +143,60 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
     handleUpdateActionItem(agenda.id, actionItem.id, { convertedToActivity: true });
   };
 
+  const handleFileUploadForPautaInModal = (agendaId: string, filesList: FileList | null) => {
+    if (!filesList || filesList.length === 0) return;
+
+    Array.from(filesList).forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        const sizeFormatted = file.size > 1024 * 1024
+          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+          : `${Math.round(file.size / 1024)} KB`;
+
+        const newFileObj = {
+          id: 'file_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+          name: file.name,
+          size: sizeFormatted,
+          type: file.type || file.name.split('.').pop() || 'documento',
+          dataUrl: dataUrl
+        };
+
+        setAgendaItems(prev => prev.map(ag => {
+          if (ag.id === agendaId) {
+            const currentFiles = ag.attachedFiles || [];
+            return {
+              ...ag,
+              attachedFiles: [...currentFiles, newFileObj]
+            };
+          }
+          return ag;
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleDeletePautaFileInModal = (agendaId: string, fileId: string) => {
+    setAgendaItems(prev => prev.map(ag => {
+      if (ag.id === agendaId) {
+        return {
+          ...ag,
+          attachedFiles: (ag.attachedFiles || []).filter(f => f.id !== fileId)
+        };
+      }
+      return ag;
+    }));
+  };
+
   const handleSaveMeeting = () => {
     if (!title.trim()) {
       alert('Por favor, informe o título da reunião.');
+      return;
+    }
+
+    if (agendaItems.length === 0) {
+      alert('Não é possível concluir o agendamento de uma reunião sem informar pelo menos uma pauta.');
       return;
     }
 
@@ -358,6 +409,7 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                     onChange={e => setProjectId(e.target.value)}
                     className="w-full p-3 bg-white border border-slate-300 rounded-2xl font-bold text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-sm"
                   >
+                    <option value="">Geral (Sem Projeto Específico / Reunião Geral)</option>
                     {projects.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
@@ -453,11 +505,24 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
 
               {/* Participants chips */}
               <div className="p-5 bg-white border border-slate-200 rounded-3xl space-y-3 shadow-sm">
-                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
-                  Participantes ({participants.length})
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                    Participantes da Reunião ({participants.length})
+                  </label>
 
-                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allNames = teamMembers.map(tm => tm.name);
+                      setParticipants(Array.from(new Set([...participants, ...allNames])));
+                    }}
+                    className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-[10px] transition"
+                  >
+                    + Adicionar Toda a Equipe Cadastrada
+                  </button>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <select
                     onChange={e => {
                       if (e.target.value) {
@@ -467,9 +532,9 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                     }}
                     className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs text-slate-700 outline-none"
                   >
-                    <option value="">+ Selecionar da Equipe...</option>
+                    <option value="">+ Selecionar Membro da Equipe...</option>
                     {teamMembers.map(tm => (
-                      <option key={tm.id} value={tm.name}>{tm.name}</option>
+                      <option key={tm.id} value={tm.name}>{tm.name} ({tm.role || 'Equipe'})</option>
                     ))}
                   </select>
 
@@ -478,8 +543,8 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                       type="text"
                       value={newParticipant}
                       onChange={e => setNewParticipant(e.target.value)}
-                      placeholder="Outro participante..."
-                      className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none"
+                      placeholder="Convidado / Externo..."
+                      className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none flex-1"
                     />
                     <button
                       type="button"
@@ -489,9 +554,9 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                           setNewParticipant('');
                         }
                       }}
-                      className="px-3 py-2 bg-indigo-600 text-white rounded-xl font-bold text-xs hover:bg-indigo-700 transition"
+                      className="px-3 py-2 bg-indigo-600 text-white rounded-xl font-bold text-xs hover:bg-indigo-700 transition shrink-0"
                     >
-                      Adicionar
+                      + Convidado
                     </button>
                   </div>
                 </div>
@@ -698,6 +763,63 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                           })}
                           {(!agenda.linkedRegulatoryStandardIds || agenda.linkedRegulatoryStandardIds.length === 0) && (
                             <span className="text-[11px] text-indigo-400 italic">Nenhuma norma vinculada a esta pauta ainda.</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Anexos de Arquivos para a Pauta */}
+                      <div className="p-3 bg-teal-50/60 border border-teal-200/80 rounded-2xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-teal-900 flex items-center gap-1.5">
+                            <Paperclip size={13} className="text-teal-600" /> Arquivos Anexos desta Pauta ({(agenda.attachedFiles || []).length})
+                          </label>
+
+                          <label className="cursor-pointer px-2.5 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-[10px] flex items-center gap-1 transition shadow-xs">
+                            <Plus size={12} />
+                            <span>Anexar Arquivo</span>
+                            <input
+                              type="file"
+                              multiple
+                              className="hidden"
+                              onChange={e => handleFileUploadForPautaInModal(agenda.id, e.target.files)}
+                            />
+                          </label>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          {(agenda.attachedFiles || []).map(file => (
+                            <div key={file.id} className="p-2 bg-white border border-teal-200 rounded-xl flex items-center justify-between gap-2 text-xs">
+                              <div className="flex items-center gap-2 overflow-hidden flex-1">
+                                <FileText size={14} className="text-teal-600 shrink-0" />
+                                <span className="font-bold text-slate-800 truncate">{file.name}</span>
+                                {file.size && <span className="text-[10px] text-slate-400 shrink-0">({file.size})</span>}
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                {file.dataUrl && (
+                                  <a
+                                    href={file.dataUrl}
+                                    download={file.name}
+                                    className="p-1 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition"
+                                    title="Baixar / Acessar arquivo"
+                                  >
+                                    <FileText size={13} />
+                                  </a>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePautaFileInModal(agenda.id, file.id)}
+                                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                                  title="Excluir arquivo"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+
+                          {(!agenda.attachedFiles || agenda.attachedFiles.length === 0) && (
+                            <p className="text-[11px] text-teal-700/70 italic">Nenhum arquivo anexado a esta pauta ainda. Você pode anexar agora para ficar disponível no dia da reunião.</p>
                           )}
                         </div>
                       </div>

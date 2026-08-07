@@ -376,7 +376,7 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
                             )}
                           </div>
 
-                          <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-2">
+                          <div className="pt-2 border-t border-slate-200/60 flex flex-col gap-2">
                             <button
                               onClick={() => setActiveFullMeeting(mtg)}
                               className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-sm"
@@ -384,6 +384,29 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
                               <CheckCircle2 size={14} />
                               <span>Iniciar / Acessar Reunião</span>
                             </button>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  setSelectedMeetingForEdit(mtg);
+                                  setIsMeetingModalOpen(true);
+                                }}
+                                className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition"
+                                title="Editar Agendamento"
+                              >
+                                <Edit size={13} />
+                                <span>Editar</span>
+                              </button>
+
+                              <button
+                                onClick={() => handleDeleteMeeting(mtg.id)}
+                                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition"
+                                title="Excluir Agendamento"
+                              >
+                                <Trash2 size={13} />
+                                <span>Excluir</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -596,6 +619,7 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
       {/* MODAL 1: NEW / EDIT MEETING */}
       {isMeetingModalOpen && (
         <MeetingModal
+          key={selectedMeetingForEdit?.id || 'new_meeting'}
           meeting={selectedMeetingForEdit}
           projects={projects}
           teamMembers={teamMembers}

@@ -98,6 +98,51 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
     }
   };
 
+  // State for lateral post-its on norms
+  const [normPostIts, setNormPostIts] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    regulatoryStandards.forEach(s => {
+      initial[s.id] = s.keyNotes || s.summary || '';
+    });
+    return initial;
+  });
+
+  // Toggle participant presence
+  const handleToggleParticipantPresence = (participantName: string) => {
+    setMeetingState(prev => {
+      const allParticipants = prev.participants || [];
+      const currentPresent = prev.presentParticipants && prev.presentParticipants.length > 0 
+        ? prev.presentParticipants 
+        : allParticipants;
+
+      const isPresent = currentPresent.includes(participantName);
+      let newPresent: string[];
+      let newAbsent: string[];
+
+      if (isPresent) {
+        newPresent = currentPresent.filter(p => p !== participantName);
+        newAbsent = Array.from(new Set([...(prev.absentParticipants || []), participantName]));
+      } else {
+        newPresent = [...currentPresent, participantName];
+        newAbsent = (prev.absentParticipants || []).filter(p => p !== participantName);
+      }
+
+      return {
+        ...prev,
+        presentParticipants: newPresent,
+        absentParticipants: newAbsent
+      };
+    });
+  };
+
+  const handleMarkAllPresent = () => {
+    setMeetingState(prev => ({
+      ...prev,
+      presentParticipants: [...prev.participants],
+      absentParticipants: []
+    }));
+  };
+
   // Handle Save
   const handleSaveAll = () => {
     const updated: Meeting = {
@@ -482,40 +527,39 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
     const presentList = (m.presentParticipants && m.presentParticipants.length > 0) ? m.presentParticipants.join(', ') : (m.participants.join(', ') || 'Não especificados');
     const absentList = (m.absentParticipants && m.absentParticipants.length > 0) ? m.absentParticipants.join(', ') : 'Nenhum participante ausente registrado';
 
-    let body = `ATA DA REUNIÃO DO ${m.projectName ? m.projectName.toUpperCase() : 'COMITÊ GESTOR'}\n\n`;
-    body += `Data: ${dateFormatted}\n`;
-    body += `Horário: ${m.time || '10:00'} | Local: ${m.location || 'CTVacinas'}\n`;
-    body += `Moderador: ${m.moderator || 'Não informado'}\n`;
+    let body = `ATA OFICIAL DE REUNIÃO - ${m.projectName ? m.projectName.toUpperCase() : 'COMITÊ GESTOR'}\n\n`;
+    body += `TÍTULO DA REUNIÃO: ${m.title}\n`;
+    body += `Data: ${dateFormatted} ${m.time ? '| Horário: ' + m.time : ''} | Local: ${m.location || 'CTVacinas'}\n`;
+    body += `Moderador / Presidente: ${m.moderator || 'Não informado'}\n`;
     body += `Participantes Presentes: ${presentList}\n`;
     body += `Ausências Justificadas: ${absentList}\n\n`;
-    body += `========================================================================\n`;
-    body += `DELIBERAÇÕES E ENCAMINHAMENTOS POR PAUTA\n`;
-    body += `========================================================================\n\n`;
+
+    body += `DELIBERAÇÕES E ENCAMINHAMENTOS POR PAUTA\n\n`;
 
     const allReferencedNormsMap = new Map<string, { std: RegulatoryStandard; pautaTitles: string[] }>();
 
     m.agendaItems.forEach((agenda, idx) => {
-      body += `PAUTA ${idx + 1}: ${agenda.title.toUpperCase()}\n`;
-      if (agenda.description) body += `Objetivo: ${agenda.description}\n`;
+      body += `PAUTA N.º ${idx + 1}: ${agenda.title.toUpperCase()}\n`;
+      if (agenda.description) body += `Objetivo / Contexto: ${agenda.description}\n`;
       
       // Collect discussion notes
       if (agenda.discussionNotes && agenda.discussionNotes.length > 0) {
-        body += `Discussões / Anotações:\n`;
+        body += `Discussões e Debates:\n`;
         agenda.discussionNotes.forEach(n => {
-          body += `   • [${n.time}] ${n.author}: ${n.text}\n`;
+          body += `   • ${n.author}: ${n.text}\n`;
         });
       } else if (agenda.discussions) {
         body += `Discussões: ${agenda.discussions}\n`;
       } else {
-        body += `Discussões: Sem notas registradas.\n`;
+        body += `Discussões: Registrado em pauta conforme apresentação.\n`;
       }
 
-      body += `Decisão Final: ${agenda.decisions || 'Sem decisão final registrada.'}\n`;
+      body += `Decisão Final / Deliberação: ${agenda.decisions || 'Pauta deliberada e alinhada.'}\n`;
 
       if (agenda.actionItems && agenda.actionItems.length > 0) {
-        body += `Encaminhamentos:\n`;
+        body += `Encaminhamentos / Ações:\n`;
         agenda.actionItems.forEach(act => {
-          body += `   [ ] Ação: ${act.action} | Responsável: ${act.responsible || 'A definir'} | Prazo: ${act.dueDate || 'S/P'}\n`;
+          body += `   • Ação: ${act.action} | Responsável: ${act.responsible || 'A definir'} | Prazo: ${act.dueDate || 'S/P'}\n`;
         });
       }
 
@@ -533,7 +577,7 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
         });
       }
 
-      body += `\n------------------------------------------------------------------------\n\n`;
+      body += `\n\n`;
     });
 
     if (m.generalConclusions) {
@@ -541,9 +585,7 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
     }
 
     // SECTION FOR REFERENCED NORMS AT THE END OF ATA
-    body += `========================================================================\n`;
-    body += `REFERÊNCIAS DE NORMAS REGULATÓRIAS UTILIZADAS NESTA REUNIÃO\n`;
-    body += `========================================================================\n`;
+    body += `REFERÊNCIAS DE NORMAS REGULATÓRIAS UTILIZADAS NESTA REUNIÃO\n\n`;
 
     if (allReferencedNormsMap.size === 0) {
       body += `Nenhuma norma regulatória especificamente vinculada às pautas desta reunião.\n`;
@@ -670,6 +712,70 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
           {/* LEFT COLUMN: PAUTAS DA REUNIÃO (3 Cols) */}
           <div className="lg:col-span-3 space-y-6">
             
+            {/* Lista de Presença dos Participantes Card */}
+            {(() => {
+              const allParts = meetingState.participants || [];
+              const presentParts = (meetingState.presentParticipants && meetingState.presentParticipants.length > 0)
+                ? meetingState.presentParticipants
+                : allParts;
+              const totalParts = allParts.length || 1;
+              const presentCount = presentParts.length;
+              const percent = Math.round((presentCount / totalParts) * 100);
+
+              return (
+                <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <UserCheck size={18} className="text-emerald-600" />
+                      <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
+                        Lista de Presença dos Participantes
+                      </h3>
+                      <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-full font-black text-[10px]">
+                        {presentCount} de {totalParts} Presente(s) ({percent}%)
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleMarkAllPresent}
+                      className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition shadow-xs flex items-center gap-1"
+                    >
+                      <CheckCircle2 size={13} />
+                      <span>Marcar Todos Presentes</span>
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {allParts.map(partName => {
+                      const isPresent = presentParts.includes(partName);
+                      return (
+                        <button
+                          key={partName}
+                          type="button"
+                          onClick={() => handleToggleParticipantPresence(partName)}
+                          className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition border ${
+                            isPresent
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-900 hover:bg-emerald-100'
+                              : 'bg-rose-50 border-rose-200 text-rose-800 hover:bg-rose-100 line-through'
+                          }`}
+                          title={isPresent ? 'Clique para marcar como ausente' : 'Clique para marcar como presente'}
+                        >
+                          {isPresent ? <UserCheck size={13} className="text-emerald-600 shrink-0" /> : <UserX size={13} className="text-rose-600 shrink-0" />}
+                          <span>{partName}</span>
+                          <span className="text-[10px] font-black uppercase ml-1 opacity-75">
+                            {isPresent ? '(Presente)' : '(Ausente)'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                    {allParts.length === 0 && (
+                      <p className="text-xs text-slate-400 italic">Nenhum participante listado nesta reunião.</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Section Header */}
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-black uppercase text-slate-800 tracking-wider flex items-center gap-2">
@@ -802,7 +908,7 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
                           </button>
                         </div>
 
-                        {/* Linked Regulatory Standards Section with Post-it and Access Links */}
+                        {/* Linked Regulatory Standards Section with Access Links */}
                         <div className="space-y-2 pt-3 border-t border-slate-100">
                           <h5 className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
                             <BookOpen size={13} className="text-indigo-600" /> Normas Regulatórias Vinculadas
@@ -813,33 +919,25 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
                               const std = regulatoryStandards.find(s => s.id === normId);
                               if (!std) return null;
 
-                              const hasPostIt = Boolean(std.keyNotes && std.keyNotes.trim().length > 0) || Boolean(std.summary && std.summary.trim().length > 0);
                               const normLink = std.documentLink || std.notebookLMLink;
 
                               return (
-                                <div key={normId} className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-2xl text-xs font-bold text-amber-900 shadow-xs">
-                                  {hasPostIt ? (
-                                    <span
-                                      className="px-2 py-0.5 bg-amber-300 text-amber-950 font-black text-[10px] rounded-md flex items-center gap-1 shrink-0"
-                                      title={std.keyNotes || std.summary}
-                                    >
-                                      📌 {std.keyNotes || std.summary}
-                                    </span>
-                                  ) : (
-                                    <span>[{std.type || 'Norma'}] {std.name}</span>
-                                  )}
+                                <div key={normId} className="flex items-center gap-2 bg-indigo-50/80 border border-indigo-200 px-3 py-1.5 rounded-2xl text-xs font-bold text-indigo-900 shadow-2xs">
+                                  <span>[{std.type || 'Norma'}] {std.name}</span>
 
-                                  {normLink && (
+                                  {normLink ? (
                                     <a
                                       href={normLink.startsWith('http') ? normLink : `https://${normLink}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="px-2 py-0.5 bg-teal-100 hover:bg-teal-200 text-teal-800 rounded-lg transition inline-flex items-center gap-1 text-[10px] font-black"
-                                      title="Acessar documento da norma"
+                                      className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition inline-flex items-center gap-1 text-[10px] font-black shadow-2xs"
+                                      title="Acessar documento / link da norma"
                                     >
-                                      <ExternalLink size={10} />
-                                      <span>Link de Acesso</span>
+                                      <ExternalLink size={11} />
+                                      <span>Acessar Link da Norma</span>
                                     </a>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 italic">Sem link</span>
                                   )}
                                 </div>
                               );
@@ -1036,18 +1134,48 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
             <div className="p-6 bg-white border border-slate-200 rounded-3xl space-y-4 shadow-sm">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                  <BookOpen size={16} className="text-indigo-600" /> Normas Vinculadas
+                  <BookOpen size={16} className="text-indigo-600" /> Normas Vinculadas ({allMeetingNormIds.length})
                 </h3>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-4">
                 {allMeetingNormIds.map(normId => {
                   const std = regulatoryStandards.find(s => s.id === normId);
                   if (!std) return null;
+                  const normLink = std.documentLink || std.notebookLMLink;
+
                   return (
-                    <div key={normId} className="p-3 bg-amber-50/80 border border-amber-200/80 rounded-2xl text-xs space-y-1">
-                      <span className="font-black text-amber-900 block">[{std.type || 'Norma'}] {std.name}</span>
-                      <p className="text-[11px] text-slate-600 line-clamp-2">{std.summary || 'Instrução normativa técnica aplicada ao projeto.'}</p>
+                    <div key={normId} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-black text-xs text-indigo-950 block">[{std.type || 'Norma'}] {std.name}</span>
+                        
+                        {normLink && (
+                          <a
+                            href={normLink.startsWith('http') ? normLink : `https://${normLink}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 rounded-lg text-[10px] font-black flex items-center gap-1 transition shrink-0"
+                            title="Acessar link da norma"
+                          >
+                            <ExternalLink size={10} />
+                            <span>Abrir Link</span>
+                          </a>
+                        )}
+                      </div>
+
+                      {/* Post-it Lateral Box */}
+                      <div className="p-3 bg-amber-100/90 border border-amber-300 rounded-2xl space-y-1.5 shadow-2xs">
+                        <span className="text-[10px] font-black uppercase text-amber-950 flex items-center gap-1">
+                          📌 Post-it da Norma (Principal Informação)
+                        </span>
+                        <textarea
+                          rows={3}
+                          value={normPostIts[std.id] || ''}
+                          onChange={e => setNormPostIts({ ...normPostIts, [std.id]: e.target.value })}
+                          placeholder="Digite aqui o post-it com a principal informação da norma sobre o assunto..."
+                          className="w-full p-2 bg-white/95 border border-amber-200 rounded-xl text-xs text-amber-950 font-medium outline-none focus:ring-2 focus:ring-amber-500 leading-relaxed"
+                        />
+                      </div>
                     </div>
                   );
                 })}
@@ -1276,33 +1404,49 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
                           {projAg.linkedRegulatoryStandardIds.map(normId => {
                             const std = regulatoryStandards.find(s => s.id === normId);
                             if (!std) return null;
-                            const hasPostIt = Boolean(std.keyNotes && std.keyNotes.trim().length > 0) || Boolean(std.summary && std.summary.trim().length > 0);
                             const normLink = std.documentLink || std.notebookLMLink;
 
                             return (
-                              <div key={normId} className="flex items-center gap-2 bg-amber-950/60 border border-amber-800/80 px-3 py-1.5 rounded-2xl text-xs font-bold text-amber-200">
-                                {hasPostIt ? (
-                                  <span className="px-2 py-0.5 bg-amber-400 text-amber-950 font-black text-[10px] rounded flex items-center gap-1">
-                                    📌 {std.keyNotes || std.summary}
-                                  </span>
-                                ) : (
-                                  <span>[{std.type || 'Norma'}] {std.name}</span>
-                                )}
+                              <div key={normId} className="flex items-center gap-2 bg-indigo-950/80 border border-indigo-700/80 px-3 py-1.5 rounded-2xl text-xs font-bold text-indigo-200">
+                                <span>[{std.type || 'Norma'}] {std.name}</span>
 
                                 {normLink && (
                                   <a
                                     href={normLink.startsWith('http') ? normLink : `https://${normLink}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="px-2 py-0.5 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/40 rounded-lg transition inline-flex items-center gap-1 text-[10px] font-bold"
+                                    className="px-2.5 py-1 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl transition inline-flex items-center gap-1 text-[10px] font-black"
+                                    title="Acessar link da norma"
                                   >
-                                    <ExternalLink size={10} />
-                                    <span>Link de Acesso</span>
+                                    <ExternalLink size={11} />
+                                    <span>Acessar Link da Norma</span>
                                   </a>
                                 )}
                               </div>
                             );
                           })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Attached Files in Projection Mode */}
+                    {(projAg.attachedFiles && projAg.attachedFiles.length > 0) && (
+                      <div className="pt-3 border-t border-slate-800 space-y-2">
+                        <span className="text-xs font-black uppercase text-teal-400 tracking-wider flex items-center gap-1.5">
+                          <Paperclip size={14} /> Arquivos Anexados a esta Pauta ({projAg.attachedFiles.length})
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          {projAg.attachedFiles.map(file => (
+                            <a
+                              key={file.id}
+                              href={file.dataUrl}
+                              download={file.name}
+                              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-teal-300 border border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                            >
+                              <Download size={13} />
+                              <span>{file.name}</span>
+                            </a>
+                          ))}
                         </div>
                       </div>
                     )}
