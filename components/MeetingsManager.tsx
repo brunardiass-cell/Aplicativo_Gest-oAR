@@ -4,9 +4,10 @@ import { DEFAULT_MINUTES_TEMPLATE } from '../constants';
 import { DecisionsHistoryView } from './DecisionsHistoryView';
 import { MeetingModal } from './MeetingModal';
 import { MeetingMinutesModal } from './MeetingMinutesModal';
+import { MeetingFullDetailView } from './MeetingFullDetailView';
 import { 
   Users, Plus, Search, Calendar, FileText, ShieldCheck, 
-  Settings, Clock, ArrowRight, Layers, Trash2, Edit, CheckCircle2, AlertCircle, Filter, RefreshCw, X, Folder, BookOpen
+  Settings, Clock, ArrowRight, Layers, Trash2, Edit, CheckCircle2, AlertCircle, Filter, RefreshCw, X, Folder, BookOpen, ExternalLink
 } from 'lucide-react';
 
 interface MeetingsManagerProps {
@@ -38,7 +39,8 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
   const [typeFilter, setTypeFilter] = useState('Todos');
   const [statusFilter, setStatusFilter] = useState('Todos');
 
-  // Modals state
+  // Modals and Full View state
+  const [activeFullMeeting, setActiveFullMeeting] = useState<Meeting | null>(null);
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
   const [selectedMeetingForEdit, setSelectedMeetingForEdit] = useState<Meeting | null>(null);
 
@@ -152,6 +154,24 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
     handleSaveMeeting(updatedMeeting);
     setIsMinutesModalOpen(false);
   };
+
+  if (activeFullMeeting) {
+    return (
+      <MeetingFullDetailView
+        meeting={activeFullMeeting}
+        projects={projects}
+        teamMembers={teamMembers}
+        regulatoryStandards={regulatoryStandards}
+        currentUser={currentUser?.name || 'Usuário'}
+        onBack={() => setActiveFullMeeting(null)}
+        onSaveMeeting={(updatedMeeting, createdContributions) => {
+          handleSaveMeeting(updatedMeeting, createdContributions);
+          setActiveFullMeeting(updatedMeeting);
+        }}
+        onConvertToActivity={handleConvertToActivity}
+      />
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -357,14 +377,11 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
 
                           <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-2">
                             <button
-                              onClick={() => {
-                                setSelectedMeetingForEdit(mtg);
-                                setIsMeetingModalOpen(true);
-                              }}
+                              onClick={() => setActiveFullMeeting(mtg)}
                               className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-sm"
                             >
                               <CheckCircle2 size={14} />
-                              <span>No Dia: Preencher Discussão & Ata</span>
+                              <span>Iniciar / Acessar Reunião</span>
                             </button>
                           </div>
                         </div>
@@ -540,14 +557,11 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
                       </div>
 
                       <button
-                        onClick={() => {
-                          setSelectedMeetingForEdit(mtg);
-                          setIsMeetingModalOpen(true);
-                        }}
+                        onClick={() => setActiveFullMeeting(mtg)}
                         className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition flex items-center gap-1 shadow-sm"
                       >
-                        <Edit size={14} />
-                        <span>Editar Reunião</span>
+                        <ExternalLink size={14} />
+                        <span>Acessar Reunião</span>
                       </button>
                     </div>
 

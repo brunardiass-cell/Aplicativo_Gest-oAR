@@ -314,27 +314,31 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                 activeTab === 'pautas' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-200'
               }`}
             >
-              <span>2. Pautas & Decisões</span>
+              <span>2. Pautas da Reunião</span>
               <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-white/20 text-white font-extrabold">
                 {agendaItems.length}
               </span>
             </button>
-            <button
-              onClick={() => setActiveTab('encaminhamentos')}
-              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
-                activeTab === 'encaminhamentos' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              3. Encaminhamentos
-            </button>
-            <button
-              onClick={() => setActiveTab('conclusoes')}
-              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
-                activeTab === 'conclusoes' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              4. Conclusões
-            </button>
+            {isEditing && (
+              <>
+                <button
+                  onClick={() => setActiveTab('encaminhamentos')}
+                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                    activeTab === 'encaminhamentos' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  3. Encaminhamentos
+                </button>
+                <button
+                  onClick={() => setActiveTab('conclusoes')}
+                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                    activeTab === 'conclusoes' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  4. Conclusões
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -697,64 +701,68 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Discussions & Decisions Textareas */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black uppercase text-slate-500 block flex items-center gap-1">
-                            <MessageSquare size={12} className="text-indigo-600" /> Discussões Durante a Reunião
-                          </label>
-                          <textarea
-                            rows={3}
-                            value={agenda.discussions || ''}
-                            onChange={e => handleUpdateAgendaItem(agenda.id, { discussions: e.target.value })}
-                            placeholder="Anotações de debate, observações dos técnicos e divergências..."
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                        </div>
+                      {/* Discussions & Decisions Textareas (Only shown when editing/running an existing meeting) */}
+                      {isEditing && (
+                        <>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black uppercase text-slate-500 block flex items-center gap-1">
+                                <MessageSquare size={12} className="text-indigo-600" /> Discussões Durante a Reunião
+                              </label>
+                              <textarea
+                                rows={3}
+                                value={agenda.discussions || ''}
+                                onChange={e => handleUpdateAgendaItem(agenda.id, { discussions: e.target.value })}
+                                placeholder="Anotações de debate, observações dos técnicos e divergências..."
+                                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                              />
+                            </div>
 
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black uppercase text-emerald-800 block flex items-center gap-1 font-bold">
-                            <CheckCircle2 size={12} className="text-emerald-600" /> Decisão e Conclusão Final
-                          </label>
-                          <textarea
-                            rows={3}
-                            value={agenda.decisions || ''}
-                            onChange={e => handleUpdateAgendaItem(agenda.id, { decisions: e.target.value })}
-                            placeholder="O que ficou decidido, aprovado ou recomendado para esta pauta..."
-                            className="w-full p-3 bg-emerald-50/40 border border-emerald-200 rounded-2xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Regulatory Impact Box */}
-                      <div className="p-4 bg-amber-50/80 border border-amber-200/90 rounded-2xl space-y-2">
-                        <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(agenda.hasRegulatoryImpact)}
-                            onChange={e => handleUpdateAgendaItem(agenda.id, { hasRegulatoryImpact: e.target.checked })}
-                            className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-amber-300 cursor-pointer"
-                          />
-                          <span className="text-xs font-black uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
-                            <ShieldCheck size={16} className="text-amber-600" /> Possui Impacto Regulatório Directo
-                          </span>
-                        </label>
-
-                        {agenda.hasRegulatoryImpact && (
-                          <div className="space-y-2 pl-6 animate-in slide-in-from-top-1 duration-200">
-                            <p className="text-[11px] text-amber-900 font-medium">
-                              Ao marcar esta opção, ao salvar a reunião o sistema registrará automaticamente uma <strong>contribuição pendente no módulo Documentos Regulatórios</strong>.
-                            </p>
-                            <input
-                              type="text"
-                              value={agenda.regulatoryImpactDetails || ''}
-                              onChange={e => handleUpdateAgendaItem(agenda.id, { regulatoryImpactDetails: e.target.value })}
-                              placeholder="Especifique o detalhe do impacto regulatório (ex: inclusão no capítulo 3 do DDCM)..."
-                              className="w-full p-2.5 bg-white border border-amber-300 rounded-xl text-xs font-medium text-slate-900 outline-none focus:ring-2 focus:ring-amber-500"
-                            />
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black uppercase text-emerald-800 block flex items-center gap-1 font-bold">
+                                <CheckCircle2 size={12} className="text-emerald-600" /> Decisão e Conclusão Final
+                              </label>
+                              <textarea
+                                rows={3}
+                                value={agenda.decisions || ''}
+                                onChange={e => handleUpdateAgendaItem(agenda.id, { decisions: e.target.value })}
+                                placeholder="O que ficou decidido, aprovado ou recomendado para esta pauta..."
+                                className="w-full p-3 bg-emerald-50/40 border border-emerald-200 rounded-2xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500"
+                              />
+                            </div>
                           </div>
-                        )}
-                      </div>
+
+                          {/* Regulatory Impact Box */}
+                          <div className="p-4 bg-amber-50/80 border border-amber-200/90 rounded-2xl space-y-2">
+                            <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(agenda.hasRegulatoryImpact)}
+                                onChange={e => handleUpdateAgendaItem(agenda.id, { hasRegulatoryImpact: e.target.checked })}
+                                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-amber-300 cursor-pointer"
+                              />
+                              <span className="text-xs font-black uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                                <ShieldCheck size={16} className="text-amber-600" /> Possui Impacto Regulatório Directo
+                              </span>
+                            </label>
+
+                            {agenda.hasRegulatoryImpact && (
+                              <div className="space-y-2 pl-6 animate-in slide-in-from-top-1 duration-200">
+                                <p className="text-[11px] text-amber-900 font-medium">
+                                  Ao marcar esta opção, ao salvar a reunião o sistema registrará automaticamente uma <strong>contribuição pendente no módulo Documentos Regulatórios</strong>.
+                                </p>
+                                <input
+                                  type="text"
+                                  value={agenda.regulatoryImpactDetails || ''}
+                                  onChange={e => handleUpdateAgendaItem(agenda.id, { regulatoryImpactDetails: e.target.value })}
+                                  placeholder="Especifique o detalhe do impacto regulatório (ex: inclusão no capítulo 3 do DDCM)..."
+                                  className="w-full p-2.5 bg-white border border-amber-300 rounded-xl text-xs font-medium text-slate-900 outline-none focus:ring-2 focus:ring-amber-500"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
 
                     </div>
                   ))}

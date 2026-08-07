@@ -93,6 +93,13 @@ export interface MeetingActionItem {
   targetMacroId?: string;
 }
 
+export interface MeetingAgendaNote {
+  id: string;
+  author: string;
+  time: string;
+  text: string;
+}
+
 export interface MeetingAgendaItem {
   id: string;
   title: string;
@@ -104,6 +111,7 @@ export interface MeetingAgendaItem {
   linkedRegulatoryStandardIds?: string[];
   linkedPostItIds?: string[];
   discussions?: string;
+  discussionNotes?: MeetingAgendaNote[];
   decisions?: string;
   hasRegulatoryImpact?: boolean;
   regulatoryImpactDetails?: string;
