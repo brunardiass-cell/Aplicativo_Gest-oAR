@@ -27,26 +27,26 @@ export const generateMinutesText = (meeting: Meeting, templateText: string = DEF
 
   meeting.agendaItems.forEach((agenda, idx) => {
     pautasDecisoesText += `PAUTA ${idx + 1}: ${agenda.title.toUpperCase()}\n`;
-    if (agenda.description) pautasDecisoesText += `   Descrição: ${agenda.description}\n`;
-    if (agenda.phase) pautasDecisoesText += `   Fase Vinculada: ${agenda.phase}\n`;
+    if (agenda.description) pautasDecisoesText += `   • Descrição: ${agenda.description}\n`;
+    if (agenda.phase) pautasDecisoesText += `   • Fase Vinculada: ${agenda.phase}\n`;
     
     // Linked norms
     if (agenda.linkedRegulatoryStandardIds && agenda.linkedRegulatoryStandardIds.length > 0) {
-      pautasDecisoesText += `   Normas Regulatórias Associadas: ${agenda.linkedRegulatoryStandardIds.length} norma(s) vinculada(s)\n`;
+      pautasDecisoesText += `   • Normas Regulatórias Associadas: ${agenda.linkedRegulatoryStandardIds.length} norma(s) vinculada(s)\n`;
     }
 
-    pautasDecisoesText += `   Discussão: ${agenda.discussions || 'Sem discussões registradas.'}\n`;
-    pautasDecisoesText += `   Decisões/Conclusões: ${agenda.decisions || 'Sem decisões registradas.'}\n\n`;
+    pautasDecisoesText += `   • Discussão: ${agenda.discussions || 'Sem discussões registradas.'}\n`;
+    pautasDecisoesText += `   • Decisões / Conclusões: ${agenda.decisions || 'Sem decisões registradas.'}\n\n`;
 
     if (agenda.hasRegulatoryImpact) {
       impactosRegulatoriosText += `• Pauta ${idx + 1} (${agenda.title}):\n`;
-      impactosRegulatoriosText += `  ${agenda.regulatoryImpactDetails || agenda.decisions || 'Impacto regulatório assinalado.'}\n\n`;
+      impactosRegulatoriosText += `  • Detalhes do Impacto: ${agenda.regulatoryImpactDetails || agenda.decisions || 'Impacto regulatório assinalado.'}\n\n`;
     }
 
     if (agenda.actionItems && agenda.actionItems.length > 0) {
       agenda.actionItems.forEach((act) => {
         const prazo = act.dueDate ? act.dueDate.split('-').reverse().join('/') : 'Sem prazo';
-        encaminhamentosText += `• [Pauta ${idx + 1}] Ação: ${act.action}\n  Responsável: ${act.responsible || 'A definir'} | Prazo: ${prazo} | Status: ${act.status}\n\n`;
+        encaminhamentosText += `• [Pauta ${idx + 1}] Ação: ${act.action}\n  • Responsável: ${act.responsible || 'A definir'} | Prazo: ${prazo} | Status: ${act.status}\n\n`;
       });
     }
   });
@@ -152,20 +152,97 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({ meetin
         <html>
           <head>
             <title>Ata de Reunião - ${meeting.title}</title>
+            <meta charset="utf-8">
             <style>
-              @page { size: A4; margin: 20mm; }
-              body { font-family: 'Segoe UI', Arial, sans-serif; padding: 0; margin: 0; color: #1e293b; line-height: 1.6; font-size: 13px; }
-              .header-box { border-bottom: 2px solid #334155; padding-bottom: 12px; margin-bottom: 24px; text-align: center; }
-              .header-title { font-size: 16px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #0f172a; margin: 0; }
-              .header-sub { font-size: 11px; font-weight: 600; color: #64748b; margin-top: 4px; text-transform: uppercase; }
-              .content-body { white-space: pre-wrap; font-family: 'Courier New', Courier, monospace; font-size: 12px; background: #fafafa; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; }
-              .footer-box { border-top: 1px solid #cbd5e1; margin-top: 30px; padding-top: 12px; text-align: center; font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+              @page { 
+                size: A4; 
+                margin-top: 3.5cm; 
+                margin-bottom: 3.0cm; 
+                margin-left: 2.5cm; 
+                margin-right: 2.5cm; 
+              }
+              * { box-sizing: border-box; }
+              body { 
+                font-family: Calibri, 'Segoe UI', Candara, Arial, sans-serif; 
+                padding: 0; 
+                margin: 0; 
+                color: #111827; 
+                line-height: 1.5; 
+                font-size: 11pt; 
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              .header-box { 
+                position: fixed; 
+                top: -3.0cm; 
+                left: 0; 
+                right: 0; 
+                width: 100%;
+                height: 2.5cm; 
+                border-bottom: 2px solid #0f172a; 
+                display: flex; 
+                align-items: center; 
+                justify-content: space-between; 
+                box-sizing: border-box;
+                padding-bottom: 4px;
+              }
+              .header-text-container {
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                text-align: left;
+              }
+              .header-title { 
+                font-size: 12pt; 
+                font-weight: bold; 
+                text-transform: uppercase; 
+                color: #0f172a; 
+                letter-spacing: 0.5px;
+                margin: 0;
+              }
+              .header-sub { 
+                font-size: 8.5pt; 
+                color: #475569; 
+                text-transform: uppercase; 
+                letter-spacing: 0.5px;
+                margin-top: 2px;
+              }
+              .logo-img { 
+                max-height: 55px; 
+                max-width: 150px; 
+                object-fit: contain; 
+                margin-left: auto;
+              }
+              .content-body { 
+                white-space: pre-wrap; 
+                font-family: Calibri, 'Segoe UI', Candara, Arial, sans-serif; 
+                font-size: 11pt; 
+                line-height: 1.5;
+                color: #111827;
+              }
+              .footer-box { 
+                position: fixed; 
+                bottom: -2.5cm; 
+                left: 0; 
+                right: 0; 
+                width: 100%;
+                height: 2.0cm; 
+                border-top: 1px solid #cbd5e1; 
+                text-align: center; 
+                font-size: 8.5pt; 
+                color: #64748b; 
+                padding-top: 8px;
+                box-sizing: border-box;
+              }
             </style>
           </head>
           <body>
             <div class="header-box">
-              <div class="header-title">${headerTitle}</div>
-              <div class="header-sub">${headerSubtitle}</div>
+              <div class="header-text-container">
+                <div class="header-title">${headerTitle}</div>
+                <div class="header-sub">${headerSubtitle}</div>
+              </div>
+              ${meeting.headerLogoUrl ? `<img src="${meeting.headerLogoUrl}" class="logo-img" alt="Logo" />` : ''}
             </div>
             <div class="content-body">${minutesText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
             <div class="footer-box">${footerText}</div>
@@ -370,7 +447,8 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({ meetin
             <textarea
               value={minutesText}
               onChange={(e) => setMinutesText(e.target.value)}
-              className="w-full h-96 p-4 bg-slate-50/80 border border-slate-200 rounded-2xl font-mono text-xs leading-relaxed text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 custom-scrollbar resize-y"
+              style={{ fontFamily: "Calibri, 'Segoe UI', Candara, Arial, sans-serif" }}
+              className="w-full h-96 p-5 bg-slate-50/90 border border-slate-200 rounded-2xl text-[13px] leading-relaxed text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 custom-scrollbar resize-y"
               placeholder="Ata de Reunião..."
             />
 

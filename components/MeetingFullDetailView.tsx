@@ -438,23 +438,43 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
   };
 
   // Copy for Word
-  const handleCopyForWord = () => {
-    const textHtml = buildOfficialAtaText(meetingState, headerTitle, headerSubtitle, footerText);
-    navigator.clipboard.writeText(textHtml);
-    setCopiedWord(true);
-    setTimeout(() => setCopiedWord(false), 2000);
+  const handleCopyForWord = async () => {
+    const htmlContent = buildOfficialAtaHtml(meetingState, headerTitle, headerSubtitle, footerText, headerLogoUrl);
+    const plainText = buildOfficialAtaText(meetingState, headerTitle, headerSubtitle, footerText);
+
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        const blobHtml = new Blob([htmlContent], { type: 'text/html' });
+        const blobText = new Blob([plainText], { type: 'text/plain' });
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': blobHtml,
+            'text/plain': blobText,
+          })
+        ]);
+      } else {
+        await navigator.clipboard.writeText(plainText);
+      }
+      setCopiedWord(true);
+      setTimeout(() => setCopiedWord(false), 2000);
+    } catch (e) {
+      await navigator.clipboard.writeText(plainText);
+      setCopiedWord(true);
+      setTimeout(() => setCopiedWord(false), 2000);
+    }
   };
 
   // Print PDF
   const handlePrintPdf = () => {
     const printWindow = window.open('', '_blank');
     if (printWindow) {
-      const ataText = buildOfficialAtaText(meetingState, headerTitle, headerSubtitle, footerText);
+      const ataHtml = buildOfficialAtaHtml(meetingState, headerTitle, headerSubtitle, footerText, headerLogoUrl);
       printWindow.document.write(`
         <!DOCTYPE html>
         <html>
           <head>
             <title>Ata Oficial - ${meetingState.title}</title>
+            <meta charset="utf-8">
             <style>
               @page { 
                 size: A4; 
@@ -463,52 +483,89 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
                 margin-left: 2.5cm; 
                 margin-right: 2.5cm; 
               }
+              * {
+                box-sizing: border-box;
+              }
               body { 
-                font-family: 'Times New Roman', Times, serif; 
+                font-family: Calibri, 'Segoe UI', Candara, Arial, sans-serif; 
                 padding: 0; 
                 margin: 0; 
                 color: #111827; 
-                line-height: 1.6; 
+                line-height: 1.5; 
                 font-size: 11pt; 
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
               }
               .header-box { 
                 position: fixed; 
                 top: -3.0cm; 
                 left: 0; 
                 right: 0; 
+                width: 100%;
                 height: 2.5cm; 
                 border-bottom: 2px solid #0f172a; 
                 display: flex; 
                 align-items: center; 
                 justify-content: space-between; 
+                box-sizing: border-box;
+                padding-bottom: 4px;
               }
-              .header-title { font-size: 13pt; font-weight: bold; text-transform: uppercase; color: #0f172a; }
-              .header-sub { font-size: 9pt; color: #475569; text-transform: uppercase; }
-              .logo-img { max-height: 50px; max-width: 140px; object-fit: contain; }
+              .header-text-container {
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                text-align: left;
+              }
+              .header-title { 
+                font-size: 12pt; 
+                font-weight: bold; 
+                text-transform: uppercase; 
+                color: #0f172a; 
+                letter-spacing: 0.5px;
+                margin: 0;
+              }
+              .header-sub { 
+                font-size: 8.5pt; 
+                color: #475569; 
+                text-transform: uppercase; 
+                letter-spacing: 0.5px;
+                margin-top: 2px;
+              }
+              .logo-img { 
+                max-height: 55px; 
+                max-width: 150px; 
+                object-fit: contain; 
+                margin-left: auto;
+              }
               .footer-box { 
                 position: fixed; 
                 bottom: -2.5cm; 
                 left: 0; 
                 right: 0; 
+                width: 100%;
                 height: 2.0cm; 
                 border-top: 1px solid #cbd5e1; 
                 text-align: center; 
-                font-size: 8pt; 
+                font-size: 8.5pt; 
                 color: #64748b; 
                 padding-top: 8px;
+                box-sizing: border-box;
               }
-              .content { white-space: pre-wrap; font-family: inherit; }
+              .content { 
+                width: 100%;
+                font-family: Calibri, 'Segoe UI', Candara, Arial, sans-serif;
+              }
             </style>
           </head>
           <body>
             <div class="header-box">
-              <div>
+              <div class="header-text-container">
                 <div class="header-title">${headerTitle}</div>
                 <div class="header-sub">${headerSubtitle}</div>
               </div>
-              ${headerLogoUrl ? `<img src="${headerLogoUrl}" class="logo-img" />` : ''}
+              ${headerLogoUrl ? `<img src="${headerLogoUrl}" class="logo-img" alt="Logo" />` : ''}
             </div>
-            <div class="content">${ataText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+            <div class="content">${ataHtml}</div>
             <div class="footer-box">${footerText}</div>
           </body>
         </html>
@@ -521,6 +578,177 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
     }
   };
 
+  // Helper to build formatted HTML version with Calibri font, bold titles/subtitles, and colons ':'
+  function buildOfficialAtaHtml(
+    m: Meeting,
+    hTitle: string,
+    hSub: string,
+    fText: string,
+    logoUrl?: string
+  ): string {
+    const dateFormatted = m.date ? m.date.split('-').reverse().join('/') : 'Data N/I';
+    const presentList = (m.presentParticipants && m.presentParticipants.length > 0) 
+      ? m.presentParticipants.join(', ') 
+      : (m.participants.join(', ') || 'Não especificados');
+    const absentList = (m.absentParticipants && m.absentParticipants.length > 0) 
+      ? m.absentParticipants.join(', ') 
+      : 'Nenhum participante ausente registrado';
+
+    const allReferencedNormsMap = new Map<string, { std: RegulatoryStandard; pautaTitles: string[] }>();
+
+    let pautasHtml = '';
+    m.agendaItems.forEach((agenda, idx) => {
+      let discussionsHtml = '';
+      if (agenda.discussionNotes && agenda.discussionNotes.length > 0) {
+        discussionsHtml = `
+          <div style="margin-top: 5px; margin-bottom: 5px;">
+            <div style="font-weight: bold; margin-bottom: 2px;">Discussões e Debates:</div>
+            <ul style="margin: 0; padding-left: 20px; list-style-type: disc;">
+              ${agenda.discussionNotes.map(n => `
+                <li style="margin-bottom: 3px;">
+                  <strong>${n.author || 'Participante'}:</strong> ${n.text}
+                </li>
+              `).join('')}
+            </ul>
+          </div>
+        `;
+      } else if (agenda.discussions) {
+        discussionsHtml = `
+          <div style="margin-top: 4px; margin-bottom: 4px;">
+            <strong>Discussões:</strong> ${agenda.discussions}
+          </div>
+        `;
+      } else {
+        discussionsHtml = `
+          <div style="margin-top: 4px; margin-bottom: 4px;">
+            <strong>Discussões:</strong> Registrado em pauta conforme apresentação.
+          </div>
+        `;
+      }
+
+      let actionsHtml = '';
+      if (agenda.actionItems && agenda.actionItems.length > 0) {
+        actionsHtml = `
+          <div style="margin-top: 5px; margin-bottom: 5px;">
+            <div style="font-weight: bold; margin-bottom: 2px;">Encaminhamentos / Ações:</div>
+            <ul style="margin: 0; padding-left: 20px; list-style-type: disc;">
+              ${agenda.actionItems.map(act => {
+                const prazo = act.dueDate ? act.dueDate.split('-').reverse().join('/') : 'S/P';
+                return `
+                  <li style="margin-bottom: 3px;">
+                    <strong>Ação:</strong> ${act.action} &nbsp;|&nbsp; <strong>Responsável:</strong> ${act.responsible || 'A definir'} &nbsp;|&nbsp; <strong>Prazo:</strong> ${prazo}
+                  </li>
+                `;
+              }).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      // Collect norms
+      if (agenda.linkedRegulatoryStandardIds && agenda.linkedRegulatoryStandardIds.length > 0) {
+        agenda.linkedRegulatoryStandardIds.forEach(normId => {
+          const std = regulatoryStandards.find(s => s.id === normId);
+          if (std) {
+            if (!allReferencedNormsMap.has(std.id)) {
+              allReferencedNormsMap.set(std.id, { std, pautaTitles: [agenda.title] });
+            } else {
+              allReferencedNormsMap.get(std.id)?.pautaTitles.push(agenda.title);
+            }
+          }
+        });
+      }
+
+      pautasHtml += `
+        <div style="margin-bottom: 18px;">
+          <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase; color: #0f172a; margin-bottom: 5px; border-bottom: 1px dashed #cbd5e1; padding-bottom: 2px;">
+            PAUTA N.º ${idx + 1}: ${agenda.title.toUpperCase()}
+          </div>
+          ${agenda.description ? `<div style="margin-bottom: 4px;"><strong>Objetivo / Contexto:</strong> ${agenda.description}</div>` : ''}
+          ${discussionsHtml}
+          <div style="margin-top: 4px; margin-bottom: 4px;">
+            <strong>Decisão Final / Deliberação:</strong> ${agenda.decisions || 'Pauta deliberada e alinhada.'}
+          </div>
+          ${actionsHtml}
+        </div>
+      `;
+    });
+
+    let normsHtml = '';
+    if (allReferencedNormsMap.size === 0) {
+      normsHtml = `<p style="margin: 0; color: #475569;">Nenhuma norma regulatória especificamente vinculada às pautas desta reunião.</p>`;
+    } else {
+      normsHtml = `
+        <div style="margin-top: 6px;">
+          ${Array.from(allReferencedNormsMap.values()).map(({ std, pautaTitles }, i) => `
+            <div style="margin-bottom: 10px;">
+              <div><strong>${i + 1}. [${std.type || 'Norma'}] ${std.name}</strong></div>
+              ${std.summary ? `<div style="padding-left: 15px;">• <strong>Resumo:</strong> ${std.summary}</div>` : ''}
+              ${std.theme ? `<div style="padding-left: 15px;">• <strong>Tema:</strong> ${std.theme}</div>` : ''}
+              <div style="padding-left: 15px;">• <strong>Aplicada nas pautas:</strong> ${pautaTitles.join(', ')}</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    let conclusionsHtml = '';
+    if (m.generalConclusions) {
+      conclusionsHtml = `
+        <div style="margin-top: 20px; margin-bottom: 16px;">
+          <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase; color: #0f172a; margin-bottom: 4px;">
+            CONCLUSÕES GERAIS E PRÓXIMOS PASSOS:
+          </div>
+          <div style="text-align: justify; line-height: 1.5;">${m.generalConclusions}</div>
+        </div>
+      `;
+    }
+
+    return `
+      <div style="font-family: Calibri, 'Segoe UI', Candara, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #111827; text-align: justify;">
+        
+        <!-- TÍTULO PRINCIPAL DA ATA -->
+        <div style="text-align: center; margin-bottom: 18px;">
+          <div style="font-size: 12.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #0f172a;">
+            ATA OFICIAL DE REUNIÃO - ${m.projectName ? m.projectName.toUpperCase() : 'COMITÊ GESTOR'}
+          </div>
+        </div>
+
+        <!-- BLOCO DE INFORMAÇÕES INICIAIS -->
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 14px; margin-bottom: 20px; line-height: 1.6;">
+          <div style="margin-bottom: 4px;"><strong>TÍTULO DA REUNIÃO:</strong> ${m.title}</div>
+          <div style="margin-bottom: 4px;">
+            <strong>Data:</strong> ${dateFormatted} &nbsp;|&nbsp; 
+            <strong>Horário:</strong> ${m.time || '10:00'} &nbsp;|&nbsp; 
+            <strong>Local:</strong> ${m.location || 'MS Teams / CTVacinas'}
+          </div>
+          <div style="margin-bottom: 4px;"><strong>Moderador / Presidente:</strong> ${m.moderator || 'Não informado'}</div>
+          <div style="margin-bottom: 4px;"><strong>Participantes Presentes:</strong> ${presentList}</div>
+          <div><strong>Ausências Justificadas:</strong> ${absentList}</div>
+        </div>
+
+        <!-- SEÇÃO 1: DELIBERAÇÕES E ENCAMINHAMENTOS -->
+        <div style="margin-bottom: 20px;">
+          <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase; color: #0f172a; border-bottom: 2px solid #0f172a; padding-bottom: 3px; margin-bottom: 12px; letter-spacing: 0.5px;">
+            DELIBERAÇÕES E ENCAMINHAMENTOS POR PAUTA:
+          </div>
+          ${pautasHtml}
+        </div>
+
+        ${conclusionsHtml}
+
+        <!-- SEÇÃO 2: NORMAS REGULATÓRIAS -->
+        <div style="margin-top: 22px; margin-bottom: 16px;">
+          <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase; color: #0f172a; border-bottom: 2px solid #0f172a; padding-bottom: 3px; margin-bottom: 10px; letter-spacing: 0.5px;">
+            REFERÊNCIAS DE NORMAS REGULATÓRIAS UTILIZADAS NESTA REUNIÃO:
+          </div>
+          ${normsHtml}
+        </div>
+
+      </div>
+    `;
+  }
+
   // Helper to build full official text with Norms Reference section at bottom
   function buildOfficialAtaText(m: Meeting, hTitle: string, hSub: string, fText: string): string {
     const dateFormatted = m.date ? m.date.split('-').reverse().join('/') : 'Data N/I';
@@ -529,12 +757,12 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
 
     let body = `ATA OFICIAL DE REUNIÃO - ${m.projectName ? m.projectName.toUpperCase() : 'COMITÊ GESTOR'}\n\n`;
     body += `TÍTULO DA REUNIÃO: ${m.title}\n`;
-    body += `Data: ${dateFormatted} ${m.time ? '| Horário: ' + m.time : ''} | Local: ${m.location || 'CTVacinas'}\n`;
+    body += `Data: ${dateFormatted} | Horário: ${m.time || '10:00'} | Local: ${m.location || 'MS Teams / CTVacinas'}\n`;
     body += `Moderador / Presidente: ${m.moderator || 'Não informado'}\n`;
     body += `Participantes Presentes: ${presentList}\n`;
     body += `Ausências Justificadas: ${absentList}\n\n`;
 
-    body += `DELIBERAÇÕES E ENCAMINHAMENTOS POR PAUTA\n\n`;
+    body += `DELIBERAÇÕES E ENCAMINHAMENTOS POR PAUTA:\n\n`;
 
     const allReferencedNormsMap = new Map<string, { std: RegulatoryStandard; pautaTitles: string[] }>();
 
@@ -559,7 +787,8 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
       if (agenda.actionItems && agenda.actionItems.length > 0) {
         body += `Encaminhamentos / Ações:\n`;
         agenda.actionItems.forEach(act => {
-          body += `   • Ação: ${act.action} | Responsável: ${act.responsible || 'A definir'} | Prazo: ${act.dueDate || 'S/P'}\n`;
+          const prazo = act.dueDate ? act.dueDate.split('-').reverse().join('/') : 'S/P';
+          body += `   • Ação: ${act.action} | Responsável: ${act.responsible || 'A definir'} | Prazo: ${prazo}\n`;
         });
       }
 
@@ -577,7 +806,7 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
         });
       }
 
-      body += `\n\n`;
+      body += `\n`;
     });
 
     if (m.generalConclusions) {
@@ -585,16 +814,16 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
     }
 
     // SECTION FOR REFERENCED NORMS AT THE END OF ATA
-    body += `REFERÊNCIAS DE NORMAS REGULATÓRIAS UTILIZADAS NESTA REUNIÃO\n\n`;
+    body += `REFERÊNCIAS DE NORMAS REGULATÓRIAS UTILIZADAS NESTA REUNIÃO:\n\n`;
 
     if (allReferencedNormsMap.size === 0) {
       body += `Nenhuma norma regulatória especificamente vinculada às pautas desta reunião.\n`;
     } else {
       Array.from(allReferencedNormsMap.values()).forEach(({ std, pautaTitles }, i) => {
         body += `${i + 1}. [${std.type || 'Norma'}] ${std.name}\n`;
-        if (std.summary) body += `   Resumo: ${std.summary}\n`;
-        if (std.theme) body += `   Tema: ${std.theme}\n`;
-        body += `   Aplicada nas pautas: ${pautaTitles.join(', ')}\n\n`;
+        if (std.summary) body += `   • Resumo: ${std.summary}\n`;
+        if (std.theme) body += `   • Tema: ${std.theme}\n`;
+        body += `   • Aplicada nas pautas: ${pautaTitles.join(', ')}\n\n`;
       });
     }
 
@@ -1306,23 +1535,25 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
 
           {/* A4 OFFICIAL DOCUMENT MOCKUP (Matching Screenshot) */}
           <div className="bg-slate-300 p-8 rounded-3xl flex justify-center shadow-inner overflow-x-auto">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl min-h-[900px] p-12 flex flex-col justify-between border border-slate-200 text-slate-900 font-serif relative">
-              
-              {/* CABEÇALHO OFICIAL (3.5 cm spacing) */}
-              <div className="border-b-2 border-slate-900 pb-4 mb-6 flex items-start justify-between gap-4">
+            <div 
+              style={{ fontFamily: "Calibri, 'Segoe UI', Candara, Arial, sans-serif" }}
+              className="bg-white rounded-xl shadow-2xl w-full max-w-3xl min-h-[900px] p-12 flex flex-col justify-between border border-slate-200 text-slate-900 relative"
+            >
+              {/* CABEÇALHO OFICIAL (aligned with margins) */}
+              <div className="border-b-2 border-slate-900 pb-4 mb-6 flex items-center justify-between gap-4 w-full">
                 <div>
                   <h1 className="text-sm font-black uppercase tracking-wider text-slate-900">{headerTitle}</h1>
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">{headerSubtitle}</p>
                   <p className="text-[9px] font-bold text-teal-700 tracking-wider mt-1">CABEÇALHO OFICIAL (3,5 cm)</p>
                 </div>
 
-                {/* Uploaded Company Logo (like the green "G" logo in image 1) */}
+                {/* Uploaded Company Logo (aligned to margin) */}
                 {headerLogoUrl ? (
-                  <img src={headerLogoUrl} alt="Logo" className="h-14 w-auto object-contain rounded-lg shrink-0 shadow-sm border border-slate-100" />
+                  <img src={headerLogoUrl} alt="Logo" className="max-h-14 max-w-[150px] object-contain rounded-lg shrink-0 shadow-xs border border-slate-100" />
                 ) : (
                   <div 
                     onClick={() => logoInputRef.current?.click()}
-                    className="w-14 h-14 rounded-2xl border-2 border-dashed border-slate-300 hover:border-teal-500 flex flex-col items-center justify-center text-slate-400 hover:text-teal-600 cursor-pointer transition"
+                    className="w-14 h-14 rounded-2xl border-2 border-dashed border-slate-300 hover:border-teal-500 flex flex-col items-center justify-center text-slate-400 hover:text-teal-600 cursor-pointer transition shrink-0"
                     title="Clique para enviar logo da empresa"
                   >
                     <ImageIcon size={20} />
@@ -1331,10 +1562,13 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
                 )}
               </div>
 
-              {/* DOCUMENT CONTENT */}
-              <div className="flex-1 whitespace-pre-wrap font-serif text-sm leading-relaxed text-slate-900 text-justify">
-                {buildOfficialAtaText(meetingState, headerTitle, headerSubtitle, footerText)}
-              </div>
+              {/* DOCUMENT CONTENT (Calibri, bold topics/subtitles, colons ':' separation) */}
+              <div 
+                className="flex-1 text-slate-900 text-justify"
+                dangerouslySetInnerHTML={{
+                  __html: buildOfficialAtaHtml(meetingState, headerTitle, headerSubtitle, footerText, headerLogoUrl)
+                }}
+              />
 
               {/* RODAPÉ OFICIAL (3.0 cm spacing) */}
               <div className="border-t border-slate-300 pt-4 mt-8 text-center space-y-1">

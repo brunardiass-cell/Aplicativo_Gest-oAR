@@ -48,6 +48,79 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
 
   const selectedProject = projects.find(p => p.id === projectId);
 
+  // Combined team list (Project team + Global team + Other projects teams)
+  const combinedTeamList = React.useMemo(() => {
+    const list: { id: string; name: string; role: string; source: 'project' | 'global' }[] = [];
+    const addedNames = new Set<string>();
+
+    // 1. Selected project team members
+    if (selectedProject?.team && selectedProject.team.length > 0) {
+      selectedProject.team.forEach((name, idx) => {
+        if (name && name.trim()) {
+          const cleanName = name.trim();
+          const key = cleanName.toLowerCase();
+          if (!addedNames.has(key)) {
+            addedNames.add(key);
+            const globalMatch = teamMembers.find(tm => tm.name.trim().toLowerCase() === key);
+            list.push({
+              id: globalMatch?.id || `proj_member_${idx}_${cleanName}`,
+              name: cleanName,
+              role: globalMatch?.role || `Equipe do Projeto ${selectedProject.name}`,
+              source: 'project'
+            });
+          }
+        }
+      });
+    }
+
+    // 2. Global team members
+    teamMembers.forEach(tm => {
+      if (tm.name && tm.name.trim()) {
+        const cleanName = tm.name.trim();
+        const key = cleanName.toLowerCase();
+        if (!addedNames.has(key)) {
+          addedNames.add(key);
+          list.push({
+            id: tm.id,
+            name: cleanName,
+            role: tm.role || 'Equipe',
+            source: 'global'
+          });
+        }
+      }
+    });
+
+    // 3. Members from all other projects
+    projects.forEach(p => {
+      if (p.team && p.team.length > 0) {
+        p.team.forEach((name, idx) => {
+          if (name && name.trim()) {
+            const cleanName = name.trim();
+            const key = cleanName.toLowerCase();
+            if (!addedNames.has(key)) {
+              addedNames.add(key);
+              list.push({
+                id: `other_proj_${p.id}_${idx}`,
+                name: cleanName,
+                role: `Equipe (${p.name})`,
+                source: 'project'
+              });
+            }
+          }
+        });
+      }
+    });
+
+    return list;
+  }, [selectedProject, teamMembers, projects]);
+
+  // Auto-populate participants from selected project's team if creating a new meeting and participants list is empty
+  React.useEffect(() => {
+    if (!meeting && selectedProject?.team && selectedProject.team.length > 0 && participants.length === 0) {
+      setParticipants(selectedProject.team);
+    }
+  }, [projectId, selectedProject, meeting]);
+
   const handleAddParticipant = (name: string) => {
     if (name && !participants.includes(name)) {
       setParticipants([...participants, name]);

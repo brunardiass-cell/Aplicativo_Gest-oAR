@@ -586,22 +586,22 @@ MODERADOR: [MODERADOR]
 PARTICIPANTES: [PARTICIPANTES]
 
 -------------------------------------------------------------------
-1. PAUTAS, DISCUSSÕES E DECISÕES
+1. PAUTAS, DISCUSSÕES E DECISÕES:
 -------------------------------------------------------------------
 [PAUTAS_E_DECISOES]
 
 -------------------------------------------------------------------
-2. REGISTRO DE IMPACTOS REGULATÓRIOS
+2. REGISTRO DE IMPACTOS REGULATÓRIOS:
 -------------------------------------------------------------------
 [IMPACTOS_REGULATORIOS]
 
 -------------------------------------------------------------------
-3. ENCAMINHAMENTOS E PLANO DE AÇÃO
+3. ENCAMINHAMENTOS E PLANO DE AÇÃO:
 -------------------------------------------------------------------
 [ENCAMINHAMENTOS]
 
 -------------------------------------------------------------------
-4. CONCLUSÕES GERAIS E PRÓXIMOS PASSOS
+4. CONCLUSÕES GERAIS E PRÓXIMOS PASSOS:
 -------------------------------------------------------------------
 [CONCLUSOES_GERAIS]
 
