@@ -104,7 +104,15 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
   };
 
   // Handle Convert Action Item to Project Activity (MicroActivity)
-  const handleConvertToActivity = (projectId: string, macroActivityId: string, actionItem: MeetingActionItem) => {
+  const handleConvertToActivity = (
+    projectId: string,
+    macroActivityId: string,
+    actionItem: MeetingActionItem,
+    targetMicroId?: string,
+    customMicroName?: string,
+    assigneeOverride?: string,
+    dueDateOverride?: string
+  ) => {
     if (!onUpdateProjects) return;
 
     const targetProject = projects.find(p => p.id === projectId);
@@ -113,22 +121,54 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
     const targetMacro = targetProject.macroActivities.find(m => m.id === macroActivityId);
     if (!targetMacro) return;
 
-    const newMicro = {
-      id: 'micro_' + Math.random().toString(36).substring(2, 9),
-      name: `[Reunião] ${actionItem.action}`,
-      assignee: actionItem.responsible || 'Usuário',
-      dueDate: actionItem.dueDate || new Date().toISOString().split('T')[0],
-      status: 'Planejado' as const,
-      observations: `Atividade originada do encaminhamento de reunião com prazo ${actionItem.dueDate}.`,
-      progress: 0
-    };
+    let finalMicroId = targetMicroId;
+    let finalMicroName = customMicroName || `[Reunião] ${actionItem.action}`;
+
+    if (targetMicroId && targetMicroId !== 'new') {
+      const existingMicro = targetMacro.microActivities.find(mic => mic.id === targetMicroId);
+      if (existingMicro) {
+        finalMicroName = existingMicro.name;
+      }
+    }
 
     const updatedMacroActivities = targetProject.macroActivities.map(m => {
       if (m.id === macroActivityId) {
-        return {
-          ...m,
-          microActivities: [...m.microActivities, newMicro]
-        };
+        if (targetMicroId && targetMicroId !== 'new') {
+          // Update existing microactivity
+          return {
+            ...m,
+            microActivities: m.microActivities.map(mic => {
+              if (mic.id === targetMicroId) {
+                const prevObs = mic.observations ? `${mic.observations}\n\n` : '';
+                return {
+                  ...mic,
+                  observations: `${prevObs}[Encaminhamento de Reunião]: ${actionItem.action} (Responsável: ${assigneeOverride || actionItem.responsible || mic.assignee}, Prazo: ${dueDateOverride || actionItem.dueDate || mic.dueDate})`,
+                  assignee: assigneeOverride || actionItem.responsible || mic.assignee,
+                  dueDate: dueDateOverride || actionItem.dueDate || mic.dueDate
+                };
+              }
+              return mic;
+            })
+          };
+        } else {
+          // Create new microactivity
+          const generatedId = 'micro_' + Math.random().toString(36).substring(2, 9);
+          finalMicroId = generatedId;
+          const newMicro = {
+            id: generatedId,
+            name: finalMicroName,
+            assignee: assigneeOverride || actionItem.responsible || 'Usuário',
+            dueDate: dueDateOverride || actionItem.dueDate || new Date().toISOString().split('T')[0],
+            status: 'Planejado' as const,
+            observations: `Atividade originada do encaminhamento de reunião: "${actionItem.action}" com prazo ${dueDateOverride || actionItem.dueDate}.`,
+            progress: 0
+          };
+
+          return {
+            ...m,
+            microActivities: [...m.microActivities, newMicro]
+          };
+        }
       }
       return m;
     });
@@ -140,6 +180,14 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
 
     const updatedProjects = projects.map(p => p.id === projectId ? updatedProject : p);
     onUpdateProjects(updatedProjects);
+
+    return {
+      success: true,
+      microId: finalMicroId,
+      microName: finalMicroName,
+      macroName: targetMacro.name,
+      projectName: targetProject.name
+    };
   };
 
   // Save Minutes Text

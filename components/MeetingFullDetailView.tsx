@@ -4,8 +4,10 @@ import {
   ArrowLeft, Copy, Download, Printer, Send, Mail, Image as ImageIcon, Settings, 
   Check, RefreshCw, FileText, Sparkles, BookOpen, UserCheck, UserX, Plus, Trash2, 
   Calendar, Clock, MapPin, Users, CheckCircle2, MessageSquare, AlertCircle, 
-  Paperclip, ExternalLink, ChevronLeft, ChevronRight, Monitor, Share2, FileSpreadsheet, File
+  Paperclip, ExternalLink, ChevronLeft, ChevronRight, Monitor, Share2, FileSpreadsheet, File,
+  FolderKanban, Layers, ArrowRight
 } from 'lucide-react';
+import { RegisterActionAsActivityModal } from './RegisterActionAsActivityModal';
 
 interface MeetingFullDetailViewProps {
   meeting: Meeting;
@@ -15,7 +17,15 @@ interface MeetingFullDetailViewProps {
   currentUser?: string;
   onBack: () => void;
   onSaveMeeting: (updatedMeeting: Meeting, createdContributions?: DossierContribution[]) => void;
-  onConvertToActivity?: (projectId: string, macroActivityId: string, actionItem: MeetingActionItem) => void;
+  onConvertToActivity?: (
+    projectId: string,
+    macroActivityId: string,
+    actionItem: MeetingActionItem,
+    targetMicroId?: string,
+    customMicroName?: string,
+    assigneeOverride?: string,
+    dueDateOverride?: string
+  ) => any;
 }
 
 export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
@@ -306,8 +316,86 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
     }));
   };
 
+  // Action item registration modal state
+  const [actionForRegisterModal, setActionForRegisterModal] = useState<{
+    agenda: MeetingAgendaItem;
+    action: MeetingActionItem;
+  } | null>(null);
+
+  // Update Action Item
+  const handleUpdateActionItem = (agendaId: string, actionId: string, updates: Partial<MeetingActionItem>) => {
+    setMeetingState(prev => ({
+      ...prev,
+      agendaItems: prev.agendaItems.map(ag => {
+        if (ag.id === agendaId) {
+          return {
+            ...ag,
+            actionItems: (ag.actionItems || []).map(act => act.id === actionId ? { ...act, ...updates } : act)
+          };
+        }
+        return ag;
+      })
+    }));
+  };
+
+  // Delete Action Item
+  const handleDeleteActionItem = (agendaId: string, actionId: string) => {
+    setMeetingState(prev => ({
+      ...prev,
+      agendaItems: prev.agendaItems.map(ag => {
+        if (ag.id === agendaId) {
+          return {
+            ...ag,
+            actionItems: (ag.actionItems || []).filter(act => act.id !== actionId)
+          };
+        }
+        return ag;
+      })
+    }));
+  };
+
+  // Confirm registration from modal
+  const handleConfirmRegisterFromModal = (data: {
+    projectId: string;
+    macroActivityId: string;
+    targetMicroId?: string;
+    microName: string;
+    assignee: string;
+    dueDate: string;
+    isNewMicro: boolean;
+  }) => {
+    if (!actionForRegisterModal || !onConvertToActivity) return;
+    const { agenda, action } = actionForRegisterModal;
+
+    const result = onConvertToActivity(
+      data.projectId,
+      data.macroActivityId,
+      action,
+      data.targetMicroId,
+      data.microName,
+      data.assignee,
+      data.dueDate
+    ) as any;
+
+    const proj = projects.find(p => p.id === data.projectId);
+    const macro = proj?.macroActivities.find(m => m.id === data.macroActivityId);
+    const micro = macro?.microActivities.find(mic => mic.id === (result?.microId || data.targetMicroId));
+
+    handleUpdateActionItem(agenda.id, action.id, {
+      convertedToActivity: true,
+      targetProjectId: data.projectId,
+      targetProjectName: proj?.name || data.projectId,
+      targetMacroId: data.macroActivityId,
+      targetMacroName: macro?.name || data.macroActivityId,
+      targetMicroId: result?.microId || data.targetMicroId,
+      targetMicroName: result?.microName || data.microName || micro?.name || action.action
+    });
+
+    setActionForRegisterModal(null);
+  };
+
   // Add Encaminhamento (Action Item)
-  const handleAddActionItem = (agendaId: string) => {
+  const handleAddActionItem = (agendaId: string, andOpenRegisterModal: boolean = false) => {
     const action = newActionText[agendaId]?.trim();
     if (!action) return;
 
@@ -339,6 +427,16 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
     setNewActionText(prev => ({ ...prev, [agendaId]: '' }));
     setNewActionResp(prev => ({ ...prev, [agendaId]: '' }));
     setNewActionDate(prev => ({ ...prev, [agendaId]: '' }));
+
+    if (andOpenRegisterModal) {
+      const currentAgenda = meetingState.agendaItems.find(a => a.id === agendaId);
+      if (currentAgenda) {
+        setActionForRegisterModal({
+          agenda: currentAgenda,
+          action: newAction
+        });
+      }
+    }
   };
 
   // Toggle Action Status
@@ -1264,58 +1362,125 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
                         </div>
 
                         {/* Encaminhamentos */}
-                        <div className="space-y-2">
-                          <h4 className="text-xs font-black uppercase text-slate-700 tracking-wider">Encaminhamentos</h4>
-                          
-                          <div className="space-y-2">
-                            {actions.map(act => (
-                              <div key={act.id} className="p-2.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between gap-2 text-xs">
-                                <div className="flex items-center gap-2 flex-1">
-                                  <input
-                                    type="checkbox"
-                                    checked={act.status === 'Concluído'}
-                                    onChange={() => handleToggleActionStatus(agenda.id, act.id)}
-                                    className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500 cursor-pointer"
-                                  />
-                                  <span className={`font-medium ${act.status === 'Concluído' ? 'line-through text-slate-400' : 'text-slate-800'}`}>
-                                    {act.action}
-                                  </span>
-                                </div>
-                                <span className="text-[10px] font-bold text-slate-500 shrink-0">
-                                  {act.responsible} • {act.dueDate}
-                                </span>
-                              </div>
-                            ))}
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                              <FolderKanban size={13} className="text-indigo-600" />
+                              Encaminhamentos / Ações da Pauta ({actions.length})
+                            </h4>
                           </div>
+                          
+                          {actions.length === 0 ? (
+                            <p className="text-[11px] text-slate-400 italic py-1">Nenhum encaminhamento registrado para esta pauta.</p>
+                          ) : (
+                            <div className="space-y-2.5">
+                              {actions.map(act => (
+                                <div key={act.id} className="p-3 bg-slate-50 border border-slate-200/90 rounded-2xl space-y-2 text-xs hover:border-slate-300 transition">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-start gap-2 flex-1">
+                                      <input
+                                        type="checkbox"
+                                        checked={act.status === 'Concluído'}
+                                        onChange={() => handleToggleActionStatus(agenda.id, act.id)}
+                                        className="w-4 h-4 mt-0.5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                                      />
+                                      <div className="space-y-0.5">
+                                        <span className={`font-bold block ${act.status === 'Concluído' ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+                                          {act.action}
+                                        </span>
+                                        <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 font-semibold">
+                                          <span><strong>Resp:</strong> {act.responsible || 'A definir'}</span>
+                                          <span>•</span>
+                                          <span><strong>Prazo:</strong> {act.dueDate ? act.dueDate.split('-').reverse().join('/') : 'S/P'}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteActionItem(agenda.id, act.id)}
+                                      className="p-1 text-slate-400 hover:text-rose-600 rounded-lg transition"
+                                      title="Excluir Encaminhamento"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
+
+                                  {/* Registration status badge or conversion button */}
+                                  <div className="pt-2 border-t border-slate-200/70 flex flex-wrap items-center justify-between gap-2">
+                                    {act.convertedToActivity ? (
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        <span className="text-[10px] font-black uppercase text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                                          <Check size={12} className="text-emerald-700 shrink-0" />
+                                          <span>Atividade no Projeto: {act.targetProjectName || 'Projeto'}{act.targetMacroName ? ` › ${act.targetMacroName}` : ''}{act.targetMicroName ? ` › ${act.targetMicroName}` : ''}</span>
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => setActionForRegisterModal({ agenda, action: act })}
+                                          className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer px-1"
+                                        >
+                                          Alterar Vínculo
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => setActionForRegisterModal({ agenda, action: act })}
+                                        className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 transition shadow-xs cursor-pointer ml-auto"
+                                      >
+                                        <FolderKanban size={12} />
+                                        <span>Registrar como Atividade do Projeto</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
 
                           {/* Add Encaminhamento row */}
-                          <div className="p-2.5 bg-slate-50 rounded-2xl border border-dashed border-slate-300 space-y-2">
+                          <div className="p-3 bg-slate-50/80 rounded-2xl border border-dashed border-slate-300 space-y-2.5">
+                            <span className="text-[10px] font-black uppercase text-slate-500 block">Novo Encaminhamento</span>
                             <input
                               type="text"
-                              placeholder="Novo encaminhamento..."
+                              placeholder="Descreva o encaminhamento / ação resultante..."
                               value={newActionText[agenda.id] || ''}
                               onChange={e => setNewActionText({ ...newActionText, [agenda.id]: e.target.value })}
-                              className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs outline-none"
+                              className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
                             />
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="text"
-                                placeholder="Responsável"
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <select
                                 value={newActionResp[agenda.id] || ''}
                                 onChange={e => setNewActionResp({ ...newActionResp, [agenda.id]: e.target.value })}
-                                className="flex-1 p-2 bg-white border border-slate-200 rounded-xl text-xs outline-none"
-                              />
+                                className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                              >
+                                <option value="">Selecione o Responsável</option>
+                                {teamMembers.map(tm => (
+                                  <option key={tm.id} value={tm.name}>{tm.name}</option>
+                                ))}
+                              </select>
                               <input
                                 type="date"
                                 value={newActionDate[agenda.id] || ''}
                                 onChange={e => setNewActionDate({ ...newActionDate, [agenda.id]: e.target.value })}
-                                className="p-2 bg-white border border-slate-200 rounded-xl text-xs outline-none"
+                                className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
                               />
+                            </div>
+                            <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
                               <button
-                                onClick={() => handleAddActionItem(agenda.id)}
-                                className="px-3 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition shrink-0"
+                                type="button"
+                                onClick={() => handleAddActionItem(agenda.id, false)}
+                                className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs transition shrink-0"
                               >
-                                + Adicionar
+                                + Adicionar Encaminhamento
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleAddActionItem(agenda.id, true)}
+                                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition shrink-0 flex items-center gap-1.5 shadow-sm"
+                              >
+                                <FolderKanban size={13} />
+                                <span>+ Adicionar e Registrar no Projeto</span>
                               </button>
                             </div>
                           </div>
@@ -1906,6 +2071,22 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
             </footer>
           </div>
         </div>
+      )}
+
+      {/* REGISTRATION MODAL FOR ACTION ITEM -> PROJECT ACTIVITY */}
+      {actionForRegisterModal && (
+        <RegisterActionAsActivityModal
+          isOpen={Boolean(actionForRegisterModal)}
+          onClose={() => setActionForRegisterModal(null)}
+          actionItem={actionForRegisterModal.action}
+          agendaTitle={actionForRegisterModal.agenda.title}
+          meetingTitle={meetingState.title}
+          defaultProjectId={meetingState.projectId}
+          defaultMacroId={actionForRegisterModal.agenda.macroActivityId}
+          projects={projects}
+          teamMembers={teamMembers}
+          onConfirm={handleConfirmRegisterFromModal}
+        />
       )}
 
     </div>

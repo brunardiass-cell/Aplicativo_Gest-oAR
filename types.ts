@@ -90,7 +90,12 @@ export interface MeetingActionItem {
   status: 'Pendente' | 'Em Andamento' | 'Concluído';
   convertedToActivity?: boolean;
   convertedActivityId?: string;
+  targetProjectId?: string;
+  targetProjectName?: string;
   targetMacroId?: string;
+  targetMacroName?: string;
+  targetMicroId?: string;
+  targetMicroName?: string;
 }
 
 export interface MeetingAgendaNote {

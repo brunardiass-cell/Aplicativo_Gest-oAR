@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Meeting, MeetingAgendaItem, MeetingActionItem, Project, TeamMember, RegulatoryStandard, DossierContribution } from '../types';
-import { X, Plus, Trash2, Calendar, Clock, MapPin, Users, ShieldCheck, CheckCircle2, FileText, ArrowRight, Layers, Sparkles, MessageSquare, AlertCircle, Link as LinkIcon, Check, BookOpen, UserCheck, UserX, Paperclip, Download } from 'lucide-react';
+import { X, Plus, Trash2, Calendar, Clock, MapPin, Users, ShieldCheck, CheckCircle2, FileText, ArrowRight, Layers, Sparkles, MessageSquare, AlertCircle, Link as LinkIcon, Check, BookOpen, UserCheck, UserX, Paperclip, Download, FolderKanban } from 'lucide-react';
+import { RegisterActionAsActivityModal } from './RegisterActionAsActivityModal';
 
 interface MeetingModalProps {
   meeting?: Meeting | null;
@@ -9,7 +10,15 @@ interface MeetingModalProps {
   regulatoryStandards: RegulatoryStandard[];
   onClose: () => void;
   onSave: (meeting: Meeting, createdContributions?: DossierContribution[]) => void;
-  onConvertToActivity: (projectId: string, macroActivityId: string, actionItem: MeetingActionItem) => void;
+  onConvertToActivity: (
+    projectId: string,
+    macroActivityId: string,
+    actionItem: MeetingActionItem,
+    targetMicroId?: string,
+    customMicroName?: string,
+    assigneeOverride?: string,
+    dueDateOverride?: string
+  ) => any;
   onOpenMinutes: (meeting: Meeting) => void;
 }
 
@@ -200,20 +209,52 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
     }));
   };
 
+  const [actionForRegisterModal, setActionForRegisterModal] = useState<{
+    agenda: MeetingAgendaItem;
+    action: MeetingActionItem;
+  } | null>(null);
+
+  const handleConfirmRegisterFromModal = (data: {
+    projectId: string;
+    macroActivityId: string;
+    targetMicroId?: string;
+    microName: string;
+    assignee: string;
+    dueDate: string;
+    isNewMicro: boolean;
+  }) => {
+    if (!actionForRegisterModal) return;
+    const { agenda, action } = actionForRegisterModal;
+
+    const result = onConvertToActivity(
+      data.projectId,
+      data.macroActivityId,
+      action,
+      data.targetMicroId,
+      data.microName,
+      data.assignee,
+      data.dueDate
+    ) as any;
+
+    const proj = projects.find(p => p.id === data.projectId);
+    const macro = proj?.macroActivities.find(m => m.id === data.macroActivityId);
+    const micro = macro?.microActivities.find(mic => mic.id === (result?.microId || data.targetMicroId));
+
+    handleUpdateActionItem(agenda.id, action.id, {
+      convertedToActivity: true,
+      targetProjectId: data.projectId,
+      targetProjectName: proj?.name || data.projectId,
+      targetMacroId: data.macroActivityId,
+      targetMacroName: macro?.name || data.macroActivityId,
+      targetMicroId: result?.microId || data.targetMicroId,
+      targetMicroName: result?.microName || data.microName || micro?.name || action.action
+    });
+
+    setActionForRegisterModal(null);
+  };
+
   const handleConvertActionToActivity = (agenda: MeetingAgendaItem, actionItem: MeetingActionItem) => {
-    if (!projectId) {
-      alert('Selecione um projeto para vincular a atividade.');
-      return;
-    }
-
-    const targetMacroId = agenda.macroActivityId || selectedProject?.macroActivities?.[0]?.id;
-    if (!targetMacroId) {
-      alert('Nenhuma macroatividade foi encontrada no projeto para receber a nova atividade.');
-      return;
-    }
-
-    onConvertToActivity(projectId, targetMacroId, actionItem);
-    handleUpdateActionItem(agenda.id, actionItem.id, { convertedToActivity: true });
+    setActionForRegisterModal({ agenda, action: actionItem });
   };
 
   const handleFileUploadForPautaInModal = (agendaId: string, filesList: FileList | null) => {
@@ -1051,18 +1092,29 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                           </div>
 
                           {/* Action Conversion Option */}
-                          <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between">
+                          <div className="pt-2 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-2">
                             {act.convertedToActivity ? (
-                              <span className="text-[10px] font-black uppercase text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-lg flex items-center gap-1">
-                                <Check size={12} /> Convertida em Atividade do Projeto
-                              </span>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-[10px] font-black uppercase text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                                  <Check size={12} className="text-emerald-700 shrink-0" />
+                                  <span>Atividade no Projeto: {act.targetProjectName || 'Projeto'}{act.targetMacroName ? ` › ${act.targetMacroName}` : ''}{act.targetMicroName ? ` › ${act.targetMicroName}` : ''}</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setActionForRegisterModal({ agenda, action: act })}
+                                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer px-1"
+                                >
+                                  Alterar Vínculo
+                                </button>
+                              </div>
                             ) : (
                               <button
                                 type="button"
                                 onClick={() => handleConvertActionToActivity(agenda, act)}
-                                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-extrabold text-[10px] uppercase tracking-wider flex items-center gap-1 transition shadow-sm"
+                                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-extrabold text-[10px] uppercase tracking-wider flex items-center gap-1.5 transition shadow-xs cursor-pointer ml-auto"
                               >
-                                <ArrowRight size={12} /> Converter em Atividade do Projeto
+                                <FolderKanban size={12} />
+                                <span>Registrar como Atividade do Projeto</span>
                               </button>
                             )}
                           </div>
@@ -1205,6 +1257,22 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
             </button>
           </div>
         </footer>
+
+        {/* REGISTRATION MODAL FOR ACTION ITEM -> PROJECT ACTIVITY */}
+        {actionForRegisterModal && (
+          <RegisterActionAsActivityModal
+            isOpen={Boolean(actionForRegisterModal)}
+            onClose={() => setActionForRegisterModal(null)}
+            actionItem={actionForRegisterModal.action}
+            agendaTitle={actionForRegisterModal.agenda.title}
+            meetingTitle={title}
+            defaultProjectId={projectId}
+            defaultMacroId={actionForRegisterModal.agenda.macroActivityId}
+            projects={projects}
+            teamMembers={teamMembers}
+            onConfirm={handleConfirmRegisterFromModal}
+          />
+        )}
 
       </div>
     </div>
