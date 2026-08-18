@@ -10,12 +10,36 @@ interface ProjectKanbanViewProps {
   onNavigateToMicroActivity: (projectId: string, microId: string) => void;
   regulatoryStandards: RegulatoryStandard[];
   onOpenRegulatoryModal: (activityName: string) => void;
+  currentUser?: { name: string; isLeader?: boolean; isComiteGestor?: boolean } | null;
+  currentUserRole?: string | null;
 }
 
-const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdateProject, onNavigateToMicroActivity, regulatoryStandards, onOpenRegulatoryModal }) => {
+const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ 
+  project, 
+  onUpdateProject, 
+  onNavigateToMicroActivity, 
+  regulatoryStandards, 
+  onOpenRegulatoryModal,
+  currentUser,
+  currentUserRole
+}) => {
   const [editingDateId, setEditingDateId] = useState<string | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [detailType, setDetailType] = useState<'prerequisites' | 'budget' | null>(null);
+
+  const isLeader = useMemo(() => {
+    return (
+      currentUserRole === 'admin' ||
+      currentUserRole === 'gerente' ||
+      currentUser?.isLeader ||
+      currentUser?.isComiteGestor ||
+      currentUser?.name === 'Visão Geral da Equipe'
+    );
+  }, [currentUserRole, currentUser]);
+
+  const canEditAllInProject = useMemo(() => {
+    return isLeader || (project.responsible === currentUser?.name);
+  }, [isLeader, project.responsible, currentUser?.name]);
   const columns = [
     { title: 'Planejado', statuses: ['Planejado'] as MicroActivityStatus[], color: 'border-slate-300 bg-slate-55 border bg-slate-50 text-slate-700', badge: 'bg-slate-200 text-slate-700', bgCardContainer: 'bg-slate-50/80 border-slate-100' },
     { title: 'Em andamento', statuses: ['Em andamento'] as MicroActivityStatus[], color: 'border-blue-300 bg-blue-50 border bg-blue-50/40 text-blue-800', badge: 'bg-blue-200 text-blue-800', bgCardContainer: 'bg-blue-50/20 border-blue-100' },
@@ -122,6 +146,9 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
             <div className={`flex-1 space-y-4 p-4 rounded-[2rem] border ${column.bgCardContainer}`}>
               {tasksInColumn.map(task => {
                 const visuals = getTaskVisuals(task.status);
+                const isTaskAssignee = (task.assignee || '').toLowerCase().trim() === (currentUser?.name || '').toLowerCase().trim();
+                const canEditTask = canEditAllInProject || isTaskAssignee || !task.assignee;
+
                 return (
                   <div key={task.id} className={`bg-white p-4 rounded-2xl border-2 hover:shadow-md transition-all duration-300 space-y-3 relative overflow-hidden pl-5 ${visuals.borderColor} ${visuals.bgColor}`}>
                     {/* Left Accent Bar */}
@@ -260,9 +287,9 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
                   
                   <div className="flex items-center justify-between text-[9px] font-bold text-slate-500">
                     <div 
-                      className="flex items-center gap-1 cursor-pointer hover:text-brand-primary transition"
-                      onDoubleClick={() => setEditingDateId(task.id)}
-                      title="Duplo clique para alterar o prazo"
+                      className={`flex items-center gap-1 transition ${canEditTask ? 'cursor-pointer hover:text-brand-primary' : 'cursor-default'}`}
+                      onDoubleClick={() => canEditTask && setEditingDateId(task.id)}
+                      title={canEditTask ? "Duplo clique para alterar o prazo" : "Apenas o responsável ou líder pode alterar o prazo"}
                     >
                       <Clock size={12} />
                       {editingDateId === task.id ? (
@@ -288,8 +315,12 @@ const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({ project, onUpdate
                     <div className="flex items-center gap-2 flex-1">
                       <select 
                         value={task.status} 
+                        disabled={!canEditTask}
                         onChange={(e) => handleStatusChange(task.macroId, task.id, e.target.value as MicroActivityStatus)}
-                        className="text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 rounded-lg px-2 py-1 outline-none flex-1"
+                        className={`text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 rounded-lg px-2 py-1 outline-none flex-1 ${
+                          !canEditTask ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'
+                        }`}
+                        title={!canEditTask ? 'Apenas o responsável pela atividade ou líder pode alterar o status' : undefined}
                       >
                         <option value="Planejado">Planejado</option>
                         <option value="Em andamento">Em andamento</option>

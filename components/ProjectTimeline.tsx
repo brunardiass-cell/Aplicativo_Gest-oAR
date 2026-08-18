@@ -32,6 +32,8 @@ interface ProjectTimelineProps {
   regulatoryStandards: RegulatoryStandard[];
   onOpenRegulatoryModal: (activityName: string) => void;
   meetings?: Meeting[];
+  currentUser?: TeamMember | null;
+  currentUserRole?: string | null;
 }
 
 const ProjectTimeline: React.FC<ProjectTimelineProps> = ({ 
@@ -43,8 +45,14 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({
   onClearTargetMicroId,
   regulatoryStandards,
   onOpenRegulatoryModal,
-  meetings = []
+  meetings = [],
+  currentUser,
+  currentUserRole
 }) => {
+  const isLeader = currentUserRole === 'admin' || (currentUserRole as string) === 'gerente' || currentUser?.isLeader || currentUser?.isComiteGestor || currentUser?.name === 'Visão Geral da Equipe';
+  const isProjectResponsible = (project.responsible || '').toLowerCase().trim() === (currentUser?.name || '').toLowerCase().trim();
+  const canEditAllInProject = isLeader || isProjectResponsible;
+
   const [editingMicro, setEditingMicro] = useState<string | null>(null);
   const [isAddingMacroForPhase, setIsAddingMacroForPhase] = useState<string | null>(null);
   const [newMacroNameInput, setNewMacroNameInput] = useState('');
@@ -275,6 +283,9 @@ const ProjectTimeline: React.FC<ProjectTimelineProps> = ({
               newMacroNameInput={newMacroNameInput}
               setNewMacroNameInput={setNewMacroNameInput}
               handleAddMacroActivity={handleAddMacroActivity}
+              currentUser={currentUser}
+              isLeader={isLeader}
+              canEditAllInProject={canEditAllInProject}
             />
           ))}
         </SortableContext>
@@ -339,13 +350,17 @@ interface PhaseSectionProps {
   newMacroNameInput: string;
   setNewMacroNameInput: (val: string) => void;
   handleAddMacroActivity: (phase: string) => void;
+  currentUser?: TeamMember | null;
+  isLeader: boolean;
+  canEditAllInProject: boolean;
 }
 
 const PhaseSection: React.FC<PhaseSectionProps> = ({
   phase, macros, project, onUpdateProject, onOpenDeletionModal, teamMembers, projectAssignees,
   handleMicroUpdate, addMicroActivity, editingMicro, setEditingMicro, expandedMacros, setExpandedMacros,
   regulatoryStandards, onOpenRegulatoryModal, isAddingMacroForPhase, setIsAddingMacroForPhase,
-  newMacroNameInput, setNewMacroNameInput, handleAddMacroActivity
+  newMacroNameInput, setNewMacroNameInput, handleAddMacroActivity,
+  currentUser, isLeader, canEditAllInProject
 }) => {
   const {
     attributes,
@@ -395,6 +410,9 @@ const PhaseSection: React.FC<PhaseSectionProps> = ({
               onToggleExpand={(expanded) => setExpandedMacros(prev => ({ ...prev, [macro.id]: expanded }))}
               regulatoryStandards={regulatoryStandards}
               onOpenRegulatoryModal={onOpenRegulatoryModal}
+              currentUser={currentUser}
+              isLeader={isLeader}
+              canEditAllInProject={canEditAllInProject}
             />
           ))}
         </SortableContext>
@@ -405,8 +423,9 @@ const PhaseSection: React.FC<PhaseSectionProps> = ({
             <button onClick={() => { setIsAddingMacroForPhase(null); setNewMacroNameInput(''); }} className="p-2 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 transition"><X size={16} /></button>
           </div>
         ) : (
-          phase !== 'Sem Fase Atribuída' &&
-          <button onClick={() => setIsAddingMacroForPhase(phase)} className="w-full mt-2 p-3 bg-slate-100 text-slate-500 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 hover:text-slate-700 transition"><Plus size={14} /> Adicionar Macroatividade</button>
+          phase !== 'Sem Fase Atribuída' && canEditAllInProject && (
+            <button onClick={() => setIsAddingMacroForPhase(phase)} className="w-full mt-2 p-3 bg-slate-100 text-slate-500 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 hover:text-slate-700 transition"><Plus size={14} /> Adicionar Macroatividade</button>
+          )
         )}
       </div>
     </div>
@@ -428,12 +447,16 @@ interface MacroRowProps {
   onToggleExpand?: (expanded: boolean) => void;
   regulatoryStandards: RegulatoryStandard[];
   onOpenRegulatoryModal: (activityName: string) => void;
+  currentUser?: TeamMember | null;
+  isLeader: boolean;
+  canEditAllInProject: boolean;
 }
 
 const MacroRow: React.FC<MacroRowProps> = (props) => {
   const { 
     macro, project, onUpdateProject, onOpenDeletionModal, assignees, onMicroUpdate, onAddMicro, editingMicro, onSetEditingMicro,
-    isExpanded: controlledIsExpanded, onToggleExpand, regulatoryStandards, onOpenRegulatoryModal
+    isExpanded: controlledIsExpanded, onToggleExpand, regulatoryStandards, onOpenRegulatoryModal,
+    currentUser, isLeader, canEditAllInProject
   } = props;
 
   const {
@@ -624,11 +647,13 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
-              <button onClick={() => setShowPrerequisites(true)} className="p-2 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-md" title="Adicionar Pré-requisito"><ListTodo size={16}/></button>
-              <button onClick={() => setIsEditing(true)} className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-md"><Edit size={16}/></button>
-              <button onClick={() => onOpenDeletionModal({ type: 'macro', ids: { projectId: project.id, macroId: macro.id }, name: macro.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"><Trash2 size={16}/></button>
-          </div>
+          {canEditAllInProject && (
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
+                <button onClick={() => setShowPrerequisites(true)} className="p-2 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-md" title="Adicionar Pré-requisito"><ListTodo size={16}/></button>
+                <button onClick={() => setIsEditing(true)} className="p-2 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-md"><Edit size={16}/></button>
+                <button onClick={() => onOpenDeletionModal({ type: 'macro', ids: { projectId: project.id, macroId: macro.id }, name: macro.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"><Trash2 size={16}/></button>
+            </div>
+          )}
           <div className="flex items-center gap-2">
               {macro.prerequisites && macro.prerequisites.length > 0 && (
                   <button 
@@ -691,20 +716,28 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {macro.microActivities.map(micro => (
-                  <MicroActivityTableRow 
-                    key={micro.id} 
-                    micro={micro} 
-                    assignees={assignees} 
-                    onUpdate={(updates) => onMicroUpdate(macro.id, micro.id, updates)} 
-                    onDelete={() => onOpenDeletionModal({ type: 'micro', ids: { projectId: project.id, macroId: macro.id, microId: micro.id }, name: micro.name })} 
-                    onOpenEvidenceModal={(m) => setEvidenceModalMicro(m)}
-                    projectId={project.id}
-                    projectName={project.name}
-                    macroId={macro.id}
-                    macroName={macro.name}
-                  />
-                ))}
+                {macro.microActivities.map(micro => {
+                  const isMicroAssignee = (micro.assignee || '').toLowerCase().trim() === (currentUser?.name || '').toLowerCase().trim();
+                  const canEditMicro = canEditAllInProject || isMicroAssignee || !micro.assignee;
+                  const canReassignMicro = canEditAllInProject;
+
+                  return (
+                    <MicroActivityTableRow 
+                      key={micro.id} 
+                      micro={micro} 
+                      assignees={assignees} 
+                      onUpdate={(updates) => onMicroUpdate(macro.id, micro.id, updates)} 
+                      onDelete={() => onOpenDeletionModal({ type: 'micro', ids: { projectId: project.id, macroId: macro.id, microId: micro.id }, name: micro.name })} 
+                      onOpenEvidenceModal={(m) => setEvidenceModalMicro(m)}
+                      projectId={project.id}
+                      projectName={project.name}
+                      macroId={macro.id}
+                      macroName={macro.name}
+                      canEditMicro={canEditMicro}
+                      canReassignMicro={canReassignMicro}
+                    />
+                  );
+                })}
                 {macro.microActivities.length === 0 && (
                   <tr>
                     <td colSpan={6} className="py-6 text-center text-slate-400 italic text-xs font-medium">
@@ -715,7 +748,9 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
               </tbody>
             </table>
           </div>
-          <button onClick={() => onAddMicro(macro.id)} className="w-full mt-2 p-3 bg-slate-50 text-slate-600 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition border border-dashed border-slate-200"><Plus size={14}/> Adicionar Microatividade</button>
+          {canEditAllInProject && (
+            <button onClick={() => onAddMicro(macro.id)} className="w-full mt-2 p-3 bg-slate-50 text-slate-600 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition border border-dashed border-slate-200"><Plus size={14}/> Adicionar Microatividade</button>
+          )}
         </div>
       )}
 
@@ -727,6 +762,7 @@ const MacroRow: React.FC<MacroRowProps> = (props) => {
             onMicroUpdate(macro.id, evidenceModalMicro.id, updates);
             setEvidenceModalMicro(null);
           }}
+          canEdit={canEditAllInProject || (evidenceModalMicro.assignee || '').toLowerCase().trim() === (currentUser?.name || '').toLowerCase().trim() || !evidenceModalMicro.assignee}
         />
       )}
     </div>
@@ -909,6 +945,8 @@ interface MicroActivityTableRowProps {
   projectName?: string;
   macroId?: string;
   macroName?: string;
+  canEditMicro: boolean;
+  canReassignMicro: boolean;
 }
 
 const MicroActivityTableRow: React.FC<MicroActivityTableRowProps> = ({
@@ -920,7 +958,9 @@ const MicroActivityTableRow: React.FC<MicroActivityTableRowProps> = ({
   projectId = 'geral',
   projectName = 'Geral',
   macroId,
-  macroName
+  macroName,
+  canEditMicro,
+  canReassignMicro
 }) => {
   const [localName, setLocalName] = useState(micro.name);
 
@@ -935,6 +975,7 @@ const MicroActivityTableRow: React.FC<MicroActivityTableRowProps> = ({
   );
 
   const handleToggleRegulatory = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canEditMicro) return;
     const isChecked = e.target.checked;
     
     if (isChecked) {
@@ -969,14 +1010,15 @@ const MicroActivityTableRow: React.FC<MicroActivityTableRowProps> = ({
   };
 
   return (
-    <tr className="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
+    <tr className={`border-b border-slate-100 transition-colors ${canEditMicro ? 'hover:bg-slate-50/80' : 'bg-slate-50/30'}`}>
       <td className="py-3 px-4 font-medium text-slate-800">
         <input 
           type="text"
           value={localName}
+          readOnly={!canEditMicro}
           onChange={(e) => setLocalName(e.target.value)}
           onBlur={() => {
-            if (localName.trim() !== micro.name) {
+            if (canEditMicro && localName.trim() !== micro.name) {
               onUpdate({ name: localName.trim() });
             }
           }}
@@ -985,16 +1027,23 @@ const MicroActivityTableRow: React.FC<MicroActivityTableRowProps> = ({
               (e.target as HTMLInputElement).blur();
             }
           }}
-          className="w-full bg-transparent font-bold text-slate-800 text-xs border-b border-transparent focus:border-teal-500 hover:border-slate-300 outline-none px-1 py-0.5 rounded transition-colors"
+          className={`w-full bg-transparent font-bold text-slate-800 text-xs border-b border-transparent outline-none px-1 py-0.5 rounded transition-colors ${
+            canEditMicro ? 'focus:border-teal-500 hover:border-slate-300' : 'cursor-default text-slate-600'
+          }`}
           placeholder="Nome da atividade..."
+          title={!canEditMicro ? 'Apenas o responsável pela atividade ou líder pode editar' : undefined}
         />
       </td>
 
       <td className="py-3 px-4 text-slate-600">
         <select 
           value={micro.assignee || ''} 
+          disabled={!canReassignMicro}
           onChange={(e) => onUpdate({ assignee: e.target.value })}
-          className="w-full bg-slate-50 border border-slate-200/80 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer"
+          className={`w-full bg-slate-50 border border-slate-200/80 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-teal-500 ${
+            canReassignMicro ? 'cursor-pointer' : 'cursor-not-allowed opacity-80'
+          }`}
+          title={!canReassignMicro ? 'Apenas o líder ou responsável pelo projeto pode reatribuir' : undefined}
         >
           <option value="">Selecione...</option>
           {assignees.map(a => (
@@ -1006,14 +1055,18 @@ const MicroActivityTableRow: React.FC<MicroActivityTableRowProps> = ({
       <td className="py-3 px-4">
         <select 
           value={micro.status} 
+          disabled={!canEditMicro}
           onChange={(e) => onUpdate({ status: e.target.value as MicroActivityStatus })}
-          className={`w-full text-xs font-bold px-2 py-1.5 rounded-xl border outline-none cursor-pointer transition ${
+          className={`w-full text-xs font-bold px-2 py-1.5 rounded-xl border outline-none transition ${
+            !canEditMicro ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'
+          } ${
             micro.status === 'Concluído e aprovado' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' :
             micro.status === 'Em andamento' ? 'bg-amber-50 text-amber-800 border-amber-300' :
             micro.status === 'Concluído com restrições' ? 'bg-orange-50 text-orange-800 border-orange-300' :
             micro.status === 'A repetir / retrabalho' ? 'bg-rose-50 text-rose-800 border-rose-300' :
             'bg-slate-50 text-slate-700 border-slate-200'
           }`}
+          title={!canEditMicro ? 'Apenas o responsável pela atividade ou líder pode alterar o status' : undefined}
         >
           <option value="Planejado">⚪ Não iniciado</option>
           <option value="Em andamento">🟡 Em andamento</option>
@@ -1041,19 +1094,20 @@ const MicroActivityTableRow: React.FC<MicroActivityTableRowProps> = ({
           ) : (
             <>
               <Plus size={13} className="text-slate-500" />
-              <span>Adicionar</span>
+              <span>{canEditMicro ? 'Adicionar' : 'Ver'}</span>
             </>
           )}
         </button>
       </td>
 
       <td className="py-3 px-4">
-        <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+        <label className={`inline-flex items-center gap-2 select-none ${canEditMicro ? 'cursor-pointer' : 'cursor-not-allowed opacity-80'}`}>
           <input 
             type="checkbox"
             checked={Boolean(micro.generatesRegulatoryContent)}
+            disabled={!canEditMicro}
             onChange={handleToggleRegulatory}
-            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer"
+            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer disabled:cursor-not-allowed"
           />
           <span className={`text-xs font-bold ${
             micro.generatesRegulatoryContent ? 'text-indigo-900' : 'text-slate-500'
@@ -1073,14 +1127,16 @@ const MicroActivityTableRow: React.FC<MicroActivityTableRowProps> = ({
           >
             <Eye size={16} />
           </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-            title="Excluir Atividade"
-          >
-            <Trash2 size={16} />
-          </button>
+          {canEditMicro && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+              title="Excluir Atividade"
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
         </div>
       </td>
     </tr>
@@ -1091,14 +1147,19 @@ interface MicroEvidenceModalProps {
   micro: MicroActivity;
   onClose: () => void;
   onSave: (updates: Partial<MicroActivity>) => void;
+  canEdit?: boolean;
 }
 
-const MicroEvidenceModal: React.FC<MicroEvidenceModalProps> = ({ micro, onClose, onSave }) => {
+const MicroEvidenceModal: React.FC<MicroEvidenceModalProps> = ({ micro, onClose, onSave, canEdit = true }) => {
   const [link, setLink] = useState(micro.reportLink || '');
   const [obs, setObs] = useState(micro.observations || '');
   const [docUrl, setDocUrl] = useState(micro.dossierContribution?.attachmentUrl || '');
 
   const handleSave = () => {
+    if (!canEdit) {
+      onClose();
+      return;
+    }
     const updatedContrib = micro.dossierContribution ? {
       ...micro.dossierContribution,
       attachmentUrl: docUrl.trim(),
@@ -1145,7 +1206,9 @@ const MicroEvidenceModal: React.FC<MicroEvidenceModalProps> = ({ micro, onClose,
 
         <div className="p-6 space-y-4 text-xs">
           <p className="text-slate-500 font-medium">
-            Preencha ao menos uma das opções abaixo para que a evidência seja considerada existente.
+            {canEdit 
+              ? 'Preencha ao menos uma das opções abaixo para que a evidência seja considerada existente.' 
+              : 'Visualização da evidência registrada para esta atividade.'}
           </p>
 
           <div className="space-y-1">
@@ -1155,9 +1218,12 @@ const MicroEvidenceModal: React.FC<MicroEvidenceModalProps> = ({ micro, onClose,
             <input 
               type="text"
               value={link}
+              readOnly={!canEdit}
               onChange={e => setLink(e.target.value)}
               placeholder="https://sharepoint.com/... ou URL do arquivo"
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none ${
+                canEdit ? 'focus:ring-2 focus:ring-teal-500' : 'cursor-default opacity-80'
+              }`}
             />
           </div>
 
@@ -1168,9 +1234,12 @@ const MicroEvidenceModal: React.FC<MicroEvidenceModalProps> = ({ micro, onClose,
             <textarea 
               rows={3}
               value={obs}
+              readOnly={!canEdit}
               onChange={e => setObs(e.target.value)}
               placeholder="Insira detalhes técnicos, observações ou notas da evidência..."
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none ${
+                canEdit ? 'focus:ring-2 focus:ring-teal-500' : 'cursor-default opacity-80'
+              }`}
             />
           </div>
 
@@ -1181,25 +1250,29 @@ const MicroEvidenceModal: React.FC<MicroEvidenceModalProps> = ({ micro, onClose,
             <input 
               type="text"
               value={docUrl}
+              readOnly={!canEdit}
               onChange={e => setDocUrl(e.target.value)}
               placeholder="Link do anexo ou documento de suporte..."
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-medium outline-none ${
+                canEdit ? 'focus:ring-2 focus:ring-teal-500' : 'cursor-default opacity-80'
+              }`}
             />
           </div>
         </div>
 
         <footer className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
           <button onClick={onClose} className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-bold uppercase text-[10px]">
-            Cancelar
+            {canEdit ? 'Cancelar' : 'Fechar'}
           </button>
-          <button onClick={handleSave} className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-black uppercase text-[10px] tracking-wider hover:bg-indigo-700 shadow-md">
-            Salvar Evidência
-          </button>
+          {canEdit && (
+            <button onClick={handleSave} className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-black uppercase text-[10px] tracking-wider hover:bg-indigo-700 shadow-md">
+              Salvar Evidência
+            </button>
+          )}
         </footer>
       </div>
     </div>
   );
 };
-
 
 export default ProjectTimeline;

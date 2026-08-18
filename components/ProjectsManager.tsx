@@ -126,7 +126,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   };
 
   const isAdmin = currentUserRole === 'admin';
-  const canCreatePlan = isAdmin || (currentUserRole as string) === 'admin' || (currentUserRole as string) === 'gerente' || currentUser?.isComiteGestor || currentUser?.isLeader;
+  const isLeader = isAdmin || (currentUserRole as string) === 'gerente' || currentUser?.isLeader || currentUser?.isComiteGestor || currentUser?.name === 'Visão Geral da Equipe';
+  const canCreatePlan = isLeader;
   
   useEffect(() => {
     if (initialProjectId) {
@@ -444,6 +445,17 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   const filteredProjects = useMemo(() => {
     return projects
       .filter(project => {
+        // RBAC: Non-leaders can only see projects created in their name or containing activities assigned to them
+        if (!isLeader && currentUser?.name) {
+          const isResp = (project.responsible || '').toLowerCase().trim() === currentUser.name.toLowerCase().trim();
+          const hasMicro = project.macroActivities?.some(m =>
+            m.microActivities?.some(mi => (mi.assignee || '').toLowerCase().trim() === currentUser.name.toLowerCase().trim())
+          );
+          if (!isResp && !hasMicro) {
+            return false;
+          }
+        }
+
         // Search term
         const term = searchTerm.toLowerCase().trim();
         if (term) {
@@ -895,16 +907,18 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                                   >
                                     <ListPlus size={14} /> Duplicar
                                   </button>
-                                  <button 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onOpenDeletionModal({ type: 'project', ids: { projectId: project.id }, name: project.name });
-                                      setActiveMenuProjectId(null);
-                                    }}
-                                    className="w-full text-left px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                  >
-                                    <Trash2 size={14} /> Excluir
-                                  </button>
+                                  {(isLeader || project.responsible === currentUser?.name) && (
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onOpenDeletionModal({ type: 'project', ids: { projectId: project.id }, name: project.name });
+                                        setActiveMenuProjectId(null);
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                    >
+                                      <Trash2 size={14} /> Excluir
+                                    </button>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1008,16 +1022,18 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                           >
                             <ListPlus size={14} /> Duplicar
                           </button>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onOpenDeletionModal({ type: 'project', ids: { projectId: project.id }, name: project.name });
-                              setActiveMenuProjectId(null);
-                            }}
-                            className="w-full text-left px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
-                          >
-                            <Trash2 size={14} /> Excluir
-                          </button>
+                          {(isLeader || project.responsible === currentUser?.name) && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenDeletionModal({ type: 'project', ids: { projectId: project.id }, name: project.name });
+                                setActiveMenuProjectId(null);
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
+                            >
+                              <Trash2 size={14} /> Excluir
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1257,8 +1273,12 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">{selectedProject?.name}</h1>
                 <div className="flex gap-1 no-print">
-                   <button onClick={handleStartEdit} className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-brand-primary/5 rounded-lg transition" title="Editar Projeto"><Edit size={14}/></button>
-                   <button onClick={() => onOpenDeletionModal({ type: 'project', ids: { projectId: selectedProject!.id }, name: selectedProject!.name })} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Excluir Projeto"><Trash2 size={14}/></button>
+                   {(isLeader || selectedProject?.responsible === currentUser?.name) && (
+                     <>
+                       <button onClick={handleStartEdit} className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-brand-primary/5 rounded-lg transition" title="Editar Projeto"><Edit size={14}/></button>
+                       <button onClick={() => onOpenDeletionModal({ type: 'project', ids: { projectId: selectedProject!.id }, name: selectedProject!.name })} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Excluir Projeto"><Trash2 size={14}/></button>
+                     </>
+                   )}
                 </div>
               </div>
               <p className="text-slate-400 font-bold uppercase text-[9px] tracking-widest leading-tight">Responsável: {selectedProject?.responsible || 'Não definido'}</p>
@@ -1517,6 +1537,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                  regulatoryStandards={regulatoryStandards}
                  onOpenRegulatoryModal={onOpenRegulatoryModal}
                  meetings={meetings}
+                 currentUser={currentUser}
+                 currentUserRole={currentUserRole}
                />
              )}
              {projectDetailView === 'kanban' && selectedProject && (
@@ -1528,6 +1550,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                  }}
                  regulatoryStandards={regulatoryStandards}
                  onOpenRegulatoryModal={onOpenRegulatoryModal}
+                 currentUser={currentUser}
+                 currentUserRole={currentUserRole}
                />
              )}
              {projectDetailView === 'phases' && selectedProject && (
@@ -1719,7 +1743,17 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           onUpdateProjects={onUpdateProjects}
         />
       )}
-      {isNewProjectModalOpen && (<NewProjectModal isOpen={isNewProjectModalOpen} onClose={() => setIsNewProjectModalOpen(false)} plans={activityPlans} onAddProject={addProject} teamMembers={teamMembers}/>)}
+      {isNewProjectModalOpen && (
+        <NewProjectModal 
+          isOpen={isNewProjectModalOpen} 
+          onClose={() => setIsNewProjectModalOpen(false)} 
+          plans={activityPlans} 
+          onAddProject={addProject} 
+          teamMembers={teamMembers}
+          currentUser={currentUser}
+          isLeader={isLeader}
+        />
+      )}
       {isChecklistModalOpen && selectedProject && (
         <RegulatoryChecklistModal 
           isOpen={isChecklistModalOpen} 
@@ -1757,8 +1791,10 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Responsável Principal</label>
                   <select 
                     value={editedProjectData.responsible || ''} 
+                    disabled={!isLeader}
                     onChange={e => setEditedProjectData({...editedProjectData, responsible: e.target.value})}
-                    className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-brand-primary/20 outline-none transition"
+                    className={`w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-brand-primary/20 outline-none transition ${!isLeader ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    title={!isLeader ? 'Apenas o líder pode alterar o responsável pelo projeto' : undefined}
                   >
                     <option value="">Selecione o responsável</option>
                     {teamMembers.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}

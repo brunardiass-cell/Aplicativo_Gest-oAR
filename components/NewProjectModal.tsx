@@ -9,12 +9,31 @@ interface NewProjectModalProps {
   plans: ActivityPlanTemplate[];
   onAddProject: (project: Project) => void;
   teamMembers: TeamMember[];
+  currentUser?: TeamMember | null;
+  isLeader?: boolean;
 }
 
-const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plans, onAddProject, teamMembers }) => {
+const NewProjectModal: React.FC<NewProjectModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  plans, 
+  onAddProject, 
+  teamMembers,
+  currentUser,
+  isLeader = false
+}) => {
   const [projectName, setProjectName] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState<string>(plans[0]?.id || '');
-  const [responsibleMember, setResponsibleMember] = useState<string>(teamMembers[0]?.name || '');
+  const [responsibleMember, setResponsibleMember] = useState<string>(() => {
+    if (!isLeader && currentUser?.name) return currentUser.name;
+    return teamMembers[0]?.name || '';
+  });
+
+  useEffect(() => {
+    if (!isLeader && currentUser?.name) {
+      setResponsibleMember(currentUser.name);
+    }
+  }, [isLeader, currentUser]);
   const [customTeam, setCustomTeam] = useState<string[]>([]);
   const [newMemberName, setNewMemberName] = useState('');
   const [projectPhases, setProjectPhases] = useState<string[]>([]);
@@ -116,9 +135,17 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose, plan
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Responsável</label>
-              <select value={responsibleMember} onChange={e => { setResponsibleMember(e.target.value); setError(''); }} className="mt-1 w-full px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none">
+              <select 
+                value={responsibleMember} 
+                onChange={e => { setResponsibleMember(e.target.value); setError(''); }} 
+                disabled={!isLeader}
+                className={`mt-1 w-full px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none ${!isLeader ? 'opacity-80 cursor-not-allowed bg-slate-100' : ''}`}
+              >
                 {teamMembers.map(member => (<option key={member.id} value={member.name}>{member.name}</option>))}
               </select>
+              {!isLeader && (
+                <p className="text-[9px] font-semibold text-slate-400 mt-1 ml-1">Atribuído automaticamente ao seu perfil.</p>
+              )}
             </div>
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Plano Base</label>

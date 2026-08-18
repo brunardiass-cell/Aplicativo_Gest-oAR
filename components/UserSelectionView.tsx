@@ -51,7 +51,15 @@ const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSe
 
         <div className="mt-12 bg-white p-4 sm:p-8 rounded-2xl border border-slate-200 shadow-sm">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
-            {teamMembers.map(member => {
+            {teamMembers
+              .filter(member => {
+                // Perfil de liderança deve aparecer apenas para o líder e para o administrador
+                if (member.isLeader && currentUserRole !== 'admin') {
+                  return false;
+                }
+                return true;
+              })
+              .map(member => {
               const isLeaderProfile = member.isLeader;
               let isDisabled = false;
               let title = member.name;

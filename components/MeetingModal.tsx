@@ -485,26 +485,22 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                 {agendaItems.length}
               </span>
             </button>
-            {isEditing && (
-              <>
-                <button
-                  onClick={() => setActiveTab('encaminhamentos')}
-                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
-                    activeTab === 'encaminhamentos' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  3. Encaminhamentos
-                </button>
-                <button
-                  onClick={() => setActiveTab('conclusoes')}
-                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
-                    activeTab === 'conclusoes' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  4. Conclusões
-                </button>
-              </>
-            )}
+            <button
+              onClick={() => setActiveTab('encaminhamentos')}
+              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+                activeTab === 'encaminhamentos' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <span>3. Encaminhamentos</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('conclusoes')}
+              className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                activeTab === 'conclusoes' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              4. Conclusões
+            </button>
           </div>
         </div>
 
