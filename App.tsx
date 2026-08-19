@@ -1094,19 +1094,31 @@ const App: React.FC = () => {
   const allMicroTasksForUser = useMemo(() => {
     if (!selectedProfile) return [];
     
-    const isLeader = currentUserRole === 'admin' || (currentUserRole as string) === 'gerente' || selectedProfile.isLeader || selectedProfile.isComiteGestor || selectedProfile.name === 'Visão Geral da Equipe';
+    const isNameMatch = (targetName?: string, currentUserName?: string) => {
+      if (!targetName || !currentUserName) return false;
+      const t = targetName.toLowerCase().trim();
+      const c = currentUserName.toLowerCase().trim();
+      if (t === c) return true;
+      const tFirst = t.split(' ')[0];
+      const cFirst = c.split(' ')[0];
+      if (tFirst.length > 2 && cFirst.length > 2 && tFirst === cFirst) return true;
+      return t.includes(c) || c.includes(t);
+    };
+
+    const isComiteGestor = selectedProfile.isComiteGestor || selectedProfile.name === 'Comitê Gestor' || selectedProfile.name === 'Visão Geral da Equipe';
+    const profileName = selectedProfile.name;
 
     const relevantProjects = projects.filter(p => 
       !p.deleted && 
-      (isLeader || p.responsible === selectedProfile.name || p.macroActivities?.some(m => m.microActivities?.some(mi => mi.assignee === selectedProfile.name)))
+      (isComiteGestor || isNameMatch(p.responsible, profileName) || (p.team || []).some(t => isNameMatch(t, profileName)) || p.macroActivities?.some(m => m.microActivities?.some(mi => isNameMatch(mi.assignee, profileName))))
     );
     
     const allMicroTasks: AugmentedMicroActivity[] = [];
     for (const project of relevantProjects) {
-        const canSeeAllInProject = isLeader || project.responsible === selectedProfile.name;
-        for (const macro of project.macroActivities) {
-            for (const micro of macro.microActivities) {
-                if (canSeeAllInProject || micro.assignee === selectedProfile.name) {
+        const canSeeAllInProject = isComiteGestor || isNameMatch(project.responsible, profileName);
+        for (const macro of project.macroActivities || []) {
+            for (const micro of macro.microActivities || []) {
+                if (canSeeAllInProject || isNameMatch(micro.assignee, profileName)) {
                     allMicroTasks.push({
                         ...micro,
                         projectId: project.id,
@@ -1121,7 +1133,7 @@ const App: React.FC = () => {
         }
     }
     return allMicroTasks;
-  }, [projects, selectedProfile, currentUserRole]);
+  }, [projects, selectedProfile]);
 
   const microTasksForBoard = useMemo(() => {
     return allMicroTasksForUser.filter(micro => {

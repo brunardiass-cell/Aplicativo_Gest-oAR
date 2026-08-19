@@ -26,10 +26,20 @@ const ROLE_TO_MEMBER_ID_MAP: Record<string, string> = {
   user_team_3: 'tm_4', // Marjorie
   user_team_4: 'tm_5', // Ana Luiza
   user_team_5: 'tm_6', // Ana Terzian
+  user_leader: 'tm_1', // Graziella
 };
 
-
 const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSelectUser, onSelectTeamView, onLogout, currentUserRole, onBackToModules }) => {
+  // Ensure Comitê Gestor is in the list if not already present
+  const displayMembers = React.useMemo(() => {
+    const list = [...teamMembers];
+    const hasComite = list.some(m => m.isComiteGestor || m.name === 'Comitê Gestor');
+    if (!hasComite) {
+      list.push({ id: 'tm_comite', name: 'Comitê Gestor', role: 'Gestão', isLeader: false, isComiteGestor: true });
+    }
+    return list;
+  }, [teamMembers]);
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative">
       {onBackToModules && (
@@ -51,31 +61,25 @@ const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSe
 
         <div className="mt-12 bg-white p-4 sm:p-8 rounded-2xl border border-slate-200 shadow-sm">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
-            {teamMembers
-              .filter(member => {
-                // Perfil de liderança deve aparecer apenas para o líder e para o administrador
-                if (member.isLeader && currentUserRole !== 'admin') {
-                  return false;
-                }
-                return true;
-              })
-              .map(member => {
+            {displayMembers.map(member => {
               const isLeaderProfile = member.isLeader;
               let isDisabled = false;
               let title = member.name;
 
               if (currentUserRole !== 'admin') {
                 if (isLeaderProfile) {
-                  isDisabled = true;
-                  title = "Acesso restrito ao perfil de liderança.";
+                  if (currentUserRole !== 'user_leader') {
+                    isDisabled = true;
+                    title = "Acesso restrito ao perfil de liderança.";
+                  }
                 } else if (currentUserRole === 'user_general' && !member.isComiteGestor) {
                   isDisabled = true;
-                  title = "Seu perfil só permite a Visão Geral.";
+                  title = "Seu perfil só permite a Visão Geral / Comitê Gestor.";
                 } else if (currentUserRole && currentUserRole.startsWith('user_team_')) {
                   const allowedMemberId = ROLE_TO_MEMBER_ID_MAP[currentUserRole];
                   if (member.id !== allowedMemberId) {
-                      isDisabled = true;
-                      title = "Acesso restrito a este perfil.";
+                    isDisabled = true;
+                    title = "Acesso restrito a este perfil.";
                   }
                 }
               }
@@ -93,12 +97,12 @@ const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSe
                       {getInitials(member.name)}
                     </div>
                     {member.isLeader && (
-                      <div className="absolute -top-1 -right-1 bg-amber-400 p-1.5 rounded-full text-white border-2 border-white">
+                      <div className="absolute -top-1 -right-1 bg-amber-400 p-1.5 rounded-full text-white border-2 border-white" title="Líder">
                         <Crown size={12} />
                       </div>
                     )}
                     {member.isComiteGestor && (
-                      <div className="absolute -top-1 -right-1 bg-teal-500 p-1.5 rounded-full text-white border-2 border-white">
+                      <div className="absolute -top-1 -right-1 bg-teal-500 p-1.5 rounded-full text-white border-2 border-white" title="Comitê Gestor">
                         <Briefcase size={12} />
                       </div>
                     )}

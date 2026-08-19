@@ -315,6 +315,7 @@ export type AppUserRole =
   | 'user_team_3'
   | 'user_team_4'
   | 'user_team_5'
+  | 'user_leader'
   | 'user_general';
 
 export interface AppUser {

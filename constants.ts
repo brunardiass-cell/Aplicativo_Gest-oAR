@@ -34,7 +34,8 @@ export const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
   { id: 'tm_3', name: 'Ester', role: 'Equipe', isLeader: false },
   { id: 'tm_4', name: 'Marjorie', role: 'Equipe', isLeader: false },
   { id: 'tm_5', name: 'Ana Luiza', role: 'Equipe', isLeader: false },
-  { id: 'tm_6', name: 'Ana Terzian', role: 'Equipe', isLeader: false }
+  { id: 'tm_6', name: 'Ana Terzian', role: 'Equipe', isLeader: false },
+  { id: 'tm_comite', name: 'Comitê Gestor', role: 'Gestão', isLeader: false, isComiteGestor: true }
 ];
 
 export const ADMIN_WHITELIST = [

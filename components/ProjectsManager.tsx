@@ -125,9 +125,29 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     return 'text-red-500';
   };
 
+  // Helper for flexible name matching
+  const isNameMatch = (targetName?: string, currentUserName?: string) => {
+    if (!targetName || !currentUserName) return false;
+    const t = targetName.toLowerCase().trim();
+    const c = currentUserName.toLowerCase().trim();
+    if (t === c) return true;
+    const tFirst = t.split(' ')[0];
+    const cFirst = c.split(' ')[0];
+    if (tFirst.length > 2 && cFirst.length > 2 && tFirst === cFirst) return true;
+    return t.includes(c) || c.includes(t);
+  };
+
+  const isComiteGestor = useMemo(() => {
+    return !!(
+      currentUser?.isComiteGestor ||
+      currentUser?.name === 'Comitê Gestor' ||
+      currentUser?.name === 'Visão Geral da Equipe'
+    );
+  }, [currentUser]);
+
   const isAdmin = currentUserRole === 'admin';
-  const isLeader = isAdmin || (currentUserRole as string) === 'gerente' || currentUser?.isLeader || currentUser?.isComiteGestor || currentUser?.name === 'Visão Geral da Equipe';
-  const canCreatePlan = isLeader;
+  const isLeader = isComiteGestor;
+  const canCreatePlan = isComiteGestor || isAdmin || currentUser?.isLeader;
   
   useEffect(() => {
     if (initialProjectId) {
@@ -410,21 +430,37 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     addProject(newProject);
   };
 
+  // Accessible projects: Comitê Gestor sees all projects; individual profiles see only their projects
+  const accessibleProjects = useMemo(() => {
+    if (isComiteGestor || !currentUser?.name) {
+      return projects;
+    }
+    const currentUserName = currentUser.name;
+    return projects.filter(project => {
+      const isResp = isNameMatch(project.responsible, currentUserName);
+      const inTeam = (project.team || []).some(t => isNameMatch(t, currentUserName));
+      const hasMicro = project.macroActivities?.some(m =>
+        m.microActivities?.some(mi => isNameMatch(mi.assignee, currentUserName))
+      );
+      return isResp || inTeam || hasMicro;
+    });
+  }, [projects, isComiteGestor, currentUser]);
+
   const uniqueResponsibles = useMemo(() => {
     const set = new Set<string>();
-    projects.forEach(p => {
+    accessibleProjects.forEach(p => {
       if (p.responsible) set.add(p.responsible);
     });
     return Array.from(set);
-  }, [projects]);
+  }, [accessibleProjects]);
 
   const overviewStats = useMemo(() => {
-    const total = projects.length;
+    const total = accessibleProjects.length;
     let inProgress = 0;
     let completed = 0;
     let planned = 0;
 
-    projects.forEach(p => {
+    accessibleProjects.forEach(p => {
       const st = (p.status || '').toLowerCase();
       if (st.includes('concl')) {
         completed++;
@@ -440,22 +476,11 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     const plannedPct = total > 0 ? Math.round((planned / total) * 100) : 0;
 
     return { total, inProgress, inProgressPct, completed, completedPct, planned, plannedPct };
-  }, [projects]);
+  }, [accessibleProjects]);
 
   const filteredProjects = useMemo(() => {
-    return projects
+    return accessibleProjects
       .filter(project => {
-        // RBAC: Non-leaders can only see projects created in their name or containing activities assigned to them
-        if (!isLeader && currentUser?.name) {
-          const isResp = (project.responsible || '').toLowerCase().trim() === currentUser.name.toLowerCase().trim();
-          const hasMicro = project.macroActivities?.some(m =>
-            m.microActivities?.some(mi => (mi.assignee || '').toLowerCase().trim() === currentUser.name.toLowerCase().trim())
-          );
-          if (!isResp && !hasMicro) {
-            return false;
-          }
-        }
-
         // Search term
         const term = searchTerm.toLowerCase().trim();
         if (term) {

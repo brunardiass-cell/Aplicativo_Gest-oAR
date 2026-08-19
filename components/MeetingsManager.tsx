@@ -53,34 +53,57 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [customMinutesTemplate, setCustomMinutesTemplate] = useState<string>(DEFAULT_MINUTES_TEMPLATE);
 
-  // RBAC Permission Logic
-  const isLeader = useMemo(() => {
-    return (
-      currentUserRole === 'admin' ||
-      (currentUserRole as string) === 'gerente' ||
-      currentUser?.isLeader ||
+  // Helper for flexible name matching (e.g. "Bruna" vs "Bruna Dias")
+  const isNameMatch = (targetName?: string, currentUserName?: string) => {
+    if (!targetName || !currentUserName) return false;
+    const t = targetName.toLowerCase().trim();
+    const c = currentUserName.toLowerCase().trim();
+    if (t === c) return true;
+    const tFirst = t.split(' ')[0];
+    const cFirst = c.split(' ')[0];
+    if (tFirst.length > 2 && cFirst.length > 2 && tFirst === cFirst) return true;
+    return t.includes(c) || c.includes(t);
+  };
+
+  // Only Comitê Gestor / Visão Geral can see all projects and all meetings
+  const isComiteGestor = useMemo(() => {
+    return !!(
       currentUser?.isComiteGestor ||
+      currentUser?.name === 'Comitê Gestor' ||
       currentUser?.name === 'Visão Geral da Equipe'
     );
-  }, [currentUserRole, currentUser]);
+  }, [currentUser]);
 
-  // If leader, sees all projects. If not leader (e.g. Bruna), sees only projects she leads
+  // For individual profiles (Bruna, Graziella, Ester, Marjorie, Ana Luiza, etc.):
+  // only projects they lead / are responsible for or participate in
   const accessibleProjects = useMemo(() => {
-    if (isLeader || !currentUser?.name) {
+    if (isComiteGestor || !currentUser?.name) {
       return projects;
     }
-    return projects.filter(
-      p => (p.responsible || '').toLowerCase().trim() === (currentUser.name || '').toLowerCase().trim()
-    );
-  }, [projects, isLeader, currentUser]);
+    const currentUserName = currentUser.name;
+    return projects.filter(p => {
+      const isResp = isNameMatch(p.responsible, currentUserName);
+      const inTeam = (p.team || []).some(t => isNameMatch(t, currentUserName));
+      const hasMicro = p.macroActivities?.some(m =>
+        m.microActivities?.some(mi => isNameMatch(mi.assignee, currentUserName))
+      );
+      return isResp || inTeam || hasMicro;
+    });
+  }, [projects, isComiteGestor, currentUser]);
 
   const accessibleMeetings = useMemo(() => {
-    if (isLeader || !currentUser?.name) {
+    if (isComiteGestor || !currentUser?.name) {
       return meetings;
     }
     const accessibleProjectIds = new Set(accessibleProjects.map(p => p.id));
-    return meetings.filter(m => accessibleProjectIds.has(m.projectId));
-  }, [meetings, accessibleProjects, isLeader, currentUser]);
+    const currentUserName = currentUser.name;
+    return meetings.filter(m => {
+      const inAccessibleProject = accessibleProjectIds.has(m.projectId);
+      const isModerator = isNameMatch(m.moderator, currentUserName);
+      const isParticipant = (m.participants || []).some(p => isNameMatch(p, currentUserName));
+      return inAccessibleProject || isModerator || isParticipant;
+    });
+  }, [meetings, accessibleProjects, isComiteGestor, currentUser]);
 
   // Filtered Meetings List for completed / all list
   const filteredMeetings = useMemo(() => {
