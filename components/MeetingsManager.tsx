@@ -7,7 +7,7 @@ import { MeetingMinutesModal } from './MeetingMinutesModal';
 import { MeetingFullDetailView } from './MeetingFullDetailView';
 import { 
   Users, Plus, Search, Calendar, FileText, ShieldCheck, 
-  Settings, Clock, ArrowRight, Layers, Trash2, Edit, CheckCircle2, AlertCircle, Filter, RefreshCw, X, Folder, BookOpen, ExternalLink
+  Settings, Clock, ArrowRight, Layers, Trash2, Edit, CheckCircle2, AlertCircle, Filter, RefreshCw, X, Folder, BookOpen, ExternalLink, MoreVertical, Play
 } from 'lucide-react';
 
 interface MeetingsManagerProps {
@@ -20,6 +20,7 @@ interface MeetingsManagerProps {
   onUpdateProjects?: (projects: Project[]) => void;
   onAddDossierContribution?: (contribution: DossierContribution) => void;
   currentUser?: TeamMember | null;
+  currentUserRole?: string | null;
 }
 
 export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
@@ -31,13 +32,15 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
   onUpdateMeetings,
   onUpdateProjects,
   onAddDossierContribution,
-  currentUser
+  currentUser,
+  currentUserRole
 }) => {
   const [activeTab, setActiveTab] = useState<'previstas' | 'list' | 'decisions'>('previstas');
   const [searchTerm, setSearchTerm] = useState('');
   const [projectFilter, setProjectFilter] = useState('Todos');
   const [typeFilter, setTypeFilter] = useState('Todos');
   const [statusFilter, setStatusFilter] = useState('Todos');
+  const [openMenuMeetingId, setOpenMenuMeetingId] = useState<string | null>(null);
 
   // Modals and Full View state
   const [activeFullMeeting, setActiveFullMeeting] = useState<Meeting | null>(null);
@@ -50,9 +53,38 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [customMinutesTemplate, setCustomMinutesTemplate] = useState<string>(DEFAULT_MINUTES_TEMPLATE);
 
-  // Filtered Meetings List
+  // RBAC Permission Logic
+  const isLeader = useMemo(() => {
+    return (
+      currentUserRole === 'admin' ||
+      (currentUserRole as string) === 'gerente' ||
+      currentUser?.isLeader ||
+      currentUser?.isComiteGestor ||
+      currentUser?.name === 'Visão Geral da Equipe'
+    );
+  }, [currentUserRole, currentUser]);
+
+  // If leader, sees all projects. If not leader (e.g. Bruna), sees only projects she leads
+  const accessibleProjects = useMemo(() => {
+    if (isLeader || !currentUser?.name) {
+      return projects;
+    }
+    return projects.filter(
+      p => (p.responsible || '').toLowerCase().trim() === (currentUser.name || '').toLowerCase().trim()
+    );
+  }, [projects, isLeader, currentUser]);
+
+  const accessibleMeetings = useMemo(() => {
+    if (isLeader || !currentUser?.name) {
+      return meetings;
+    }
+    const accessibleProjectIds = new Set(accessibleProjects.map(p => p.id));
+    return meetings.filter(m => accessibleProjectIds.has(m.projectId));
+  }, [meetings, accessibleProjects, isLeader, currentUser]);
+
+  // Filtered Meetings List for completed / all list
   const filteredMeetings = useMemo(() => {
-    return meetings.filter(mtg => {
+    return accessibleMeetings.filter(mtg => {
       if (projectFilter !== 'Todos' && mtg.projectId !== projectFilter) return false;
       if (typeFilter !== 'Todos' && mtg.type !== typeFilter) return false;
       if (statusFilter !== 'Todos' && mtg.status !== statusFilter) return false;
@@ -69,7 +101,12 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
 
       return true;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [meetings, projectFilter, typeFilter, statusFilter, searchTerm]);
+  }, [accessibleMeetings, projectFilter, typeFilter, statusFilter, searchTerm]);
+
+  // Completed meetings count for badge
+  const completedMeetingsCount = useMemo(() => {
+    return accessibleMeetings.filter(m => m.status === 'Concluída').length;
+  }, [accessibleMeetings]);
 
   // Handle Save Meeting
   const handleSaveMeeting = (updatedMeeting: Meeting, createdContributions?: DossierContribution[]) => {
@@ -222,33 +259,32 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300">
       
-      {/* Top Banner Header */}
-      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-8 shadow-xl relative overflow-hidden border border-slate-800">
-        <div className="absolute top-0 right-0 -mt-12 -mr-12 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="px-3 py-1 bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
-                <Users size={12} /> Governança & Rastreabilidade de Decisões
-              </span>
+      {/* Top Banner Header - Exactly matching UI design in screenshot */}
+      <div className="bg-[#0f1424] text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden border border-slate-800">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 relative z-10">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-950/90 text-indigo-300 border border-indigo-500/30 rounded-xl text-[10px] font-black uppercase tracking-wider">
+              <Users size={12} className="text-indigo-400" />
+              <span>Governança & Rastreabilidade de Decisões</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white">
+            
+            <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white leading-tight">
               Gestão de Reuniões Técnicas & Regulatórias
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 font-medium max-w-2xl leading-relaxed">
+            
+            <p className="text-xs sm:text-sm text-slate-300 font-normal max-w-3xl leading-relaxed">
               Registre reuniões por projeto, crie pautas com impacto regulatório, vincule decisões a normas, converta encaminhamentos em tarefas e gere atas automáticas.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
             <button
               onClick={() => setIsTemplateModalOpen(true)}
-              className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition backdrop-blur-sm"
+              className="px-4 py-3 bg-[#242b4d] hover:bg-[#2e3761] text-white rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition border border-slate-700/40"
             >
-              <Settings size={16} />
+              <Settings size={15} />
               <span>Modelo de Ata</span>
             </button>
 
@@ -257,49 +293,49 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
                 setSelectedMeetingForEdit(null);
                 setIsMeetingModalOpen(true);
               }}
-              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-xs uppercase tracking-wider flex items-center gap-2 transition shadow-lg shadow-indigo-600/30 active:scale-95"
+              className="px-5 py-3 bg-[#4f46e5] hover:bg-[#4338ca] text-white rounded-2xl font-black text-xs uppercase tracking-wider flex items-center gap-2 transition shadow-lg shadow-indigo-600/30"
             >
-              <Plus size={18} />
+              <Plus size={16} strokeWidth={2.5} />
               <span>Nova Reunião</span>
             </button>
           </div>
         </div>
 
         {/* Tab Selection */}
-        <div className="flex flex-wrap items-center gap-2 mt-8 pt-6 border-t border-white/10">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-8 pt-6 border-t border-slate-800">
           <button
             onClick={() => setActiveTab('previstas')}
-            className={`px-5 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider transition flex items-center gap-2 ${
+            className={`px-5 py-2.5 rounded-full font-bold text-xs transition flex items-center gap-2 ${
               activeTab === 'previstas' 
-                ? 'bg-white text-slate-900 shadow-md' 
-                : 'text-slate-300 hover:text-white hover:bg-white/5'
+                ? 'bg-white text-slate-900 shadow-md font-black' 
+                : 'text-slate-300 hover:text-white hover:bg-white/5 font-semibold'
             }`}
           >
-            <Folder size={16} className={activeTab === 'previstas' ? 'text-indigo-600' : 'text-slate-400'} />
+            <Folder size={15} className={activeTab === 'previstas' ? 'text-indigo-600' : 'text-slate-400'} />
             <span>Reuniões Previstas (por Projeto)</span>
           </button>
 
           <button
             onClick={() => setActiveTab('list')}
-            className={`px-5 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider transition flex items-center gap-2 ${
+            className={`px-5 py-2.5 rounded-full font-bold text-xs transition flex items-center gap-2 ${
               activeTab === 'list' 
-                ? 'bg-white text-slate-900 shadow-md' 
-                : 'text-slate-300 hover:text-white hover:bg-white/5'
+                ? 'bg-white text-slate-900 shadow-md font-black' 
+                : 'text-slate-300 hover:text-white hover:bg-white/5 font-semibold'
             }`}
           >
-            <CheckCircle2 size={16} className={activeTab === 'list' ? 'text-emerald-500' : 'text-slate-400'} />
-            <span>Reuniões Concluídas ({meetings.filter(m => m.status === 'Concluída').length})</span>
+            <CheckCircle2 size={15} className={activeTab === 'list' ? 'text-emerald-500' : 'text-slate-400'} />
+            <span>Reuniões Concluídas ({completedMeetingsCount})</span>
           </button>
 
           <button
             onClick={() => setActiveTab('decisions')}
-            className={`px-5 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider transition flex items-center gap-2 ${
+            className={`px-5 py-2.5 rounded-full font-bold text-xs transition flex items-center gap-2 ${
               activeTab === 'decisions' 
-                ? 'bg-white text-slate-900 shadow-md' 
-                : 'text-slate-300 hover:text-white hover:bg-white/5'
+                ? 'bg-white text-slate-900 shadow-md font-black' 
+                : 'text-slate-300 hover:text-white hover:bg-white/5 font-semibold'
             }`}
           >
-            <ShieldCheck size={16} className={activeTab === 'decisions' ? 'text-indigo-600' : 'text-slate-400'} />
+            <ShieldCheck size={15} className={activeTab === 'decisions' ? 'text-indigo-600' : 'text-slate-400'} />
             <span>Histórico de Decisões</span>
           </button>
         </div>
@@ -307,164 +343,187 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
 
       {/* SUB-VIEW 0: REUNIÕES PREVISTAS SEPARADAS POR PROJETO */}
       {activeTab === 'previstas' && (
-        <div className="space-y-8">
-          
-          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div>
-              <span className="text-[10px] font-black uppercase text-indigo-600 tracking-wider block">Módulo de Projetos & Atividades</span>
-              <h3 className="text-lg font-black uppercase tracking-tight text-slate-900">Reuniões Previstas por Projeto</h3>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Cadastre o agendamento inicial com pautas e normas. No dia da reunião, acesse a pauta para registrar discussões, encaminhamentos e finalizar a ata.
+        <div className="space-y-6">
+          {accessibleProjects.length === 0 ? (
+            <div className="bg-white p-12 text-center rounded-3xl border border-dashed border-slate-200 space-y-3">
+              <Folder size={40} className="mx-auto text-slate-300" />
+              <h4 className="text-slate-700 font-black text-sm uppercase">Nenhum Projeto Encontrado</h4>
+              <p className="text-slate-400 text-xs font-medium max-w-sm mx-auto">
+                Você não possui projetos atribuídos ao seu perfil no momento.
               </p>
             </div>
+          ) : (
+            accessibleProjects.map(proj => {
+              const projectMeetings = accessibleMeetings.filter(m => m.projectId === proj.id && m.status !== 'Concluída');
+              const finishedMeetingsCount = accessibleMeetings.filter(m => m.projectId === proj.id && m.status === 'Concluída').length;
 
-            <button
-              onClick={() => {
-                setSelectedMeetingForEdit(null);
-                setIsMeetingModalOpen(true);
-              }}
-              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider flex items-center gap-2 transition shadow-md shrink-0"
-            >
-              <Plus size={16} />
-              <span>Agendar Reunião</span>
-            </button>
-          </div>
-
-          {/* Grouping by Project */}
-          {projects.map(proj => {
-            const projectMeetings = meetings.filter(m => m.projectId === proj.id && m.status !== 'Concluída');
-            const finishedMeetingsCount = meetings.filter(m => m.projectId === proj.id && m.status === 'Concluída').length;
-
-            return (
-              <div key={proj.id} className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden space-y-4 p-6">
-                
-                {/* Project Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-2xl text-indigo-700">
-                      <Folder size={20} />
+              return (
+                <div key={proj.id} className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-5">
+                  
+                  {/* Project Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                        <Folder size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-base font-black text-slate-900 uppercase tracking-tight">{proj.name}</h4>
+                        <p className="text-xs text-slate-500 font-bold">
+                          Líder: {proj.responsible || 'Não definido'} • {proj.macroActivities?.length || 0} Macroatividades
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-base font-black text-slate-900 uppercase tracking-tight">{proj.name}</h4>
-                      <p className="text-xs text-slate-500 font-semibold">{proj.responsible ? `Líder: ${proj.responsible}` : 'Projeto'} • {proj.macroActivities.length} Macroatividades</p>
+
+                    <div className="flex items-center gap-2 text-xs font-bold self-start sm:self-center">
+                      <span className="px-3.5 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-2xl">
+                        {projectMeetings.length} {projectMeetings.length === 1 ? 'Reunião Prevista' : 'Reuniões Previstas'}
+                      </span>
+                      <span className="px-3.5 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-2xl">
+                        {finishedMeetingsCount} Concluídas
+                      </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs font-bold">
-                    <span className="px-3 py-1 bg-indigo-50 text-indigo-900 border border-indigo-200 rounded-xl">
-                      {projectMeetings.length} Reuniões Previstas
-                    </span>
-                    <span className="px-3 py-1 bg-emerald-50 text-emerald-900 border border-emerald-200 rounded-xl">
-                      {finishedMeetingsCount} Concluídas
-                    </span>
-                  </div>
-                </div>
+                  {/* Scheduled Meetings List for this Project */}
+                  {projectMeetings.length === 0 ? (
+                    <div className="py-10 px-4 text-center bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col items-center justify-center space-y-1.5">
+                      <Calendar size={28} className="text-slate-300" />
+                      <p className="text-xs font-bold text-slate-500">Nenhuma reunião agendada para este projeto.</p>
+                      <button
+                        onClick={() => {
+                          setSelectedMeetingForEdit({
+                            id: 'mtg_' + Date.now(),
+                            title: '',
+                            projectId: proj.id,
+                            projectName: proj.name,
+                            date: new Date().toISOString().split('T')[0],
+                            time: '10:00',
+                            location: 'Online',
+                            type: 'Técnica',
+                            status: 'Agendada',
+                            moderator: currentUser?.name || proj.responsible || teamMembers[0]?.name || '',
+                            participants: [],
+                            agendaItems: [],
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString()
+                          });
+                          setIsMeetingModalOpen(true);
+                        }}
+                        className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition"
+                      >
+                        + Agendar reunião
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 pt-1">
+                      {projectMeetings.map(mtg => {
+                        const dateFormatted = mtg.date ? mtg.date.split('-').reverse().join('/') : 'Data N/I';
+                        const isMenuOpen = openMenuMeetingId === mtg.id;
 
-                {/* Scheduled Meetings List for this Project */}
-                {projectMeetings.length === 0 ? (
-                  <div className="p-8 text-center bg-slate-50/60 rounded-2xl border border-dashed border-slate-200">
-                    <Calendar size={28} className="mx-auto text-slate-300 mb-2" />
-                    <p className="text-xs font-bold text-slate-500">Nenhuma reunião agendada para este projeto.</p>
-                    <button
-                      onClick={() => {
-                        setSelectedMeetingForEdit({
-                          id: 'mtg_' + Date.now(),
-                          title: '',
-                          projectId: proj.id,
-                          projectName: proj.name,
-                          date: new Date().toISOString().split('T')[0],
-                          time: '10:00',
-                          location: 'MS Teams / CTVacinas',
-                          type: 'Técnica',
-                          status: 'Agendada',
-                          moderator: teamMembers[0]?.name || '',
-                          participants: [],
-                          agendaItems: [],
-                          createdAt: new Date().toISOString(),
-                          updatedAt: new Date().toISOString()
-                        });
-                        setIsMeetingModalOpen(true);
-                      }}
-                      className="mt-3 px-4 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-indigo-600 rounded-xl text-xs font-black uppercase tracking-wider transition inline-flex items-center gap-1.5 shadow-sm"
-                    >
-                      <Plus size={14} /> Agendar Reunião para {proj.name}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
-                    {projectMeetings.map(mtg => {
-                      const dateFormatted = mtg.date ? mtg.date.split('-').reverse().join('/') : 'Data N/I';
-                      const hasNorms = mtg.agendaItems.some(ag => ag.linkedRegulatoryStandardIds && ag.linkedRegulatoryStandardIds.length > 0);
+                        return (
+                          <div 
+                            key={mtg.id}
+                            className="p-4 bg-white rounded-2xl border border-slate-200/80 hover:border-indigo-300 hover:shadow-xs transition flex items-center justify-between gap-4 relative"
+                          >
+                            <div className="flex items-center gap-3.5">
+                              <div className="w-10 h-10 rounded-xl bg-indigo-50/80 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                                <Calendar size={18} />
+                              </div>
+                              <div className="space-y-0.5">
+                                <h5 className="text-sm font-bold text-slate-900 leading-snug">{mtg.title}</h5>
+                                <p className="text-xs text-slate-500 font-medium">
+                                  {dateFormatted} {mtg.time ? `às ${mtg.time}` : ''} • {mtg.location || 'Online'}
+                                </p>
+                              </div>
+                            </div>
 
-                      return (
-                        <div 
-                          key={mtg.id}
-                          className="p-5 bg-slate-50/80 hover:bg-white rounded-2xl border border-slate-200 hover:border-indigo-300 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4"
-                        >
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-[10px] font-black uppercase">
+                            <div className="flex items-center gap-3">
+                              <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl text-xs font-semibold">
                                 {mtg.status}
                               </span>
-                              <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
-                                <Calendar size={12} /> {dateFormatted} {mtg.time ? `às ${mtg.time}` : ''}
-                              </span>
+
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenMenuMeetingId(isMenuOpen ? null : mtg.id);
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+                                  title="Opções"
+                                >
+                                  <MoreVertical size={16} />
+                                </button>
+
+                                {isMenuOpen && (
+                                  <>
+                                    <div 
+                                      className="fixed inset-0 z-40" 
+                                      onClick={() => setOpenMenuMeetingId(null)}
+                                    />
+                                    <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-50 text-xs font-bold text-slate-700 animate-in fade-in-50 zoom-in-95 duration-150">
+                                      <button
+                                        onClick={() => {
+                                          setOpenMenuMeetingId(null);
+                                          setActiveFullMeeting(mtg);
+                                        }}
+                                        className="w-full px-4 py-2.5 text-left hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2 transition text-indigo-600"
+                                      >
+                                        <Play size={14} />
+                                        <span>Acessar Reunião</span>
+                                      </button>
+
+                                      <button
+                                        onClick={() => {
+                                          setOpenMenuMeetingId(null);
+                                          setSelectedMeetingForMinutes(mtg);
+                                          setIsMinutesModalOpen(true);
+                                        }}
+                                        className="w-full px-4 py-2.5 text-left hover:bg-slate-50 flex items-center gap-2 transition"
+                                      >
+                                        <FileText size={14} />
+                                        <span>Ver / Gerar Ata</span>
+                                      </button>
+
+                                      <button
+                                        onClick={() => {
+                                          setOpenMenuMeetingId(null);
+                                          setSelectedMeetingForEdit(mtg);
+                                          setIsMeetingModalOpen(true);
+                                        }}
+                                        className="w-full px-4 py-2.5 text-left hover:bg-slate-50 flex items-center gap-2 transition"
+                                      >
+                                        <Edit size={14} />
+                                        <span>Editar Agendamento</span>
+                                      </button>
+
+                                      <div className="my-1 border-t border-slate-100" />
+
+                                      <button
+                                        onClick={() => {
+                                          setOpenMenuMeetingId(null);
+                                          handleDeleteMeeting(mtg.id);
+                                        }}
+                                        className="w-full px-4 py-2.5 text-left hover:bg-rose-50 text-rose-600 flex items-center gap-2 transition"
+                                      >
+                                        <Trash2 size={14} />
+                                        <span>Excluir Reunião</span>
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
                             </div>
-
-                            <h5 className="text-sm font-black text-slate-900 leading-snug">{mtg.title}</h5>
-
-                            <p className="text-xs text-slate-500 font-medium line-clamp-2">
-                              {mtg.agendaItems.length} pauta(s) cadastrada(s) • Moderador: {mtg.moderator || 'N/I'}
-                            </p>
-
-                            {hasNorms && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
-                                <BookOpen size={10} /> Possui Normas Vinculadas
-                              </span>
-                            )}
                           </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
-                          <div className="pt-2 border-t border-slate-200/60 flex flex-col gap-2">
-                            <button
-                              onClick={() => setActiveFullMeeting(mtg)}
-                              className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-sm"
-                            >
-                              <CheckCircle2 size={14} />
-                              <span>Iniciar / Acessar Reunião</span>
-                            </button>
-
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => {
-                                  setSelectedMeetingForEdit(mtg);
-                                  setIsMeetingModalOpen(true);
-                                }}
-                                className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition"
-                                title="Editar Agendamento"
-                              >
-                                <Edit size={13} />
-                                <span>Editar</span>
-                              </button>
-
-                              <button
-                                onClick={() => handleDeleteMeeting(mtg.id)}
-                                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition"
-                                title="Excluir Agendamento"
-                              >
-                                <Trash2 size={13} />
-                                <span>Excluir</span>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-              </div>
-            );
-          })}
+                </div>
+              );
+            })
+          )}
 
         </div>
       )}
@@ -496,7 +555,7 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
                 className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 outline-none cursor-pointer"
               >
                 <option value="Todos">Todos os Projetos</option>
-                {projects.map(p => (
+                {accessibleProjects.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
@@ -600,7 +659,7 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
                     {hasRegulatoryImpact && (
                       <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-xs text-amber-900 font-bold">
                         <ShieldCheck size={16} className="text-amber-600 shrink-0" />
-                        <span>Contém pauta com Impacto Regulatório Directo</span>
+                        <span>Contém pauta com Impacto Regulatório Direto</span>
                       </div>
                     )}
 
@@ -649,8 +708,8 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
       {/* SUB-VIEW 2: HISTÓRICO DE DECISÕES */}
       {activeTab === 'decisions' && (
         <DecisionsHistoryView
-          meetings={meetings}
-          projects={projects}
+          meetings={accessibleMeetings}
+          projects={accessibleProjects}
           regulatoryStandards={regulatoryStandards}
           regulatorySubjects={regulatorySubjects}
           onOpenMeetingDetails={(mtg) => {
@@ -669,7 +728,7 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
         <MeetingModal
           key={selectedMeetingForEdit?.id || 'new_meeting'}
           meeting={selectedMeetingForEdit}
-          projects={projects}
+          projects={accessibleProjects.length > 0 ? accessibleProjects : projects}
           teamMembers={teamMembers}
           regulatoryStandards={regulatoryStandards}
           onClose={() => {

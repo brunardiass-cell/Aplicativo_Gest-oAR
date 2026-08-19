@@ -406,7 +406,7 @@ const App: React.FC = () => {
 
         const merged = {
           tasks: mergeArrays(cloudData.tasks || [], tasks, baseData.tasks),
-          projects: mergeProjects(cloudData.projects || [], projects, baseData.projects),
+          projects: mergeArrays(cloudData.projects || [], projects, baseData.projects),
           teamMembers: mergeArrays(cloudData.teamMembers || [], teamMembers, baseData.teamMembers),
           activityPlans: mergeArrays(migratedPlans, activityPlans, baseData.activityPlans),
           notifications: mergeArrays(cloudData.notifications || [], notifications, baseData.notifications),
@@ -719,84 +719,6 @@ const App: React.FC = () => {
     } else {
       setProjectSubView('management');
     }
-  };
-
-  const mergeProjects = (serverProjects: Project[], localProjects: Project[], baseProjects: Project[]): Project[] => {
-    if (!serverProjects || !localProjects || !baseProjects) return localProjects || [];
-    const merged = [...serverProjects];
-
-    localProjects.forEach(lProj => {
-      const bProj = baseProjects.find(b => b.id === lProj.id);
-      const sProjIdx = merged.findIndex(s => s.id === lProj.id);
-
-      if (!bProj) {
-        // New project created locally
-        if (sProjIdx === -1) {
-          merged.push(lProj);
-        } else {
-          merged[sProjIdx] = lProj;
-        }
-      } else if (JSON.stringify(lProj) !== JSON.stringify(bProj)) {
-        // Project changed locally
-        if (sProjIdx === -1) {
-          merged.push(lProj);
-        } else {
-          const sProj = merged[sProjIdx];
-          if (JSON.stringify(sProj) === JSON.stringify(bProj)) {
-            // Server didn't modify this project, take local changes
-            merged[sProjIdx] = lProj;
-          } else {
-            // Both local and server modified this project -> granularly merge macro & micro activities
-            const mergedMacros = [...(sProj.macroActivities || [])];
-            (lProj.macroActivities || []).forEach(lMacro => {
-              const bMacro = bProj.macroActivities?.find(m => m.id === lMacro.id);
-              const sMacroIdx = mergedMacros.findIndex(m => m.id === lMacro.id);
-
-              if (!bMacro) {
-                if (sMacroIdx === -1) mergedMacros.push(lMacro);
-                else mergedMacros[sMacroIdx] = lMacro;
-              } else if (JSON.stringify(lMacro) !== JSON.stringify(bMacro)) {
-                if (sMacroIdx === -1) {
-                  mergedMacros.push(lMacro);
-                } else {
-                  const sMacro = mergedMacros[sMacroIdx];
-                  if (JSON.stringify(sMacro) === JSON.stringify(bMacro)) {
-                    mergedMacros[sMacroIdx] = lMacro;
-                  } else {
-                    // Both modified the same macro -> merge microActivities
-                    const mergedMicros = [...(sMacro.microActivities || [])];
-                    (lMacro.microActivities || []).forEach(lMicro => {
-                      const bMicro = bMacro.microActivities?.find(mic => mic.id === lMicro.id);
-                      const sMicroIdx = mergedMicros.findIndex(mic => mic.id === lMicro.id);
-                      if (!bMicro) {
-                        if (sMicroIdx === -1) mergedMicros.push(lMicro);
-                        else mergedMicros[sMicroIdx] = lMicro;
-                      } else if (JSON.stringify(lMicro) !== JSON.stringify(bMicro)) {
-                        if (sMicroIdx !== -1) mergedMicros[sMicroIdx] = lMicro;
-                        else mergedMicros.push(lMicro);
-                      }
-                    });
-                    mergedMacros[sMacroIdx] = {
-                      ...sMacro,
-                      ...lMacro,
-                      microActivities: mergedMicros
-                    };
-                  }
-                }
-              }
-            });
-
-            merged[sProjIdx] = {
-              ...sProj,
-              ...lProj,
-              macroActivities: mergedMacros
-            };
-          }
-        }
-      }
-    });
-
-    return merged;
   };
 
   const mergeArrays = (serverArr: any[], localArr: any[], baseArr: any[]) => {
@@ -1697,6 +1619,7 @@ const App: React.FC = () => {
               setDataDirty();
             }}
             currentUser={selectedProfile}
+            currentUserRole={currentUserRole}
           />
         )}
           </>
