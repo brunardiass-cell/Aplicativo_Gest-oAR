@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Task } from '../types';
-import { Edit2, Trash2, Eye, CheckCircle2, Clock, ShieldCheck } from 'lucide-react';
+import { Edit2, Trash2, Eye, CheckCircle2, Clock, ShieldCheck, MessageSquare } from 'lucide-react';
 import { EvidenceDetailModal } from './EvidenceDetailModal';
+import { TaskNotesModal } from './TaskNotesModal';
 
 interface TaskTableProps {
   tasks: Task[];
@@ -9,10 +10,13 @@ interface TaskTableProps {
   onEdit: (task: Task) => void;
   onViewDetails: (task: Task) => void;
   onDelete: (id: string) => void;
+  onSaveTask?: (task: Task) => void;
+  currentUser?: string;
 }
 
-const TaskTable: React.FC<TaskTableProps> = ({ tasks, canEdit, onEdit, onViewDetails, onDelete }) => {
+const TaskTable: React.FC<TaskTableProps> = ({ tasks, canEdit, onEdit, onViewDetails, onDelete, onSaveTask, currentUser = 'Usuário' }) => {
   const [selectedTaskForEvidence, setSelectedTaskForEvidence] = useState<Task | null>(null);
+  const [selectedTaskForNotes, setSelectedTaskForNotes] = useState<Task | null>(null);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -132,6 +136,18 @@ const TaskTable: React.FC<TaskTableProps> = ({ tasks, canEdit, onEdit, onViewDet
                 <td className="px-6 py-3.5 text-right">
                   <div className="flex items-center justify-end gap-1">
                     <button 
+                      onClick={() => setSelectedTaskForNotes(task)}
+                      className="p-1.5 text-slate-400 hover:text-[#008779] hover:bg-teal-50 rounded-lg transition relative"
+                      title="Ver e adicionar notas de atualização"
+                    >
+                      <MessageSquare size={17} />
+                      {task.updates && task.updates.length > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-0.5 bg-[#008779] text-white rounded-full text-[9px] font-black flex items-center justify-center">
+                          {task.updates.length}
+                        </span>
+                      )}
+                    </button>
+                    <button 
                       onClick={() => setSelectedTaskForEvidence(task)}
                       className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-teal-50 rounded-lg transition"
                       title="Visualizar Detalhes da Evidência (Olho)"
@@ -174,6 +190,21 @@ const TaskTable: React.FC<TaskTableProps> = ({ tasks, canEdit, onEdit, onViewDet
         <EvidenceDetailModal
           item={selectedTaskForEvidence}
           onClose={() => setSelectedTaskForEvidence(null)}
+        />
+      )}
+
+      {selectedTaskForNotes && (
+        <TaskNotesModal
+          isOpen={Boolean(selectedTaskForNotes)}
+          task={selectedTaskForNotes}
+          onClose={() => setSelectedTaskForNotes(null)}
+          onSaveTask={(updated) => {
+            if (onSaveTask) {
+              onSaveTask(updated);
+            }
+            setSelectedTaskForNotes(updated);
+          }}
+          currentUser={currentUser}
         />
       )}
     </div>

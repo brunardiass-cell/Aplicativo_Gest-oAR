@@ -57,19 +57,8 @@ const TaskModal: React.FC<TaskModalProps> = ({
   useEffect(() => {
     if (initialData) {
       setFormData(initialData);
-      // If editing an existing task that has optional details populated, expand by default
-      const hasOptionalContent = Boolean(
-        initialData.description ||
-        (initialData.collaborators && initialData.collaborators.length > 0) ||
-        initialData.priority !== 'Média' ||
-        initialData.status !== 'Planejada' ||
-        initialData.progress > 0 ||
-        initialData.isReport ||
-        initialData.nextStep ||
-        (initialData.updates && initialData.updates.length > 0) ||
-        initialData.generatesRegulatoryContent
-      );
-      setShowOptionalDetails(hasOptionalContent);
+      // When editing an existing task, always show all details expanded
+      setShowOptionalDetails(true);
     } else {
       setFormData({
         activity: '',

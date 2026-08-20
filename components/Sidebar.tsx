@@ -54,6 +54,7 @@ interface SidebarProps {
   onSelectVisualizationMode: (mode: 'gantt' | 'kanban' | 'phases' | 'map') => void;
   projectSubView: 'visual' | 'management';
   onSelectProjectSubView: (view: 'visual' | 'management') => void;
+  onOpenExcelReports?: () => void;
 }
 
 const getInitials = (name?: string): string => {
@@ -86,7 +87,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   visualizationMode,
   onSelectVisualizationMode,
   projectSubView,
-  onSelectProjectSubView
+  onSelectProjectSubView,
+  onOpenExcelReports
 }) => {
 
   const formatSyncTime = (timestamp: string) => {
@@ -227,6 +229,13 @@ const Sidebar: React.FC<SidebarProps> = ({
               label="Reuniões" 
             />
             
+            <SidebarButton 
+              active={false} 
+              onClick={() => { onOpenExcelReports?.(); onClose?.(); }} 
+              icon={<FileSpreadsheet size={18} />} 
+              label="Relatórios Excel" 
+            />
+
             {hasFullAccess && !selectedProfile?.isComiteGestor && (
               <>
                 <SidebarButton active={currentView === 'quality'} onClick={() => { onViewChange('quality'); onClose?.(); }} icon={<ShieldCheck size={18} />} label="Acessos" />

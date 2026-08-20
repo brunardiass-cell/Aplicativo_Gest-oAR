@@ -18,6 +18,7 @@ import TaskDetailsModal from './components/TaskDetailsModal';
 import DeletionModal from './components/DeletionModal';
 import ActivityLogView from './components/ActivityLogView';
 import MonthlyReportModal from './components/MonthlyReportModal';
+import ExcelReportsModal from './components/ExcelReportsModal';
 import ProjectsManager from './components/ProjectsManager';
 import AccessControl from './components/AccessControl';
 import RegulatoryStandardsManager from './components/RegulatoryStandardsManager';
@@ -107,6 +108,7 @@ const App: React.FC = () => {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isExcelReportsModalOpen, setIsExcelReportsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [filterMember, setFilterMember] = useState<string | 'Todos'>('Todos');
   
@@ -1288,6 +1290,7 @@ const App: React.FC = () => {
           onSelectVisualizationMode={setProjectVisualizationMode}
           projectSubView={projectSubView}
           onSelectProjectSubView={setProjectSubView}
+          onOpenExcelReports={() => setIsExcelReportsModalOpen(true)}
         />
       )}
       <input type="file" ref={fileInputRef} onChange={handleLoadLocalBackup} accept=".json" className="hidden" />
@@ -1647,6 +1650,19 @@ const App: React.FC = () => {
         onClose={() => setIsRegulatoryModalOpen(false)}
         activityName={regulatoryModalData.name}
         standards={regulatoryModalData.standards}
+      />
+
+      <ExcelReportsModal
+        isOpen={isExcelReportsModalOpen}
+        onClose={() => setIsExcelReportsModalOpen(false)}
+        teamMembers={teamMembers}
+        tasks={tasks}
+        projects={activeProjects}
+        regulatoryEvidence={regulatoryEvidence}
+        regulatoryStandards={regulatoryStandards}
+        regulatoryDocs={regulatoryDocs}
+        dossierContributions={dossierContributions}
+        currentProfileName={selectedProfile?.name}
       />
     </div>
     </>

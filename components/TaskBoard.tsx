@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Task, AppNotification, Status } from '../types';
+import { TaskNotesModal } from './TaskNotesModal';
 import { 
   ArrowRight, 
   MessageSquare, 
@@ -57,6 +58,7 @@ interface TaskBoardProps {
   searchTerm: string;
   onSearchTermChange: (term: string) => void;
   onNewTask?: () => void;
+  onSaveTask?: (task: Task) => void;
 }
 
 const getTaskStatusVisuals = (status: Status, isReport?: boolean, reportStage?: string) => {
@@ -157,12 +159,14 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   onCompleteCollaboration,
   searchTerm,
   onSearchTermChange,
-  onNewTask
+  onNewTask,
+  onSaveTask
 }) => {
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
+  const [notesModalTask, setNotesModalTask] = useState<Task | null>(null);
 
   const activeTasks = useMemo(() => tasks.filter(t => !t.deleted), [tasks]);
   const activeReviews = notifications.filter(n => n.userId === currentUser && !n.read && n.type === 'REVIEW_ASSIGNED');
@@ -610,11 +614,23 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                       {/* AÇÕES COLUMN */}
                       <td className="py-4 px-6 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {/* Updates / Comments count */}
-                          <div className="flex items-center gap-1 text-xs font-bold text-slate-400 mr-2">
-                            <MessageSquare size={14} />
+                          {/* Updates / Comments count button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNotesModalTask(task);
+                            }}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-bold transition border ${
+                              task.updates && task.updates.length > 0
+                                ? 'text-[#008779] bg-teal-50 hover:bg-teal-100 border-teal-200 shadow-2xs'
+                                : 'text-slate-400 hover:text-[#008779] hover:bg-teal-50/60 border-slate-100 hover:border-teal-200'
+                            }`}
+                            title="Clique para ver o histórico e adicionar notas de atualização"
+                          >
+                            <MessageSquare size={14} className={task.updates && task.updates.length > 0 ? 'text-[#008779]' : 'text-slate-400'} />
                             <span>{task.updates ? task.updates.length : 0}</span>
-                          </div>
+                          </button>
 
                           <button 
                             onClick={() => onView(task)} 
@@ -812,7 +828,22 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                     </div>
                   )}
                   {isCompleted && <div className="flex-1"></div>}
-                  {task.updates && task.updates.length > 0 && (<div className="flex items-center gap-1.5 text-teal-700 ml-auto"><MessageSquare size={12} /><span className="text-[9px] font-black">{task.updates.length}</span></div>)}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setNotesModalTask(task);
+                    }}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-bold transition ml-auto border ${
+                      task.updates && task.updates.length > 0
+                        ? 'text-[#008779] bg-teal-50 hover:bg-teal-100 border-teal-200 shadow-2xs'
+                        : 'text-slate-400 hover:text-[#008779] hover:bg-teal-50/60 border-slate-100 hover:border-teal-200'
+                    }`}
+                    title="Clique para ver o histórico e adicionar notas de atualização"
+                  >
+                    <MessageSquare size={13} className={task.updates && task.updates.length > 0 ? 'text-[#008779]' : 'text-slate-400'} />
+                    <span className="text-[10px] font-black">{task.updates ? task.updates.length : 0}</span>
+                  </button>
                 </div>
               </div>
             );
@@ -825,6 +856,20 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
           )}
         </div>
       )}
+
+      {/* Quick Notes Modal */}
+      <TaskNotesModal
+        isOpen={Boolean(notesModalTask)}
+        task={notesModalTask}
+        onClose={() => setNotesModalTask(null)}
+        onSaveTask={(updated) => {
+          if (onSaveTask) {
+            onSaveTask(updated);
+          }
+          setNotesModalTask(updated);
+        }}
+        currentUser={currentUser === 'Todos' || currentUser === 'Visão Geral da Equipe' ? 'Usuário' : currentUser}
+      />
 
     </div>
   );

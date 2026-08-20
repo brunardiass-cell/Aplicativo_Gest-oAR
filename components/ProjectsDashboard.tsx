@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Project, Task } from '../types';
 import { FolderKanban, Activity, PauseCircle, AlertTriangle, ArrowRight, Clock, CheckCircle } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { isNameMatch } from '../constants';
 
 interface ProjectsDashboardProps {
   projects: Project[];
@@ -13,8 +14,10 @@ interface ProjectsDashboardProps {
 const ProjectsDashboard: React.FC<ProjectsDashboardProps> = ({ projects, tasks, filteredUser, onNavigateToProject }) => {
 
   const userProjects = useMemo(() => {
-    if (filteredUser === 'Todos') return projects;
-    return projects.filter(p => p.responsible === filteredUser || p.team?.includes(filteredUser));
+    if (filteredUser === 'Todos' || filteredUser === 'Visão Geral da Equipe' || filteredUser === 'Comitê Gestor') {
+      return projects;
+    }
+    return projects.filter(p => isNameMatch(p.responsible, filteredUser));
   }, [projects, filteredUser]);
 
   const projectStats = useMemo(() => {

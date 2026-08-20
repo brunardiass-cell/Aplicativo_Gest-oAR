@@ -1,5 +1,11 @@
 
 import * as msal from "@azure/msal-browser";
+import {
+  generateMonthlyTasksWorkbook,
+  generateProjectsWorkbook,
+  generateRegulatoryWorkbook,
+  uploadExcelToSharePointPath
+} from "../utils/excelReports";
 
 const CLIENT_ID = "609422c2-d648-4b50-b1fe-ca614b77ffb5"; 
 const TENANT_ID = "f51c2ea8-6e50-4e8f-a3e3-30c69e99d323";
@@ -826,6 +832,70 @@ export const MicrosoftGraphService = {
     } catch (e) {
       console.error("Microsoft Graph: Exceção ao enviar e-mail", e);
       return false;
+    }
+  },
+
+  async syncProfileSpreadsheetsToSharePoint(data: any): Promise<{ success: boolean; syncedCount: number; errors: string[] }> {
+    const token = await this.getToken();
+    if (!token) return { success: false, syncedCount: 0, errors: ['Não autenticado no Microsoft Graph'] };
+
+    try {
+      const ids = await this.getSiteAndDriveId(token);
+      if (!ids) return { success: false, syncedCount: 0, errors: ['Site ou Drive do SharePoint não encontrados'] };
+
+      const teamMembers: any[] = data.teamMembers || [];
+      const tasks: any[] = data.tasks || [];
+      const projects: any[] = data.projects || [];
+      const regulatoryEvidence: any[] = data.regulatoryEvidence || [];
+      const regulatoryStandards: any[] = data.regulatoryStandards || [];
+      const regulatoryDocs: any[] = data.regulatoryDocs || [];
+      const dossierContributions: any[] = data.dossierContributions || [];
+
+      await this.ensureFolderExists(token, ids.driveId);
+
+      const errors: string[] = [];
+      let syncedCount = 0;
+
+      for (const member of teamMembers) {
+        if (!member || !member.name) continue;
+        const isDiscontinued = member.active === false || member.discontinued === true;
+        const cleanName = member.name.trim();
+        const safeFolderName = cleanName.replace(/[/\\?%*:|"<>]/g, '-');
+        const baseFolder = isDiscontinued 
+          ? `${FOLDER_NAME}/perfis antigos/${safeFolderName}` 
+          : `${FOLDER_NAME}/${safeFolderName}`;
+
+        try {
+          const wbTasks = generateMonthlyTasksWorkbook(member, tasks, projects);
+          const wbProjects = generateProjectsWorkbook(member, projects);
+          const wbRegulatory = generateRegulatoryWorkbook(member, projects, tasks, regulatoryEvidence, regulatoryStandards, regulatoryDocs, dossierContributions);
+
+          const fileSuffix = safeFolderName.replace(/\s+/g, '_');
+          const res1 = await uploadExcelToSharePointPath(token, ids.driveId, baseFolder, `Atividades_do_Mes_${fileSuffix}.xlsx`, wbTasks);
+          const res2 = await uploadExcelToSharePointPath(token, ids.driveId, baseFolder, `Projetos_e_Atividades_${fileSuffix}.xlsx`, wbProjects);
+          const res3 = await uploadExcelToSharePointPath(token, ids.driveId, baseFolder, `Documentos_Regulatorios_${fileSuffix}.xlsx`, wbRegulatory);
+
+          if (res1.success && res2.success && res3.success) {
+            syncedCount++;
+          } else {
+            if (!res1.success) errors.push(`[${member.name}] Atividades do Mês: ${res1.error}`);
+            if (!res2.success) errors.push(`[${member.name}] Projetos e Atividades: ${res2.error}`);
+            if (!res3.success) errors.push(`[${member.name}] Documentos Regulatórios: ${res3.error}`);
+          }
+        } catch (memErr: any) {
+          console.error(`Erro ao gerar planilhas para ${member.name}:`, memErr);
+          errors.push(`[${member.name}] ${memErr.message}`);
+        }
+      }
+
+      return {
+        success: errors.length === 0,
+        syncedCount,
+        errors
+      };
+    } catch (e: any) {
+      console.error('Erro na sincronização de planilhas por perfil:', e);
+      return { success: false, syncedCount: 0, errors: [e.message] };
     }
   }
 };

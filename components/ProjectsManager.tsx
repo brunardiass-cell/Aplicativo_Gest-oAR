@@ -511,7 +511,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
         if (a.status !== 'Ativo' && b.status === 'Ativo') return 1;
         return 0;
       });
-  }, [projects, searchTerm, statusFilter, responsibleFilter, sortBy]);
+  }, [accessibleProjects, searchTerm, statusFilter, responsibleFilter, sortBy]);
 
   if (viewMode === 'selection' || viewMode === 'initial') {
     return (
