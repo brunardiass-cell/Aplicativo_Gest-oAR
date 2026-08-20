@@ -4,6 +4,7 @@ import { Task, AppNotification, Project } from '../types';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Briefcase, CheckCircle, FolderKanban, Activity, AlertTriangle, FileSignature } from 'lucide-react';
 import AlertsDetailModal from './AlertsDetailModal';
+import { isNameMatch } from '../constants';
 
 interface DashboardProps {
   tasks: Task[];
@@ -21,7 +22,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
     return tasks.filter(t => {
       if (t.deleted) return false;
       if (filteredUser === 'Todos') return true;
-      return t.projectLead === filteredUser || (Array.isArray(t.collaborators) && t.collaborators.includes(filteredUser)) || t.currentReviewer === filteredUser;
+      return isNameMatch(t.projectLead, filteredUser) || (Array.isArray(t.collaborators) && t.collaborators.some(c => isNameMatch(c, filteredUser))) || isNameMatch(t.currentReviewer, filteredUser);
     });
   }, [tasks, filteredUser]);
 
@@ -48,7 +49,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, projects, filteredUser, no
           const completion = new Date(t.completionDate + 'T00:00:00');
           return completion.getMonth() === currentMonth && completion.getFullYear() === currentYear;
       }).length,
-      projects: projects.filter(p => filteredUser === 'Todos' || p.responsible === filteredUser || p.team?.includes(filteredUser)).length,
+      projects: projects.filter(p => filteredUser === 'Todos' || isNameMatch(p.responsible, filteredUser)).length,
       ongoing: createdLast30Days.filter(t => t.status === 'Em Andamento').length,
       late: lateTasks.length,
     };

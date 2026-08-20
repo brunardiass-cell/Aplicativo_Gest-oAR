@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Meeting, Project, TeamMember, RegulatoryStandard, RegulatorySubject, MeetingActionItem, DossierContribution } from '../types';
-import { DEFAULT_MINUTES_TEMPLATE } from '../constants';
+import { DEFAULT_MINUTES_TEMPLATE, isNameMatch } from '../constants';
 import { DecisionsHistoryView } from './DecisionsHistoryView';
 import { MeetingModal } from './MeetingModal';
 import { MeetingMinutesModal } from './MeetingMinutesModal';
@@ -53,18 +53,6 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [customMinutesTemplate, setCustomMinutesTemplate] = useState<string>(DEFAULT_MINUTES_TEMPLATE);
 
-  // Helper for flexible name matching (e.g. "Bruna" vs "Bruna Dias")
-  const isNameMatch = (targetName?: string, currentUserName?: string) => {
-    if (!targetName || !currentUserName) return false;
-    const t = targetName.toLowerCase().trim();
-    const c = currentUserName.toLowerCase().trim();
-    if (t === c) return true;
-    const tFirst = t.split(' ')[0];
-    const cFirst = c.split(' ')[0];
-    if (tFirst.length > 2 && cFirst.length > 2 && tFirst === cFirst) return true;
-    return t.includes(c) || c.includes(t);
-  };
-
   // Only Comitê Gestor / Visão Geral can see all projects and all meetings
   const isComiteGestor = useMemo(() => {
     return !!(
@@ -75,20 +63,13 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
   }, [currentUser]);
 
   // For individual profiles (Bruna, Graziella, Ester, Marjorie, Ana Luiza, etc.):
-  // only projects they lead / are responsible for or participate in
+  // only projects they lead / are responsible for
   const accessibleProjects = useMemo(() => {
     if (isComiteGestor || !currentUser?.name) {
       return projects;
     }
     const currentUserName = currentUser.name;
-    return projects.filter(p => {
-      const isResp = isNameMatch(p.responsible, currentUserName);
-      const inTeam = (p.team || []).some(t => isNameMatch(t, currentUserName));
-      const hasMicro = p.macroActivities?.some(m =>
-        m.microActivities?.some(mi => isNameMatch(mi.assignee, currentUserName))
-      );
-      return isResp || inTeam || hasMicro;
-    });
+    return projects.filter(p => isNameMatch(p.responsible, currentUserName));
   }, [projects, isComiteGestor, currentUser]);
 
   const accessibleMeetings = useMemo(() => {

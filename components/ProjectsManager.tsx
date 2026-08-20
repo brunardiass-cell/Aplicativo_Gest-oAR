@@ -28,6 +28,7 @@ import RegulatoryChecklistModal from './RegulatoryChecklistModal';
 import ProjectGanttView from './ProjectGanttView';
 import ProjectActivityMap from './ProjectActivityMap';
 import { RegulatoryDocManagement } from './RegulatoryDocManagement';
+import { isNameMatch } from '../constants';
 
 interface ProjectsManagerProps {
   projects: Project[];
@@ -123,18 +124,6 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     if (score > 80) return 'text-emerald-500';
     if (score > 60) return 'text-amber-500';
     return 'text-red-500';
-  };
-
-  // Helper for flexible name matching
-  const isNameMatch = (targetName?: string, currentUserName?: string) => {
-    if (!targetName || !currentUserName) return false;
-    const t = targetName.toLowerCase().trim();
-    const c = currentUserName.toLowerCase().trim();
-    if (t === c) return true;
-    const tFirst = t.split(' ')[0];
-    const cFirst = c.split(' ')[0];
-    if (tFirst.length > 2 && cFirst.length > 2 && tFirst === cFirst) return true;
-    return t.includes(c) || c.includes(t);
   };
 
   const isComiteGestor = useMemo(() => {
@@ -430,19 +419,14 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     addProject(newProject);
   };
 
-  // Accessible projects: Comitê Gestor sees all projects; individual profiles see only their projects
+  // Accessible projects: Comitê Gestor sees all projects; individual profiles see only projects they lead/are responsible for
   const accessibleProjects = useMemo(() => {
     if (isComiteGestor || !currentUser?.name) {
       return projects;
     }
     const currentUserName = currentUser.name;
     return projects.filter(project => {
-      const isResp = isNameMatch(project.responsible, currentUserName);
-      const inTeam = (project.team || []).some(t => isNameMatch(t, currentUserName));
-      const hasMicro = project.macroActivities?.some(m =>
-        m.microActivities?.some(mi => isNameMatch(mi.assignee, currentUserName))
-      );
-      return isResp || inTeam || hasMicro;
+      return isNameMatch(project.responsible, currentUserName);
     });
   }, [projects, isComiteGestor, currentUser]);
 

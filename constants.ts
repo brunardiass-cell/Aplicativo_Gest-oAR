@@ -38,6 +38,66 @@ export const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
   { id: 'tm_comite', name: 'Comitê Gestor', role: 'Gestão', isLeader: false, isComiteGestor: true }
 ];
 
+export const normalizeName = (name?: string): string => {
+  if (!name) return '';
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+};
+
+export const isNameMatch = (targetName?: string, currentUserName?: string): boolean => {
+  if (!targetName || !currentUserName) return false;
+  const t = normalizeName(targetName);
+  const c = normalizeName(currentUserName);
+  if (!t || !c) return false;
+  if (t === c) return true;
+
+  // Specific profiles handling:
+  // "bruna" <-> "bruna dias" / "bruna rodrigues"
+  const isTBruna = t.startsWith('bruna');
+  const isCBruna = c.startsWith('bruna');
+  if (isTBruna && isCBruna) return true;
+  if ((isTBruna && !isCBruna) || (!isTBruna && isCBruna)) return false;
+
+  // "graziella"
+  const isTGraziella = t.startsWith('graziella');
+  const isCGraziella = c.startsWith('graziella');
+  if (isTGraziella && isCGraziella) return true;
+  if ((isTGraziella && !isCGraziella) || (!isTGraziella && isCGraziella)) return false;
+
+  // "ester"
+  const isTEster = t.startsWith('ester');
+  const isCEster = c.startsWith('ester');
+  if (isTEster && isCEster) return true;
+  if ((isTEster && !isCEster) || (!isTEster && isCEster)) return false;
+
+  // "marjorie"
+  const isTMarjorie = t.startsWith('marjorie');
+  const isCMarjorie = c.startsWith('marjorie');
+  if (isTMarjorie && isCMarjorie) return true;
+  if ((isTMarjorie && !isCMarjorie) || (!isTMarjorie && isCMarjorie)) return false;
+
+  // "ana luiza" vs "ana terzian"
+  const isTAnaLuiza = t.includes('ana luiza') || t.includes('ana luisa');
+  const isCAnaLuiza = c.includes('ana luiza') || c.includes('ana luisa');
+  if (isTAnaLuiza || isCAnaLuiza) return isTAnaLuiza && isCAnaLuiza;
+
+  const isTAnaTerzian = t.includes('ana terzian');
+  const isCAnaTerzian = c.includes('ana terzian');
+  if (isTAnaTerzian || isCAnaTerzian) return isTAnaTerzian && isCAnaTerzian;
+
+  // Fallback: check first token if not ambiguous
+  const tFirst = t.split(/\s+/)[0];
+  const cFirst = c.split(/\s+/)[0];
+  if (tFirst && cFirst && tFirst === cFirst && tFirst !== 'ana') {
+    return true;
+  }
+
+  return false;
+};
+
 export const ADMIN_WHITELIST = [
   'priscilapassos@ctvacinas.org'
 ];

@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
 import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity, RegulatoryEvidence, MacroActivityConfig, RegulatoryInfoItem, RepeatableRecord, RegulatoryNarrative, RegulatoryDocument, Meeting, DossierContribution } from './types';
-import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES, DEFAULT_MEETINGS } from './constants';
+import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES, DEFAULT_MEETINGS, isNameMatch } from './constants';
 import { MeetingsManager } from './components/MeetingsManager';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
@@ -1060,12 +1060,12 @@ const App: React.FC = () => {
 
       const memberMatch =
         filterMember === 'Todos' ||
-        t.projectLead === filterMember ||
-        (Array.isArray(t.collaborators) && t.collaborators.includes(filterMember)) ||
-        t.currentReviewer === filterMember;
+        isNameMatch(t.projectLead, filterMember) ||
+        (Array.isArray(t.collaborators) && t.collaborators.some(c => isNameMatch(c, filterMember))) ||
+        isNameMatch(t.currentReviewer, filterMember);
 
       const statusMatch = statusFilter === 'Todos' || t.status === statusFilter;
-      const leadMatch = leadFilter === 'Todos' || t.projectLead === leadFilter;
+      const leadMatch = leadFilter === 'Todos' || isNameMatch(t.projectLead, leadFilter);
       const projectMatch = projectFilter === 'Todos' || t.project === projectFilter;
 
       const dateFilterMatch = (() => {
@@ -1093,24 +1093,13 @@ const App: React.FC = () => {
   
   const allMicroTasksForUser = useMemo(() => {
     if (!selectedProfile) return [];
-    
-    const isNameMatch = (targetName?: string, currentUserName?: string) => {
-      if (!targetName || !currentUserName) return false;
-      const t = targetName.toLowerCase().trim();
-      const c = currentUserName.toLowerCase().trim();
-      if (t === c) return true;
-      const tFirst = t.split(' ')[0];
-      const cFirst = c.split(' ')[0];
-      if (tFirst.length > 2 && cFirst.length > 2 && tFirst === cFirst) return true;
-      return t.includes(c) || c.includes(t);
-    };
 
     const isComiteGestor = selectedProfile.isComiteGestor || selectedProfile.name === 'Comitê Gestor' || selectedProfile.name === 'Visão Geral da Equipe';
     const profileName = selectedProfile.name;
 
     const relevantProjects = projects.filter(p => 
       !p.deleted && 
-      (isComiteGestor || isNameMatch(p.responsible, profileName) || (p.team || []).some(t => isNameMatch(t, profileName)) || p.macroActivities?.some(m => m.microActivities?.some(mi => isNameMatch(mi.assignee, profileName))))
+      (isComiteGestor || isNameMatch(p.responsible, profileName))
     );
     
     const allMicroTasks: AugmentedMicroActivity[] = [];
