@@ -4,7 +4,9 @@ import {
   generateMonthlyTasksWorkbook,
   generateProjectsWorkbook,
   generateRegulatoryWorkbook,
-  uploadExcelToSharePointPath
+  generateVaccinesWorkbook,
+  uploadExcelToSharePointPath,
+  downloadWorkbookAsFile
 } from "../utils/excelReports";
 
 const CLIENT_ID = "609422c2-d648-4b50-b1fe-ca614b77ffb5"; 
@@ -896,6 +898,492 @@ export const MicrosoftGraphService = {
     } catch (e: any) {
       console.error('Erro na sincronização de planilhas por perfil:', e);
       return { success: false, syncedCount: 0, errors: [e.message] };
+    }
+  },
+
+  // =========================================================================
+  // NOVA ESTRUTURA MODULAR NO SHAREPOINT:
+  // Documentos > Sistema > {Modulo} > perfis > {Nome}
+  // =========================================================================
+
+  async ensureSharePointFolderPath(token: string, driveId: string, fullPath: string): Promise<boolean> {
+    try {
+      const parts = fullPath.replace(/\/+/g, '/').replace(/^\/|\/$/g, '').split('/');
+      let currentPath = '';
+
+      for (const part of parts) {
+        const parentPath = currentPath;
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+
+        const endpoint = parentPath 
+          ? `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${parentPath}:/children`
+          : `https://graph.microsoft.com/v1.0/drives/${driveId}/root/children`;
+
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: part,
+            folder: {},
+            '@microsoft.graph.conflictBehavior': 'fail'
+          })
+        });
+
+        if (res.status === 409 || res.ok) {
+          continue;
+        }
+      }
+      return true;
+    } catch (e) {
+      console.warn(`Aviso ao criar pasta SharePoint '${fullPath}':`, e);
+      return false;
+    }
+  },
+
+  async downloadJsonFromSharePointPath(token: string, driveId: string, folderPath: string, fileName: string): Promise<{ data: any; eTag: string } | null> {
+    try {
+      const sanitizedFolder = folderPath.replace(/\/+/g, '/').replace(/^\/|\/$/g, '');
+      const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${sanitizedFolder}/${fileName}`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.status === 404) return null;
+      if (!res.ok) return null;
+
+      const itemData = await res.json();
+      const downloadUrl = itemData['@microsoft.graph.downloadUrl'];
+      const eTag = itemData.eTag || itemData['@odata.etag'] || '';
+
+      if (!downloadUrl) return null;
+
+      const contentRes = await fetch(downloadUrl);
+      if (!contentRes.ok) return null;
+
+      const data = await contentRes.json();
+      return { data, eTag };
+    } catch (e) {
+      console.error(`Erro ao baixar JSON ${fileName} de ${folderPath}:`, e);
+      return null;
+    }
+  },
+
+  async uploadJsonWithRetry(
+    token: string,
+    driveId: string,
+    folderPath: string,
+    fileName: string,
+    data: any,
+    initialETag?: string
+  ): Promise<{ success: boolean; newETag?: string; conflict?: boolean; error?: string }> {
+    const sanitizedFolder = folderPath.replace(/\/+/g, '/').replace(/^\/|\/$/g, '');
+    await this.ensureSharePointFolderPath(token, driveId, sanitizedFolder);
+
+    let currentETag = initialETag;
+    let payload = data;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const url = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${sanitizedFolder}/${fileName}:/content`;
+        const headers: HeadersInit = {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        };
+
+        if (currentETag) {
+          headers['If-Match'] = currentETag;
+        }
+
+        const res = await fetch(url, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify(payload, null, 2)
+        });
+
+        if (res.status === 412) {
+          console.warn(`[Concorrência] Conflito 412 detectado em ${sanitizedFolder}/${fileName}. Tentativa ${attempt} de 3. Reconciliando dados remotos...`);
+          const remote = await this.downloadJsonFromSharePointPath(token, driveId, sanitizedFolder, fileName);
+          if (remote && remote.data) {
+            currentETag = remote.eTag;
+            // Mescla inteligente: preserva novos itens locais e atualizações mantendo integridade
+            if (Array.isArray(payload) && Array.isArray(remote.data)) {
+              const mergedMap = new Map<string, any>();
+              remote.data.forEach((item: any) => { if (item.id) mergedMap.set(item.id, item); });
+              payload.forEach((item: any) => { if (item.id) mergedMap.set(item.id, item); });
+              payload = Array.from(mergedMap.values());
+            } else if (typeof payload === 'object' && typeof remote.data === 'object') {
+              payload = { ...remote.data, ...payload };
+            }
+            continue;
+          }
+        }
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          return { success: false, conflict: false, error: err?.error?.message || 'Falha ao salvar JSON' };
+        }
+
+        const resData = await res.json();
+        return {
+          success: true,
+          conflict: false,
+          newETag: resData.eTag || resData['@odata.etag'] || ''
+        };
+      } catch (err: any) {
+        if (attempt === 3) {
+          return { success: false, conflict: false, error: err.message };
+        }
+      }
+    }
+
+    return { success: false, conflict: true, error: 'Excedido limite de tentativas de reconciliação de concorrência' };
+  },
+
+  // Salva os dados na nova estrutura modular com persistência isolada por módulo/perfil
+  async saveModularToSharePoint(
+    fullData: any,
+    fileETagsMap: Record<string, string> = {}
+  ): Promise<{ success: boolean; updatedETags: Record<string, string>; errors: string[] }> {
+    const token = await this.getToken();
+    if (!token) return { success: false, updatedETags: {}, errors: ['Não autenticado'] };
+
+    try {
+      const ids = await this.getSiteAndDriveId(token);
+      if (!ids) return { success: false, updatedETags: {}, errors: ['Site ou Drive não encontrados'] };
+
+      const updatedETags: Record<string, string> = { ...fileETagsMap };
+      const errors: string[] = [];
+
+      // 1. Módulo: Normas Regulatórias -> sistema/Normas_Regulatorias/normas_regulatorias.json
+      const regulatoryData = {
+        regulatoryStandards: fullData.regulatoryStandards || [],
+        regulatorySubjects: fullData.regulatorySubjects || [],
+        regulatoryDocs: fullData.regulatoryDocs || [],
+        regulatoryEvidence: fullData.regulatoryEvidence || [],
+        regulatoryNarratives: fullData.regulatoryNarratives || [],
+        regulatoryInfoItems: fullData.regulatoryInfoItems || [],
+        repeatableRecords: fullData.repeatableRecords || []
+      };
+      const regKey = 'normas_regulatorias';
+      const regRes = await this.uploadJsonWithRetry(
+        token,
+        ids.driveId,
+        'sistema/Normas_Regulatorias',
+        'normas_regulatorias.json',
+        regulatoryData,
+        fileETagsMap[regKey]
+      );
+      if (regRes.success && regRes.newETag) updatedETags[regKey] = regRes.newETag;
+      else if (!regRes.success) errors.push(`Normas Regulatórias: ${regRes.error}`);
+
+      // 2. Módulo: Vacinas e Componentes -> sistema/Vacinas_e_Componentes/vacinas_e_componentes.json
+      const vaccinesData = {
+        vaccineCandidates: fullData.vaccineCandidates || [],
+        vaccineComponents: fullData.vaccineComponents || [],
+        formulationBatches: fullData.formulationBatches || []
+      };
+      const vacKey = 'vacinas_e_componentes';
+      const vacRes = await this.uploadJsonWithRetry(
+        token,
+        ids.driveId,
+        'sistema/Vacinas_e_Componentes',
+        'vacinas_e_componentes.json',
+        vaccinesData,
+        fileETagsMap[vacKey]
+      );
+      if (vacRes.success && vacRes.newETag) updatedETags[vacKey] = vacRes.newETag;
+      else if (!vacRes.success) errors.push(`Vacinas e Componentes: ${vacRes.error}`);
+
+      // 3. Módulo: Gestão de Projetos (Global) -> sistema/Gestao_de_Projetos/global.json
+      const globalProjectsData = {
+        projects: fullData.projects || [],
+        macroActivityConfigs: fullData.macroActivityConfigs || [],
+        teamMembers: fullData.teamMembers || [],
+        activityPlans: fullData.activityPlans || [],
+        appUsers: fullData.appUsers || [],
+        managerEmail: fullData.managerEmail || '',
+        notifications: fullData.notifications || [],
+        logs: fullData.logs || []
+      };
+      const projKey = 'gestao_projetos_global';
+      const projRes = await this.uploadJsonWithRetry(
+        token,
+        ids.driveId,
+        'sistema/Gestao_de_Projetos',
+        'global.json',
+        globalProjectsData,
+        fileETagsMap[projKey]
+      );
+      if (projRes.success && projRes.newETag) updatedETags[projKey] = projRes.newETag;
+      else if (!projRes.success) errors.push(`Gestão de Projetos (Global): ${projRes.error}`);
+
+      // 4. Módulo: Gestão de Projetos (Perfis Individuais)
+      // sistema/Gestao_de_Projetos/perfis/{Nome}/perfil_{safeName}.json
+      const teamMembers: any[] = fullData.teamMembers || [];
+      const allTasks: any[] = fullData.tasks || [];
+
+      // Mapear tarefas por perfil para salvar em JSONs isolados
+      const assignedTaskIds = new Set<string>();
+
+      for (const member of teamMembers) {
+        if (!member || !member.name) continue;
+        const cleanName = member.name.trim();
+        const safeFolderName = cleanName.replace(/[/\\?%*:|"<>]/g, '_');
+        const fileKey = `perfil_${safeFolderName}`;
+
+        const memberTasks = allTasks.filter(t => {
+          const isLead = t.projectLead?.trim().toLowerCase() === cleanName.toLowerCase();
+          const isCollab = t.collaborators?.some((c: string) => c.trim().toLowerCase() === cleanName.toLowerCase());
+          const isReviewer = t.currentReviewer?.trim().toLowerCase() === cleanName.toLowerCase();
+          return isLead || isCollab || isReviewer;
+        });
+
+        memberTasks.forEach(t => assignedTaskIds.add(t.id));
+
+        const profileData = {
+          profileName: cleanName,
+          lastUpdated: new Date().toISOString(),
+          tasks: memberTasks
+        };
+
+        const profileRes = await this.uploadJsonWithRetry(
+          token,
+          ids.driveId,
+          `sistema/Gestao_de_Projetos/perfis/${safeFolderName}`,
+          `perfil_${safeFolderName}.json`,
+          profileData,
+          fileETagsMap[fileKey]
+        );
+
+        if (profileRes.success && profileRes.newETag) {
+          updatedETags[fileKey] = profileRes.newETag;
+        } else if (!profileRes.success) {
+          errors.push(`Perfil ${cleanName}: ${profileRes.error}`);
+        }
+      }
+
+      // Salvar tarefas gerais / não atribuídas caso existam
+      const unassignedTasks = allTasks.filter(t => !assignedTaskIds.has(t.id));
+      if (unassignedTasks.length > 0) {
+        const generalKey = 'perfil_geral';
+        const genRes = await this.uploadJsonWithRetry(
+          token,
+          ids.driveId,
+          'sistema/Gestao_de_Projetos/perfis/Geral',
+          'perfil_geral.json',
+          { profileName: 'Geral', tasks: unassignedTasks },
+          fileETagsMap[generalKey]
+        );
+        if (genRes.success && genRes.newETag) updatedETags[generalKey] = genRes.newETag;
+      }
+
+      // 5. Preservação Absoluta: Mantém também o backup consolidado db.json
+      await this.saveToCloud(fullData, null);
+
+      return {
+        success: errors.length === 0,
+        updatedETags,
+        errors
+      };
+    } catch (e: any) {
+      console.error('Erro ao salvar estrutura modular no SharePoint:', e);
+      return { success: false, updatedETags: {}, errors: [e.message] };
+    }
+  },
+
+  // Sincroniza todas as planilhas derivadas correspondentes aos módulos e perfis
+  async syncAllModularExcelToSharePoint(data: any): Promise<{ success: boolean; syncedCount: number; errors: string[] }> {
+    const token = await this.getToken();
+    if (!token) return { success: false, syncedCount: 0, errors: ['Não autenticado'] };
+
+    try {
+      const ids = await this.getSiteAndDriveId(token);
+      if (!ids) return { success: false, syncedCount: 0, errors: ['Site ou Drive não encontrados'] };
+
+      const errors: string[] = [];
+      let syncedCount = 0;
+
+      // 1. Excel do Módulo Normas Regulatórias
+      try {
+        const wbReg = generateRegulatoryWorkbook(
+          { name: 'Geral', isLeader: true } as any,
+          data.projects || [],
+          data.tasks || [],
+          data.regulatoryEvidence || [],
+          data.regulatoryStandards || [],
+          data.regulatoryDocs || [],
+          data.dossierContributions || []
+        );
+        const resReg = await uploadExcelToSharePointPath(token, ids.driveId, 'sistema/Normas_Regulatorias', 'Normas_Regulatorias.xlsx', wbReg);
+        if (resReg.success) syncedCount++;
+        else errors.push(`Normas Regulatórias Excel: ${resReg.error}`);
+      } catch (err: any) {
+        errors.push(`Normas Regulatórias Excel: ${err.message}`);
+      }
+
+      // 2. Excel do Módulo Vacinas e Componentes
+      try {
+        const wbVac = generateVaccinesWorkbook(
+          data.vaccineCandidates || [],
+          data.vaccineComponents || [],
+          data.formulationBatches || []
+        );
+        const resVac = await uploadExcelToSharePointPath(token, ids.driveId, 'sistema/Vacinas_e_Componentes', 'Vacinas_e_Componentes.xlsx', wbVac);
+        if (resVac.success) syncedCount++;
+        else errors.push(`Vacinas e Componentes Excel: ${resVac.error}`);
+      } catch (err: any) {
+        errors.push(`Vacinas e Componentes Excel: ${err.message}`);
+      }
+
+      // 3. Excel do Módulo Gestão de Projetos (Geral)
+      try {
+        const wbProj = generateProjectsWorkbook({ name: 'Geral', isLeader: true } as any, data.projects || []);
+        const resProj = await uploadExcelToSharePointPath(token, ids.driveId, 'sistema/Gestao_de_Projetos', 'Projetos_e_Atividades.xlsx', wbProj);
+        if (resProj.success) syncedCount++;
+        else errors.push(`Gestão de Projetos Excel: ${resProj.error}`);
+      } catch (err: any) {
+        errors.push(`Gestão de Projetos Excel: ${err.message}`);
+      }
+
+      // 4. Excel de cada Perfil Individual
+      const teamMembers: any[] = data.teamMembers || [];
+      for (const member of teamMembers) {
+        if (!member || !member.name) continue;
+        const cleanName = member.name.trim();
+        const safeFolderName = cleanName.replace(/[/\\?%*:|"<>]/g, '_');
+        const folderPath = `sistema/Gestao_de_Projetos/perfis/${safeFolderName}`;
+
+        try {
+          const wbTasks = generateMonthlyTasksWorkbook(member, data.tasks || [], data.projects || []);
+          const wbMemberProj = generateProjectsWorkbook(member, data.projects || []);
+
+          const resT = await uploadExcelToSharePointPath(token, ids.driveId, folderPath, `Atividades_do_Mes_${safeFolderName}.xlsx`, wbTasks);
+          const resP = await uploadExcelToSharePointPath(token, ids.driveId, folderPath, `Projetos_e_Atividades_${safeFolderName}.xlsx`, wbMemberProj);
+
+          if (resT.success && resP.success) {
+            syncedCount += 2;
+          } else {
+            if (!resT.success) errors.push(`[${member.name}] Atividades: ${resT.error}`);
+            if (!resP.success) errors.push(`[${member.name}] Projetos: ${resP.error}`);
+          }
+        } catch (memErr: any) {
+          errors.push(`[${member.name}] ${memErr.message}`);
+        }
+      }
+
+      return {
+        success: errors.length === 0,
+        syncedCount,
+        errors
+      };
+    } catch (e: any) {
+      return { success: false, syncedCount: 0, errors: [e.message] };
+    }
+  },
+
+  // =========================================================================
+  // MÉTODOS CONTEXTUAIS DE DOWNLOAD E SINCRONIZAÇÃO (Requirement 3)
+  // =========================================================================
+
+  downloadContextualExcel(context: 'profile' | 'projects' | 'regulatory' | 'vaccines', data: any, profileName?: string) {
+    if (context === 'profile' && profileName) {
+      const member = (data.teamMembers || []).find((m: any) => m.name?.toLowerCase() === profileName.toLowerCase()) || { name: profileName, isLeader: true };
+      const wb = generateMonthlyTasksWorkbook(member, data.tasks || [], data.projects || []);
+      const safeName = profileName.replace(/[/\\?%*:|"<>]/g, '_');
+      downloadWorkbookAsFile(wb, `Atividades_${safeName}.xlsx`);
+    } else if (context === 'projects') {
+      const member = (data.teamMembers || []).find((m: any) => m.name?.toLowerCase() === profileName?.toLowerCase()) || { name: 'Geral', isLeader: true };
+      const wb = generateProjectsWorkbook(member, data.projects || []);
+      downloadWorkbookAsFile(wb, 'Projetos_e_Atividades.xlsx');
+    } else if (context === 'regulatory') {
+      const wb = generateRegulatoryWorkbook(
+        { name: 'Geral', isLeader: true } as any,
+        data.projects || [],
+        data.tasks || [],
+        data.regulatoryEvidence || [],
+        data.regulatoryStandards || [],
+        data.regulatoryDocs || [],
+        data.dossierContributions || []
+      );
+      downloadWorkbookAsFile(wb, 'Normas_Regulatorias.xlsx');
+    } else if (context === 'vaccines') {
+      const wb = generateVaccinesWorkbook(
+        data.vaccineCandidates || [],
+        data.vaccineComponents || [],
+        data.formulationBatches || []
+      );
+      downloadWorkbookAsFile(wb, 'Vacinas_e_Componentes.xlsx');
+    }
+  },
+
+  async syncContextualExcelToSharePoint(
+    context: 'profile' | 'projects' | 'regulatory' | 'vaccines',
+    data: any,
+    profileName?: string
+  ): Promise<{ success: boolean; message: string; error?: string }> {
+    const token = await this.getToken();
+    if (!token) return { success: false, message: 'Usuário não autenticado no SharePoint.', error: 'Não autenticado' };
+
+    try {
+      const ids = await this.getSiteAndDriveId(token);
+      if (!ids) return { success: false, message: 'Não foi possível conectar ao SharePoint.', error: 'Drive não encontrado' };
+
+      if (context === 'profile' && profileName) {
+        const member = (data.teamMembers || []).find((m: any) => m.name?.toLowerCase() === profileName.toLowerCase()) || { name: profileName, isLeader: true };
+        const safeFolderName = profileName.replace(/[/\\?%*:|"<>]/g, '_');
+        const folderPath = `sistema/Gestao_de_Projetos/perfis/${safeFolderName}`;
+
+        const wbTasks = generateMonthlyTasksWorkbook(member, data.tasks || [], data.projects || []);
+        const res = await uploadExcelToSharePointPath(token, ids.driveId, folderPath, `Atividades_do_Mes_${safeFolderName}.xlsx`, wbTasks);
+        if (res.success) {
+          return { success: true, message: `Planilha de atividades do perfil ${profileName} sincronizada no SharePoint com sucesso!` };
+        } else {
+          return { success: false, message: `Falha ao sincronizar planilha no SharePoint: ${res.error}`, error: res.error };
+        }
+      } else if (context === 'projects') {
+        const wbProj = generateProjectsWorkbook({ name: 'Geral', isLeader: true } as any, data.projects || []);
+        const res = await uploadExcelToSharePointPath(token, ids.driveId, 'sistema/Gestao_de_Projetos', 'Projetos_e_Atividades.xlsx', wbProj);
+        if (res.success) {
+          return { success: true, message: 'Planilha de Projetos e Atividades sincronizada no SharePoint com sucesso!' };
+        } else {
+          return { success: false, message: `Falha ao sincronizar planilha de projetos: ${res.error}`, error: res.error };
+        }
+      } else if (context === 'regulatory') {
+        const wbReg = generateRegulatoryWorkbook(
+          { name: 'Geral', isLeader: true } as any,
+          data.projects || [],
+          data.tasks || [],
+          data.regulatoryEvidence || [],
+          data.regulatoryStandards || [],
+          data.regulatoryDocs || [],
+          data.dossierContributions || []
+        );
+        const res = await uploadExcelToSharePointPath(token, ids.driveId, 'sistema/Normas_Regulatorias', 'Normas_Regulatorias.xlsx', wbReg);
+        if (res.success) {
+          return { success: true, message: 'Planilha de Normas Regulatórias sincronizada no SharePoint com sucesso!' };
+        } else {
+          return { success: false, message: `Falha ao sincronizar normas regulatórias: ${res.error}`, error: res.error };
+        }
+      } else if (context === 'vaccines') {
+        const wbVac = generateVaccinesWorkbook(
+          data.vaccineCandidates || [],
+          data.vaccineComponents || [],
+          data.formulationBatches || []
+        );
+        const res = await uploadExcelToSharePointPath(token, ids.driveId, 'sistema/Vacinas_e_Componentes', 'Vacinas_e_Componentes.xlsx', wbVac);
+        if (res.success) {
+          return { success: true, message: 'Planilha de Vacinas e Componentes sincronizada no SharePoint com sucesso!' };
+        } else {
+          return { success: false, message: `Falha ao sincronizar vacinas e componentes: ${res.error}`, error: res.error };
+        }
+      }
+
+      return { success: true, message: 'Sincronização concluída com sucesso!' };
+    } catch (e: any) {
+      return { success: false, message: `Erro ao sincronizar com SharePoint: ${e.message}`, error: e.message };
     }
   }
 };

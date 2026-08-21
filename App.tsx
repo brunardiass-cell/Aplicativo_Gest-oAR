@@ -29,7 +29,7 @@ import { DossierContributionsManager } from './components/DossierContributionsMa
 import { DossierAssemblerManager } from './components/DossierAssemblerManager';
 import { RegulatoryDocManagement } from './components/RegulatoryDocManagement';
 import { MicrosoftGraphService, SPMetadataMap } from './services/microsoftGraphService';
-import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft, LayoutGrid, Kanban, Clock, Briefcase, Map as MapIcon, Syringe, Layers } from 'lucide-react';
+import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft, LayoutGrid, Kanban, Clock, Briefcase, Map as MapIcon, Syringe, Layers, Cloud, FileSpreadsheet } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
 import ProjectFlowView from './components/ProjectFlowView';
 import ProjectKanbanView from './components/ProjectKanbanView';
@@ -111,6 +111,8 @@ const App: React.FC = () => {
   const [isExcelReportsModalOpen, setIsExcelReportsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [filterMember, setFilterMember] = useState<string | 'Todos'>('Todos');
+  const [isSyncingSharePoint, setIsSyncingSharePoint] = useState(false);
+  const [syncToastMessage, setSyncToastMessage] = useState<string | null>(null);
   
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -519,6 +521,11 @@ const App: React.FC = () => {
       setBaseData(updatedBase);
       setIsDataDirty(false);
       setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'System' });
+
+      // Atualiza também a organização modular no SharePoint em background
+      MicrosoftGraphService.saveModularToSharePoint(currentState).catch(err => {
+        console.warn('Aviso: Sincronização modular de background:', err);
+      });
       
       // Broadcast update via WebSocket
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -530,6 +537,63 @@ const App: React.FC = () => {
     } else {
       console.error('Falha ao salvar nas listas do SharePoint', result);
       setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
+    }
+  };
+
+  const handleDownloadContextualExcel = (context: 'profile' | 'projects' | 'regulatory' | 'vaccines') => {
+    const fullData = {
+      tasks,
+      projects,
+      teamMembers,
+      regulatoryStandards,
+      regulatorySubjects,
+      regulatoryDocs,
+      regulatoryEvidence,
+      dossierContributions,
+      vaccineCandidates,
+      vaccineComponents,
+      formulationBatches
+    };
+    MicrosoftGraphService.downloadContextualExcel(context, fullData, selectedProfile?.name);
+  };
+
+  const handleSyncContextualExcel = async (context: 'profile' | 'projects' | 'regulatory' | 'vaccines') => {
+    setIsSyncingSharePoint(true);
+    try {
+      const fullData = {
+        tasks,
+        projects,
+        teamMembers,
+        activityPlans,
+        appUsers,
+        managerEmail,
+        notifications,
+        logs,
+        regulatoryStandards,
+        regulatorySubjects,
+        regulatoryDocs,
+        regulatoryEvidence,
+        regulatoryNarratives,
+        regulatoryInfoItems,
+        repeatableRecords,
+        dossierContributions,
+        vaccineCandidates,
+        vaccineComponents,
+        formulationBatches
+      };
+
+      // 1. Garante integridade persistindo a estrutura modular JSON por módulo/perfil
+      await MicrosoftGraphService.saveModularToSharePoint(fullData, {});
+
+      // 2. Sincroniza a planilha Excel do contexto solicitado
+      const res = await MicrosoftGraphService.syncContextualExcelToSharePoint(context, fullData, selectedProfile?.name);
+      setSyncToastMessage(res.message);
+      setTimeout(() => setSyncToastMessage(null), 4500);
+    } catch (err: any) {
+      setSyncToastMessage(`Erro na sincronização: ${err.message}`);
+      setTimeout(() => setSyncToastMessage(null), 4500);
+    } finally {
+      setIsSyncingSharePoint(false);
     }
   };
 
@@ -1301,6 +1365,16 @@ const App: React.FC = () => {
           : (isDesktop ? 'ml-64 p-6 sm:p-8' : 'ml-0 p-4 pt-20')
       }`}>
 
+        {syncToastMessage && (
+          <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-xl border border-slate-700 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3 duration-300">
+            <Cloud size={18} className="text-teal-400 shrink-0" />
+            <span className="text-xs font-bold">{syncToastMessage}</span>
+            <button onClick={() => setSyncToastMessage(null)} className="ml-2 text-slate-400 hover:text-white">
+              <X size={15} />
+            </button>
+          </div>
+        )}
+
         {comiteImpersonatingFrom && (
           <div className="mb-4 bg-teal-50 border border-teal-200 p-3.5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm animate-in fade-in duration-300">
             <div className="flex items-center gap-3">
@@ -1484,6 +1558,10 @@ const App: React.FC = () => {
                 onCompleteCollaboration={handleCompleteCollaboration}
                 searchTerm={searchTerm}
                 onSearchTermChange={setSearchTerm}
+                onSaveTask={handleSaveTask}
+                onDownloadExcel={() => handleDownloadContextualExcel('profile')}
+                onSyncSharePoint={() => handleSyncContextualExcel('profile')}
+                isSyncingSharePoint={isSyncingSharePoint}
               />
             ) : (
               <ProjectTaskBoard 
