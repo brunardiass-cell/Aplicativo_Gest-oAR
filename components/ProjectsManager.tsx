@@ -27,6 +27,10 @@ import ProjectFlowView from './ProjectFlowView';
 import RegulatoryChecklistModal from './RegulatoryChecklistModal';
 import ProjectGanttView from './ProjectGanttView';
 import ProjectActivityMap from './ProjectActivityMap';
+import { ProjectPhasesMap } from './ProjectPhasesMap';
+import { ProjectPhaseDetails } from './ProjectPhaseDetails';
+import { NewMicroActivityModal } from './NewMicroActivityModal';
+import { PrerequisitesModal } from './PrerequisitesModal';
 import { RegulatoryDocManagement } from './RegulatoryDocManagement';
 import { isNameMatch } from '../constants';
 
@@ -92,6 +96,11 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'initial' | 'selection' | 'dashboard'>('selection');
   const [projectDetailView, setProjectDetailView] = useState<'dashboard' | 'timeline' | 'kanban' | 'phases' | 'gantt' | 'regulatory_docs'>('dashboard');
+  const [projectPhaseTab, setProjectPhaseTab] = useState<'map' | 'details' | 'regulatory_docs'>('map');
+  const [selectedPhaseMacroId, setSelectedPhaseMacroId] = useState<string>('');
+  const [isNewMicroModalOpen, setIsNewMicroModalOpen] = useState(false);
+  const [isPrerequisitesModalOpen, setIsPrerequisitesModalOpen] = useState(false);
+  const [selectedMacroForPrerequisites, setSelectedMacroForPrerequisites] = useState<MacroActivity | null>(null);
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
@@ -331,6 +340,34 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
     const updatedProjects = projects.map(p => p.id === updatedProject.id ? updatedProject : p);
     onUpdateProjects(updatedProjects);
     setSelectedProject(updatedProject);
+  };
+
+  const handleAddMicroActivity = (macroId: string, newMicro: MicroActivity) => {
+    if (!selectedProject) return;
+    const updatedMacros = selectedProject.macroActivities.map(macro => {
+      if (macro.id === macroId) {
+        return {
+          ...macro,
+          microActivities: [...(macro.microActivities || []), newMicro]
+        };
+      }
+      return macro;
+    });
+    handleUpdateProject({ ...selectedProject, macroActivities: updatedMacros });
+  };
+
+  const handleUpdateMacroPrerequisites = (updatedPrerequisites: any[]) => {
+    if (!selectedProject || !selectedMacroForPrerequisites) return;
+    const updatedMacros = selectedProject.macroActivities.map(macro => {
+      if (macro.id === selectedMacroForPrerequisites.id) {
+        return {
+          ...macro,
+          prerequisites: updatedPrerequisites
+        };
+      }
+      return macro;
+    });
+    handleUpdateProject({ ...selectedProject, macroActivities: updatedMacros });
   };
 
   const handleNavigateToProject = (projectId: string) => {
@@ -1170,61 +1207,53 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   }
 
   return (
-    <div className="space-y-4 project-manager-container animate-in fade-in duration-500">
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
+    <div className="space-y-6 project-manager-container animate-in fade-in duration-500">
+      
+      {/* PROJECT HEADER CARD */}
+      <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/90 shadow-2xs flex flex-col gap-5">
+        
+        {/* Top Control Bar */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setViewMode('selection')} 
-              className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-black transition active:scale-95 shadow-2xs"
+              className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-2xl text-xs font-black transition active:scale-95 shadow-2xs"
               title="Voltar para a Lista de Projetos"
             >
               <ArrowLeft size={16} /> Voltar para Projetos
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Primary Navigation Tabs */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Primary Two Tabs: MAPA DE FASES | DETALHAMENTO DAS FASES */}
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200/60">
               <button 
-                onClick={() => setProjectDetailView('dashboard')} 
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
-                  projectDetailView === 'dashboard' 
-                    ? 'bg-white text-brand-primary shadow-sm font-black' 
-                    : 'text-slate-500 hover:text-slate-800'
+                onClick={() => setProjectPhaseTab('map')} 
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                  projectPhaseTab === 'map' 
+                    ? 'bg-teal-700 text-white shadow-xs font-black' 
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <LayoutDashboard size={14} /> Dashboard
+                <LayoutGrid size={15} /> MAPA DE FASES
               </button>
 
               <button 
-                onClick={() => setProjectDetailView('timeline')} 
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
-                  projectDetailView === 'timeline' 
-                    ? 'bg-white text-brand-primary shadow-sm font-black' 
-                    : 'text-slate-500 hover:text-slate-800'
+                onClick={() => setProjectPhaseTab('details')} 
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                  projectPhaseTab === 'details' 
+                    ? 'bg-teal-700 text-white shadow-xs font-black' 
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <Clock size={14} /> Plano de Trabalho
+                <ListOrdered size={15} /> DETALHAMENTO DAS FASES
               </button>
 
               <button 
-                onClick={() => setProjectDetailView('phases')} 
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
-                  projectDetailView === 'phases' 
-                    ? 'bg-emerald-700 text-white shadow-sm font-black' 
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-                title="Visualização Principal do Cronograma e Fases"
-              >
-                <LayoutGrid size={14} /> Fases
-              </button>
-
-              <button 
-                onClick={() => setProjectDetailView('regulatory_docs')} 
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
-                  projectDetailView === 'regulatory_docs' 
-                    ? 'bg-indigo-600 text-white shadow-sm font-black' 
+                onClick={() => setProjectPhaseTab('regulatory_docs')} 
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${
+                  projectPhaseTab === 'regulatory_docs' 
+                    ? 'bg-indigo-600 text-white shadow-xs font-black' 
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
                 title="Documentação Regulatória do Projeto"
@@ -1233,346 +1262,154 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
               </button>
             </div>
 
-            {/* Other View Options (Gantt & Kanban) */}
-            <div className="relative group">
+            {/* Quick Actions */}
+            <div className="flex items-center gap-2 no-print">
               <button 
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-wider border transition-all ${
-                  (projectDetailView === 'gantt' || projectDetailView === 'kanban')
-                    ? 'bg-brand-primary/10 text-brand-primary border-brand-primary/30'
-                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                }`}
+                onClick={() => setIsChecklistModalOpen(true)} 
+                className="p-2.5 bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 rounded-xl transition" 
+                title="Checklist Regulatório"
               >
-                <Layers size={14} />
-                {projectDetailView === 'gantt' ? 'Gantt' : projectDetailView === 'kanban' ? 'Kanban' : 'Outras Formas de Visualização'}
-                <ChevronDown size={12} />
+                <ClipboardCheck size={16} />
               </button>
-              <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-30 hidden group-hover:block hover:block animate-in fade-in duration-150">
-                <button 
-                  onClick={() => setProjectDetailView('gantt')}
-                  className={`w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-wider flex items-center gap-2 hover:bg-slate-50 transition ${
-                    projectDetailView === 'gantt' ? 'text-brand-primary bg-brand-primary/5' : 'text-slate-700'
-                  }`}
-                >
-                  <GanttChartSquare size={14} /> Visualização Gantt
-                </button>
-                <button 
-                  onClick={() => setProjectDetailView('kanban')}
-                  className={`w-full text-left px-4 py-2.5 text-xs font-black uppercase tracking-wider flex items-center gap-2 hover:bg-slate-50 transition ${
-                    projectDetailView === 'kanban' ? 'text-brand-primary bg-brand-primary/5' : 'text-slate-700'
-                  }`}
-                >
-                  <Kanban size={14} /> Visualização Kanban
-                </button>
-              </div>
+              <button 
+                onClick={handlePrint} 
+                className="p-2.5 bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 rounded-xl transition"
+                title="Imprimir visualização"
+              >
+                <Printer size={16} />
+              </button>
             </div>
-
-            {/* Mapa de Atividades (Ver Tela Cheia) */}
-            <button 
-              onClick={() => setIsActivityMapOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-2xl text-[10px] font-black uppercase tracking-wider transition shadow-2xs"
-              title="Visualizar Mapa de Atividades em Tela Cheia"
-            >
-              <Workflow size={14} /> Ver Tela Cheia
-            </button>
           </div>
         </div>
 
-          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">{selectedProject?.name}</h1>
-                <div className="flex gap-1 no-print">
-                   {(isLeader || selectedProject?.responsible === currentUser?.name) && (
-                     <>
-                       <button onClick={handleStartEdit} className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-brand-primary/5 rounded-lg transition" title="Editar Projeto"><Edit size={14}/></button>
-                       <button onClick={() => onOpenDeletionModal({ type: 'project', ids: { projectId: selectedProject!.id }, name: selectedProject!.name })} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Excluir Projeto"><Trash2 size={14}/></button>
-                     </>
-                   )}
-                </div>
+        {/* Project Meta Info Row */}
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+          <div className="flex-1 space-y-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tight leading-none">
+                {selectedProject?.name}
+              </h1>
+              <div className="flex gap-1 no-print">
+                {(isLeader || selectedProject?.responsible === currentUser?.name) && (
+                  <>
+                    <button onClick={handleStartEdit} className="p-1.5 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition" title="Editar Projeto"><Edit size={14}/></button>
+                    <button onClick={() => onOpenDeletionModal({ type: 'project', ids: { projectId: selectedProject!.id }, name: selectedProject!.name })} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Excluir Projeto"><Trash2 size={14}/></button>
+                  </>
+                )}
               </div>
-              <p className="text-slate-400 font-bold uppercase text-[9px] tracking-widest leading-tight">Responsável: {selectedProject?.responsible || 'Não definido'}</p>
             </div>
+            <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest leading-tight">
+              Responsável: {selectedProject?.responsible || 'Não definido'}
+            </p>
+          </div>
 
-            {/* Next Milestone Highlight */}
-            <div className="bg-slate-900 text-white px-6 py-4 rounded-2xl flex items-center gap-4 shadow-xl border border-white/5 no-print">
-                <div className="p-2 bg-white/10 rounded-xl text-amber-400">
-                    <Presentation size={20} />
-                </div>
-                <div className="space-y-0.5 min-w-[140px]">
-                    <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Próximo Marco</p>
-                    <p className="text-[11px] font-black uppercase tracking-tight leading-tight truncate max-w-[180px]">{projectStats?.milestoneName}</p>
-                </div>
-                <div className="pl-4 border-l border-white/10">
-                    <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Prazo</p>
-                    <p className="text-sm font-black text-amber-400 tracking-tighter">
-                        {projectStats?.milestoneDate ? new Date(projectStats.milestoneDate + 'T00:00:00').toLocaleDateString('pt-BR') : '--/--/----'}
-                    </p>
-                </div>
+          {/* Next Milestone Pill */}
+          <div className="bg-slate-900 text-white px-5 py-3.5 rounded-2xl flex items-center gap-4 shadow-md border border-white/5 no-print">
+            <div className="p-2 bg-white/10 rounded-xl text-amber-400 shrink-0">
+              <Presentation size={18} />
             </div>
+            <div className="space-y-0.5 min-w-[130px]">
+              <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Próximo Marco</p>
+              <p className="text-xs font-black uppercase tracking-tight leading-tight truncate max-w-[180px]">
+                {projectStats?.milestoneName || 'Ensaio de Segurança BPL'}
+              </p>
+            </div>
+            <div className="pl-3.5 border-l border-white/10">
+              <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Prazo</p>
+              <p className="text-xs font-black text-amber-400 tracking-tight">
+                {projectStats?.milestoneDate ? new Date(projectStats.milestoneDate + 'T00:00:00').toLocaleDateString('pt-BR') : '--/--/----'}
+              </p>
+            </div>
+          </div>
 
-          <div className="flex flex-col items-center gap-1 min-w-[200px]">
+          {/* Overall Project Progress */}
+          <div className="flex flex-col items-center gap-1 min-w-[180px]">
             <div className="w-full flex justify-between items-end">
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Progresso Total</span>
-              <span className="text-2xl font-black text-slate-900 tracking-tighter">{Math.round(projectStats?.progress || 0)}%</span>
+              <span className="text-xl font-black text-slate-900 tracking-tight">{Math.round(projectStats?.progress || 0)}%</span>
             </div>
-            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner p-0.5">
-              <div className="h-full bg-brand-primary rounded-full shadow-lg transition-all duration-1000" style={{ width: `${projectStats?.progress}%` }}></div>
+            <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden shadow-inner p-0.5">
+              <div className="h-full bg-teal-600 rounded-full transition-all duration-1000" style={{ width: `${projectStats?.progress}%` }}></div>
             </div>
           </div>
         </div>
+
       </div>
 
-      {projectDetailView === 'dashboard' ? (
-        <div className="space-y-8 animate-in fade-in duration-700">
-           {/* Metrics Row */}
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <MetricCard label="Tarefas Ativas" value={projectStats?.ongoingMicros || 0} icon={<Clock className="text-blue-500" />} subtitle="Atividades em progresso" />
-            <MetricCard label="Total Entregue" value={projectStats?.completedMicros || 0} icon={<CheckCircle className="text-emerald-500" />} subtitle="Atividades concluídas" />
-            <MetricCard label="Atenção" value={projectStats?.lateMicros || 0} icon={<AlertTriangle className="text-red-500" />} subtitle="Atividades em atraso" color={projectStats?.lateMicros && projectStats.lateMicros > 0 ? 'border-red-200 bg-red-50/30' : ''} />
-            <MetricCard label="Saúde" value={`${projectStats?.health}%`} icon={<Activity className={getHealthColor(projectStats?.health || 0)} />} subtitle="Estabilidade do projeto" />
-          </div>
+      {/* ACTIVE TAB CONTENT */}
+      {projectPhaseTab === 'map' && selectedProject && (
+        <ProjectPhasesMap 
+          project={selectedProject}
+          onSelectMacro={(macroId) => {
+            setSelectedPhaseMacroId(macroId);
+            setProjectPhaseTab('details');
+          }}
+          onOpenPrerequisitesModal={(macro) => {
+            setSelectedMacroForPrerequisites(macro);
+            setIsPrerequisitesModalOpen(true);
+          }}
+        />
+      )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-8">
-              {/* Team Load */}
-              <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-8">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2">
-                    <Users2 size={16} /> CARGA DA EQUIPE
-                  </h3>
-                </div>
-                <div className="h-[320px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={projectStats?.teamLoadData} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
-                      <XAxis type="number" hide />
-                      <YAxis dataKey="name" type="category" fontSize={9} fontWeight="black" width={100} axisLine={false} tickLine={false} />
-                      <Tooltip cursor={{fill: '#f8fafc'}} />
-                      <Bar dataKey="count" radius={[0, 8, 8, 0]} barSize={30}>
-                        {projectStats?.teamLoadData.map((_, i) => <Cell key={i} fill={['#6366f1', '#06b6d4', '#2dd4bf', '#fbbf24'][i % 4]} />)}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+      {projectPhaseTab === 'details' && selectedProject && (
+        <ProjectPhaseDetails
+          project={selectedProject}
+          currentMacroId={selectedPhaseMacroId || selectedProject.macroActivities[0]?.id}
+          onBackToMap={() => setProjectPhaseTab('map')}
+          onUpdateProject={handleUpdateProject}
+          teamMembers={teamMembers}
+          regulatoryStandards={regulatoryStandards}
+          onOpenRegulatoryModal={onOpenRegulatoryModal}
+          onOpenNewMicroModal={() => setIsNewMicroModalOpen(true)}
+          onOpenDeletionModal={(item) => onOpenDeletionModal(item as any)}
+        />
+      )}
 
-              {/* Recent Activities */}
-              <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-8">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2">
-                    <Clock size={16} /> ATIVIDADES RECENTES
-                  </h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="text-left border-b border-slate-100 pb-4">
-                        <th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Atividade</th>
-                        <th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Fase</th>
-                        <th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Responsável</th>
-                        <th className="pb-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {projectStats?.recentActivities.map((activity: any) => (
-                        <tr key={activity.id} className="group">
-                          <td className="py-6">
-                            <div className="flex items-center gap-3">
-                               <div className={`p-2.5 rounded-xl ${activity.status === 'Concluído e aprovado' ? 'bg-emerald-50 text-emerald-500' : 'bg-blue-50 text-blue-500'}`}>
-                                 {activity.status === 'Concluído e aprovado' ? <CheckCircle size={14}/> : <Clock size={14}/>}
-                               </div>
-                               <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">{activity.name}</span>
-                            </div>
-                          </td>
-                          <td className="py-6 text-center text-[10px] font-bold text-slate-500">{activity.phase}</td>
-                          <td className="py-6 text-center text-[10px] font-black text-slate-700 uppercase tracking-tighter">{activity.assignee}</td>
-                          <td className="py-6 text-right">
-                             <div className="flex items-center justify-end">
-                                <span className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${
-                                    activity.status === 'Concluído e aprovado' ? 'bg-emerald-50 text-emerald-600' : 
-                                    activity.status === 'Em andamento' ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-600'
-                                }`}>
-                                {activity.status}
-                                </span>
-                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-8">
-              {/* Resumo do Projeto Editable */}
-              <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-8 relative group">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2">
-                   <Activity size={16}/> RESUMO DO PROJETO
-                </h3>
-                
-                <div className="space-y-6">
-                    <textarea 
-                        value={selectedProject?.description || ''}
-                        onChange={(e) => selectedProject && handleUpdateProject({ ...selectedProject, description: e.target.value })}
-                        placeholder="Clique para adicionar um resumo do projeto..."
-                        className="w-full bg-slate-50 p-6 rounded-[2rem] text-sm font-bold text-slate-700 leading-relaxed min-h-[160px] border border-transparent focus:border-brand-primary/20 focus:bg-white transition-all outline-none"
-                    />
-
-                    <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white space-y-6">
-                        <div className="flex justify-between items-end">
-                            <div className="space-y-1">
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">PROGRESSO TOTAL</span>
-                                <h4 className="text-4xl font-black tracking-tighter">{Math.round(projectStats?.progress || 0)}%</h4>
-                            </div>
-                            <div className="text-right space-y-0.5">
-                                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">{projectStats?.completedMicros} Concluídas</p>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">{projectStats?.totalMicros} Atividades</p>
-                            </div>
-                        </div>
-                        <div className="h-2.5 bg-white/10 rounded-full overflow-hidden shadow-inner">
-                            <div className="h-full bg-brand-primary transition-all duration-1000" style={{ width: `${projectStats?.progress}%` }} />
-                        </div>
-                    </div>
-                </div>
-              </div>
-
-              {/* Critical Alerts */}
-              <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm space-y-8">
-                <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
-                  <AlertTriangle size={16} className="text-red-500" /> ALERTAS CRÍTICOS
-                </div>
-                <div className="space-y-4">
-                    {projectStats?.alerts && projectStats.alerts.length > 0 ? projectStats.alerts.map((alert: any) => {
-                      if (alert.isRestricted) {
-                        return (
-                          <div key={alert.id} className="p-6 bg-amber-50/40 rounded-[2rem] border border-amber-150 flex items-start gap-4">
-                             <div className="p-2 bg-white rounded-xl text-amber-500 shadow-sm">
-                                <ClipboardCheck size={16} />
-                             </div>
-                             <div className="space-y-1">
-                                <h5 className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{alert.name}</h5>
-                                <p className="text-[10px] font-bold text-amber-700 uppercase tracking-tighter">
-                                  {alert.status === 'Concluído com restrições' 
-                                    ? 'Concluída com restrições (aguardando validação)' 
-                                    : 'A repetir / retrabalho (aguardando ajuste)'}
-                                </p>
-                             </div>
-                          </div>
-                        );
-                      }
-                      return (
-                        <div key={alert.id} className="p-6 bg-red-50/50 rounded-[2rem] border border-red-100 flex items-start gap-4">
-                           <div className="p-2 bg-white rounded-xl text-red-500 shadow-sm">
-                              {ShieldAlert ? <ShieldAlert size={16} /> : <AlertTriangle size={16} />}
-                           </div>
-                           <div className="space-y-1">
-                              <h5 className="text-[11px] font-black text-slate-900 uppercase tracking-tight">{alert.name}</h5>
-                              <p className="text-[10px] font-bold text-red-600 uppercase tracking-tighter">+{alert.daysLate} dias de atraso</p>
-                           </div>
-                        </div>
-                      );
-                    }) : (
-                    <div className="py-12 text-center flex flex-col items-center gap-4">
-                       <div className="p-5 bg-emerald-50 text-emerald-500 rounded-full shadow-sm">
-                        {CheckCircle2 ? <CheckCircle2 size={32}/> : <CheckCircle size={32} />}
-                       </div>
-                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">Operação estável.<br/>Nenhum alerta crítico detectado.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+      {projectPhaseTab === 'regulatory_docs' && selectedProject && (
+        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs p-6">
+          <RegulatoryDocManagement 
+            projects={projects}
+            tasks={tasks}
+            regulatoryEvidence={regulatoryEvidence}
+            macroActivityConfigs={macroActivityConfigs}
+            regulatoryInfoItems={regulatoryInfoItems}
+            repeatableRecords={repeatableRecords}
+            regulatoryNarratives={regulatoryNarratives}
+            regulatoryDocs={regulatoryDocs}
+            onUpdateEvidence={onUpdateEvidence}
+            onUpdateMacroConfigs={onUpdateMacroConfigs}
+            onUpdateInfoItems={onUpdateInfoItems}
+            onUpdateRepeatableRecords={onUpdateRepeatableRecords}
+            onUpdateNarratives={onUpdateNarratives}
+            onUpdateDocs={onUpdateDocs}
+            currentUser={currentUser?.name || 'Usuário'}
+            hasAdminAccess={canCreatePlan}
+            selectedProjectId={selectedProject?.id}
+          />
         </div>
+      )}
 
-      ) : (
-        <div className="space-y-6 animate-in fade-in duration-500">
-          <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-4 sm:p-8">
-             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-slate-50 pb-6 gap-4">
-               <div className="flex items-center gap-4">
-                 <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
-                   {projectDetailView === 'timeline' && <><Clock size={20} className="text-brand-primary"/> Plano de Trabalho</>}
-                   {projectDetailView === 'gantt' && <><GanttChartSquare size={20} className="text-brand-primary"/> Visualização Gantt</>}
-                   {projectDetailView === 'kanban' && <><Kanban size={20} className="text-brand-primary"/> Kanban do Projeto</>}
-                   {projectDetailView === 'phases' && <><LayoutGrid size={20} className="text-brand-primary"/> Fluxo de Fases</>}
-                   {projectDetailView === 'regulatory_docs' && <><ShieldCheck size={20} className="text-indigo-600"/> Documentação Regulatória do Projeto</>}
-                 </h2>
-               </div>
-               <div className="flex gap-2 no-print">
-                 <button onClick={() => setIsActivityMapOpen(true)} className="p-3 bg-indigo-50 text-indigo-500 rounded-xl hover:bg-indigo-100 transition" title="Mapa de Atividades"><Workflow size={16}/></button>
-                 <button onClick={() => setIsChecklistModalOpen(true)} className="p-3 bg-brand-primary/10 text-brand-primary rounded-xl hover:bg-brand-primary/20 transition" title="Checklist Regulatório"><ClipboardCheck size={16}/></button>
-                 <button onClick={handlePrint} className="p-3 bg-slate-50 text-slate-500 rounded-xl hover:bg-slate-100 transition"><Printer size={16}/></button>
-               </div>
-             </div>
+      {/* Modal: Nova Microatividade */}
+      {selectedProject && (
+        <NewMicroActivityModal
+          isOpen={isNewMicroModalOpen}
+          onClose={() => setIsNewMicroModalOpen(false)}
+          project={selectedProject}
+          selectedMacroId={selectedPhaseMacroId || selectedProject.macroActivities[0]?.id}
+          teamMembers={teamMembers}
+          onAddMicroActivity={handleAddMicroActivity}
+        />
+      )}
 
-             {projectDetailView === 'regulatory_docs' && (
-                <RegulatoryDocManagement 
-                  projects={projects}
-                  tasks={tasks}
-                  regulatoryEvidence={regulatoryEvidence}
-                  macroActivityConfigs={macroActivityConfigs}
-                  regulatoryInfoItems={regulatoryInfoItems}
-                  repeatableRecords={repeatableRecords}
-                  regulatoryNarratives={regulatoryNarratives}
-                  regulatoryDocs={regulatoryDocs}
-                  onUpdateEvidence={onUpdateEvidence}
-                  onUpdateMacroConfigs={onUpdateMacroConfigs}
-                  onUpdateInfoItems={onUpdateInfoItems}
-                  onUpdateRepeatableRecords={onUpdateRepeatableRecords}
-                  onUpdateNarratives={onUpdateNarratives}
-                  onUpdateDocs={onUpdateDocs}
-                  currentUser={currentUser?.name || 'Usuário'}
-                  hasAdminAccess={canCreatePlan}
-                  selectedProjectId={selectedProject?.id}
-                />
-              )}
-
-             {projectDetailView === 'gantt' && selectedProject && (
-               <ProjectGanttView 
-                 project={selectedProject} 
-                 onUpdateProject={handleUpdateProject} 
-                 teamMembers={teamMembers}
-               />
-             )}
-             {projectDetailView === 'timeline' && selectedProject && (
-               <ProjectTimeline 
-                 project={selectedProject} 
-                 onUpdateProject={handleUpdateProject} 
-                 onOpenDeletionModal={(item) => onOpenDeletionModal(item as any)} 
-                 teamMembers={teamMembers}
-                 targetMicroId={targetMicroId}
-                 onClearTargetMicroId={onClearTargetMicroId}
-                 regulatoryStandards={regulatoryStandards}
-                 onOpenRegulatoryModal={onOpenRegulatoryModal}
-                 meetings={meetings}
-                 currentUser={currentUser}
-                 currentUserRole={currentUserRole}
-               />
-             )}
-             {projectDetailView === 'kanban' && selectedProject && (
-               <ProjectKanbanView 
-                 project={selectedProject} 
-                 onUpdateProject={handleUpdateProject} 
-                 onNavigateToMicroActivity={(pid, mid) => {
-                   setProjectDetailView('timeline');
-                 }}
-                 regulatoryStandards={regulatoryStandards}
-                 onOpenRegulatoryModal={onOpenRegulatoryModal}
-                 currentUser={currentUser}
-                 currentUserRole={currentUserRole}
-               />
-             )}
-             {projectDetailView === 'phases' && selectedProject && (
-               <ProjectFlowView 
-                 project={selectedProject} 
-                 onUpdateProject={handleUpdateProject} 
-                 regulatoryStandards={regulatoryStandards} 
-                 onOpenRegulatoryModal={onOpenRegulatoryModal} 
-               />
-             )}
-          </div>
-        </div>
+      {/* Modal: Pré-requisitos */}
+      {selectedProject && isPrerequisitesModalOpen && (
+        <PrerequisitesModal
+          isOpen={isPrerequisitesModalOpen}
+          onClose={() => setIsPrerequisitesModalOpen(false)}
+          title={selectedMacroForPrerequisites?.name || selectedProject.name}
+          prerequisites={selectedMacroForPrerequisites?.prerequisites || []}
+          onUpdatePrerequisites={handleUpdateMacroPrerequisites}
+        />
       )}
 
       {/* Modal para Líderes e Administradores criarem novos Modelos de Dossiê */}

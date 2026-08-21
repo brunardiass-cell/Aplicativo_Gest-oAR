@@ -1,5 +1,6 @@
 {
   "name": "Aplicativo Gestão de atividade - AR",
   "description": "Uma plataforma robusta para gestão de projetos e tarefas, com dashboard executivo, relatórios gerados por IA e acompanhamento detalhado de equipe.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -380,11 +380,18 @@ export interface MicroActivity {
   startDate?: string;
   dueDate: string;
   status: MicroActivityStatus; // Alterado de Status
+  priority?: Priority;
+  code?: string;
   observations: string;
   reportLink?: string;
   completionDate?: string;
   progress?: number;
   prerequisites?: Prerequisite[];
+  dependsOnMicroIds?: string[];
+  dependsOnNames?: string[];
+  blocksMicroIds?: string[];
+  isBlocked?: boolean;
+  blockReason?: string;
   budget?: BudgetInfo;
   realStartDate?: string;
   realEndDate?: string;
@@ -399,6 +406,12 @@ export interface MacroActivity {
   id: string;
   name: string;
   phase: string; // Adicionado
+  code?: string;
+  relationshipType?: 'sequential' | 'parallel' | 'dependent';
+  parallelGroup?: string;
+  dependsOnMacroIds?: string[];
+  blocksMacroIds?: string[];
+  isBlocked?: boolean;
   microActivities: MicroActivity[];
   prerequisites?: Prerequisite[];
   dueDate?: string;
