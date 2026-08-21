@@ -346,6 +346,8 @@ export interface MacroActivityTemplate {
   resultLinks?: string[];
   hasDeliverable?: boolean;
   deliverableType?: string;
+  isPhasePrerequisite?: boolean;
+  unlocksPhases?: string[];
 }
 
 export interface RegulatoryChecklistItem {
@@ -422,6 +424,8 @@ export interface MacroActivity {
   hasDeliverable?: boolean;
   deliverableType?: string;
   isDeliverableRegistered?: boolean;
+  isPhasePrerequisite?: boolean;
+  unlocksPhases?: string[];
 }
 
 export interface Project {

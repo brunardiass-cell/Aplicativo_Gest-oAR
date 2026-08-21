@@ -782,6 +782,7 @@ const SortablePhaseItem: React.FC<SortablePhaseItemProps> = ({
             <SortableMacroItem 
               key={index}
               macro={macro}
+              availablePhases={selectedPlan.phases || []}
               onUpdateMacro={onUpdateMacro}
               onDeleteMacro={onDeleteMacro}
               onAddMicro={onAddMicro}
@@ -802,6 +803,7 @@ const SortablePhaseItem: React.FC<SortablePhaseItemProps> = ({
 
 interface SortableMacroItemProps {
   macro: MacroActivityTemplate;
+  availablePhases: string[];
   onUpdateMacro: (m: MacroActivityTemplate, updates: Partial<MacroActivityTemplate>) => void;
   onDeleteMacro: (m: MacroActivityTemplate) => void;
   onAddMicro: (e: React.FormEvent, m: MacroActivityTemplate) => void;
@@ -811,7 +813,7 @@ interface SortableMacroItemProps {
 }
 
 const SortableMacroItem: React.FC<SortableMacroItemProps> = ({
-  macro, onUpdateMacro, onDeleteMacro, onAddMicro, onDeleteMicro, newMicroNames, setNewMicroNames
+  macro, availablePhases, onUpdateMacro, onDeleteMacro, onAddMicro, onDeleteMicro, newMicroNames, setNewMicroNames
 }) => {
   const macroKey = `${macro.phase}-${macro.name}`;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `macro_${macroKey}` });
@@ -832,6 +834,7 @@ const SortableMacroItem: React.FC<SortableMacroItemProps> = ({
       </div>
 
       <div className="space-y-4 pt-4 border-t border-slate-50">
+        {/* Entregáveis */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -867,6 +870,63 @@ const SortableMacroItem: React.FC<SortableMacroItemProps> = ({
               </div>
             )}
           </div>
+        </div>
+
+        {/* Esta macroatividade é necessária para liberar outra fase? */}
+        <div className="p-3 bg-purple-50/60 border border-purple-100 rounded-xl space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black text-purple-900 uppercase tracking-wide">
+              Necessária para liberar outra fase?
+            </span>
+            <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-purple-200">
+              <button
+                type="button"
+                onClick={() => onUpdateMacro(macro, { isPhasePrerequisite: true, unlocksPhases: macro.unlocksPhases || ['Fase I'] })}
+                className={`px-2 py-0.5 text-[9px] font-black rounded-md transition ${
+                  macro.isPhasePrerequisite ? 'bg-purple-600 text-white' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Sim
+              </button>
+              <button
+                type="button"
+                onClick={() => onUpdateMacro(macro, { isPhasePrerequisite: false, unlocksPhases: [] })}
+                className={`px-2 py-0.5 text-[9px] font-black rounded-md transition ${
+                  !macro.isPhasePrerequisite ? 'bg-slate-200 text-slate-800' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Não
+              </button>
+            </div>
+          </div>
+
+          {macro.isPhasePrerequisite && (
+            <div className="pt-2 border-t border-purple-100 space-y-1.5 animate-in fade-in duration-200">
+              <label className="text-[9px] font-black uppercase text-purple-800 tracking-wider">
+                Fases que esta macroatividade libera:
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {availablePhases.filter(p => p !== macro.phase).map(p => {
+                  const isChecked = (macro.unlocksPhases || []).includes(p);
+                  return (
+                    <label key={p} className="flex items-center gap-1.5 text-[10px] font-bold text-purple-950 bg-white px-2 py-1 rounded-lg border border-purple-200 cursor-pointer">
+                      <input 
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={e => {
+                          const current = macro.unlocksPhases || [];
+                          const updated = e.target.checked ? [...current, p] : current.filter(x => x !== p);
+                          onUpdateMacro(macro, { unlocksPhases: updated });
+                        }}
+                        className="w-3.5 h-3.5 rounded text-purple-600"
+                      />
+                      <span>{p}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
       
