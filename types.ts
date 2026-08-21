@@ -376,19 +376,15 @@ export interface ActivityPlanTemplate {
 export interface MicroActivity {
   id: string;
   name: string;
-  code?: string;
   assignee: string;
   startDate?: string;
   dueDate: string;
   status: MicroActivityStatus; // Alterado de Status
-  priority?: Priority;
   observations: string;
   reportLink?: string;
   completionDate?: string;
   progress?: number;
   prerequisites?: Prerequisite[];
-  dependsOn?: string[]; // IDs or names of micro/macro activities this depends on
-  blocks?: string[]; // IDs or names of downstream activities it blocks
   budget?: BudgetInfo;
   realStartDate?: string;
   realEndDate?: string;
@@ -402,12 +398,7 @@ export interface MicroActivity {
 export interface MacroActivity {
   id: string;
   name: string;
-  code?: string;
   phase: string; // Adicionado
-  status?: string;
-  relationType?: 'sequential' | 'parallel' | 'dependent_block' | 'dependent_nonblock';
-  dependsOn?: string[];
-  blocks?: string[];
   microActivities: MicroActivity[];
   prerequisites?: Prerequisite[];
   dueDate?: string;

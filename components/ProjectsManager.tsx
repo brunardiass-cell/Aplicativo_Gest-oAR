@@ -27,7 +27,6 @@ import ProjectFlowView from './ProjectFlowView';
 import RegulatoryChecklistModal from './RegulatoryChecklistModal';
 import ProjectGanttView from './ProjectGanttView';
 import ProjectActivityMap from './ProjectActivityMap';
-import { ProjectPhasesView } from './ProjectPhasesView';
 import { RegulatoryDocManagement } from './RegulatoryDocManagement';
 import { isNameMatch } from '../constants';
 
@@ -1565,18 +1564,11 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                />
              )}
              {projectDetailView === 'phases' && selectedProject && (
-               <ProjectPhasesView 
+               <ProjectFlowView 
                  project={selectedProject} 
                  onUpdateProject={handleUpdateProject} 
-                 onBackToProjects={() => setViewMode('selection')}
-                 teamMembers={teamMembers}
-                 currentUser={currentUser || null}
-                 currentUserRole={currentUserRole}
                  regulatoryStandards={regulatoryStandards} 
-                 onOpenRegulatoryModal={onOpenRegulatoryModal}
-                 onOpenDeletionModal={(item) => onOpenDeletionModal(item as any)}
-                 targetMicroId={targetMicroId}
-                 onClearTargetMicroId={onClearTargetMicroId}
+                 onOpenRegulatoryModal={onOpenRegulatoryModal} 
                />
              )}
           </div>
