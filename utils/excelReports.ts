@@ -327,59 +327,6 @@ export function generateRegulatoryWorkbook(
   return wb;
 }
 
-// 4. Generate "Vacinas e Componentes" Workbook
-export function generateVaccinesWorkbook(
-  candidates: any[] = [],
-  components: any[] = [],
-  batches: any[] = []
-): XLSX.WorkBook {
-  const wb = XLSX.utils.book_new();
-
-  // Sheet 1: Candidatos Vacinais
-  const candidateRows = candidates.map(c => ({
-    'ID': c.id,
-    'Nome': c.name,
-    'Plataforma': c.platform || '',
-    'Alvo / Doença': c.targetDisease || '',
-    'Fase de Desenvolvimento': c.developmentStage || '',
-    'Status': c.status || 'Ativo',
-    'Responsável': c.responsible || '',
-    'Descrição': c.description || ''
-  }));
-  const wsCandidates = XLSX.utils.json_to_sheet(candidateRows.length > 0 ? candidateRows : [{ 'Aviso': 'Nenhum candidato vacinal cadastrado.' }]);
-  XLSX.utils.book_append_sheet(wb, wsCandidates, 'Candidatos_Vacinais');
-
-  // Sheet 2: Componentes e Ingredientes
-  const compRows = components.map(comp => ({
-    'ID': comp.id,
-    'Nome': comp.name,
-    'Tipo': comp.type || '',
-    'Grau / Pureza': comp.grade || '',
-    'Fornecedor / Fabricante': comp.supplier || '',
-    'Lote Referência': comp.batchNumber || '',
-    'Armazenamento': comp.storageCondition || '',
-    'Status': comp.status || 'Aprovado'
-  }));
-  const wsComponents = XLSX.utils.json_to_sheet(compRows.length > 0 ? compRows : [{ 'Aviso': 'Nenhum componente cadastrado.' }]);
-  XLSX.utils.book_append_sheet(wb, wsComponents, 'Componentes');
-
-  // Sheet 3: Lotes de Formulação
-  const batchRows = batches.map(b => ({
-    'ID Lote': b.id,
-    'Código do Lote': b.batchCode || b.id,
-    'Candidato / Vacina': b.candidateName || '',
-    'Data de Formulação': formatDate(b.formulationDate),
-    'Volume / Qtd': b.volume || '',
-    'Status do Lote': b.status || '',
-    'Responsável': b.operator || '',
-    'Observações': b.notes || ''
-  }));
-  const wsBatches = XLSX.utils.json_to_sheet(batchRows.length > 0 ? batchRows : [{ 'Aviso': 'Nenhum lote formulado registrado.' }]);
-  XLSX.utils.book_append_sheet(wb, wsBatches, 'Lotes_Formulacao');
-
-  return wb;
-}
-
 // Helper to convert workbook to binary ArrayBuffer / Uint8Array
 export function workbookToArrayBuffer(wb: XLSX.WorkBook): ArrayBuffer {
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });

@@ -228,6 +228,13 @@ const Sidebar: React.FC<SidebarProps> = ({
               icon={<Calendar size={18} />} 
               label="Reuniões" 
             />
+            
+            <SidebarButton 
+              active={false} 
+              onClick={() => { onOpenExcelReports?.(); onClose?.(); }} 
+              icon={<FileSpreadsheet size={18} />} 
+              label="Relatórios Excel" 
+            />
 
             {hasFullAccess && !selectedProfile?.isComiteGestor && (
               <>

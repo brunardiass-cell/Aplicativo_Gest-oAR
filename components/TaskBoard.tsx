@@ -26,9 +26,7 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
-  Layers,
-  FileSpreadsheet,
-  Cloud
+  Layers
 } from 'lucide-react';
 
 interface TaskBoardProps {
@@ -61,9 +59,6 @@ interface TaskBoardProps {
   onSearchTermChange: (term: string) => void;
   onNewTask?: () => void;
   onSaveTask?: (task: Task) => void;
-  onDownloadExcel?: () => void;
-  onSyncSharePoint?: () => void;
-  isSyncingSharePoint?: boolean;
 }
 
 const getTaskStatusVisuals = (status: Status, isReport?: boolean, reportStage?: string) => {
@@ -165,81 +160,13 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   searchTerm,
   onSearchTermChange,
   onNewTask,
-  onSaveTask,
-  onDownloadExcel,
-  onSyncSharePoint,
-  isSyncingSharePoint
+  onSaveTask
 }) => {
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
   const [notesModalTask, setNotesModalTask] = useState<Task | null>(null);
-
-  // Inline editing state
-  const [inlineEdit, setInlineEdit] = useState<{
-    taskId: string;
-    field: 'activity' | 'project' | 'lead' | 'status' | 'date' | 'progress';
-    value: any;
-  } | null>(null);
-
-  const handleStartInlineEdit = (e: React.MouseEvent, task: Task, field: 'activity' | 'project' | 'lead' | 'status' | 'date' | 'progress') => {
-    e.stopPropagation();
-    if (!onSaveTask) return;
-    setInlineEdit({
-      taskId: task.id,
-      field,
-      value: field === 'date' ? (task.completionDate || '') :
-             field === 'progress' ? task.progress :
-             field === 'status' ? task.status :
-             field === 'project' ? task.project :
-             field === 'lead' ? task.projectLead :
-             task.activity
-    });
-  };
-
-  const handleCancelInlineEdit = (e?: React.MouseEvent | React.SyntheticEvent) => {
-    if (e) e.stopPropagation();
-    setInlineEdit(null);
-  };
-
-  const handleSaveInlineEdit = (task: Task, overrideValue?: any) => {
-    if (!inlineEdit || !onSaveTask) return;
-    const valueToSave = overrideValue !== undefined ? overrideValue : inlineEdit.value;
-    
-    const updatedTask: Task = { ...task };
-    if (inlineEdit.field === 'activity') {
-      if (!String(valueToSave).trim()) {
-        setInlineEdit(null);
-        return;
-      }
-      updatedTask.activity = String(valueToSave).trim();
-    } else if (inlineEdit.field === 'project') {
-      updatedTask.project = String(valueToSave);
-    } else if (inlineEdit.field === 'lead') {
-      updatedTask.projectLead = String(valueToSave);
-    } else if (inlineEdit.field === 'status') {
-      updatedTask.status = valueToSave as Status;
-      if (valueToSave === 'Concluída' && updatedTask.progress < 100) {
-        updatedTask.progress = 100;
-      } else if (valueToSave !== 'Concluída' && updatedTask.progress === 100) {
-        updatedTask.progress = 75;
-      }
-    } else if (inlineEdit.field === 'date') {
-      updatedTask.completionDate = String(valueToSave);
-    } else if (inlineEdit.field === 'progress') {
-      const num = Math.min(100, Math.max(0, Number(valueToSave) || 0));
-      updatedTask.progress = num;
-      if (num === 100 && updatedTask.status !== 'Concluída') {
-        updatedTask.status = 'Concluída';
-      } else if (num < 100 && updatedTask.status === 'Concluída') {
-        updatedTask.status = 'Em Andamento';
-      }
-    }
-
-    onSaveTask(updatedTask);
-    setInlineEdit(null);
-  };
 
   const activeTasks = useMemo(() => tasks.filter(t => !t.deleted), [tasks]);
   const activeReviews = notifications.filter(n => n.userId === currentUser && !n.read && n.type === 'REVIEW_ASSIGNED');
@@ -333,48 +260,10 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
     <div className="space-y-4">
       
       {/* 1. SUB HEADER */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-transparent">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-transparent">
         <div>
           <h2 className="text-xl font-black text-slate-900 tracking-tight">Atividades</h2>
           <p className="text-xs font-bold text-slate-500">Acompanhe e gerencie suas atividades e prazos.</p>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          {onDownloadExcel && (
-            <button
-              type="button"
-              onClick={onDownloadExcel}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-black rounded-xl shadow-2xs transition hover:border-emerald-300"
-              title="Baixar planilha Excel com as atividades deste contexto"
-            >
-              <FileSpreadsheet size={15} className="text-emerald-600" />
-              <span>Baixar Excel</span>
-            </button>
-          )}
-
-          {onSyncSharePoint && (
-            <button
-              type="button"
-              onClick={onSyncSharePoint}
-              disabled={isSyncingSharePoint}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-black rounded-xl shadow-2xs transition hover:border-teal-300 disabled:opacity-50"
-              title="Sincronizar dados e planilhas com o SharePoint"
-            >
-              <Cloud size={15} className={`text-teal-600 ${isSyncingSharePoint ? 'animate-pulse' : ''}`} />
-              <span>{isSyncingSharePoint ? 'Sincronizando...' : 'Sincronizar com SharePoint'}</span>
-            </button>
-          )}
-
-          {onNewTask && (
-            <button
-              type="button"
-              onClick={onNewTask}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-black rounded-xl shadow-sm transition"
-            >
-              <Plus size={15} />
-              <span>Nova Atividade</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -659,57 +548,13 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                           </div>
 
                           <div className="min-w-0 flex-1">
-                            {inlineEdit?.taskId === task.id && inlineEdit?.field === 'activity' ? (
-                              <div className="flex items-center gap-1.5 min-w-[260px]" onClick={(e) => e.stopPropagation()}>
-                                <input
-                                  type="text"
-                                  autoFocus
-                                  value={inlineEdit.value}
-                                  onChange={(e) => setInlineEdit({ ...inlineEdit, value: e.target.value })}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') handleSaveInlineEdit(task);
-                                    if (e.key === 'Escape') handleCancelInlineEdit();
-                                  }}
-                                  className="w-full text-xs font-bold px-2 py-1 bg-white border-2 border-teal-500 rounded-lg outline-none text-slate-900 shadow-sm"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => handleSaveInlineEdit(task)}
-                                  className="p-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition shrink-0"
-                                  title="Confirmar"
-                                >
-                                  <CheckCircle size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={handleCancelInlineEdit}
-                                  className="p-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition shrink-0"
-                                  title="Cancelar"
-                                >
-                                  <X size={14} />
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1.5 group/editTitle">
-                                <button
-                                  onClick={() => onView(task)}
-                                  className="text-left font-black text-slate-900 text-xs sm:text-sm hover:text-teal-700 transition block truncate max-w-[280px]"
-                                  title={task.activity}
-                                >
-                                  {task.activity}
-                                </button>
-                                {onSaveTask && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => handleStartInlineEdit(e, task, 'activity')}
-                                    className="opacity-0 group-hover/editTitle:opacity-100 p-1 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded transition shrink-0"
-                                    title="Editar nome da atividade"
-                                  >
-                                    <Edit2 size={12} />
-                                  </button>
-                                )}
-                              </div>
-                            )}
+                            <button
+                              onClick={() => onView(task)}
+                              className="text-left font-black text-slate-900 text-xs sm:text-sm hover:text-teal-700 transition block truncate max-w-[320px]"
+                              title={task.activity}
+                            >
+                              {task.activity}
+                            </button>
                             {task.description && (
                               <p className="text-[11px] font-medium text-slate-400 truncate max-w-[320px] mt-0.5">
                                 {task.description}
@@ -721,200 +566,49 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
 
                       {/* PROJETO COLUMN */}
                       <td className="py-4 px-4 text-xs font-black text-slate-700">
-                        {inlineEdit?.taskId === task.id && inlineEdit?.field === 'project' ? (
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <select
-                              autoFocus
-                              value={inlineEdit.value}
-                              onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
-                              onBlur={handleCancelInlineEdit}
-                              onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold px-2 py-1 bg-white border-2 border-teal-500 rounded-lg outline-none text-slate-800 shadow-sm max-w-[170px]"
-                            >
-                              {uniqueProjects.filter(p => p !== 'Todos').map(p => (
-                                <option key={p} value={p}>{p}</option>
-                              ))}
-                            </select>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => handleStartInlineEdit(e, task, 'project')}
-                            className="text-left text-xs font-black text-slate-700 hover:text-teal-700 hover:bg-teal-50 px-2 py-1 -mx-2 -my-1 rounded-lg transition flex items-center gap-1 group/proj"
-                            title="Clique para alterar o projeto"
-                          >
-                            <span className="truncate max-w-[140px]">{task.project}</span>
-                            <Edit2 size={11} className="opacity-0 group-hover/proj:opacity-100 text-teal-600 shrink-0 transition" />
-                          </button>
-                        )}
+                        {task.project}
                       </td>
 
                       {/* RESPONSÁVEL COLUMN */}
                       <td className="py-4 px-4">
-                        {inlineEdit?.taskId === task.id && inlineEdit?.field === 'lead' ? (
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <select
-                              autoFocus
-                              value={inlineEdit.value}
-                              onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
-                              onBlur={handleCancelInlineEdit}
-                              onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold px-2 py-1 bg-white border-2 border-teal-500 rounded-lg outline-none text-slate-800 shadow-sm max-w-[160px]"
-                            >
-                              {uniqueLeads.filter(l => l !== 'Todos').map(l => (
-                                <option key={l} value={l}>{l}</option>
-                              ))}
-                            </select>
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-emerald-800 text-white flex items-center justify-center text-[10px] font-black uppercase shrink-0 shadow-xs">
+                            {getInitials(task.projectLead)}
                           </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => handleStartInlineEdit(e, task, 'lead')}
-                            className="text-left hover:bg-teal-50 px-2 py-1 -mx-2 -my-1 rounded-lg transition flex items-center gap-2 group/lead"
-                            title="Clique para alterar o responsável"
-                          >
-                            <div className="w-6 h-6 rounded-full bg-emerald-800 text-white flex items-center justify-center text-[10px] font-black uppercase shrink-0 shadow-xs">
-                              {getInitials(task.projectLead)}
-                            </div>
-                            <span className="text-xs font-bold text-slate-800 truncate max-w-[110px]">
-                              {task.projectLead}
-                            </span>
-                            <Edit2 size={11} className="opacity-0 group-hover/lead:opacity-100 text-teal-600 shrink-0 transition" />
-                          </button>
-                        )}
+                          <span className="text-xs font-bold text-slate-800 truncate max-w-[120px]">
+                            {task.projectLead}
+                          </span>
+                        </div>
                       </td>
 
                       {/* STATUS COLUMN */}
                       <td className="py-4 px-4">
-                        {inlineEdit?.taskId === task.id && inlineEdit?.field === 'status' ? (
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <select
-                              autoFocus
-                              value={inlineEdit.value}
-                              onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
-                              onBlur={handleCancelInlineEdit}
-                              onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold px-2 py-1 bg-white border-2 border-teal-500 rounded-lg outline-none text-slate-800 shadow-sm"
-                            >
-                              <option value="Planejada">Planejada</option>
-                              <option value="Em Andamento">Em Andamento</option>
-                              <option value="Concluída">Concluída</option>
-                              <option value="Pausado">Pausado</option>
-                              <option value="Não Aplicável">Não Aplicável</option>
-                            </select>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => handleStartInlineEdit(e, task, 'status')}
-                            className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border inline-flex items-center gap-1.5 hover:scale-105 hover:shadow-xs transition ${visuals.badgeClass}`}
-                            title="Clique para alterar o status"
-                          >
-                            <span>{visuals.label}</span>
-                            <Edit2 size={10} className="opacity-60" />
-                          </button>
-                        )}
+                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border inline-block ${visuals.badgeClass}`}>
+                          {visuals.label}
+                        </span>
                       </td>
 
                       {/* PRAZO COLUMN */}
                       <td className="py-4 px-4">
-                        {inlineEdit?.taskId === task.id && inlineEdit?.field === 'date' ? (
-                          <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
-                            <input
-                              type="date"
-                              autoFocus
-                              value={inlineEdit.value || ''}
-                              onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
-                              onBlur={handleCancelInlineEdit}
-                              onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold px-2 py-1 bg-white border-2 border-teal-500 rounded-lg outline-none text-slate-800 shadow-sm"
-                            />
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => handleStartInlineEdit(e, task, 'date')}
-                            className={`flex items-center gap-1.5 text-xs font-bold hover:bg-slate-100 px-2 py-1 -mx-2 -my-1 rounded-lg transition group/date ${isOverdue ? 'text-red-500' : 'text-slate-600'}`}
-                            title="Clique para alterar o prazo"
-                          >
-                            <Calendar size={14} className={isOverdue ? 'text-red-500' : 'text-slate-400'} />
-                            <span>{formatDateBR(task.completionDate)}</span>
-                            <Edit2 size={11} className="opacity-0 group-hover/date:opacity-100 text-teal-600 shrink-0 transition" />
-                          </button>
-                        )}
+                        <div className={`flex items-center gap-1.5 text-xs font-bold ${isOverdue ? 'text-red-500' : 'text-slate-600'}`}>
+                          <Calendar size={14} className={isOverdue ? 'text-red-500' : 'text-slate-400'} />
+                          <span>{formatDateBR(task.completionDate)}</span>
+                        </div>
                       </td>
 
                       {/* PROGRESSO COLUMN */}
-                      <td className="py-4 px-4 min-w-[130px] relative">
-                        {inlineEdit?.taskId === task.id && inlineEdit?.field === 'progress' ? (
-                          <div onClick={(e) => e.stopPropagation()} className="absolute top-0 right-0 z-30 space-y-2 p-3 bg-white border-2 border-teal-500 rounded-xl shadow-xl min-w-[200px]">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-[10px] font-black text-slate-500 uppercase">Progresso:</span>
-                              <span className="text-xs font-black text-teal-700">{inlineEdit.value}%</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              step="5"
-                              value={inlineEdit.value}
-                              onChange={(e) => setInlineEdit({ ...inlineEdit, value: Number(e.target.value) })}
-                              className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-600"
+                      <td className="py-4 px-4 min-w-[130px]">
+                        <div className="space-y-1">
+                          <span className="text-xs font-black text-slate-800 block">
+                            {task.progress}%
+                          </span>
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full transition-all duration-500 ${task.progress === 100 ? 'bg-emerald-500' : 'bg-teal-600'}`}
+                              style={{ width: `${task.progress}%` }}
                             />
-                            <div className="flex items-center justify-between gap-1">
-                              {[0, 25, 50, 75, 100].map(pct => (
-                                <button
-                                  key={pct}
-                                  type="button"
-                                  onClick={() => setInlineEdit({ ...inlineEdit, value: pct })}
-                                  className={`px-1.5 py-0.5 rounded text-[9px] font-black transition ${
-                                    inlineEdit.value === pct ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                  }`}
-                                >
-                                  {pct}%
-                                </button>
-                              ))}
-                            </div>
-                            <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100">
-                              <button
-                                type="button"
-                                onClick={handleCancelInlineEdit}
-                                className="px-2 py-1 text-[10px] font-bold text-slate-500 hover:bg-slate-100 rounded"
-                              >
-                                Cancelar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleSaveInlineEdit(task)}
-                                className="px-2.5 py-1 text-[10px] font-black text-white bg-teal-600 hover:bg-teal-700 rounded shadow-xs"
-                              >
-                                Salvar
-                              </button>
-                            </div>
                           </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => handleStartInlineEdit(e, task, 'progress')}
-                            className="w-full text-left hover:bg-slate-100 p-1.5 -m-1.5 rounded-lg transition group/prog"
-                            title="Clique para alterar a porcentagem de progresso"
-                          >
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-black text-slate-800">
-                                  {task.progress}%
-                                </span>
-                                <Edit2 size={11} className="opacity-0 group-hover/prog:opacity-100 text-teal-600 transition" />
-                              </div>
-                              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                <div 
-                                  className={`h-full transition-all duration-500 ${task.progress === 100 ? 'bg-emerald-500' : 'bg-teal-600'}`}
-                                  style={{ width: `${task.progress}%` }}
-                                />
-                              </div>
-                            </div>
-                          </button>
-                        )}
+                        </div>
                       </td>
 
                       {/* AÇÕES COLUMN */}
