@@ -3,6 +3,8 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import { WebSocketServer, WebSocket } from "ws";
 import http from "http";
+import fs from "fs";
+import path from "path";
 
 async function startServer() {
   const app = express();
@@ -10,6 +12,7 @@ async function startServer() {
   const wss = new WebSocketServer({ server, path: "/ws-updates" });
 
   const PORT = 3000;
+  const DB_FILE = path.join(process.cwd(), "db.json");
 
   // Track connected clients and their user names
   const clients = new Map<WebSocket, string>();
@@ -66,6 +69,35 @@ async function startServer() {
   // API routes
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // Local persistence routes to prevent any data loss
+  app.get("/api/data", (req, res) => {
+    try {
+      if (fs.existsSync(DB_FILE)) {
+        const fileContent = fs.readFileSync(DB_FILE, "utf-8");
+        const data = JSON.parse(fileContent);
+        return res.json({ success: true, data });
+      }
+      return res.json({ success: false, data: null, message: "No stored data file yet." });
+    } catch (err: any) {
+      console.error("Error reading local db.json:", err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post("/api/data", (req, res) => {
+    try {
+      const data = req.body;
+      if (!data || typeof data !== "object") {
+        return res.status(400).json({ success: false, error: "Invalid data payload." });
+      }
+      fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
+      return res.json({ success: true, timestamp: new Date().toISOString() });
+    } catch (err: any) {
+      console.error("Error saving local db.json:", err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
   });
 
   // API endpoint to process PDF / Bula with Gemini 2.5 Flash Multimodal

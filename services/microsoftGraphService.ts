@@ -33,7 +33,7 @@ const loginRequest = {
 
 const SHAREPOINT_HOST = "ctvacinas974.sharepoint.com";
 const SITE_PATH = "/sites/regulatorios";
-const FOLDER_NAME = "sistema";
+const FOLDER_NAME = "Sistema";
 const FILE_NAME = "db.json";
 
 export const MicrosoftGraphService = {
@@ -1056,132 +1056,303 @@ export const MicrosoftGraphService = {
 
       const updatedETags: Record<string, string> = { ...fileETagsMap };
       const errors: string[] = [];
+      const timestamp = new Date().toISOString();
+      const currentUser = fullData.lastEditor || 'Sistema';
 
-      // 1. Módulo: Normas Regulatórias -> sistema/Normas_Regulatorias/normas_regulatorias.json
-      const regulatoryData = {
-        regulatoryStandards: fullData.regulatoryStandards || [],
-        regulatorySubjects: fullData.regulatorySubjects || [],
-        regulatoryDocs: fullData.regulatoryDocs || [],
-        regulatoryEvidence: fullData.regulatoryEvidence || [],
-        regulatoryNarratives: fullData.regulatoryNarratives || [],
-        regulatoryInfoItems: fullData.regulatoryInfoItems || [],
-        repeatableRecords: fullData.repeatableRecords || []
+      // -----------------------------------------------------------------------
+      // 1. MÓDULO: GESTÃO DE PROJETOS -> Sistema/Gestao_de_Projetos/
+      // -----------------------------------------------------------------------
+      const projFolder = 'Sistema/Gestao_de_Projetos';
+
+      // 1.1 Projetos
+      const projetosPayload = {
+        modulo: 'Gestao_de_Projetos',
+        entidade: 'Projetos',
+        updatedAt: timestamp,
+        updatedBy: currentUser,
+        count: (fullData.projects || []).length,
+        data: fullData.projects || []
       };
-      const regKey = 'normas_regulatorias';
-      const regRes = await this.uploadJsonWithRetry(
-        token,
-        ids.driveId,
-        'sistema/Normas_Regulatorias',
-        'normas_regulatorias.json',
-        regulatoryData,
-        fileETagsMap[regKey]
-      );
-      if (regRes.success && regRes.newETag) updatedETags[regKey] = regRes.newETag;
-      else if (!regRes.success) errors.push(`Normas Regulatórias: ${regRes.error}`);
+      const pRes = await this.uploadJsonWithRetry(token, ids.driveId, projFolder, 'projetos.json', projetosPayload);
+      if (!pRes.success) errors.push(`Projetos JSON: ${pRes.error}`);
 
-      // 2. Módulo: Vacinas e Componentes -> sistema/Vacinas_e_Componentes/vacinas_e_componentes.json
-      const vaccinesData = {
-        vaccineCandidates: fullData.vaccineCandidates || [],
-        vaccineComponents: fullData.vaccineComponents || [],
-        formulationBatches: fullData.formulationBatches || []
+      // 1.2 Tarefas
+      const tarefasPayload = {
+        modulo: 'Gestao_de_Projetos',
+        entidade: 'Tarefas',
+        updatedAt: timestamp,
+        updatedBy: currentUser,
+        count: (fullData.tasks || []).length,
+        data: fullData.tasks || []
       };
-      const vacKey = 'vacinas_e_componentes';
-      const vacRes = await this.uploadJsonWithRetry(
-        token,
-        ids.driveId,
-        'sistema/Vacinas_e_Componentes',
-        'vacinas_e_componentes.json',
-        vaccinesData,
-        fileETagsMap[vacKey]
-      );
-      if (vacRes.success && vacRes.newETag) updatedETags[vacKey] = vacRes.newETag;
-      else if (!vacRes.success) errors.push(`Vacinas e Componentes: ${vacRes.error}`);
+      const tRes = await this.uploadJsonWithRetry(token, ids.driveId, projFolder, 'tarefas.json', tarefasPayload);
+      if (!tRes.success) errors.push(`Tarefas JSON: ${tRes.error}`);
 
-      // 3. Módulo: Gestão de Projetos (Global) -> sistema/Gestao_de_Projetos/global.json
-      const globalProjectsData = {
+      // 1.3 Equipe e Usuários
+      const equipePayload = {
+        modulo: 'Gestao_de_Projetos',
+        entidade: 'Equipe_e_Usuarios',
+        updatedAt: timestamp,
+        updatedBy: currentUser,
+        teamMembers: fullData.teamMembers || [],
+        appUsers: fullData.appUsers || [],
+        managerEmail: fullData.managerEmail || ''
+      };
+      const eRes = await this.uploadJsonWithRetry(token, ids.driveId, projFolder, 'equipe_e_usuarios.json', equipePayload);
+      if (!eRes.success) errors.push(`Equipe JSON: ${eRes.error}`);
+
+      // 1.4 Planos de Atividades
+      const planosPayload = {
+        modulo: 'Gestao_de_Projetos',
+        entidade: 'Planos_de_Atividades',
+        updatedAt: timestamp,
+        updatedBy: currentUser,
+        activityPlans: fullData.activityPlans || []
+      };
+      const plRes = await this.uploadJsonWithRetry(token, ids.driveId, projFolder, 'planos_de_atividades.json', planosPayload);
+      if (!plRes.success) errors.push(`Planos de Atividades JSON: ${plRes.error}`);
+
+      // 1.5 Histórico e Logs
+      const logsPayload = {
+        modulo: 'Gestao_de_Projetos',
+        entidade: 'Historico_e_Logs',
+        updatedAt: timestamp,
+        updatedBy: currentUser,
+        logs: fullData.logs || [],
+        notifications: fullData.notifications || []
+      };
+      const lRes = await this.uploadJsonWithRetry(token, ids.driveId, projFolder, 'historico_logs.json', logsPayload);
+      if (!lRes.success) errors.push(`Logs JSON: ${lRes.error}`);
+
+      // 1.6 Snapshot Completo do Módulo de Gestão de Projetos
+      const gestaoCompletaPayload = {
+        modulo: 'Gestao_de_Projetos',
+        schemaVersion: '1.0',
+        updatedAt: timestamp,
+        updatedBy: currentUser,
         projects: fullData.projects || [],
-        macroActivityConfigs: fullData.macroActivityConfigs || [],
+        tasks: fullData.tasks || [],
         teamMembers: fullData.teamMembers || [],
         activityPlans: fullData.activityPlans || [],
         appUsers: fullData.appUsers || [],
         managerEmail: fullData.managerEmail || '',
-        notifications: fullData.notifications || [],
-        logs: fullData.logs || []
+        logs: fullData.logs || [],
+        notifications: fullData.notifications || []
       };
-      const projKey = 'gestao_projetos_global';
-      const projRes = await this.uploadJsonWithRetry(
-        token,
-        ids.driveId,
-        'sistema/Gestao_de_Projetos',
-        'global.json',
-        globalProjectsData,
-        fileETagsMap[projKey]
-      );
-      if (projRes.success && projRes.newETag) updatedETags[projKey] = projRes.newETag;
-      else if (!projRes.success) errors.push(`Gestão de Projetos (Global): ${projRes.error}`);
+      const gcRes = await this.uploadJsonWithRetry(token, ids.driveId, projFolder, 'gestao_de_projetos_completo.json', gestaoCompletaPayload);
+      if (!gcRes.success) errors.push(`Gestão de Projetos Completo JSON: ${gcRes.error}`);
 
-      // 4. Módulo: Gestão de Projetos (Perfis Individuais)
-      // sistema/Gestao_de_Projetos/perfis/{Nome}/perfil_{safeName}.json
+      // 1.7 Perfis Individuais
       const teamMembers: any[] = fullData.teamMembers || [];
       const allTasks: any[] = fullData.tasks || [];
-
-      // Mapear tarefas por perfil para salvar em JSONs isolados
       const assignedTaskIds = new Set<string>();
 
       for (const member of teamMembers) {
         if (!member || !member.name) continue;
         const cleanName = member.name.trim();
         const safeFolderName = cleanName.replace(/[/\\?%*:|"<>]/g, '_');
-        const fileKey = `perfil_${safeFolderName}`;
-
         const memberTasks = allTasks.filter(t => {
           const isLead = t.projectLead?.trim().toLowerCase() === cleanName.toLowerCase();
           const isCollab = t.collaborators?.some((c: string) => c.trim().toLowerCase() === cleanName.toLowerCase());
           const isReviewer = t.currentReviewer?.trim().toLowerCase() === cleanName.toLowerCase();
           return isLead || isCollab || isReviewer;
         });
-
         memberTasks.forEach(t => assignedTaskIds.add(t.id));
 
         const profileData = {
           profileName: cleanName,
-          lastUpdated: new Date().toISOString(),
+          lastUpdated: timestamp,
+          updatedBy: currentUser,
+          memberConfig: member,
+          tasksCount: memberTasks.length,
           tasks: memberTasks
         };
-
-        const profileRes = await this.uploadJsonWithRetry(
+        await this.uploadJsonWithRetry(
           token,
           ids.driveId,
-          `sistema/Gestao_de_Projetos/perfis/${safeFolderName}`,
+          `Sistema/Gestao_de_Projetos/perfis/${safeFolderName}`,
           `perfil_${safeFolderName}.json`,
-          profileData,
-          fileETagsMap[fileKey]
+          profileData
         );
-
-        if (profileRes.success && profileRes.newETag) {
-          updatedETags[fileKey] = profileRes.newETag;
-        } else if (!profileRes.success) {
-          errors.push(`Perfil ${cleanName}: ${profileRes.error}`);
-        }
       }
 
-      // Salvar tarefas gerais / não atribuídas caso existam
-      const unassignedTasks = allTasks.filter(t => !assignedTaskIds.has(t.id));
-      if (unassignedTasks.length > 0) {
-        const generalKey = 'perfil_geral';
-        const genRes = await this.uploadJsonWithRetry(
-          token,
-          ids.driveId,
-          'sistema/Gestao_de_Projetos/perfis/Geral',
-          'perfil_geral.json',
-          { profileName: 'Geral', tasks: unassignedTasks },
-          fileETagsMap[generalKey]
-        );
-        if (genRes.success && genRes.newETag) updatedETags[generalKey] = genRes.newETag;
-      }
+      // -----------------------------------------------------------------------
+      // 2. MÓDULO: NORMAS REGULATÓRIAS -> Sistema/Normas_Regulatorias/
+      // -----------------------------------------------------------------------
+      const regFolder = 'Sistema/Normas_Regulatorias';
 
-      // 5. Preservação Absoluta: Mantém também o backup consolidado db.json
-      await this.saveToCloud(fullData, null);
+      // 2.1 Normas e Assuntos Regulatórios
+      const normasPayload = {
+        modulo: 'Normas_Regulatorias',
+        entidade: 'Normas_e_Assuntos',
+        updatedAt: timestamp,
+        updatedBy: currentUser,
+        regulatoryStandards: fullData.regulatoryStandards || [],
+        regulatorySubjects: fullData.regulatorySubjects || []
+      };
+      const nRes = await this.uploadJsonWithRetry(token, ids.driveId, regFolder, 'normas_e_assuntos.json', normasPayload);
+      if (!nRes.success) errors.push(`Normas e Assuntos JSON: ${nRes.error}`);
+
+      // 2.2 Dossiê e Evidências Regulatórias
+      const dossiePayload = {
+        modulo: 'Normas_Regulatorias',
+        entidade: 'Dossie_e_Evidencias',
+        updatedAt: timestamp,
+        updatedBy: currentUser,
+        regulatoryEvidence: fullData.regulatoryEvidence || [],
+        regulatoryDocs: fullData.regulatoryDocs || [],
+        dossierContributions: fullData.dossierContributions || []
+      };
+      const dRes = await this.uploadJsonWithRetry(token, ids.driveId, regFolder, 'dossie_e_evidencias.json', dossiePayload);
+      if (!dRes.success) errors.push(`Dossiê e Evidências JSON: ${dRes.error}`);
+
+      // 2.3 Narrativas e Configurações
+      const narrativasPayload = {
+        modulo: 'Normas_Regulatorias',
+        entidade: 'Narrativas_e_Configuracoes',
+        updatedAt: timestamp,
+        updatedBy: currentUser,
+        regulatoryNarratives: fullData.regulatoryNarratives || [],
+        regulatoryInfoItems: fullData.regulatoryInfoItems || [],
+        repeatableRecords: fullData.repeatableRecords || [],
+        macroActivityConfigs: fullData.macroActivityConfigs || []
+      };
+      const nrRes = await this.uploadJsonWithRetry(token, ids.driveId, regFolder, 'narrativas_e_configuracoes.json', narrativasPayload);
+      if (!nrRes.success) errors.push(`Narrativas e Configurações JSON: ${nrRes.error}`);
+
+      // 2.4 Reuniões e Atas
+      const reunioesPayload = {
+        modulo: 'Normas_Regulatorias',
+        entidade: 'Reunioes_e_Atas',
+        updatedAt: timestamp,
+        updatedBy: currentUser,
+        meetings: fullData.meetings || []
+      };
+      await this.uploadJsonWithRetry(token, ids.driveId, regFolder, 'reunioes_e_atas.json', reunioesPayload);
+
+      // 2.5 Snapshot Completo do Módulo de Normas Regulatórias
+      const regCompletoPayload = {
+        modulo: 'Normas_Regulatorias',
+        schemaVersion: '1.0',
+        updatedAt: timestamp,
+        updatedBy: currentUser,
+        regulatoryStandards: fullData.regulatoryStandards || [],
+        regulatorySubjects: fullData.regulatorySubjects || [],
+        regulatoryEvidence: fullData.regulatoryEvidence || [],
+        regulatoryDocs: fullData.regulatoryDocs || [],
+        dossierContributions: fullData.dossierContributions || [],
+        regulatoryNarratives: fullData.regulatoryNarratives || [],
+        regulatoryInfoItems: fullData.regulatoryInfoItems || [],
+        repeatableRecords: fullData.repeatableRecords || [],
+        macroActivityConfigs: fullData.macroActivityConfigs || [],
+        meetings: fullData.meetings || []
+      };
+      const rcRes = await this.uploadJsonWithRetry(token, ids.driveId, regFolder, 'normas_regulatorias_completo.json', regCompletoPayload);
+      if (!rcRes.success) errors.push(`Normas Regulatórias Completo JSON: ${rcRes.error}`);
+
+      // -----------------------------------------------------------------------
+      // 3. MÓDULO: VACINAS E COMPONENTES -> Sistema/Vacinas_e_Componentes/
+      // -----------------------------------------------------------------------
+      const vacFolder = 'Sistema/Vacinas_e_Componentes';
+
+      // 3.1 Candidatos Vacinais
+      const candidatosPayload = {
+        modulo: 'Vacinas_e_Componentes',
+        entidade: 'Candidatos_Vacinais',
+        updatedAt: timestamp,
+        updatedBy: currentUser,
+        vaccineCandidates: fullData.vaccineCandidates || []
+      };
+      const cvRes = await this.uploadJsonWithRetry(token, ids.driveId, vacFolder, 'candidatos_vacinais.json', candidatosPayload);
+      if (!cvRes.success) errors.push(`Candidatos Vacinais JSON: ${cvRes.error}`);
+
+      // 3.2 Componentes, Lotes e Impurezas
+      const componentesPayload = {
+        modulo: 'Vacinas_e_Componentes',
+        entidade: 'Componentes_e_Lotes',
+        updatedAt: timestamp,
+        updatedBy: currentUser,
+        vaccineComponents: fullData.vaccineComponents || [],
+        formulationBatches: fullData.formulationBatches || [],
+        vaccineImpurities: fullData.vaccineImpurities || []
+      };
+      const clRes = await this.uploadJsonWithRetry(token, ids.driveId, vacFolder, 'componentes_e_lotes.json', componentesPayload);
+      if (!clRes.success) errors.push(`Componentes e Lotes JSON: ${clRes.error}`);
+
+      // 3.3 Snapshot Completo do Módulo de Vacinas e Componentes
+      const vacinasCompletoPayload = {
+        modulo: 'Vacinas_e_Componentes',
+        schemaVersion: '1.0',
+        updatedAt: timestamp,
+        updatedBy: currentUser,
+        vaccineCandidates: fullData.vaccineCandidates || [],
+        vaccineComponents: fullData.vaccineComponents || [],
+        formulationBatches: fullData.formulationBatches || [],
+        vaccineImpurities: fullData.vaccineImpurities || []
+      };
+      const vcRes = await this.uploadJsonWithRetry(token, ids.driveId, vacFolder, 'vacinas_e_componentes_completo.json', vacinasCompletoPayload);
+      if (!vcRes.success) errors.push(`Vacinas e Componentes Completo JSON: ${vcRes.error}`);
+
+      // -----------------------------------------------------------------------
+      // 4. MÓDULO: OBSOLETOS E ARQUIVADOS -> Sistema/Z-_Obsoletos/
+      // -----------------------------------------------------------------------
+      const obsFolder = 'Sistema/Z-_Obsoletos';
+      const itensArquivadosPayload = {
+        modulo: 'Z-_Obsoletos',
+        entidade: 'Itens_Arquivados',
+        updatedAt: timestamp,
+        updatedBy: currentUser,
+        membrosInativos: (fullData.teamMembers || []).filter((m: any) => m.active === false || m.discontinued === true),
+        projetosConcluidosOuCancelados: (fullData.projects || []).filter((p: any) => p.phase === 'Concluído' || p.phase === 'Cancelado')
+      };
+      await this.uploadJsonWithRetry(token, ids.driveId, obsFolder, 'itens_arquivados.json', itensArquivadosPayload);
+
+      // -----------------------------------------------------------------------
+      // 5. ÍNDICE GERAL E BACKUP CONSOLIDADO -> Sistema/
+      // -----------------------------------------------------------------------
+      // 5.1 Índice Geral dos Módulos
+      const indiceModulosPayload = {
+        sistema: 'CT-Vacinas Sistema Integrado',
+        updatedAt: timestamp,
+        updatedBy: currentUser,
+        sharePointSite: `${SHAREPOINT_HOST}${SITE_PATH}`,
+        basePath: 'Documentos > Sistema',
+        modulos: [
+          {
+            nome: 'Gestão de Projetos',
+            pasta: 'Sistema/Gestao_de_Projetos',
+            arquivos: ['projetos.json', 'tarefas.json', 'equipe_e_usuarios.json', 'planos_de_atividades.json', 'historico_logs.json', 'gestao_de_projetos_completo.json'],
+            metricas: { projetos: (fullData.projects || []).length, tarefas: (fullData.tasks || []).length, membros: (fullData.teamMembers || []).length }
+          },
+          {
+            nome: 'Normas Regulatórias',
+            pasta: 'Sistema/Normas_Regulatorias',
+            arquivos: ['normas_e_assuntos.json', 'dossie_e_evidencias.json', 'narrativas_e_configuracoes.json', 'reunioes_e_atas.json', 'normas_regulatorias_completo.json'],
+            metricas: { normas: (fullData.regulatoryStandards || []).length, evidencias: (fullData.regulatoryEvidence || []).length, atas: (fullData.meetings || []).length }
+          },
+          {
+            nome: 'Vacinas e Componentes',
+            pasta: 'Sistema/Vacinas_e_Componentes',
+            arquivos: ['candidatos_vacinais.json', 'componentes_e_lotes.json', 'vacinas_e_componentes_completo.json'],
+            metricas: { candidatos: (fullData.vaccineCandidates || []).length, componentes: (fullData.vaccineComponents || []).length, lotes: (fullData.formulationBatches || []).length }
+          },
+          {
+            nome: 'Obsoletos e Arquivados',
+            pasta: 'Sistema/Z-_Obsoletos',
+            arquivos: ['itens_arquivados.json']
+          }
+        ]
+      };
+      await this.uploadJsonWithRetry(token, ids.driveId, 'Sistema', 'indice_modulos.json', indiceModulosPayload);
+
+      // 5.2 db.json na raiz de Sistema (Índice Geral e Backup Consolidado)
+      const fullCloudData = {
+        ...fullData,
+        lastBackupAt: timestamp,
+        lastBackupBy: currentUser,
+        version: '2.0-modular'
+      };
+      await this.saveToCloud(fullCloudData, null);
 
       return {
         success: errors.length === 0,
@@ -1191,6 +1362,59 @@ export const MicrosoftGraphService = {
     } catch (e: any) {
       console.error('Erro ao salvar estrutura modular no SharePoint:', e);
       return { success: false, updatedETags: {}, errors: [e.message] };
+    }
+  },
+
+  // Carrega e reconstrói o estado a partir dos arquivos modulares ou do db.json
+  async loadModularFromSharePoint(): Promise<{ data: any; version?: string } | null> {
+    const token = await this.getToken();
+    if (!token) return null;
+
+    try {
+      const ids = await this.getSiteAndDriveId(token);
+      if (!ids) return null;
+
+      // 1. Tenta carregar primeiro o db.json consolidado da raiz de Sistema
+      const masterDb = await this.downloadJsonFromSharePointPath(token, ids.driveId, 'Sistema', 'db.json');
+      if (masterDb && masterDb.data) {
+        return { data: masterDb.data, version: masterDb.eTag };
+      }
+
+      // 2. Se não existir db.json, reconstrói o estado lendo os arquivos modulares individuais
+      console.log('db.json não encontrado. Reconstruindo dados a partir dos arquivos modulares...');
+      const gestaoProj = await this.downloadJsonFromSharePointPath(token, ids.driveId, 'Sistema/Gestao_de_Projetos', 'gestao_de_projetos_completo.json');
+      const normasReg = await this.downloadJsonFromSharePointPath(token, ids.driveId, 'Sistema/Normas_Regulatorias', 'normas_regulatorias_completo.json');
+      const vacinasComp = await this.downloadJsonFromSharePointPath(token, ids.driveId, 'Sistema/Vacinas_e_Componentes', 'vacinas_e_componentes_completo.json');
+
+      const reconstructed: any = {
+        projects: gestaoProj?.data?.projects || [],
+        tasks: gestaoProj?.data?.tasks || [],
+        teamMembers: gestaoProj?.data?.teamMembers || [],
+        activityPlans: gestaoProj?.data?.activityPlans || [],
+        appUsers: gestaoProj?.data?.appUsers || [],
+        managerEmail: gestaoProj?.data?.managerEmail || 'brunadias@ctvacinas.org',
+        logs: gestaoProj?.data?.logs || [],
+        notifications: gestaoProj?.data?.notifications || [],
+        regulatoryStandards: normasReg?.data?.regulatoryStandards || [],
+        regulatorySubjects: normasReg?.data?.regulatorySubjects || [],
+        regulatoryEvidence: normasReg?.data?.regulatoryEvidence || [],
+        regulatoryDocs: normasReg?.data?.regulatoryDocs || [],
+        dossierContributions: normasReg?.data?.dossierContributions || [],
+        regulatoryNarratives: normasReg?.data?.regulatoryNarratives || [],
+        regulatoryInfoItems: normasReg?.data?.regulatoryInfoItems || [],
+        repeatableRecords: normasReg?.data?.repeatableRecords || [],
+        macroActivityConfigs: normasReg?.data?.macroActivityConfigs || [],
+        meetings: normasReg?.data?.meetings || [],
+        vaccineCandidates: vacinasComp?.data?.vaccineCandidates || [],
+        vaccineComponents: vacinasComp?.data?.vaccineComponents || [],
+        formulationBatches: vacinasComp?.data?.formulationBatches || [],
+        vaccineImpurities: vacinasComp?.data?.vaccineImpurities || []
+      };
+
+      return { data: reconstructed, version: 'reconstructed' };
+    } catch (e) {
+      console.error('Erro ao carregar dados modulares do SharePoint:', e);
+      return null;
     }
   },
 

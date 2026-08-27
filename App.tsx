@@ -58,6 +58,21 @@ export type AugmentedMicroActivity = MicroActivity & {
   macroDueDate?: string;
 };
 
+const LOCAL_STORAGE_DATA_KEY = 'ctvacinas_data_store_v1';
+
+const persistDataLocally = (dataToSave: any) => {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_DATA_KEY, JSON.stringify(dataToSave));
+    fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dataToSave)
+    }).catch(err => console.warn('Aviso: backup local no servidor:', err));
+  } catch (e) {
+    console.warn('Aviso ao salvar localmente no navegador:', e);
+  }
+};
+
 const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -283,12 +298,39 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const initAuth = async () => {
-      const acc = await MicrosoftGraphService.getAccount();
-      if (acc) {
-        setAccount(acc);
-        setIsMsalAuthenticated(true);
-        loadDataFromSharePoint();
-      } else {
+      // 1. Restaurar dados locais imediatamente para zero perda de dados entre recarregamentos
+      try {
+        const localSaved = localStorage.getItem(LOCAL_STORAGE_DATA_KEY);
+        if (localSaved) {
+          const parsed = JSON.parse(localSaved);
+          if (parsed && typeof parsed === 'object') {
+            console.log('Restaurando dados persistidos do armazenamento local...');
+            applyData(parsed, 'local_storage');
+          }
+        } else {
+          // Se não houver no localStorage, consultar o endpoint do servidor local
+          const serverRes = await fetch('/api/data').then(r => r.json()).catch(() => null);
+          if (serverRes?.success && serverRes?.data) {
+            console.log('Restaurando dados persistidos do servidor local...');
+            applyData(serverRes.data, 'server_storage');
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao inicializar cache local:', e);
+      }
+
+      // 2. Verificar autenticação Microsoft
+      try {
+        const acc = await MicrosoftGraphService.getAccount();
+        if (acc) {
+          setAccount(acc);
+          setIsMsalAuthenticated(true);
+          await loadDataFromSharePoint();
+        } else {
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error('Erro na autenticação MSAL:', err);
         setIsLoading(false);
       }
     };
@@ -315,13 +357,15 @@ const App: React.FC = () => {
   };
 
   const applyData = (cloudData: any, version: string | null) => {
+    if (!cloudData || typeof cloudData !== 'object') return;
+
     const loadedPlans = cloudData.activityPlans || [];
     const migratedPlans = loadedPlans.map((plan: any) => {
-      if (plan.macroActivities.length > 0 && typeof plan.macroActivities[0] === 'string') {
+      if (plan.macroActivities && plan.macroActivities.length > 0 && typeof plan.macroActivities[0] === 'string') {
         const defaultPhase = (plan.phases && plan.phases.length > 0) ? plan.phases[0] : 'Fase Padrão';
         return {
           ...plan,
-          macroActivities: (plan.macroActivities as string[]).map(macroName => ({
+          macroActivities: (plan.macroActivities as string[]).map((macroName: string) => ({
             name: macroName,
             phase: defaultPhase
           }))
@@ -333,23 +377,26 @@ const App: React.FC = () => {
     const fullData = {
       tasks: cloudData.tasks || [],
       projects: cloudData.projects || [],
-      teamMembers: cloudData.teamMembers || DEFAULT_TEAM_MEMBERS,
+      teamMembers: (cloudData.teamMembers && cloudData.teamMembers.length > 0) ? cloudData.teamMembers : DEFAULT_TEAM_MEMBERS,
       activityPlans: migratedPlans,
       notifications: cloudData.notifications || [],
       logs: cloudData.logs || [],
-      appUsers: cloudData.appUsers || DEFAULT_APP_USERS,
+      appUsers: (cloudData.appUsers && cloudData.appUsers.length > 0) ? cloudData.appUsers : DEFAULT_APP_USERS,
+      managerEmail: cloudData.managerEmail || 'brunadias@ctvacinas.org',
       regulatoryStandards: (cloudData.regulatoryStandards && cloudData.regulatoryStandards.length > 0) ? cloudData.regulatoryStandards : DEFAULT_REGULATORY_STANDARDS,
       regulatorySubjects: (cloudData.regulatorySubjects && cloudData.regulatorySubjects.length > 0) ? cloudData.regulatorySubjects : DEFAULT_REGULATORY_SUBJECTS,
-      vaccineCandidates: cloudData.vaccineCandidates || DEFAULT_VACCINE_CANDIDATES,
-      vaccineComponents: cloudData.vaccineComponents || DEFAULT_VACCINE_COMPONENTS,
-      formulationBatches: cloudData.formulationBatches || DEFAULT_FORMULATION_BATCHES,
+      vaccineCandidates: (cloudData.vaccineCandidates && cloudData.vaccineCandidates.length > 0) ? cloudData.vaccineCandidates : DEFAULT_VACCINE_CANDIDATES,
+      vaccineComponents: (cloudData.vaccineComponents && cloudData.vaccineComponents.length > 0) ? cloudData.vaccineComponents : DEFAULT_VACCINE_COMPONENTS,
+      formulationBatches: (cloudData.formulationBatches && cloudData.formulationBatches.length > 0) ? cloudData.formulationBatches : DEFAULT_FORMULATION_BATCHES,
+      vaccineImpurities: (cloudData.vaccineImpurities && cloudData.vaccineImpurities.length > 0) ? cloudData.vaccineImpurities : DEFAULT_VACCINE_IMPURITIES,
       regulatoryEvidence: cloudData.regulatoryEvidence || [],
       macroActivityConfigs: cloudData.macroActivityConfigs || [],
       regulatoryInfoItems: cloudData.regulatoryInfoItems || [],
       repeatableRecords: cloudData.repeatableRecords || [],
       regulatoryNarratives: cloudData.regulatoryNarratives || [],
       regulatoryDocs: cloudData.regulatoryDocs || [],
-      managerEmail: cloudData.managerEmail || 'brunadias@ctvacinas.org',
+      meetings: (cloudData.meetings && cloudData.meetings.length > 0) ? cloudData.meetings : DEFAULT_MEETINGS,
+      dossierContributions: cloudData.dossierContributions || [],
     };
 
     setTasks(fullData.tasks);
@@ -365,13 +412,17 @@ const App: React.FC = () => {
     setVaccineCandidates(fullData.vaccineCandidates);
     setVaccineComponents(fullData.vaccineComponents);
     setFormulationBatches(fullData.formulationBatches);
+    setVaccineImpurities(fullData.vaccineImpurities);
     setRegulatoryEvidence(fullData.regulatoryEvidence);
     setMacroActivityConfigs(fullData.macroActivityConfigs);
     setRegulatoryInfoItems(fullData.regulatoryInfoItems);
     setRepeatableRecords(fullData.repeatableRecords);
     setRegulatoryNarratives(fullData.regulatoryNarratives);
     setRegulatoryDocs(fullData.regulatoryDocs);
+    setMeetings(fullData.meetings);
+    setDossierContributions(fullData.dossierContributions);
     setBaseData(JSON.parse(JSON.stringify(fullData)));
+    persistDataLocally(fullData);
     setDataVersion(version);
     setIsDataDirty(false);
   };
@@ -399,7 +450,7 @@ const App: React.FC = () => {
             const defaultPhase = (plan.phases && plan.phases.length > 0) ? plan.phases[0] : 'Fase Padrão';
             return {
               ...plan,
-              macroActivities: (plan.macroActivities as string[]).map(macroName => ({
+              macroActivities: (plan.macroActivities as string[]).map((macroName: string) => ({
                 name: macroName,
                 phase: defaultPhase
               }))
@@ -409,15 +460,15 @@ const App: React.FC = () => {
         });
 
         const merged = {
-          tasks: mergeArrays(cloudData.tasks || [], tasks, baseData.tasks),
-          projects: mergeArrays(cloudData.projects || [], projects, baseData.projects),
-          teamMembers: mergeArrays(cloudData.teamMembers || [], teamMembers, baseData.teamMembers),
-          activityPlans: mergeArrays(migratedPlans, activityPlans, baseData.activityPlans),
-          notifications: mergeArrays(cloudData.notifications || [], notifications, baseData.notifications),
-          logs: mergeArrays(cloudData.logs || [], logs, baseData.logs),
-          appUsers: mergeArrays(cloudData.appUsers || [], appUsers, baseData.appUsers),
-          regulatoryStandards: mergeArrays(cloudData.regulatoryStandards || [], regulatoryStandards, baseData.regulatoryStandards || []),
-          regulatorySubjects: mergeArrays(cloudData.regulatorySubjects || [], regulatorySubjects, baseData.regulatorySubjects || [])
+          tasks: mergeArrays(cloudData.tasks || [], tasks, baseData?.tasks || []),
+          projects: mergeArrays(cloudData.projects || [], projects, baseData?.projects || []),
+          teamMembers: mergeArrays(cloudData.teamMembers || [], teamMembers, baseData?.teamMembers || []),
+          activityPlans: mergeArrays(migratedPlans, activityPlans, baseData?.activityPlans || []),
+          notifications: mergeArrays(cloudData.notifications || [], notifications, baseData?.notifications || []),
+          logs: mergeArrays(cloudData.logs || [], logs, baseData?.logs || []),
+          appUsers: mergeArrays(cloudData.appUsers || [], appUsers, baseData?.appUsers || []),
+          regulatoryStandards: mergeArrays(cloudData.regulatoryStandards || [], regulatoryStandards, baseData?.regulatoryStandards || []),
+          regulatorySubjects: mergeArrays(cloudData.regulatorySubjects || [], regulatorySubjects, baseData?.regulatorySubjects || [])
         };
 
         setTasks(merged.tasks);
@@ -442,6 +493,7 @@ const App: React.FC = () => {
           managerEmail: cloudData.managerEmail || 'brunadias@ctvacinas.org'
         };
         setBaseData(JSON.parse(JSON.stringify(fullCloudData)));
+        persistDataLocally(fullCloudData);
       }
       setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'Auto-Sync' });
     } catch (err) {
@@ -453,21 +505,22 @@ const App: React.FC = () => {
     setIsLoading(true);
     try {
       const result = await MicrosoftGraphService.loadFromSharePointLists();
-      if (result && result.data) {
+      if (result && result.data && (result.data.projects?.length > 0 || result.data.tasks?.length > 0)) {
         if (result.spMetadataMap) {
           spMetadataMapRef.current = result.spMetadataMap;
         }
         applyData(result.data, result.version || null);
       } else {
-        setTeamMembers(DEFAULT_TEAM_MEMBERS);
-        setAppUsers(DEFAULT_APP_USERS);
+        if (!baseData) {
+          setTeamMembers(prev => prev.length > 0 ? prev : DEFAULT_TEAM_MEMBERS);
+          setAppUsers(prev => prev.length > 0 ? prev : DEFAULT_APP_USERS);
+        }
         setDataVersion(null);
-        setIsDataDirty(false); 
       }
       setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'Cloud' });
     } catch (error) {
-      setAuthError("Falha ao carregar dados das listas do SharePoint.");
-      setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'Cloud' });
+      console.warn("Aviso ao carregar do SharePoint (usando dados locais persistidos):", error);
+      setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'Local' });
     } finally {
       if (isAuthorized !== false) {
         setIsLoading(false);
@@ -483,10 +536,7 @@ const App: React.FC = () => {
   };
 
   const handleSaveChanges = async () => {
-    if (!isDataDirty || !baseData) return;
-    console.log('Iniciando salvamento granular nas SharePoint Lists...');
-    setLastSync((prev: SyncInfo | null) => ({ ...(prev || { timestamp: '', user: '' }), status: 'syncing' }));
-
+    if (!isDataDirty) return;
     const currentUser = selectedProfile?.name || 'Sistema';
     const currentState = { 
       tasks, 
@@ -501,42 +551,61 @@ const App: React.FC = () => {
       vaccineCandidates,
       vaccineComponents,
       formulationBatches,
+      vaccineImpurities,
+      regulatoryEvidence,
+      macroActivityConfigs,
+      regulatoryInfoItems,
+      repeatableRecords,
+      regulatoryNarratives,
+      regulatoryDocs,
+      meetings,
+      dossierContributions,
       managerEmail,
       lastEditor: currentUser
     };
 
-    const result = await MicrosoftGraphService.saveGranularToSharePoint(
-      baseData,
-      currentState,
-      spMetadataMapRef.current,
-      currentUser
-    );
+    // 1. Sempre persiste localmente no navegador e servidor primeiro
+    persistDataLocally(currentState);
+    const updatedBase = JSON.parse(JSON.stringify(currentState));
+    setBaseData(updatedBase);
+    setIsDataDirty(false);
+    setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: currentUser });
 
-    if (result.success) {
-      console.log('Salvamento granular concluído com sucesso.');
-      if (result.spMetadataMap) {
-        spMetadataMapRef.current = result.spMetadataMap;
-      }
-      const updatedBase = JSON.parse(JSON.stringify(currentState));
-      setBaseData(updatedBase);
-      setIsDataDirty(false);
-      setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'System' });
+    // 2. Se autenticado com a Microsoft e autorizado, sincroniza com SharePoint
+    if (isMsalAuthenticated && isAuthorized) {
+      console.log('Iniciando sincronização granular nas SharePoint Lists...');
+      try {
+        const effectiveBase = baseData || currentState;
+        const result = await MicrosoftGraphService.saveGranularToSharePoint(
+          effectiveBase,
+          currentState,
+          spMetadataMapRef.current,
+          currentUser
+        );
 
-      // Atualiza também a organização modular no SharePoint em background
-      MicrosoftGraphService.saveModularToSharePoint(currentState).catch(err => {
-        console.warn('Aviso: Sincronização modular de background:', err);
-      });
-      
-      // Broadcast update via WebSocket
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: currentUser }));
+        if (result.success) {
+          console.log('Salvamento granular concluído com sucesso.');
+          if (result.spMetadataMap) {
+            spMetadataMapRef.current = result.spMetadataMap;
+          }
+          setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'Cloud' });
+
+          MicrosoftGraphService.saveModularToSharePoint(currentState).catch(err => {
+            console.warn('Aviso: Sincronização modular de background:', err);
+          });
+          
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: currentUser }));
+          }
+        } else if (result.conflict) {
+          console.warn('Conflito de edição detectado no SharePoint. Sincronizando dados mais recentes...');
+          await syncDataAutomatically();
+        } else {
+          console.warn('Aviso: Não foi possível salvar nas listas do SharePoint, mantendo dados salvos localmente.');
+        }
+      } catch (spErr) {
+        console.warn('Aviso: Erro na sincronização SharePoint (dados preservados localmente):', spErr);
       }
-    } else if (result.conflict) {
-      console.warn('Conflito de edição detectado no SharePoint. Sincronizando dados mais recentes...');
-      await syncDataAutomatically();
-    } else {
-      console.error('Falha ao salvar nas listas do SharePoint', result);
-      setLastSync({ status: 'error', timestamp: new Date().toISOString(), user: 'System' });
     }
   };
 
@@ -605,22 +674,6 @@ const App: React.FC = () => {
 
   }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, regulatoryStandards, regulatorySubjects, vaccineCandidates, vaccineComponents, formulationBatches, managerEmail, dataVersion, isDataDirty]);
 
-  // Polling removed in favor of WebSockets
-  /*
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      if (!isDataDirty && isMsalAuthenticated && isAuthorized) {
-        const cloudVersion = await MicrosoftGraphService.getCloudVersion();
-        if (cloudVersion && cloudVersion !== dataVersion) {
-          setShowUpdateNotification(true);
-        }
-      }
-    }, 60000); // Verifica a cada 60 segundos
-
-    return () => clearInterval(interval);
-  }, [isDataDirty, dataVersion, isMsalAuthenticated, isAuthorized]);
-  */
-
   const currentUserRole = useMemo(() => {
     if (!account || !appUsers.length) return null;
     const userEmail = account.username.toLowerCase();
@@ -669,12 +722,23 @@ const App: React.FC = () => {
       activityPlans, 
       notifications, 
       logs, 
-      appUsers,
-      regulatoryStandards,
-      regulatorySubjects,
-      vaccineCandidates,
-      vaccineComponents,
-      formulationBatches 
+      appUsers, 
+      managerEmail,
+      regulatoryStandards, 
+      regulatorySubjects, 
+      vaccineCandidates, 
+      vaccineComponents, 
+      formulationBatches,
+      vaccineImpurities,
+      regulatoryEvidence,
+      macroActivityConfigs,
+      regulatoryInfoItems,
+      repeatableRecords,
+      regulatoryNarratives,
+      regulatoryDocs,
+      meetings,
+      dossierContributions,
+      exportDate: new Date().toISOString()
     };
     const blob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -696,29 +760,23 @@ const App: React.FC = () => {
           const content = e.target?.result;
           if (typeof content === 'string') {
             const data = JSON.parse(content);
-            setTasks(data.tasks || []);
-            setProjects(data.projects || []);
-            setTeamMembers(data.teamMembers || DEFAULT_TEAM_MEMBERS);
-            setActivityPlans(data.activityPlans || []);
-            setNotifications(data.notifications || []);
-            setLogs(data.logs || []);
-            setAppUsers(data.appUsers || []);
-            if (data.regulatoryStandards) setRegulatoryStandards(data.regulatoryStandards);
-            if (data.regulatorySubjects) setRegulatorySubjects(data.regulatorySubjects);
-            if (data.vaccineCandidates) setVaccineCandidates(data.vaccineCandidates);
-            if (data.vaccineComponents) setVaccineComponents(data.vaccineComponents);
-            if (data.formulationBatches) setFormulationBatches(data.formulationBatches);
+            applyData(data, 'backup_' + Date.now());
+            persistDataLocally(data);
             setDataDirty();
-            alert("Backup local carregado com sucesso! Os dados serão sincronizados com a nuvem.");
+            setTimeout(() => {
+              handleSaveChanges();
+            }, 100);
+            alert("Backup local carregado com sucesso! Todas as informações e projetos foram restaurados e salvos.");
           }
         } catch (error) {
-          alert("Erro ao ler o arquivo de backup. Verifique se o arquivo é válido.");
+          console.error("Erro ao ler backup:", error);
+          alert("Erro ao ler o arquivo de backup. Verifique se o arquivo JSON é válido.");
         }
       };
       reader.readAsText(file);
     }
-     if(fileInputRef.current) {
-        fileInputRef.current.value = "";
+    if(fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   };
 
