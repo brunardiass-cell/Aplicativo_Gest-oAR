@@ -1340,12 +1340,45 @@ export const MicrosoftGraphService = {
             nome: 'Obsoletos e Arquivados',
             pasta: 'Sistema/Z-_Obsoletos',
             arquivos: ['itens_arquivados.json']
+          },
+          {
+            nome: 'Histórico de Edições',
+            pasta: 'Sistema/Historico_Edicoes',
+            arquivos: ['Snapshots de cada edição com timestamp']
+          },
+          {
+            nome: 'Backups Diários (00:00)',
+            pasta: 'Sistema/Backups_Diarios',
+            arquivos: ['backup_YYYY-MM-DD.json']
           }
         ]
       };
       await this.uploadJsonWithRetry(token, ids.driveId, 'Sistema', 'indice_modulos.json', indiceModulosPayload);
 
-      // 5.2 db.json na raiz de Sistema (Índice Geral e Backup Consolidado)
+      // 5.2 Arquivo de Revisão Individual da Edição -> Sistema/Historico_Edicoes/
+      const safeTime = timestamp.replace(/[:.]/g, '-');
+      const safeUser = (currentUser || 'usuario').replace(/[/\\?%*:|"<>]/g, '_');
+      const editionPayload = {
+        edicaoId: `edit_${safeTime}_${safeUser}`,
+        timestamp,
+        usuario: currentUser,
+        sumario: {
+          totalProjetos: (fullData.projects || []).length,
+          totalTarefas: (fullData.tasks || []).length,
+          totalNormas: (fullData.regulatoryStandards || []).length,
+          totalVacinas: (fullData.vaccineCandidates || []).length
+        },
+        dados: fullData
+      };
+      await this.uploadJsonWithRetry(
+        token,
+        ids.driveId,
+        'Sistema/Historico_Edicoes',
+        `edicao_${safeTime}_${safeUser}.json`,
+        editionPayload
+      );
+
+      // 5.3 db.json na raiz de Sistema (Índice Geral e Backup Consolidado)
       const fullCloudData = {
         ...fullData,
         lastBackupAt: timestamp,
@@ -1362,6 +1395,78 @@ export const MicrosoftGraphService = {
     } catch (e: any) {
       console.error('Erro ao salvar estrutura modular no SharePoint:', e);
       return { success: false, updatedETags: {}, errors: [e.message] };
+    }
+  },
+
+  // Salva o snapshot diário completo agendado para as 00:00 (ou acionado no início do dia)
+  async saveDailyBackupToSharePoint(fullData: any): Promise<{ success: boolean; dateStr: string; error?: string }> {
+    const token = await this.getToken();
+    if (!token) return { success: false, dateStr: '', error: 'Não autenticado no Microsoft 365' };
+
+    try {
+      const ids = await this.getSiteAndDriveId(token);
+      if (!ids) return { success: false, dateStr: '', error: 'Site ou Drive não encontrados' };
+
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+      const timestamp = now.toISOString();
+      const backupFolder = 'Sistema/Backups_Diarios';
+
+      const dailyBackupData = {
+        dataBackup: dateStr,
+        horario: timestamp,
+        tipo: 'Backup Diário Automático (00:00)',
+        versao: '2.0',
+        estatisticas: {
+          projetos: (fullData.projects || []).length,
+          tarefas: (fullData.tasks || []).length,
+          membros: (fullData.teamMembers || []).length,
+          normas: (fullData.regulatoryStandards || []).length,
+          candidatosVacinas: (fullData.vaccineCandidates || []).length,
+          reunioes: (fullData.meetings || []).length
+        },
+        data: fullData
+      };
+
+      // 1. Snapshot diário consolidado
+      await this.uploadJsonWithRetry(token, ids.driveId, backupFolder, `backup_${dateStr}.json`, dailyBackupData);
+      
+      // 2. Snapshot diário modular de Projetos
+      await this.uploadJsonWithRetry(token, ids.driveId, backupFolder, `gestao_projetos_${dateStr}.json`, {
+        dataBackup: dateStr,
+        horario: timestamp,
+        projects: fullData.projects || [],
+        tasks: fullData.tasks || [],
+        teamMembers: fullData.teamMembers || [],
+        activityPlans: fullData.activityPlans || []
+      });
+
+      // 3. Snapshot diário modular de Normas Regulatórias
+      await this.uploadJsonWithRetry(token, ids.driveId, backupFolder, `normas_regulatorias_${dateStr}.json`, {
+        dataBackup: dateStr,
+        horario: timestamp,
+        regulatoryStandards: fullData.regulatoryStandards || [],
+        regulatorySubjects: fullData.regulatorySubjects || [],
+        regulatoryEvidence: fullData.regulatoryEvidence || [],
+        regulatoryDocs: fullData.regulatoryDocs || [],
+        meetings: fullData.meetings || []
+      });
+
+      // 4. Snapshot diário modular de Vacinas
+      await this.uploadJsonWithRetry(token, ids.driveId, backupFolder, `vacinas_componentes_${dateStr}.json`, {
+        dataBackup: dateStr,
+        horario: timestamp,
+        vaccineCandidates: fullData.vaccineCandidates || [],
+        vaccineComponents: fullData.vaccineComponents || [],
+        formulationBatches: fullData.formulationBatches || [],
+        vaccineImpurities: fullData.vaccineImpurities || []
+      });
+
+      console.log(`[Backup Diário 00:00] Backup de ${dateStr} salvo com sucesso no SharePoint.`);
+      return { success: true, dateStr };
+    } catch (e: any) {
+      console.error('Erro ao salvar backup diário:', e);
+      return { success: false, dateStr: '', error: e.message };
     }
   },
 

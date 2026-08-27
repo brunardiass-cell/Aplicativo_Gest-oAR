@@ -569,43 +569,149 @@ const App: React.FC = () => {
     const updatedBase = JSON.parse(JSON.stringify(currentState));
     setBaseData(updatedBase);
     setIsDataDirty(false);
-    setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: currentUser });
+
+    // Se não estiver autenticado com a Microsoft, informa com clareza no menu lateral
+    if (!isMsalAuthenticated || !isAuthorized) {
+      setLastSync({ 
+        status: 'disconnected', 
+        isCloud: false, 
+        timestamp: new Date().toISOString(), 
+        user: currentUser,
+        message: 'Salvo localmente (Sem conexão Microsoft 365)' 
+      });
+      return;
+    }
 
     // 2. Se autenticado com a Microsoft e autorizado, sincroniza com SharePoint
-    if (isMsalAuthenticated && isAuthorized) {
-      console.log('Iniciando sincronização granular nas SharePoint Lists...');
-      try {
-        const effectiveBase = baseData || currentState;
-        const result = await MicrosoftGraphService.saveGranularToSharePoint(
-          effectiveBase,
-          currentState,
-          spMetadataMapRef.current,
-          currentUser
-        );
+    setIsSyncingSharePoint(true);
+    setLastSync({ status: 'syncing', isCloud: true, timestamp: new Date().toISOString(), user: 'SharePoint' });
+    try {
+      console.log('Iniciando sincronização de arquivos modulares JSON no SharePoint...');
+      // Salva a estrutura modular JSON por módulo e cria arquivo de auditoria da edição
+      const modularRes = await MicrosoftGraphService.saveModularToSharePoint(currentState);
 
-        if (result.success) {
-          console.log('Salvamento granular concluído com sucesso.');
-          if (result.spMetadataMap) {
-            spMetadataMapRef.current = result.spMetadataMap;
-          }
-          setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'Cloud' });
+      // Também sincroniza as listas granulares do SharePoint
+      const effectiveBase = baseData || currentState;
+      const granularRes = await MicrosoftGraphService.saveGranularToSharePoint(
+        effectiveBase,
+        currentState,
+        spMetadataMapRef.current,
+        currentUser
+      );
 
-          MicrosoftGraphService.saveModularToSharePoint(currentState).catch(err => {
-            console.warn('Aviso: Sincronização modular de background:', err);
-          });
-          
-          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: currentUser }));
-          }
-        } else if (result.conflict) {
-          console.warn('Conflito de edição detectado no SharePoint. Sincronizando dados mais recentes...');
-          await syncDataAutomatically();
-        } else {
-          console.warn('Aviso: Não foi possível salvar nas listas do SharePoint, mantendo dados salvos localmente.');
-        }
-      } catch (spErr) {
-        console.warn('Aviso: Erro na sincronização SharePoint (dados preservados localmente):', spErr);
+      if (granularRes.spMetadataMap) {
+        spMetadataMapRef.current = granularRes.spMetadataMap;
       }
+
+      if (modularRes.success || granularRes.success) {
+        setLastSync({ 
+          status: 'synced', 
+          isCloud: true, 
+          timestamp: new Date().toISOString(), 
+          user: currentUser,
+          message: 'Sincronizado com SharePoint' 
+        });
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: currentUser }));
+        }
+      } else {
+        const errorMsg = modularRes.errors?.join(', ') || granularRes.error || 'Falha ao salvar no SharePoint';
+        console.warn('Aviso no salvamento SharePoint:', errorMsg);
+        setLastSync({ 
+          status: 'error', 
+          isCloud: false, 
+          timestamp: new Date().toISOString(), 
+          user: currentUser,
+          error: errorMsg 
+        });
+      }
+    } catch (spErr: any) {
+      console.error('Erro na sincronização SharePoint:', spErr);
+      setLastSync({ 
+        status: 'error', 
+        isCloud: false, 
+        timestamp: new Date().toISOString(), 
+        user: currentUser,
+        error: spErr.message || 'Falha de conexão com SharePoint' 
+      });
+    } finally {
+      setIsSyncingSharePoint(false);
+    }
+  };
+
+  const handleForceCloudSync = async () => {
+    if (!isMsalAuthenticated) {
+      await handleLogin();
+      return;
+    }
+
+    setIsSyncingSharePoint(true);
+    const currentUser = selectedProfile?.name || 'Sistema';
+    setLastSync({ status: 'syncing', isCloud: true, timestamp: new Date().toISOString(), user: 'SharePoint' });
+    setSyncToastMessage('Enviando arquivos JSON ao SharePoint...');
+
+    try {
+      const currentState = { 
+        tasks, 
+        projects, 
+        teamMembers, 
+        activityPlans, 
+        notifications, 
+        logs, 
+        appUsers,
+        regulatoryStandards,
+        regulatorySubjects,
+        vaccineCandidates,
+        vaccineComponents,
+        formulationBatches,
+        vaccineImpurities,
+        regulatoryEvidence,
+        macroActivityConfigs,
+        regulatoryInfoItems,
+        repeatableRecords,
+        regulatoryNarratives,
+        regulatoryDocs,
+        meetings,
+        dossierContributions,
+        managerEmail,
+        lastEditor: currentUser
+      };
+
+      const res = await MicrosoftGraphService.saveModularToSharePoint(currentState);
+      if (res.success) {
+        setLastSync({ 
+          status: 'synced', 
+          isCloud: true, 
+          timestamp: new Date().toISOString(), 
+          user: currentUser,
+          message: 'Sincronizado com SharePoint' 
+        });
+        setSyncToastMessage('Todos os módulos e arquivos foram sincronizados no SharePoint!');
+        setTimeout(() => setSyncToastMessage(null), 4000);
+      } else {
+        const errorText = res.errors?.join(', ') || 'Erro ao sincronizar com SharePoint';
+        setLastSync({ 
+          status: 'error', 
+          isCloud: false, 
+          timestamp: new Date().toISOString(), 
+          user: currentUser,
+          error: errorText 
+        });
+        setSyncToastMessage(`Erro: ${errorText}`);
+        setTimeout(() => setSyncToastMessage(null), 5000);
+      }
+    } catch (e: any) {
+      setLastSync({ 
+        status: 'error', 
+        isCloud: false, 
+        timestamp: new Date().toISOString(), 
+        user: currentUser,
+        error: e.message 
+      });
+      setSyncToastMessage(`Falha de conexão: ${e.message}`);
+      setTimeout(() => setSyncToastMessage(null), 5000);
+    } finally {
+      setIsSyncingSharePoint(false);
     }
   };
 
@@ -673,6 +779,53 @@ const App: React.FC = () => {
     saveDataTimeout.current = window.setTimeout(handleSaveChanges, 2000);
 
   }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, regulatoryStandards, regulatorySubjects, vaccineCandidates, vaccineComponents, formulationBatches, managerEmail, dataVersion, isDataDirty]);
+
+  // Agendador de Backup Diário às 00:00 no SharePoint
+  useEffect(() => {
+    if (!isMsalAuthenticated || !isAuthorized) return;
+
+    const checkAndRunDailyBackup = async () => {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const lastBackupDate = localStorage.getItem('ct_last_daily_backup_date');
+
+      if (lastBackupDate !== todayStr) {
+        console.log(`[Backup Diário] Gerando snapshot consolidado de ${todayStr} no SharePoint...`);
+        const fullData = {
+          tasks,
+          projects,
+          teamMembers,
+          activityPlans,
+          appUsers,
+          managerEmail,
+          notifications,
+          logs,
+          regulatoryStandards,
+          regulatorySubjects,
+          regulatoryDocs,
+          regulatoryEvidence,
+          regulatoryNarratives,
+          regulatoryInfoItems,
+          repeatableRecords,
+          dossierContributions,
+          vaccineCandidates,
+          vaccineComponents,
+          formulationBatches,
+          vaccineImpurities,
+          meetings
+        };
+
+        const res = await MicrosoftGraphService.saveDailyBackupToSharePoint(fullData);
+        if (res.success) {
+          localStorage.setItem('ct_last_daily_backup_date', todayStr);
+          console.log(`[Backup Diário] Snapshot de ${todayStr} salvo com sucesso no SharePoint.`);
+        }
+      }
+    };
+
+    checkAndRunDailyBackup();
+    const interval = setInterval(checkAndRunDailyBackup, 60000);
+    return () => clearInterval(interval);
+  }, [isMsalAuthenticated, isAuthorized, tasks, projects, teamMembers, regulatoryStandards, vaccineCandidates]);
 
   const currentUserRole = useMemo(() => {
     if (!account || !appUsers.length) return null;
@@ -1413,6 +1566,10 @@ const App: React.FC = () => {
           projectSubView={projectSubView}
           onSelectProjectSubView={setProjectSubView}
           onOpenExcelReports={() => setIsExcelReportsModalOpen(true)}
+          isMsalAuthenticated={isMsalAuthenticated}
+          onConnectMsal={handleLogin}
+          onForceCloudSync={handleForceCloudSync}
+          isSyncingSharePoint={isSyncingSharePoint}
         />
       )}
       <input type="file" ref={fileInputRef} onChange={handleLoadLocalBackup} accept=".json" className="hidden" />

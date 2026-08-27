@@ -287,7 +287,10 @@ export interface RegulatorySubject {
 export interface SyncInfo {
   timestamp: string;
   user: string;
-  status: 'syncing' | 'synced' | 'error' | 'conflict' | 'cancelled';
+  status: 'syncing' | 'synced' | 'error' | 'conflict' | 'cancelled' | 'disconnected';
+  isCloud?: boolean;
+  message?: string;
+  error?: string;
 }
 
 export interface AppNotification {

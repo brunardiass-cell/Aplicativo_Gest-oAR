@@ -24,7 +24,10 @@ import {
   Layers,
   ArrowRightLeft,
   BookOpen,
-  Calendar
+  Calendar,
+  RefreshCw,
+  LogIn,
+  CheckCircle2
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -55,6 +58,12 @@ interface SidebarProps {
   projectSubView: 'visual' | 'management';
   onSelectProjectSubView: (view: 'visual' | 'management') => void;
   onOpenExcelReports?: () => void;
+
+  // Cloud Sync & MSAL props
+  isMsalAuthenticated?: boolean;
+  onConnectMsal?: () => void;
+  onForceCloudSync?: () => void;
+  isSyncingSharePoint?: boolean;
 }
 
 const getInitials = (name?: string): string => {
@@ -88,12 +97,16 @@ const Sidebar: React.FC<SidebarProps> = ({
   onSelectVisualizationMode,
   projectSubView,
   onSelectProjectSubView,
-  onOpenExcelReports
+  onOpenExcelReports,
+  isMsalAuthenticated = false,
+  onConnectMsal,
+  onForceCloudSync,
+  isSyncingSharePoint = false
 }) => {
 
-  const formatSyncTime = (timestamp: string) => {
+  const formatSyncTime = (timestamp?: string) => {
     if (!timestamp) return '--:--:--';
-    return new Date(timestamp).toLocaleTimeString('pt-BR');
+    return new Date(timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   };
 
   const isVaccinesModule = currentModule === 'vaccines_components';
@@ -255,21 +268,92 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
         
-        <div className={`p-2.5 rounded-xl border transition-all ${
-          lastSync?.status === 'error' ? 'bg-red-500/10 border-red-500/20' : (isVaccinesModule ? 'bg-emerald-950/40 border-emerald-800/60' : 'bg-slate-900/50 border-slate-700')
+        {/* SharePoint Cloud Sync Indicator & Action Widget */}
+        <div className={`p-3 rounded-xl border transition-all ${
+          !isMsalAuthenticated || lastSync?.status === 'disconnected'
+            ? 'bg-amber-950/40 border-amber-500/40 text-amber-100'
+            : (lastSync?.status === 'syncing' || isSyncingSharePoint)
+            ? 'bg-sky-950/50 border-sky-500/50 text-sky-100'
+            : lastSync?.status === 'error'
+            ? 'bg-red-950/50 border-red-500/40 text-red-100'
+            : (isVaccinesModule ? 'bg-emerald-950/60 border-emerald-600/70 text-emerald-100' : 'bg-slate-900/80 border-teal-500/40 text-slate-100')
         }`}>
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              {lastSync?.status === 'error' ? <CloudOff size={11} className="text-red-400" /> : <Cloud size={11} className="text-emerald-400" />}
-              <span className="text-[9px] font-black uppercase text-slate-200">
-                {lastSync?.status === 'syncing' ? 'Sincronizando...' : lastSync?.status === 'error' ? 'Erro' : 'Nuvem OK'}
-              </span>
+            <div className="flex items-center gap-2">
+              {!isMsalAuthenticated || lastSync?.status === 'disconnected' ? (
+                <CloudOff size={13} className="text-amber-400 shrink-0" />
+              ) : (lastSync?.status === 'syncing' || isSyncingSharePoint) ? (
+                <RefreshCw size={13} className="text-sky-400 animate-spin shrink-0" />
+              ) : lastSync?.status === 'error' ? (
+                <AlertTriangle size={13} className="text-red-400 shrink-0" />
+              ) : (
+                <Cloud size={13} className="text-emerald-400 shrink-0" />
+              )}
+              
+              <div className="text-left leading-tight">
+                <span className="text-[9px] font-black uppercase tracking-wider block">
+                  {!isMsalAuthenticated || lastSync?.status === 'disconnected'
+                    ? 'Nuvem Desconectada'
+                    : (lastSync?.status === 'syncing' || isSyncingSharePoint)
+                    ? 'Enviando ao SharePoint...'
+                    : lastSync?.status === 'error'
+                    ? 'Erro SharePoint'
+                    : 'SharePoint OK'}
+                </span>
+                <span className="text-[8px] opacity-75 block">
+                  {!isMsalAuthenticated || lastSync?.status === 'disconnected'
+                    ? 'Salvo apenas no navegador'
+                    : (lastSync?.status === 'syncing' || isSyncingSharePoint)
+                    ? 'Atualizando JSONs...'
+                    : lastSync?.status === 'error'
+                    ? (lastSync.error || 'Falha ao sincronizar')
+                    : `Sincronizado • ${formatSyncTime(lastSync?.timestamp)}`}
+                </span>
+              </div>
             </div>
-            <div className={`w-2 h-2 rounded-full ${
-              lastSync?.status === 'syncing' ? 'bg-amber-400 animate-pulse' : 
-              lastSync?.status === 'error' ? 'bg-red-500' : 'bg-emerald-400'
-            }`} />
+
+            <div className="flex items-center gap-1">
+              {isMsalAuthenticated && onForceCloudSync && (
+                <button 
+                  onClick={onForceCloudSync} 
+                  disabled={lastSync?.status === 'syncing' || isSyncingSharePoint}
+                  title="Sincronizar com SharePoint agora"
+                  className="p-1 rounded bg-black/20 hover:bg-black/40 text-slate-300 hover:text-white transition disabled:opacity-50"
+                >
+                  <RefreshCw size={10} className={(lastSync?.status === 'syncing' || isSyncingSharePoint) ? 'animate-spin' : ''} />
+                </button>
+              )}
+              <div className={`w-2 h-2 rounded-full shrink-0 ${
+                !isMsalAuthenticated || lastSync?.status === 'disconnected'
+                  ? 'bg-amber-400'
+                  : (lastSync?.status === 'syncing' || isSyncingSharePoint)
+                  ? 'bg-sky-400 animate-pulse'
+                  : lastSync?.status === 'error'
+                  ? 'bg-red-500'
+                  : 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.7)]'
+              }`} />
+            </div>
           </div>
+
+          {/* Botão de conexão rápida caso desconectado */}
+          {(!isMsalAuthenticated || lastSync?.status === 'disconnected') && onConnectMsal && (
+            <button
+              onClick={onConnectMsal}
+              className="mt-2 w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-sm"
+            >
+              <LogIn size={11} /> Conectar Microsoft 365
+            </button>
+          )}
+
+          {/* Botão de tentar novamente em caso de erro */}
+          {isMsalAuthenticated && lastSync?.status === 'error' && onForceCloudSync && (
+            <button
+              onClick={onForceCloudSync}
+              className="mt-2 w-full py-1 px-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-[8px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition"
+            >
+              <RefreshCw size={10} /> Tentar Novamente
+            </button>
+          )}
         </div>
 
         {/* User Profile Bar at Bottom as in Reference Image */}
