@@ -702,6 +702,9 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                   const reviewInfo = getTaskReviewerInfo(task);
 
                   const noteCount = task.updates?.length || 0;
+                  const hasImportantNote = Boolean(
+                    task.updates && task.updates.some((u: TaskNote) => u.isImportant)
+                  );
                   const hasUnreadImportant = Boolean(
                     task.updates && task.updates.some((u: TaskNote) => 
                       u.isImportant && (
@@ -1046,37 +1049,43 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                       {/* AÇÕES COLUMN */}
                       <td className="py-2.5 px-2.5 text-right min-w-0">
                         <div className="flex items-center justify-end gap-1">
-                          {/* Updates / Comments count button - Highlighted with glow/pulse when important unacknowledged note exists */}
+                          {/* Updates / Comments count button - Highlighted in yellow/amber when any note is marked as important */}
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               setNotesModalTask(task);
                             }}
-                            className={`relative flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] font-bold transition border shadow-2xs active:scale-95 shrink-0 ${
-                              hasUnreadImportant
-                                ? 'bg-amber-400 hover:bg-amber-500 text-amber-950 border-amber-500 ring-2 ring-amber-400/60 shadow-md animate-pulse font-black'
+                            className={`relative flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] transition border shadow-2xs active:scale-95 shrink-0 ${
+                              hasImportantNote
+                                ? hasUnreadImportant
+                                  ? 'bg-amber-400 hover:bg-amber-500 text-amber-950 border-amber-500 ring-2 ring-amber-400/60 shadow-sm animate-pulse font-black'
+                                  : 'bg-amber-300 hover:bg-amber-400 text-amber-950 border-amber-400 ring-1 ring-amber-400/60 font-black shadow-2xs'
                                 : noteCount > 0
-                                ? 'text-[#008779] bg-teal-50 hover:bg-teal-100 border-teal-200'
-                                : 'text-slate-400 hover:text-[#008779] hover:bg-teal-50/60 border-slate-200 hover:border-teal-200'
+                                ? 'text-[#008779] bg-teal-50 hover:bg-teal-100 border-teal-200 font-bold'
+                                : 'text-slate-400 hover:text-[#008779] hover:bg-teal-50/60 border-slate-200 hover:border-teal-200 font-bold'
                             }`}
                             title={
-                              hasUnreadImportant
-                                ? '⭐ ATENÇÃO: Nota importante não confirmada! Clique para ler e confirmar ciência (OK).'
+                              hasImportantNote
+                                ? hasUnreadImportant
+                                  ? '⭐ NOTA IMPORTANTE NÃO CONFIRMADA: Clique para ler e confirmar ciência (OK).'
+                                  : '⭐ NOTA IMPORTANTE DESTACADA: Clique para ver o histórico de atualizações.'
                                 : 'Clique para ver o histórico e adicionar notas de atualização'
                             }
                           >
-                            {hasUnreadImportant ? (
-                              <>
-                                <span className="text-amber-950 font-black text-[10px]">⭐</span>
-                                <span>{noteCount}</span>
-                                <span className="w-1.5 h-1.5 rounded-full bg-red-600 absolute -top-0.5 -right-0.5 ring-2 ring-white animate-ping" />
-                              </>
-                            ) : (
-                              <>
-                                <MessageSquare size={11} className={noteCount > 0 ? 'text-[#008779]' : 'text-slate-400'} />
-                                <span>{noteCount}</span>
-                              </>
+                            <MessageSquare 
+                              size={11} 
+                              className={
+                                hasImportantNote 
+                                  ? 'text-amber-950 fill-amber-400/80 shrink-0' 
+                                  : noteCount > 0 
+                                  ? 'text-[#008779] shrink-0' 
+                                  : 'text-slate-400 shrink-0'
+                              } 
+                            />
+                            <span className={hasImportantNote ? 'text-amber-950 font-black' : ''}>{noteCount}</span>
+                            {hasUnreadImportant && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-600 absolute -top-0.5 -right-0.5 ring-2 ring-white animate-ping" />
                             )}
                           </button>
 
@@ -1208,6 +1217,20 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
             const isReviewer = task.isReport && task.currentReviewer === currentUser;
             const hasCompletedReview = task.completedCollaborators?.includes(currentUser || '');
 
+            const noteCount = task.updates?.length || 0;
+            const hasImportantNote = Boolean(
+              task.updates && task.updates.some((u: TaskNote) => u.isImportant)
+            );
+            const hasUnreadImportant = Boolean(
+              task.updates && task.updates.some((u: TaskNote) => 
+                u.isImportant && (
+                  !u.acknowledgedBy || 
+                  u.acknowledgedBy.length === 0 || 
+                  (currentUser && currentUser !== 'Todos' && currentUser !== 'Visão Geral da Equipe' && !u.acknowledgedBy.includes(currentUser))
+                )
+              )
+            );
+
             const visuals = getTaskStatusVisuals(task.status, task.isReport, task.reportStage);
 
             let cardClasses = 'rounded-3xl border p-6 pl-8 shadow-xs transition-all duration-300 group flex flex-col h-full relative overflow-hidden bg-white';
@@ -1284,15 +1307,39 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                       e.stopPropagation();
                       setNotesModalTask(task);
                     }}
-                    className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-bold transition ml-auto border ${
-                      task.updates && task.updates.length > 0
+                    className={`relative flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-bold transition ml-auto border ${
+                      hasImportantNote
+                        ? hasUnreadImportant
+                          ? 'bg-amber-400 hover:bg-amber-500 text-amber-950 border-amber-500 ring-2 ring-amber-400/60 shadow-sm animate-pulse font-black'
+                          : 'bg-amber-300 hover:bg-amber-400 text-amber-950 border-amber-400 ring-1 ring-amber-400/60 font-black shadow-2xs'
+                        : noteCount > 0
                         ? 'text-[#008779] bg-teal-50 hover:bg-teal-100 border-teal-200 shadow-2xs'
                         : 'text-slate-400 hover:text-[#008779] hover:bg-teal-50/60 border-slate-100 hover:border-teal-200'
                     }`}
-                    title="Clique para ver o histórico e adicionar notas de atualização"
+                    title={
+                      hasImportantNote
+                        ? hasUnreadImportant
+                          ? '⭐ NOTA IMPORTANTE NÃO CONFIRMADA: Clique para ler e confirmar ciência (OK).'
+                          : '⭐ NOTA IMPORTANTE DESTACADA: Clique para ver o histórico de atualizações.'
+                        : 'Clique para ver o histórico e adicionar notas de atualização'
+                    }
                   >
-                    <MessageSquare size={13} className={task.updates && task.updates.length > 0 ? 'text-[#008779]' : 'text-slate-400'} />
-                    <span className="text-[10px] font-black">{task.updates ? task.updates.length : 0}</span>
+                    <MessageSquare 
+                      size={13} 
+                      className={
+                        hasImportantNote 
+                          ? 'text-amber-950 fill-amber-400/80 shrink-0' 
+                          : noteCount > 0 
+                          ? 'text-[#008779]' 
+                          : 'text-slate-400'
+                      } 
+                    />
+                    <span className={`text-[10px] font-black ${hasImportantNote ? 'text-amber-950' : ''}`}>
+                      {noteCount}
+                    </span>
+                    {hasUnreadImportant && (
+                      <span className="w-2 h-2 rounded-full bg-red-600 absolute -top-0.5 -right-0.5 ring-2 ring-white animate-ping" />
+                    )}
                   </button>
                 </div>
               </div>
