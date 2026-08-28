@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Task, AppNotification, Status } from '../types';
+import { Task, AppNotification, Status, Priority, TaskNote } from '../types';
 import { TaskNotesModal } from './TaskNotesModal';
 import { 
   ArrowRight, 
@@ -66,22 +66,83 @@ interface TaskBoardProps {
   isSyncingSharePoint?: boolean;
 }
 
+const getPriorityVisuals = (priority?: Priority) => {
+  const p = priority || 'Média';
+  switch (p) {
+    case 'Urgente':
+      return {
+        badgeClass: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 ring-1 ring-rose-200/50',
+        dotClass: 'bg-rose-500',
+        label: 'Urgente'
+      };
+    case 'Alta':
+      return {
+        badgeClass: 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 ring-1 ring-amber-200/50',
+        dotClass: 'bg-amber-500',
+        label: 'Alta'
+      };
+    case 'Média':
+      return {
+        badgeClass: 'bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100 ring-1 ring-sky-200/50',
+        dotClass: 'bg-sky-500',
+        label: 'Média'
+      };
+    case 'Baixa':
+    default:
+      return {
+        badgeClass: 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100',
+        dotClass: 'bg-slate-400',
+        label: 'Baixa'
+      };
+  }
+};
+
+const getTaskReviewerInfo = (task: Task) => {
+  const isInReview = 
+    task.status === 'Pausado' || 
+    (task.isReport && task.reportStage && task.reportStage !== 'Concluído' && task.reportStage !== 'Concluído e Assinado') ||
+    (Boolean(task.reportStage) && (task.reportStage?.includes('Revisão') || task.reportStage === 'Próximo Revisor (equipe AR)'));
+  
+  if (!isInReview) return null;
+
+  let reviewer = task.currentReviewer;
+  if (!reviewer || !reviewer.trim()) {
+    if (task.reportStage === 'Revisão Colaboradores') {
+      reviewer = task.collaboratorReviewerName || (task.collaborators && task.collaborators.length > 0 ? task.collaborators.join(', ') : 'Colaboradores');
+    } else if (task.reportStage === 'Revisão Comitê Gestor') {
+      reviewer = task.committeeReviewerName || 'Comitê Gestor';
+    } else if (task.reportStage === 'Próximo Revisor (equipe AR)') {
+      reviewer = 'Equipe AR';
+    } else if (task.reportStage === 'Em Elaboração') {
+      reviewer = task.elaboratorName || task.projectLead;
+    } else {
+      reviewer = task.projectLead;
+    }
+  }
+
+  return {
+    isInReview: true,
+    reviewer: reviewer || 'Equipe AR',
+    stage: task.reportStage || 'Em Revisão'
+  };
+};
+
 const getTaskStatusVisuals = (status: Status, isReport?: boolean, reportStage?: string) => {
   if (status === 'Concluída') {
     return {
       accentBar: 'bg-emerald-500',
       borderColor: 'border-emerald-250 hover:border-emerald-350',
-      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       iconBox: 'bg-emerald-100 text-emerald-700',
       label: 'CONCLUÍDA'
     };
   }
   if (status === 'Em Andamento') {
-    if (isReport && reportStage?.includes('Revisão')) {
+    if (isReport && (reportStage?.includes('Revisão') || reportStage === 'Próximo Revisor (equipe AR)')) {
       return {
         accentBar: 'bg-purple-500',
         borderColor: 'border-purple-250 hover:border-purple-350',
-        badgeClass: 'bg-purple-50 text-purple-700 border-purple-100',
+        badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
         iconBox: 'bg-purple-100 text-purple-700',
         label: 'EM REVISÃO'
       };
@@ -98,7 +159,7 @@ const getTaskStatusVisuals = (status: Status, isReport?: boolean, reportStage?: 
     return {
       accentBar: 'bg-purple-500',
       borderColor: 'border-purple-250 hover:border-purple-350',
-      badgeClass: 'bg-purple-50 text-purple-700 border-purple-100',
+      badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
       iconBox: 'bg-purple-100 text-purple-700',
       label: 'EM REVISÃO'
     };
@@ -107,7 +168,7 @@ const getTaskStatusVisuals = (status: Status, isReport?: boolean, reportStage?: 
     return {
       accentBar: 'bg-amber-500',
       borderColor: 'border-amber-250 hover:border-amber-350',
-      badgeClass: 'bg-amber-50 text-amber-700 border-amber-100',
+      badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
       iconBox: 'bg-amber-100 text-amber-700',
       label: 'PLANEJADA'
     };
@@ -179,11 +240,11 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   // Inline editing state
   const [inlineEdit, setInlineEdit] = useState<{
     taskId: string;
-    field: 'activity' | 'project' | 'lead' | 'status' | 'date' | 'progress';
+    field: 'activity' | 'project' | 'lead' | 'priority' | 'status' | 'date' | 'progress';
     value: any;
   } | null>(null);
 
-  const handleStartInlineEdit = (e: React.MouseEvent, task: Task, field: 'activity' | 'project' | 'lead' | 'status' | 'date' | 'progress') => {
+  const handleStartInlineEdit = (e: React.MouseEvent, task: Task, field: 'activity' | 'project' | 'lead' | 'priority' | 'status' | 'date' | 'progress') => {
     e.stopPropagation();
     if (!onSaveTask) return;
     setInlineEdit({
@@ -192,6 +253,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
       value: field === 'date' ? (task.completionDate || '') :
              field === 'progress' ? task.progress :
              field === 'status' ? task.status :
+             field === 'priority' ? (task.priority || 'Média') :
              field === 'project' ? task.project :
              field === 'lead' ? task.projectLead :
              task.activity
@@ -218,6 +280,8 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
       updatedTask.project = String(valueToSave);
     } else if (inlineEdit.field === 'lead') {
       updatedTask.projectLead = String(valueToSave);
+    } else if (inlineEdit.field === 'priority') {
+      updatedTask.priority = valueToSave as any;
     } else if (inlineEdit.field === 'status') {
       updatedTask.status = valueToSave as Status;
       if (valueToSave === 'Concluída' && updatedTask.progress < 100) {
@@ -611,18 +675,19 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
             </span>
           </div>
 
-          {/* Table Container */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[900px]">
+          {/* Table Container - Fits screen without horizontal scroll */}
+          <div className="w-full overflow-hidden">
+            <table className="w-full text-left border-collapse table-fixed">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  <th className="py-3.5 px-6">ATIVIDADE</th>
-                  <th className="py-3.5 px-4">PROJETO</th>
-                  <th className="py-3.5 px-4">RESPONSÁVEL</th>
-                  <th className="py-3.5 px-4">STATUS</th>
-                  <th className="py-3.5 px-4">PRAZO</th>
-                  <th className="py-3.5 px-4">PROGRESSO</th>
-                  <th className="py-3.5 px-6 text-right">AÇÕES</th>
+                  <th className="py-3 px-3 sm:px-4 w-[28%]">ATIVIDADE</th>
+                  <th className="py-3 px-2 sm:px-3 w-[12%]">PROJETO</th>
+                  <th className="py-3 px-2 sm:px-3 w-[14%]">RESPONSÁVEL</th>
+                  <th className="py-3 px-2 sm:px-3 w-[10%]">PRIORIDADE</th>
+                  <th className="py-3 px-2 sm:px-3 w-[13%]">STATUS</th>
+                  <th className="py-3 px-2 sm:px-3 w-[9%]">PRAZO</th>
+                  <th className="py-3 px-2 sm:px-3 w-[8%]">PROGRESSO</th>
+                  <th className="py-3 px-3 w-[6%] text-right">AÇÕES</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -633,6 +698,19 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                   const isOverdue = !isCompleted && task.completionDate && new Date(task.completionDate + 'T00:00:00') < today;
                   
                   const visuals = getTaskStatusVisuals(task.status, task.isReport, task.reportStage);
+                  const priorityVisuals = getPriorityVisuals(task.priority);
+                  const reviewInfo = getTaskReviewerInfo(task);
+
+                  const noteCount = task.updates?.length || 0;
+                  const hasUnreadImportant = Boolean(
+                    task.updates && task.updates.some((u: TaskNote) => 
+                      u.isImportant && (
+                        !u.acknowledgedBy || 
+                        u.acknowledgedBy.length === 0 || 
+                        (currentUser && currentUser !== 'Todos' && currentUser !== 'Visão Geral da Equipe' && !u.acknowledgedBy.includes(currentUser))
+                      )
+                    )
+                  );
 
                   return (
                     <tr 
@@ -640,27 +718,27 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                       className="hover:bg-slate-50/80 transition group relative"
                     >
                       {/* ATIVIDADE COLUMN */}
-                      <td className="py-4 px-6 relative">
+                      <td className="py-3.5 px-3 sm:px-4 relative">
                         {/* Left color bar indicator */}
                         <div className={`absolute left-0 top-0 bottom-0 w-1 ${visuals.accentBar}`} />
                         
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2.5">
                           {/* Status Icon Box */}
-                          <div className={`w-9 h-9 rounded-xl ${visuals.iconBox} flex items-center justify-center shrink-0 shadow-xs font-bold`}>
+                          <div className={`w-8 h-8 rounded-xl ${visuals.iconBox} flex items-center justify-center shrink-0 shadow-xs font-bold`}>
                             {task.status === 'Concluída' ? (
-                              <CheckCircle size={16} />
+                              <CheckCircle size={15} />
                             ) : task.status === 'Em Andamento' ? (
-                              <ArrowRight size={16} />
+                              <ArrowRight size={15} />
                             ) : task.status === 'Planejada' ? (
-                              <AlertTriangle size={16} />
+                              <AlertTriangle size={15} />
                             ) : (
-                              <FileText size={16} />
+                              <FileText size={15} />
                             )}
                           </div>
 
                           <div className="min-w-0 flex-1">
                             {inlineEdit?.taskId === task.id && inlineEdit?.field === 'activity' ? (
-                              <div className="flex items-center gap-1.5 min-w-[260px]" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center gap-1.5 w-full" onClick={(e) => e.stopPropagation()}>
                                 <input
                                   type="text"
                                   autoFocus
@@ -693,7 +771,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                               <div className="flex items-center gap-1.5 group/editTitle">
                                 <button
                                   onClick={() => onView(task)}
-                                  className="text-left font-black text-slate-900 text-xs sm:text-sm hover:text-teal-700 transition block truncate max-w-[280px]"
+                                  className="text-left font-black text-slate-900 text-xs sm:text-sm hover:text-teal-700 transition block truncate"
                                   title={task.activity}
                                 >
                                   {task.activity}
@@ -702,16 +780,16 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                                   <button
                                     type="button"
                                     onClick={(e) => handleStartInlineEdit(e, task, 'activity')}
-                                    className="opacity-0 group-hover/editTitle:opacity-100 p-1 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded transition shrink-0"
+                                    className="opacity-0 group-hover/editTitle:opacity-100 p-0.5 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded transition shrink-0"
                                     title="Editar nome da atividade"
                                   >
-                                    <Edit2 size={12} />
+                                    <Edit2 size={11} />
                                   </button>
                                 )}
                               </div>
                             )}
                             {task.description && (
-                              <p className="text-[11px] font-medium text-slate-400 truncate max-w-[320px] mt-0.5">
+                              <p className="text-[10px] font-medium text-slate-400 truncate mt-0.5">
                                 {task.description}
                               </p>
                             )}
@@ -720,7 +798,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                       </td>
 
                       {/* PROJETO COLUMN */}
-                      <td className="py-4 px-4 text-xs font-black text-slate-700">
+                      <td className="py-3.5 px-2 sm:px-3 text-xs font-black text-slate-700">
                         {inlineEdit?.taskId === task.id && inlineEdit?.field === 'project' ? (
                           <div onClick={(e) => e.stopPropagation()}>
                             <select
@@ -729,7 +807,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                               onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
                               onBlur={handleCancelInlineEdit}
                               onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold px-2 py-1 bg-white border-2 border-teal-500 rounded-lg outline-none text-slate-800 shadow-sm max-w-[170px]"
+                              className="text-xs font-bold px-2 py-1 bg-white border-2 border-teal-500 rounded-lg outline-none text-slate-800 shadow-sm w-full"
                             >
                               {uniqueProjects.filter(p => p !== 'Todos').map(p => (
                                 <option key={p} value={p}>{p}</option>
@@ -740,17 +818,17 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                           <button
                             type="button"
                             onClick={(e) => handleStartInlineEdit(e, task, 'project')}
-                            className="text-left text-xs font-black text-slate-700 hover:text-teal-700 hover:bg-teal-50 px-2 py-1 -mx-2 -my-1 rounded-lg transition flex items-center gap-1 group/proj"
+                            className="text-left text-xs font-black text-slate-700 hover:text-teal-700 hover:bg-teal-50 px-1.5 py-0.5 -mx-1.5 -my-0.5 rounded-lg transition flex items-center gap-1 group/proj w-full"
                             title="Clique para alterar o projeto"
                           >
-                            <span className="truncate max-w-[140px]">{task.project}</span>
-                            <Edit2 size={11} className="opacity-0 group-hover/proj:opacity-100 text-teal-600 shrink-0 transition" />
+                            <span className="truncate">{task.project}</span>
+                            <Edit2 size={10} className="opacity-0 group-hover/proj:opacity-100 text-teal-600 shrink-0 transition" />
                           </button>
                         )}
                       </td>
 
                       {/* RESPONSÁVEL COLUMN */}
-                      <td className="py-4 px-4">
+                      <td className="py-3.5 px-2 sm:px-3">
                         {inlineEdit?.taskId === task.id && inlineEdit?.field === 'lead' ? (
                           <div onClick={(e) => e.stopPropagation()}>
                             <select
@@ -759,7 +837,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                               onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
                               onBlur={handleCancelInlineEdit}
                               onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold px-2 py-1 bg-white border-2 border-teal-500 rounded-lg outline-none text-slate-800 shadow-sm max-w-[160px]"
+                              className="text-xs font-bold px-2 py-1 bg-white border-2 border-teal-500 rounded-lg outline-none text-slate-800 shadow-sm w-full"
                             >
                               {uniqueLeads.filter(l => l !== 'Todos').map(l => (
                                 <option key={l} value={l}>{l}</option>
@@ -767,25 +845,65 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                             </select>
                           </div>
                         ) : (
+                          <div className="space-y-1">
+                            <button
+                              type="button"
+                              onClick={(e) => handleStartInlineEdit(e, task, 'lead')}
+                              className="text-left hover:bg-teal-50 px-1.5 py-0.5 -mx-1.5 -my-0.5 rounded-lg transition flex items-center gap-1.5 group/lead"
+                              title="Clique para alterar o responsável"
+                            >
+                              <div className="w-5 h-5 rounded-full bg-emerald-800 text-white flex items-center justify-center text-[9px] font-black uppercase shrink-0 shadow-xs">
+                                {getInitials(task.projectLead)}
+                              </div>
+                              <span className="text-xs font-bold text-slate-800 truncate">
+                                {task.projectLead}
+                              </span>
+                              <Edit2 size={10} className="opacity-0 group-hover/lead:opacity-100 text-teal-600 shrink-0 transition" />
+                            </button>
+                            {reviewInfo?.isInReview && (
+                              <div className="flex items-center gap-1 text-[9px] font-extrabold text-purple-800 bg-purple-100/70 border border-purple-200 px-1.5 py-0.5 rounded-md" title={`Em revisão com: ${reviewInfo.reviewer}`}>
+                                <FileSignature size={10} className="text-purple-700 shrink-0" />
+                                <span className="truncate">Rev: {reviewInfo.reviewer}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* PRIORIDADE COLUMN */}
+                      <td className="py-3.5 px-2 sm:px-3">
+                        {inlineEdit?.taskId === task.id && inlineEdit?.field === 'priority' ? (
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <select
+                              autoFocus
+                              value={inlineEdit.value || task.priority || 'Média'}
+                              onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
+                              onBlur={handleCancelInlineEdit}
+                              onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
+                              className="text-xs font-bold px-2 py-1 bg-white border-2 border-teal-500 rounded-lg outline-none text-slate-800 shadow-sm"
+                            >
+                              <option value="Baixa">Baixa</option>
+                              <option value="Média">Média</option>
+                              <option value="Alta">Alta</option>
+                              <option value="Urgente">Urgente</option>
+                            </select>
+                          </div>
+                        ) : (
                           <button
                             type="button"
-                            onClick={(e) => handleStartInlineEdit(e, task, 'lead')}
-                            className="text-left hover:bg-teal-50 px-2 py-1 -mx-2 -my-1 rounded-lg transition flex items-center gap-2 group/lead"
-                            title="Clique para alterar o responsável"
+                            onClick={(e) => handleStartInlineEdit(e, task, 'priority')}
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border inline-flex items-center gap-1 hover:scale-105 transition active:scale-95 ${priorityVisuals.badgeClass}`}
+                            title="Clique para alterar a prioridade"
                           >
-                            <div className="w-6 h-6 rounded-full bg-emerald-800 text-white flex items-center justify-center text-[10px] font-black uppercase shrink-0 shadow-xs">
-                              {getInitials(task.projectLead)}
-                            </div>
-                            <span className="text-xs font-bold text-slate-800 truncate max-w-[110px]">
-                              {task.projectLead}
-                            </span>
-                            <Edit2 size={11} className="opacity-0 group-hover/lead:opacity-100 text-teal-600 shrink-0 transition" />
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityVisuals.dotClass}`} />
+                            <span>{priorityVisuals.label}</span>
+                            <Edit2 size={9} className="opacity-40" />
                           </button>
                         )}
                       </td>
 
                       {/* STATUS COLUMN */}
-                      <td className="py-4 px-4">
+                      <td className="py-3.5 px-2 sm:px-3">
                         {inlineEdit?.taskId === task.id && inlineEdit?.field === 'status' ? (
                           <div onClick={(e) => e.stopPropagation()}>
                             <select
@@ -804,20 +922,28 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                             </select>
                           </div>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => handleStartInlineEdit(e, task, 'status')}
-                            className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border inline-flex items-center gap-1.5 hover:scale-105 hover:shadow-xs transition ${visuals.badgeClass}`}
-                            title="Clique para alterar o status"
-                          >
-                            <span>{visuals.label}</span>
-                            <Edit2 size={10} className="opacity-60" />
-                          </button>
+                          <div className="space-y-0.5">
+                            <button
+                              type="button"
+                              onClick={(e) => handleStartInlineEdit(e, task, 'status')}
+                              className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border inline-flex items-center gap-1 hover:scale-105 hover:shadow-xs transition ${visuals.badgeClass}`}
+                              title="Clique para alterar o status"
+                            >
+                              <span>{visuals.label}</span>
+                              <Edit2 size={9} className="opacity-60" />
+                            </button>
+                            {reviewInfo?.isInReview && (
+                              <div className="text-[10px] font-bold text-purple-900 flex items-center gap-1 pl-0.5">
+                                <span className="text-purple-600 font-medium text-[9px]">Com:</span>
+                                <span className="font-black truncate max-w-[100px]">{reviewInfo.reviewer}</span>
+                              </div>
+                            )}
+                          </div>
                         )}
                       </td>
 
                       {/* PRAZO COLUMN */}
-                      <td className="py-4 px-4">
+                      <td className="py-3.5 px-2 sm:px-3">
                         {inlineEdit?.taskId === task.id && inlineEdit?.field === 'date' ? (
                           <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
                             <input
@@ -834,18 +960,18 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                           <button
                             type="button"
                             onClick={(e) => handleStartInlineEdit(e, task, 'date')}
-                            className={`flex items-center gap-1.5 text-xs font-bold hover:bg-slate-100 px-2 py-1 -mx-2 -my-1 rounded-lg transition group/date ${isOverdue ? 'text-red-500' : 'text-slate-600'}`}
+                            className={`flex items-center gap-1 text-xs font-bold hover:bg-slate-100 px-1.5 py-0.5 -mx-1.5 -my-0.5 rounded-lg transition group/date ${isOverdue ? 'text-red-500' : 'text-slate-600'}`}
                             title="Clique para alterar o prazo"
                           >
-                            <Calendar size={14} className={isOverdue ? 'text-red-500' : 'text-slate-400'} />
-                            <span>{formatDateBR(task.completionDate)}</span>
-                            <Edit2 size={11} className="opacity-0 group-hover/date:opacity-100 text-teal-600 shrink-0 transition" />
+                            <Calendar size={13} className={isOverdue ? 'text-red-500' : 'text-slate-400'} />
+                            <span className="text-[11px]">{formatDateBR(task.completionDate)}</span>
+                            <Edit2 size={10} className="opacity-0 group-hover/date:opacity-100 text-teal-600 shrink-0 transition" />
                           </button>
                         )}
                       </td>
 
                       {/* PROGRESSO COLUMN */}
-                      <td className="py-4 px-4 min-w-[130px] relative">
+                      <td className="py-3.5 px-2 sm:px-3 relative">
                         {inlineEdit?.taskId === task.id && inlineEdit?.field === 'progress' ? (
                           <div onClick={(e) => e.stopPropagation()} className="absolute top-0 right-0 z-30 space-y-2 p-3 bg-white border-2 border-teal-500 rounded-xl shadow-xl min-w-[200px]">
                             <div className="flex items-center justify-between gap-2">
@@ -896,15 +1022,15 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                           <button
                             type="button"
                             onClick={(e) => handleStartInlineEdit(e, task, 'progress')}
-                            className="w-full text-left hover:bg-slate-100 p-1.5 -m-1.5 rounded-lg transition group/prog"
+                            className="w-full text-left hover:bg-slate-100 p-1 -m-1 rounded-lg transition group/prog"
                             title="Clique para alterar a porcentagem de progresso"
                           >
                             <div className="space-y-1">
                               <div className="flex items-center justify-between">
-                                <span className="text-xs font-black text-slate-800">
+                                <span className="text-[11px] font-black text-slate-800">
                                   {task.progress}%
                                 </span>
-                                <Edit2 size={11} className="opacity-0 group-hover/prog:opacity-100 text-teal-600 transition" />
+                                <Edit2 size={10} className="opacity-0 group-hover/prog:opacity-100 text-teal-600 transition" />
                               </div>
                               <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                 <div 
@@ -918,48 +1044,64 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                       </td>
 
                       {/* AÇÕES COLUMN */}
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {/* Updates / Comments count button */}
+                      <td className="py-3.5 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* Updates / Comments count button - Highlighted with glow/pulse when important unacknowledged note exists */}
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               setNotesModalTask(task);
                             }}
-                            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-bold transition border ${
-                              task.updates && task.updates.length > 0
-                                ? 'text-[#008779] bg-teal-50 hover:bg-teal-100 border-teal-200 shadow-2xs'
-                                : 'text-slate-400 hover:text-[#008779] hover:bg-teal-50/60 border-slate-100 hover:border-teal-200'
+                            className={`relative flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-black transition border shadow-xs active:scale-95 ${
+                              hasUnreadImportant
+                                ? 'bg-amber-400 hover:bg-amber-500 text-amber-950 border-amber-500 ring-2 ring-amber-400/60 shadow-md animate-pulse font-black'
+                                : noteCount > 0
+                                ? 'text-[#008779] bg-teal-50 hover:bg-teal-100 border-teal-200'
+                                : 'text-slate-400 hover:text-[#008779] hover:bg-teal-50/60 border-slate-200 hover:border-teal-200'
                             }`}
-                            title="Clique para ver o histórico e adicionar notas de atualização"
+                            title={
+                              hasUnreadImportant
+                                ? '⭐ ATENÇÃO: Nota importante não confirmada! Clique para ler e confirmar ciência (OK).'
+                                : 'Clique para ver o histórico e adicionar notas de atualização'
+                            }
                           >
-                            <MessageSquare size={14} className={task.updates && task.updates.length > 0 ? 'text-[#008779]' : 'text-slate-400'} />
-                            <span>{task.updates ? task.updates.length : 0}</span>
+                            {hasUnreadImportant ? (
+                              <>
+                                <span className="text-amber-950 font-black text-[11px]">⭐</span>
+                                <span>{noteCount}</span>
+                                <span className="w-2 h-2 rounded-full bg-red-600 absolute -top-1 -right-1 ring-2 ring-white animate-ping" />
+                              </>
+                            ) : (
+                              <>
+                                <MessageSquare size={13} className={noteCount > 0 ? 'text-[#008779]' : 'text-slate-400'} />
+                                <span>{noteCount}</span>
+                              </>
+                            )}
                           </button>
 
                           <button 
                             onClick={() => onView(task)} 
-                            className="p-1.5 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition" 
+                            className="p-1 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition" 
                             title="Visualizar"
                           >
-                            <Eye size={16}/>
+                            <Eye size={15}/>
                           </button>
 
                           <button 
                             onClick={() => onEdit(task)} 
-                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition" 
+                            className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition" 
                             title="Editar"
                           >
-                            <Edit2 size={16}/>
+                            <Edit2 size={15}/>
                           </button>
 
                           <button 
                             onClick={() => onDelete(task)} 
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" 
+                            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" 
                             title="Excluir"
                           >
-                            <Trash2 size={16}/>
+                            <Trash2 size={15}/>
                           </button>
                         </div>
                       </td>
@@ -969,7 +1111,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
 
                 {paginatedTasks.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-16 text-center text-slate-400">
+                    <td colSpan={8} className="py-16 text-center text-slate-400">
                       <AlertTriangle className="mx-auto text-slate-300 mb-3" size={40} />
                       <p className="text-xs font-black uppercase tracking-widest">Nenhuma atividade encontrada para os filtros selecionados.</p>
                     </td>
