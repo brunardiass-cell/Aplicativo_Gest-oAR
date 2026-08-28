@@ -103,15 +103,31 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
             <div className="relative pl-8 space-y-8 before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-100">
               {task.updates && task.updates.length > 0 ? [...task.updates].reverse().map((update, idx) => (
                 <div key={update.id} className="relative">
-                  <div className={`absolute -left-[33px] top-1 w-5 h-5 rounded-full border-4 border-white shadow-sm ${idx === 0 ? 'bg-brand-primary animate-pulse' : 'bg-slate-300'}`}></div>
-                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 hover:border-teal-100 transition shadow-sm">
+                  <div className={`absolute -left-[33px] top-1 w-5 h-5 rounded-full border-4 border-white shadow-sm ${
+                    update.isImportant ? 'bg-amber-500 ring-2 ring-amber-300' : idx === 0 ? 'bg-brand-primary animate-pulse' : 'bg-slate-300'
+                  }`}></div>
+                  <div className={`p-5 rounded-2xl border transition shadow-sm ${
+                    update.isImportant ? 'bg-amber-50/60 border-amber-300 ring-1 ring-amber-300/30' : 'bg-slate-50 border-slate-100 hover:border-teal-100'
+                  }`}>
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] font-black text-brand-primary uppercase tracking-widest">
-                        {new Date(update.date).toLocaleDateString('pt-BR')}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${update.isImportant ? 'text-amber-700 font-black' : 'text-brand-primary'}`}>
+                          {new Date(update.date).toLocaleDateString('pt-BR')}
+                        </span>
+                        {update.isImportant && (
+                          <span className="px-2 py-0.5 bg-amber-500 text-white rounded-full text-[8px] font-black uppercase tracking-wider">
+                            ⭐ Importante
+                          </span>
+                        )}
+                      </div>
                       {update.user && <span className="text-[9px] font-bold text-slate-400 uppercase italic">Por {update.user}</span>}
                     </div>
-                    <p className="text-slate-700 text-sm font-medium leading-relaxed">{update.note}</p>
+                    <p className="text-slate-700 text-sm font-medium leading-relaxed whitespace-pre-wrap">{update.note}</p>
+                    {update.isImportant && update.acknowledgedBy && update.acknowledgedBy.length > 0 && (
+                      <p className="mt-2 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg inline-block">
+                        ✓ Ciente por: {update.acknowledgedBy.join(', ')}
+                      </p>
+                    )}
                   </div>
                 </div>
               )) : (

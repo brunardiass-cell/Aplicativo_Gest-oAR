@@ -42,6 +42,9 @@ export interface TaskNote {
   date: string;
   user: string;
   note: string;
+  isImportant?: boolean;
+  acknowledgedBy?: string[];
+  acknowledgedAt?: string;
 }
 
 export interface Task {

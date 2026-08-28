@@ -50,6 +50,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
 
   const [showOptionalDetails, setShowOptionalDetails] = useState(false);
   const [note, setNote] = useState('');
+  const [isNoteImportant, setIsNoteImportant] = useState(false);
   const [isCollaboratorDropdownOpen, setIsCollaboratorDropdownOpen] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
@@ -110,10 +111,13 @@ const TaskModal: React.FC<TaskModalProps> = ({
       id: Math.random().toString(36).substring(2, 11),
       date: new Date().toISOString(),
       user: currentProfileName || 'Usuário',
-      note: note.trim()
+      note: note.trim(),
+      isImportant: isNoteImportant,
+      acknowledgedBy: isNoteImportant && currentProfileName ? [currentProfileName] : []
     };
-    setFormData({ ...formData, updates: [...(formData.updates || []), newNote] });
+    setFormData({ ...formData, updates: [newNote, ...(formData.updates || [])] });
     setNote('');
+    setIsNoteImportant(false);
   };
 
   const startEditingNote = (n: TaskNote) => {
@@ -179,10 +183,10 @@ const TaskModal: React.FC<TaskModalProps> = ({
 
         {/* Modal Form Content */}
         <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6 max-h-[80vh] overflow-y-auto custom-scrollbar">
-          {/* Main Essential Fields Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 items-start">
+          {/* Main Essential Fields Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 sm:gap-5 items-start">
             {/* Nome da Atividade */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
               <label className="text-[11px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
                 Nome da Atividade <span className="text-red-500">*</span>
               </label>
@@ -197,7 +201,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
             </div>
 
             {/* Projeto Relacionado */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 lg:col-span-2">
               <label className="text-[11px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
                 Projeto Relacionado <span className="text-red-500">*</span>
               </label>
@@ -212,8 +216,46 @@ const TaskModal: React.FC<TaskModalProps> = ({
               </select>
             </div>
 
+            {/* Responsável pela Atividade */}
+            <div className="space-y-1.5 lg:col-span-2">
+              <label className="text-[11px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
+                Responsável <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <select
+                  value={formData.projectLead}
+                  onChange={e => setFormData({ ...formData, projectLead: e.target.value })}
+                  className="w-full pl-9 pr-4 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-[#008779] cursor-pointer appearance-none"
+                >
+                  {teamMembers.map(m => (
+                    <option key={m.id} value={m.name}>{m.name}</option>
+                  ))}
+                </select>
+                <div className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-[#008779] text-white flex items-center justify-center text-[9px] font-black pointer-events-none">
+                  {getInitials(formData.projectLead)}
+                </div>
+              </div>
+            </div>
+
+            {/* Nível de Prioridade */}
+            <div className="space-y-1.5 lg:col-span-2">
+              <label className="text-[11px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
+                Prioridade <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.priority}
+                onChange={e => setFormData({ ...formData, priority: e.target.value as Priority })}
+                className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-[#008779] cursor-pointer"
+              >
+                <option value="Baixa">Baixa</option>
+                <option value="Média">Média</option>
+                <option value="Alta">Alta</option>
+                <option value="Urgente">Urgente</option>
+              </select>
+            </div>
+
             {/* Data de Solicitação */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 lg:col-span-2">
               <label className="text-[11px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
                 Data de Solicitação <span className="text-red-500">*</span>
               </label>
@@ -227,7 +269,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
             </div>
 
             {/* Data Prevista */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 lg:col-span-2">
               <label className="text-[11px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
                 Data Prevista <span className="text-red-500">*</span>
               </label>
@@ -439,7 +481,17 @@ const TaskModal: React.FC<TaskModalProps> = ({
                       <input
                         type="checkbox"
                         checked={formData.isReport || false}
-                        onChange={e => setFormData({ ...formData, isReport: e.target.checked })}
+                        onChange={e => {
+                          const isChecked = e.target.checked;
+                          const updates: Partial<Task> = { isReport: isChecked };
+                          if (isChecked) {
+                            updates.status = 'Em Andamento';
+                            if (!formData.reportStage || formData.reportStage === 'Em Elaboração') {
+                              updates.reportStage = 'Revisão Colaboradores';
+                            }
+                          }
+                          setFormData({ ...formData, ...updates });
+                        }}
                         className="sr-only peer"
                       />
                       <div className="w-9 h-5 bg-slate-300 rounded-full peer peer-checked:bg-[#008779] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
@@ -463,9 +515,20 @@ const TaskModal: React.FC<TaskModalProps> = ({
 
                 {/* Notas de Atualização */}
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">
-                    Notas de Atualização
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">
+                      Notas de Atualização
+                    </label>
+                    <label className="flex items-center gap-1 text-[10px] font-bold text-amber-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isNoteImportant}
+                        onChange={e => setIsNoteImportant(e.target.checked)}
+                        className="rounded text-amber-600 focus:ring-amber-500 w-3 h-3"
+                      />
+                      <span>⭐ Importante</span>
+                    </label>
+                  </div>
                   <div className="flex gap-1.5">
                     <input
                       type="text"
@@ -477,14 +540,20 @@ const TaskModal: React.FC<TaskModalProps> = ({
                           addNote();
                         }
                       }}
-                      placeholder="Adicione uma nota..."
-                      className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-[#008779] transition"
+                      placeholder={isNoteImportant ? "⭐ Digite uma nota importante..." : "Adicione uma nota..."}
+                      className={`w-full px-3.5 py-2.5 border rounded-xl text-xs font-semibold placeholder-slate-400 outline-none transition ${
+                        isNoteImportant 
+                          ? 'bg-amber-50/60 border-amber-300 text-amber-900 focus:ring-2 focus:ring-amber-400' 
+                          : 'bg-slate-50/70 border-slate-200 text-slate-800 focus:ring-2 focus:ring-[#008779]'
+                      }`}
                     />
                     {note.trim() && (
                       <button
                         type="button"
                         onClick={addNote}
-                        className="px-3 bg-[#008779] text-white rounded-xl hover:bg-[#007367] transition shrink-0 flex items-center justify-center"
+                        className={`px-3 text-white rounded-xl transition shrink-0 flex items-center justify-center ${
+                          isNoteImportant ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#008779] hover:bg-[#007367]'
+                        }`}
                         title="Adicionar nota"
                       >
                         <Plus size={16} />
@@ -497,8 +566,13 @@ const TaskModal: React.FC<TaskModalProps> = ({
               {/* Sub-Panel: Review Details if isReport is true */}
               {formData.isReport && (
                 <div className="p-4 bg-teal-50/60 border border-teal-200 rounded-2xl space-y-4 animate-in slide-in-from-top-2">
-                  <div className="flex items-center gap-2 text-xs font-black text-[#008779] uppercase tracking-wide">
-                    <FileText size={16} /> Detalhes do Fluxo de Revisão
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-black text-[#008779] uppercase tracking-wide">
+                      <FileText size={16} /> Detalhes do Fluxo de Revisão
+                    </div>
+                    <span className="px-2.5 py-1 bg-purple-100 text-purple-700 rounded-lg text-[10px] font-black uppercase tracking-wider">
+                      Status Automático: Em Revisão
+                    </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="space-y-1">
@@ -509,10 +583,12 @@ const TaskModal: React.FC<TaskModalProps> = ({
                         value={formData.reportStage}
                         onChange={e => {
                           const newStage = e.target.value as ReportStage;
-                          const updates: any = { reportStage: newStage };
+                          const updates: Partial<Task> = { reportStage: newStage };
                           if (newStage === 'Concluído' || newStage === 'Concluído e Assinado') {
                             updates.status = 'Concluída';
                             updates.progress = 100;
+                          } else {
+                            updates.status = 'Em Andamento';
                           }
                           setFormData({ ...formData, ...updates });
                         }}

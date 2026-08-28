@@ -131,24 +131,57 @@ export const MicrosoftGraphService = {
 
   async getSiteAndDriveId(token: string) {
     try {
-      const siteRes = await fetch(`https://graph.microsoft.com/v1.0/sites/${SHAREPOINT_HOST}:${SITE_PATH}?$select=id`, {
+      const siteRes = await fetch(`https://graph.microsoft.com/v1.0/sites/${SHAREPOINT_HOST}:${SITE_PATH}?$select=id,name,webUrl`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       if (!siteRes.ok) {
-        const err = await siteRes.json();
+        const err = await siteRes.json().catch(() => ({}));
         console.error("Erro Site:", err);
         throw new Error("Site não encontrado ou sem permissão");
       }
       const siteData = await siteRes.json();
-      
-      const driveRes = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteData.id}/drive?$select=id`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!driveRes.ok) throw new Error("Drive não encontrado");
-      const driveData = await driveRes.json();
 
-      return { siteId: siteData.id, driveId: driveData.id };
+      // Busca todas as bibliotecas de documentos (drives) do site para encontrar 'Documentos'
+      let selectedDriveId = '';
+      try {
+        const drivesRes = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteData.id}/drives?$select=id,name,webUrl,driveType`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (drivesRes.ok) {
+          const drivesData = await drivesRes.json();
+          const drives = drivesData.value || [];
+          
+          // 1. Tenta encontrar a biblioteca de 'Documentos' / 'Shared Documents'
+          const docLib = drives.find((d: any) => 
+            d.name === 'Documentos' || 
+            d.name === 'Documentos compartilhados' || 
+            d.name === 'Shared Documents' || 
+            d.name === 'Documents' ||
+            (d.webUrl && (d.webUrl.includes('/Shared Documents') || d.webUrl.includes('/Documentos')))
+          );
+
+          if (docLib) {
+            selectedDriveId = docLib.id;
+          } else if (drives.length > 0) {
+            selectedDriveId = drives[0].id;
+          }
+        }
+      } catch (driveLookupErr) {
+        console.warn("Aviso na busca de drives:", driveLookupErr);
+      }
+      
+      // Fallback para o drive padrão se não encontrou pela lista
+      if (!selectedDriveId) {
+        const driveRes = await fetch(`https://graph.microsoft.com/v1.0/sites/${siteData.id}/drive?$select=id`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!driveRes.ok) throw new Error("Drive não encontrado");
+        const driveData = await driveRes.json();
+        selectedDriveId = driveData.id;
+      }
+
+      return { siteId: siteData.id, driveId: selectedDriveId };
     } catch (e) {
       console.error("Erro ao buscar metadados SharePoint:", e);
       return null;
@@ -1378,14 +1411,16 @@ export const MicrosoftGraphService = {
         editionPayload
       );
 
-      // 5.3 db.json na raiz de Sistema (Índice Geral e Backup Consolidado)
+      // 5.3 db.json e espelhos diretos na raiz da pasta Sistema (para visualização imediata)
       const fullCloudData = {
         ...fullData,
         lastBackupAt: timestamp,
         lastBackupBy: currentUser,
         version: '2.0-modular'
       };
-      await this.saveToCloud(fullCloudData, null);
+      await this.uploadJsonWithRetry(token, ids.driveId, 'Sistema', 'db.json', fullCloudData);
+      await this.uploadJsonWithRetry(token, ids.driveId, 'Sistema', 'tarefas.json', fullData.tasks || []);
+      await this.uploadJsonWithRetry(token, ids.driveId, 'Sistema', 'projetos.json', fullData.projects || []);
 
       return {
         success: errors.length === 0,

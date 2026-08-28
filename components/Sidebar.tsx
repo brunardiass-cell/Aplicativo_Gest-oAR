@@ -27,7 +27,8 @@ import {
   Calendar,
   RefreshCw,
   LogIn,
-  CheckCircle2
+  CheckCircle2,
+  ExternalLink
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -334,6 +335,18 @@ const Sidebar: React.FC<SidebarProps> = ({
               }`} />
             </div>
           </div>
+
+          {/* Link para abrir pasta no SharePoint quando conectado */}
+          {isMsalAuthenticated && lastSync?.status === 'synced' && (
+            <a
+              href="https://ctvacinas974.sharepoint.com/sites/regulatorios/Shared%20Documents/Sistema"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 w-full py-1 px-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[8px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition"
+            >
+              <ExternalLink size={9} /> Abrir Pasta no SharePoint
+            </a>
+          )}
 
           {/* Botão de conexão rápida caso desconectado */}
           {(!isMsalAuthenticated || lastSync?.status === 'disconnected') && onConnectMsal && (
