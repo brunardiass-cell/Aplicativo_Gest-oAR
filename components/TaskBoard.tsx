@@ -669,25 +669,25 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden space-y-0">
           
           {/* List Header Count Banner */}
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-            <span className="text-xs font-black text-slate-900 tracking-tight">
+          <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between bg-white">
+            <span className="text-xs font-black text-slate-800 tracking-tight">
               {sortedTasks.length} atividades encontradas
             </span>
           </div>
 
-          {/* Table Container - Fits screen without horizontal scroll */}
+          {/* Table Container - Fits screen completely without horizontal scroll */}
           <div className="w-full overflow-hidden">
-            <table className="w-full text-left border-collapse table-fixed">
+            <table className="w-full text-left border-collapse table-fixed select-none">
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  <th className="py-3 px-3 sm:px-4 w-[28%]">ATIVIDADE</th>
-                  <th className="py-3 px-2 sm:px-3 w-[12%]">PROJETO</th>
-                  <th className="py-3 px-2 sm:px-3 w-[14%]">RESPONSÁVEL</th>
-                  <th className="py-3 px-2 sm:px-3 w-[10%]">PRIORIDADE</th>
-                  <th className="py-3 px-2 sm:px-3 w-[13%]">STATUS</th>
-                  <th className="py-3 px-2 sm:px-3 w-[9%]">PRAZO</th>
-                  <th className="py-3 px-2 sm:px-3 w-[8%]">PROGRESSO</th>
-                  <th className="py-3 px-3 w-[6%] text-right">AÇÕES</th>
+                <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                  <th className="py-2.5 px-3 w-[28%]">ATIVIDADE</th>
+                  <th className="py-2.5 px-2 w-[10%]">PROJETO</th>
+                  <th className="py-2.5 px-2 w-[13%]">RESPONSÁVEL</th>
+                  <th className="py-2.5 px-2 w-[9%]">PRIORIDADE</th>
+                  <th className="py-2.5 px-2 w-[13%]">STATUS</th>
+                  <th className="py-2.5 px-2 w-[9%]">PRAZO</th>
+                  <th className="py-2.5 px-2 w-[9%]">PROGRESSO</th>
+                  <th className="py-2.5 px-2.5 w-[9%] text-right">AÇÕES</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -718,27 +718,27 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                       className="hover:bg-slate-50/80 transition group relative"
                     >
                       {/* ATIVIDADE COLUMN */}
-                      <td className="py-3.5 px-3 sm:px-4 relative">
+                      <td className="py-2.5 px-3 relative min-w-0">
                         {/* Left color bar indicator */}
                         <div className={`absolute left-0 top-0 bottom-0 w-1 ${visuals.accentBar}`} />
                         
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2 min-w-0">
                           {/* Status Icon Box */}
-                          <div className={`w-8 h-8 rounded-xl ${visuals.iconBox} flex items-center justify-center shrink-0 shadow-xs font-bold`}>
+                          <div className={`w-7 h-7 rounded-lg ${visuals.iconBox} flex items-center justify-center shrink-0 shadow-2xs font-bold`}>
                             {task.status === 'Concluída' ? (
-                              <CheckCircle size={15} />
+                              <CheckCircle size={13} />
                             ) : task.status === 'Em Andamento' ? (
-                              <ArrowRight size={15} />
+                              <ArrowRight size={13} />
                             ) : task.status === 'Planejada' ? (
-                              <AlertTriangle size={15} />
+                              <AlertTriangle size={13} />
                             ) : (
-                              <FileText size={15} />
+                              <FileText size={13} />
                             )}
                           </div>
 
                           <div className="min-w-0 flex-1">
                             {inlineEdit?.taskId === task.id && inlineEdit?.field === 'activity' ? (
-                              <div className="flex items-center gap-1.5 w-full" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center gap-1 w-full" onClick={(e) => e.stopPropagation()}>
                                 <input
                                   type="text"
                                   autoFocus
@@ -748,30 +748,30 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                                     if (e.key === 'Enter') handleSaveInlineEdit(task);
                                     if (e.key === 'Escape') handleCancelInlineEdit();
                                   }}
-                                  className="w-full text-xs font-bold px-2 py-1 bg-white border-2 border-teal-500 rounded-lg outline-none text-slate-900 shadow-sm"
+                                  className="w-full text-xs font-bold px-1.5 py-0.5 bg-white border border-teal-500 rounded outline-none text-slate-900 shadow-sm"
                                 />
                                 <button
                                   type="button"
                                   onClick={() => handleSaveInlineEdit(task)}
-                                  className="p-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition shrink-0"
+                                  className="p-1 bg-teal-600 hover:bg-teal-700 text-white rounded transition shrink-0"
                                   title="Confirmar"
                                 >
-                                  <CheckCircle size={14} />
+                                  <CheckCircle size={12} />
                                 </button>
                                 <button
                                   type="button"
                                   onClick={handleCancelInlineEdit}
-                                  className="p-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition shrink-0"
+                                  className="p-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded transition shrink-0"
                                   title="Cancelar"
                                 >
-                                  <X size={14} />
+                                  <X size={12} />
                                 </button>
                               </div>
                             ) : (
-                              <div className="flex items-center gap-1.5 group/editTitle">
+                              <div className="flex items-center gap-1 group/editTitle min-w-0">
                                 <button
                                   onClick={() => onView(task)}
-                                  className="text-left font-black text-slate-900 text-xs sm:text-sm hover:text-teal-700 transition block truncate"
+                                  className="text-left font-bold text-slate-900 text-xs hover:text-teal-700 transition truncate block flex-1"
                                   title={task.activity}
                                 >
                                   {task.activity}
@@ -783,13 +783,13 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                                     className="opacity-0 group-hover/editTitle:opacity-100 p-0.5 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded transition shrink-0"
                                     title="Editar nome da atividade"
                                   >
-                                    <Edit2 size={11} />
+                                    <Edit2 size={10} />
                                   </button>
                                 )}
                               </div>
                             )}
                             {task.description && (
-                              <p className="text-[10px] font-medium text-slate-400 truncate mt-0.5">
+                              <p className="text-[10px] font-medium text-slate-400 truncate block leading-tight" title={task.description}>
                                 {task.description}
                               </p>
                             )}
@@ -798,7 +798,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                       </td>
 
                       {/* PROJETO COLUMN */}
-                      <td className="py-3.5 px-2 sm:px-3 text-xs font-black text-slate-700">
+                      <td className="py-2.5 px-2 min-w-0">
                         {inlineEdit?.taskId === task.id && inlineEdit?.field === 'project' ? (
                           <div onClick={(e) => e.stopPropagation()}>
                             <select
@@ -807,7 +807,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                               onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
                               onBlur={handleCancelInlineEdit}
                               onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold px-2 py-1 bg-white border-2 border-teal-500 rounded-lg outline-none text-slate-800 shadow-sm w-full"
+                              className="text-xs font-bold px-1 py-0.5 bg-white border border-teal-500 rounded outline-none text-slate-800 shadow-sm w-full"
                             >
                               {uniqueProjects.filter(p => p !== 'Todos').map(p => (
                                 <option key={p} value={p}>{p}</option>
@@ -818,17 +818,17 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                           <button
                             type="button"
                             onClick={(e) => handleStartInlineEdit(e, task, 'project')}
-                            className="text-left text-xs font-black text-slate-700 hover:text-teal-700 hover:bg-teal-50 px-1.5 py-0.5 -mx-1.5 -my-0.5 rounded-lg transition flex items-center gap-1 group/proj w-full"
-                            title="Clique para alterar o projeto"
+                            className="text-left text-xs font-bold text-slate-700 hover:text-teal-700 hover:bg-teal-50 px-1 py-0.5 -mx-1 rounded transition flex items-center gap-1 group/proj w-full min-w-0"
+                            title={task.project}
                           >
-                            <span className="truncate">{task.project}</span>
-                            <Edit2 size={10} className="opacity-0 group-hover/proj:opacity-100 text-teal-600 shrink-0 transition" />
+                            <span className="truncate block flex-1">{task.project}</span>
+                            <Edit2 size={9} className="opacity-0 group-hover/proj:opacity-100 text-teal-600 shrink-0 transition" />
                           </button>
                         )}
                       </td>
 
                       {/* RESPONSÁVEL COLUMN */}
-                      <td className="py-3.5 px-2 sm:px-3">
+                      <td className="py-2.5 px-2 min-w-0">
                         {inlineEdit?.taskId === task.id && inlineEdit?.field === 'lead' ? (
                           <div onClick={(e) => e.stopPropagation()}>
                             <select
@@ -837,7 +837,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                               onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
                               onBlur={handleCancelInlineEdit}
                               onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold px-2 py-1 bg-white border-2 border-teal-500 rounded-lg outline-none text-slate-800 shadow-sm w-full"
+                              className="text-xs font-bold px-1 py-0.5 bg-white border border-teal-500 rounded outline-none text-slate-800 shadow-sm w-full"
                             >
                               {uniqueLeads.filter(l => l !== 'Todos').map(l => (
                                 <option key={l} value={l}>{l}</option>
@@ -845,24 +845,24 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                             </select>
                           </div>
                         ) : (
-                          <div className="space-y-1">
+                          <div className="space-y-0.5 min-w-0">
                             <button
                               type="button"
                               onClick={(e) => handleStartInlineEdit(e, task, 'lead')}
-                              className="text-left hover:bg-teal-50 px-1.5 py-0.5 -mx-1.5 -my-0.5 rounded-lg transition flex items-center gap-1.5 group/lead"
-                              title="Clique para alterar o responsável"
+                              className="text-left hover:bg-teal-50 px-1 py-0.5 -mx-1 rounded transition flex items-center gap-1.5 group/lead w-full min-w-0"
+                              title={task.projectLead}
                             >
-                              <div className="w-5 h-5 rounded-full bg-emerald-800 text-white flex items-center justify-center text-[9px] font-black uppercase shrink-0 shadow-xs">
+                              <div className="w-5 h-5 rounded-full bg-emerald-800 text-white flex items-center justify-center text-[9px] font-black uppercase shrink-0 shadow-2xs">
                                 {getInitials(task.projectLead)}
                               </div>
-                              <span className="text-xs font-bold text-slate-800 truncate">
+                              <span className="text-xs font-bold text-slate-800 truncate block flex-1">
                                 {task.projectLead}
                               </span>
-                              <Edit2 size={10} className="opacity-0 group-hover/lead:opacity-100 text-teal-600 shrink-0 transition" />
+                              <Edit2 size={9} className="opacity-0 group-hover/lead:opacity-100 text-teal-600 shrink-0 transition" />
                             </button>
                             {reviewInfo?.isInReview && (
-                              <div className="flex items-center gap-1 text-[9px] font-extrabold text-purple-800 bg-purple-100/70 border border-purple-200 px-1.5 py-0.5 rounded-md" title={`Em revisão com: ${reviewInfo.reviewer}`}>
-                                <FileSignature size={10} className="text-purple-700 shrink-0" />
+                              <div className="flex items-center gap-1 text-[9px] font-bold text-purple-800 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded truncate" title={`Em revisão com: ${reviewInfo.reviewer}`}>
+                                <FileSignature size={9} className="text-purple-700 shrink-0" />
                                 <span className="truncate">Rev: {reviewInfo.reviewer}</span>
                               </div>
                             )}
@@ -871,7 +871,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                       </td>
 
                       {/* PRIORIDADE COLUMN */}
-                      <td className="py-3.5 px-2 sm:px-3">
+                      <td className="py-2.5 px-2 min-w-0">
                         {inlineEdit?.taskId === task.id && inlineEdit?.field === 'priority' ? (
                           <div onClick={(e) => e.stopPropagation()}>
                             <select
@@ -880,7 +880,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                               onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
                               onBlur={handleCancelInlineEdit}
                               onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold px-2 py-1 bg-white border-2 border-teal-500 rounded-lg outline-none text-slate-800 shadow-sm"
+                              className="text-xs font-bold px-1 py-0.5 bg-white border border-teal-500 rounded outline-none text-slate-800 shadow-sm w-full"
                             >
                               <option value="Baixa">Baixa</option>
                               <option value="Média">Média</option>
@@ -892,18 +892,18 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                           <button
                             type="button"
                             onClick={(e) => handleStartInlineEdit(e, task, 'priority')}
-                            className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border inline-flex items-center gap-1 hover:scale-105 transition active:scale-95 ${priorityVisuals.badgeClass}`}
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border inline-flex items-center gap-1 hover:scale-105 transition active:scale-95 whitespace-nowrap ${priorityVisuals.badgeClass}`}
                             title="Clique para alterar a prioridade"
                           >
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityVisuals.dotClass}`} />
                             <span>{priorityVisuals.label}</span>
-                            <Edit2 size={9} className="opacity-40" />
+                            <Edit2 size={8} className="opacity-40" />
                           </button>
                         )}
                       </td>
 
                       {/* STATUS COLUMN */}
-                      <td className="py-3.5 px-2 sm:px-3">
+                      <td className="py-2.5 px-2 min-w-0">
                         {inlineEdit?.taskId === task.id && inlineEdit?.field === 'status' ? (
                           <div onClick={(e) => e.stopPropagation()}>
                             <select
@@ -912,7 +912,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                               onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
                               onBlur={handleCancelInlineEdit}
                               onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold px-2 py-1 bg-white border-2 border-teal-500 rounded-lg outline-none text-slate-800 shadow-sm"
+                              className="text-xs font-bold px-1 py-0.5 bg-white border border-teal-500 rounded outline-none text-slate-800 shadow-sm w-full"
                             >
                               <option value="Planejada">Planejada</option>
                               <option value="Em Andamento">Em Andamento</option>
@@ -922,20 +922,20 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                             </select>
                           </div>
                         ) : (
-                          <div className="space-y-0.5">
+                          <div className="space-y-0.5 min-w-0">
                             <button
                               type="button"
                               onClick={(e) => handleStartInlineEdit(e, task, 'status')}
-                              className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border inline-flex items-center gap-1 hover:scale-105 hover:shadow-xs transition ${visuals.badgeClass}`}
+                              className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border inline-flex items-center gap-1 hover:scale-105 hover:shadow-2xs transition whitespace-nowrap ${visuals.badgeClass}`}
                               title="Clique para alterar o status"
                             >
                               <span>{visuals.label}</span>
-                              <Edit2 size={9} className="opacity-60" />
+                              <Edit2 size={8} className="opacity-60" />
                             </button>
                             {reviewInfo?.isInReview && (
-                              <div className="text-[10px] font-bold text-purple-900 flex items-center gap-1 pl-0.5">
-                                <span className="text-purple-600 font-medium text-[9px]">Com:</span>
-                                <span className="font-black truncate max-w-[100px]">{reviewInfo.reviewer}</span>
+                              <div className="text-[9px] font-bold text-purple-900 flex items-center gap-1 truncate" title={`Com: ${reviewInfo.reviewer}`}>
+                                <span className="text-purple-600 font-medium text-[8px]">Com:</span>
+                                <span className="font-bold truncate">{reviewInfo.reviewer}</span>
                               </div>
                             )}
                           </div>
@@ -943,7 +943,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                       </td>
 
                       {/* PRAZO COLUMN */}
-                      <td className="py-3.5 px-2 sm:px-3">
+                      <td className="py-2.5 px-2 min-w-0">
                         {inlineEdit?.taskId === task.id && inlineEdit?.field === 'date' ? (
                           <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
                             <input
@@ -953,25 +953,25 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                               onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
                               onBlur={handleCancelInlineEdit}
                               onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold px-2 py-1 bg-white border-2 border-teal-500 rounded-lg outline-none text-slate-800 shadow-sm"
+                              className="text-xs font-bold px-1 py-0.5 bg-white border border-teal-500 rounded outline-none text-slate-800 shadow-sm w-full"
                             />
                           </div>
                         ) : (
                           <button
                             type="button"
                             onClick={(e) => handleStartInlineEdit(e, task, 'date')}
-                            className={`flex items-center gap-1 text-xs font-bold hover:bg-slate-100 px-1.5 py-0.5 -mx-1.5 -my-0.5 rounded-lg transition group/date ${isOverdue ? 'text-red-500' : 'text-slate-600'}`}
+                            className={`flex items-center gap-1 text-[11px] font-semibold hover:bg-slate-100 px-1 py-0.5 -mx-1 rounded transition group/date whitespace-nowrap ${isOverdue ? 'text-red-500' : 'text-slate-600'}`}
                             title="Clique para alterar o prazo"
                           >
-                            <Calendar size={13} className={isOverdue ? 'text-red-500' : 'text-slate-400'} />
-                            <span className="text-[11px]">{formatDateBR(task.completionDate)}</span>
-                            <Edit2 size={10} className="opacity-0 group-hover/date:opacity-100 text-teal-600 shrink-0 transition" />
+                            <Calendar size={12} className={isOverdue ? 'text-red-500 shrink-0' : 'text-slate-400 shrink-0'} />
+                            <span>{formatDateBR(task.completionDate)}</span>
+                            <Edit2 size={9} className="opacity-0 group-hover/date:opacity-100 text-teal-600 shrink-0 transition" />
                           </button>
                         )}
                       </td>
 
                       {/* PROGRESSO COLUMN */}
-                      <td className="py-3.5 px-2 sm:px-3 relative">
+                      <td className="py-2.5 px-2 relative min-w-0">
                         {inlineEdit?.taskId === task.id && inlineEdit?.field === 'progress' ? (
                           <div onClick={(e) => e.stopPropagation()} className="absolute top-0 right-0 z-30 space-y-2 p-3 bg-white border-2 border-teal-500 rounded-xl shadow-xl min-w-[200px]">
                             <div className="flex items-center justify-between gap-2">
@@ -1022,7 +1022,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                           <button
                             type="button"
                             onClick={(e) => handleStartInlineEdit(e, task, 'progress')}
-                            className="w-full text-left hover:bg-slate-100 p-1 -m-1 rounded-lg transition group/prog"
+                            className="w-full text-left hover:bg-slate-100 p-1 -m-1 rounded transition group/prog min-w-0 block"
                             title="Clique para alterar a porcentagem de progresso"
                           >
                             <div className="space-y-1">
@@ -1030,9 +1030,9 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                                 <span className="text-[11px] font-black text-slate-800">
                                   {task.progress}%
                                 </span>
-                                <Edit2 size={10} className="opacity-0 group-hover/prog:opacity-100 text-teal-600 transition" />
+                                <Edit2 size={9} className="opacity-0 group-hover/prog:opacity-100 text-teal-600 transition" />
                               </div>
-                              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
                                 <div 
                                   className={`h-full transition-all duration-500 ${task.progress === 100 ? 'bg-emerald-500' : 'bg-teal-600'}`}
                                   style={{ width: `${task.progress}%` }}
@@ -1044,8 +1044,8 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                       </td>
 
                       {/* AÇÕES COLUMN */}
-                      <td className="py-3.5 px-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                      <td className="py-2.5 px-2.5 text-right min-w-0">
+                        <div className="flex items-center justify-end gap-1">
                           {/* Updates / Comments count button - Highlighted with glow/pulse when important unacknowledged note exists */}
                           <button
                             type="button"
@@ -1053,7 +1053,7 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                               e.stopPropagation();
                               setNotesModalTask(task);
                             }}
-                            className={`relative flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-black transition border shadow-xs active:scale-95 ${
+                            className={`relative flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] font-bold transition border shadow-2xs active:scale-95 shrink-0 ${
                               hasUnreadImportant
                                 ? 'bg-amber-400 hover:bg-amber-500 text-amber-950 border-amber-500 ring-2 ring-amber-400/60 shadow-md animate-pulse font-black'
                                 : noteCount > 0
@@ -1068,13 +1068,13 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                           >
                             {hasUnreadImportant ? (
                               <>
-                                <span className="text-amber-950 font-black text-[11px]">⭐</span>
+                                <span className="text-amber-950 font-black text-[10px]">⭐</span>
                                 <span>{noteCount}</span>
-                                <span className="w-2 h-2 rounded-full bg-red-600 absolute -top-1 -right-1 ring-2 ring-white animate-ping" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-600 absolute -top-0.5 -right-0.5 ring-2 ring-white animate-ping" />
                               </>
                             ) : (
                               <>
-                                <MessageSquare size={13} className={noteCount > 0 ? 'text-[#008779]' : 'text-slate-400'} />
+                                <MessageSquare size={11} className={noteCount > 0 ? 'text-[#008779]' : 'text-slate-400'} />
                                 <span>{noteCount}</span>
                               </>
                             )}
@@ -1082,26 +1082,26 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
 
                           <button 
                             onClick={() => onView(task)} 
-                            className="p-1 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition" 
+                            className="p-1 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded transition" 
                             title="Visualizar"
                           >
-                            <Eye size={15}/>
+                            <Eye size={14}/>
                           </button>
 
                           <button 
                             onClick={() => onEdit(task)} 
-                            className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition" 
+                            className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition" 
                             title="Editar"
                           >
-                            <Edit2 size={15}/>
+                            <Edit2 size={14}/>
                           </button>
 
                           <button 
                             onClick={() => onDelete(task)} 
-                            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" 
+                            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition" 
                             title="Excluir"
                           >
-                            <Trash2 size={15}/>
+                            <Trash2 size={14}/>
                           </button>
                         </div>
                       </td>
@@ -1111,9 +1111,9 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
 
                 {paginatedTasks.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center text-slate-400">
-                      <AlertTriangle className="mx-auto text-slate-300 mb-3" size={40} />
-                      <p className="text-xs font-black uppercase tracking-widest">Nenhuma atividade encontrada para os filtros selecionados.</p>
+                    <td colSpan={8} className="py-12 text-center text-slate-400">
+                      <AlertTriangle className="mx-auto text-slate-300 mb-2" size={32} />
+                      <p className="text-xs font-bold uppercase tracking-widest">Nenhuma atividade encontrada para os filtros selecionados.</p>
                     </td>
                   </tr>
                 )}
@@ -1123,18 +1123,19 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
 
           {/* PAGINATION FOOTER */}
           {totalItems > 0 && (
-            <div className="px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50/50">
-              <span className="text-xs font-bold text-slate-500">
+            <div className="px-4 py-2.5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/50">
+              <span className="text-xs font-semibold text-slate-500">
                 Mostrando {startIndex + 1} a {endIndex} de {totalItems} atividades
               </span>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
-                  className="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition"
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition"
+                  title="Página anterior"
                 >
-                  <ChevronLeft size={16} />
+                  <ChevronLeft size={14} />
                 </button>
 
                 {Array.from({ length: totalPages }, (_, i) => i + 1)
@@ -1148,9 +1149,9 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                         {showEllipsis && <span className="text-xs text-slate-400 px-1">...</span>}
                         <button
                           onClick={() => setCurrentPage(page)}
-                          className={`w-8 h-8 rounded-xl text-xs font-black transition ${
+                          className={`w-7 h-7 rounded-lg text-xs font-black transition ${
                             currentPage === page
-                              ? 'bg-emerald-800 text-white shadow-xs'
+                              ? 'bg-emerald-800 text-white shadow-2xs'
                               : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
                           }`}
                         >
@@ -1163,23 +1164,24 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
-                  className="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition"
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition"
+                  title="Próxima página"
                 >
-                  <ChevronRight size={16} />
+                  <ChevronRight size={14} />
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
                 <select
                   value={itemsPerPage}
                   onChange={(e) => {
                     setItemsPerPage(Number(e.target.value));
                     setCurrentPage(1);
                   }}
-                  className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-slate-700 outline-none"
+                  className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-700 outline-none"
                 >
                   <option value={10}>10 por página</option>
-                  <option value={25}>25 por página</option>
+                  <option value={20}>20 por página</option>
                   <option value={50}>50 por página</option>
                   <option value={100}>100 por página</option>
                 </select>
