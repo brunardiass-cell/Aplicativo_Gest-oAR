@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
 import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity, RegulatoryEvidence, MacroActivityConfig, RegulatoryInfoItem, RepeatableRecord, RegulatoryNarrative, RegulatoryDocument, Meeting, DossierContribution } from './types';
-import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES, DEFAULT_MEETINGS, isNameMatch } from './constants';
+import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES, DEFAULT_MEETINGS, isNameMatch, getAccountEmails } from './constants';
 import { MeetingsManager } from './components/MeetingsManager';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
@@ -338,17 +338,27 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (isMsalAuthenticated && account && appUsers.length > 0 && isAuthorized === null) {
-      const userEmail = account.username.toLowerCase();
+    if (isMsalAuthenticated && account && appUsers.length > 0) {
+      const userEmails = getAccountEmails(account);
       const authorizedUser = appUsers.find(
-        (user) => user.email.toLowerCase() === userEmail && user.status === 'active'
+        (user) => user.status === 'active' && userEmails.some(
+          email => email === user.email.toLowerCase().trim() ||
+                   email.split('@')[0] === user.email.toLowerCase().trim().split('@')[0] ||
+                   isNameMatch(user.username, account.name)
+        )
       );
-      setIsAuthorized(!!authorizedUser);
-      if (!authorizedUser) {
+
+      const isWhitelisted = userEmails.some(email => 
+        ['brunardias@outlook.com', 'brunadias@ctvacinas.org', 'graziellarivelli@ctvacinas.org', 'priscilapassos@ctvacinas.org', 'marjoriecoimbra@gmail.com', 'tecaester@gmail.com', 'ester@ctvacinas.org', 'analuiza@ctvacinas.org', 'anaterzian@ctvacinas.org'].includes(email)
+      );
+
+      const hasAccess = !!authorizedUser || isWhitelisted;
+      setIsAuthorized(hasAccess);
+      if (!hasAccess) {
         setIsLoading(false);
       }
     }
-  }, [isMsalAuthenticated, account, appUsers, isAuthorized]);
+  }, [isMsalAuthenticated, account, appUsers]);
   
   const setDataDirty = () => {
     if (!isDataDirty) {
@@ -829,8 +839,28 @@ const App: React.FC = () => {
 
   const currentUserRole = useMemo(() => {
     if (!account || !appUsers.length) return null;
-    const userEmail = account.username.toLowerCase();
-    return appUsers.find(u => u.email.toLowerCase() === userEmail)?.role || null;
+    const userEmails = getAccountEmails(account);
+    const authorizedUser = appUsers.find(
+      (user) => user.status === 'active' && userEmails.some(
+        email => email === user.email.toLowerCase().trim() ||
+                 email.split('@')[0] === user.email.toLowerCase().trim().split('@')[0] ||
+                 isNameMatch(user.username, account.name)
+      )
+    );
+    if (authorizedUser) return authorizedUser.role;
+    
+    // Whitelist fallbacks
+    const isKnownAdmin = userEmails.some(email => 
+      ['brunardias@outlook.com', 'brunadias@ctvacinas.org', 'graziellarivelli@ctvacinas.org', 'priscilapassos@ctvacinas.org'].includes(email)
+    );
+    if (isKnownAdmin) return 'admin';
+
+    if (userEmails.some(email => email.includes('marjorie'))) return 'user_team_3';
+    if (userEmails.some(email => email.includes('ester') || email.includes('tecaester'))) return 'user_team_2';
+    if (userEmails.some(email => email.includes('analuiza'))) return 'user_team_4';
+    if (userEmails.some(email => email.includes('anaterzian'))) return 'user_team_5';
+
+    return null;
   }, [account, appUsers]);
 
   const hasFullAccess = useMemo(() => currentUserRole === 'admin', [currentUserRole]);
@@ -1452,13 +1482,33 @@ const App: React.FC = () => {
   }
   
   if (isAuthorized === false) {
+    const userEmails = getAccountEmails(account);
+    const displayedEmail = userEmails[0] || account?.username || 'sua conta';
     return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4 font-sans text-center">
-        <div className="w-full max-w-md mx-auto">
-            <div className="mb-8 inline-block"><div className="bg-red-100 p-5 rounded-3xl shadow-sm"><ShieldAlert size={36} className="text-red-500" strokeWidth={2.5}/></div></div>
-            <h1 className="text-3xl font-black text-slate-800">Acesso Negado</h1>
-            <p className="mt-2 text-slate-500">Seu e-mail (<span className="font-bold">{account?.username}</span>) não está autorizado a acessar este sistema. Entre em contato com o administrador.</p>
-            <button onClick={handleLogout} className="mt-8 bg-slate-200 text-slate-700 px-6 py-3 rounded-xl font-bold text-sm">Sair</button>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans text-center">
+        <div className="w-full max-w-md mx-auto bg-white p-8 sm:p-10 rounded-[2.5rem] border border-slate-200/80 shadow-sm">
+            <div className="mb-6 inline-block"><div className="bg-red-50 p-5 rounded-3xl border border-red-100 shadow-sm"><ShieldAlert size={36} className="text-red-500" strokeWidth={2.5}/></div></div>
+            <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Acesso Pendente / Não Autorizado</h1>
+            <p className="mt-3 text-slate-500 text-sm leading-relaxed">
+              O e-mail conectado (<strong className="text-slate-800">{displayedEmail}</strong>) precisa estar cadastrado e ativo em <strong>Controle de Acesso &gt; Gestão de Usuários</strong> e possuir permissão no SharePoint.
+            </p>
+            <div className="mt-8 flex flex-col gap-3">
+              <button 
+                onClick={async () => {
+                  setIsLoading(true);
+                  await loadDataFromSharePoint();
+                }} 
+                className="w-full bg-brand-primary text-white py-3.5 rounded-2xl font-bold uppercase text-xs tracking-widest hover:bg-brand-accent transition shadow-lg shadow-teal-500/20"
+              >
+                Atualizar Permissões
+              </button>
+              <button 
+                onClick={handleLogout} 
+                className="w-full bg-slate-100 text-slate-600 py-3.5 rounded-2xl font-bold uppercase text-xs tracking-widest hover:bg-slate-200 transition"
+              >
+                Trocar de Conta / Sair
+              </button>
+            </div>
         </div>
       </div>
     );

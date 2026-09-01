@@ -11,10 +11,66 @@ export const DEFAULT_APP_USERS: AppUser[] = [
     joinedAt: new Date().toISOString()
   },
   {
+    id: 'user_admin_bruna_corp',
+    username: 'Bruna Dias',
+    email: 'brunadias@ctvacinas.org',
+    role: 'admin',
+    status: 'active',
+    joinedAt: new Date().toISOString()
+  },
+  {
+    id: 'user_admin_graziella',
+    username: 'Graziella Rivelli',
+    email: 'graziellarivelli@ctvacinas.org',
+    role: 'admin',
+    status: 'active',
+    joinedAt: new Date().toISOString()
+  },
+  {
+    id: 'user_team_marjorie',
+    username: 'Marjorie',
+    email: 'marjoriecoimbra@gmail.com',
+    role: 'user_team_3',
+    status: 'active',
+    joinedAt: new Date().toISOString()
+  },
+  {
+    id: 'user_team_ester_gmail',
+    username: 'Ester Roffe',
+    email: 'tecaester@gmail.com',
+    role: 'user_team_2',
+    status: 'active',
+    joinedAt: new Date().toISOString()
+  },
+  {
     id: 'user_user_ester',
     username: 'Ester (Acesso)',
     email: 'ester@ctvacinas.org',
     role: 'user_team_2',
+    status: 'active',
+    joinedAt: new Date().toISOString()
+  },
+  {
+    id: 'user_team_analuiza',
+    username: 'Ana Luiza',
+    email: 'analuiza@ctvacinas.org',
+    role: 'user_team_4',
+    status: 'active',
+    joinedAt: new Date().toISOString()
+  },
+  {
+    id: 'user_team_anaterzian',
+    username: 'Ana Terzian',
+    email: 'anaterzian@ctvacinas.org',
+    role: 'user_team_5',
+    status: 'active',
+    joinedAt: new Date().toISOString()
+  },
+  {
+    id: 'user_admin_priscila',
+    username: 'Priscila Passos',
+    email: 'priscilapassos@ctvacinas.org',
+    role: 'admin',
     status: 'active',
     joinedAt: new Date().toISOString()
   },
@@ -27,6 +83,43 @@ export const DEFAULT_APP_USERS: AppUser[] = [
     joinedAt: new Date().toISOString()
   }
 ];
+
+export const getAccountEmails = (account: any): string[] => {
+  if (!account) return [];
+  const emails = new Set<string>();
+
+  if (account.username) {
+    emails.add(account.username.toLowerCase().trim());
+  }
+
+  const claims = account.idTokenClaims as any;
+  if (claims) {
+    if (typeof claims.email === 'string') emails.add(claims.email.toLowerCase().trim());
+    if (typeof claims.preferred_username === 'string') emails.add(claims.preferred_username.toLowerCase().trim());
+    if (typeof claims.upn === 'string') emails.add(claims.upn.toLowerCase().trim());
+    if (typeof claims.unique_name === 'string') emails.add(claims.unique_name.toLowerCase().trim());
+    if (Array.isArray(claims.emails)) {
+      claims.emails.forEach((e: any) => typeof e === 'string' && emails.add(e.toLowerCase().trim()));
+    }
+    if (Array.isArray(claims.otherMails)) {
+      claims.otherMails.forEach((e: any) => typeof e === 'string' && emails.add(e.toLowerCase().trim()));
+    }
+  }
+
+  // Handle Azure AD B2B / Guest #EXT# emails (e.g. tecaester_gmail.com#EXT#@... -> tecaester@gmail.com)
+  for (const email of Array.from(emails)) {
+    if (email.includes('#ext#') || email.includes('#EXT#')) {
+      const prefix = email.split(/#ext#/i)[0];
+      const lastUnderscore = prefix.lastIndexOf('_');
+      if (lastUnderscore > 0) {
+        const converted = prefix.substring(0, lastUnderscore) + '@' + prefix.substring(lastUnderscore + 1);
+        emails.add(converted.toLowerCase().trim());
+      }
+    }
+  }
+
+  return Array.from(emails).filter(Boolean);
+};
 
 export const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
   { id: 'tm_1', name: 'Graziella', role: 'Líder', isLeader: true, password: 'admin' },

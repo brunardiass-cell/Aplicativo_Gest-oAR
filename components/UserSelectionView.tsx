@@ -2,6 +2,7 @@
 import React from 'react';
 import { TeamMember, AppUser, AppUserRole } from '../types';
 import { Crown, LogOut, Users, Eye, Briefcase, ArrowLeft } from 'lucide-react';
+import { isNameMatch } from '../constants';
 
 interface UserSelectionViewProps {
   teamMembers: TeamMember[];
@@ -20,13 +21,13 @@ const getInitials = (name: string): string => {
   return name.substring(0, 2).toUpperCase();
 };
 
-const ROLE_TO_MEMBER_ID_MAP: Record<string, string> = {
-  user_team_1: 'tm_2', // Bruna Dias
-  user_team_2: 'tm_3', // Ester
-  user_team_3: 'tm_4', // Marjorie
-  user_team_4: 'tm_5', // Ana Luiza
-  user_team_5: 'tm_6', // Ana Terzian
-  user_leader: 'tm_1', // Graziella
+const ROLE_TO_MEMBER_NAMES: Record<string, string[]> = {
+  user_team_1: ['Bruna', 'Bruna Dias', 'Bruna Rodrigues', 'tm_2'],
+  user_team_2: ['Ester', 'Ester Roffe', 'tm_3'],
+  user_team_3: ['Marjorie', 'Marjorie Coimbra', 'tm_4'],
+  user_team_4: ['Ana Luiza', 'Ana L.', 'tm_5'],
+  user_team_5: ['Ana Terzian', 'Ana T.', 'tm_6'],
+  user_leader: ['Graziella', 'Graziella Rivelli', 'tm_1'],
 };
 
 const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSelectUser, onSelectTeamView, onLogout, currentUserRole, onBackToModules }) => {
@@ -66,18 +67,23 @@ const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSe
               let isDisabled = false;
               let title = member.name;
 
-              if (currentUserRole !== 'admin') {
+              if (currentUserRole && currentUserRole !== 'admin') {
                 if (isLeaderProfile) {
                   if (currentUserRole !== 'user_leader') {
                     isDisabled = true;
                     title = "Acesso restrito ao perfil de liderança.";
                   }
-                } else if (currentUserRole === 'user_general' && !member.isComiteGestor) {
-                  isDisabled = true;
-                  title = "Seu perfil só permite a Visão Geral / Comitê Gestor.";
-                } else if (currentUserRole && currentUserRole.startsWith('user_team_')) {
-                  const allowedMemberId = ROLE_TO_MEMBER_ID_MAP[currentUserRole];
-                  if (member.id !== allowedMemberId) {
+                } else if (currentUserRole === 'user_general') {
+                  if (!member.isComiteGestor) {
+                    isDisabled = true;
+                    title = "Seu perfil só permite a Visão Geral / Comitê Gestor.";
+                  }
+                } else if (currentUserRole.startsWith('user_team_')) {
+                  const allowedPatterns = ROLE_TO_MEMBER_NAMES[currentUserRole] || [];
+                  const isAllowed = allowedPatterns.some(
+                    pattern => member.id === pattern || isNameMatch(member.name, pattern)
+                  );
+                  if (!isAllowed) {
                     isDisabled = true;
                     title = "Acesso restrito a este perfil.";
                   }
