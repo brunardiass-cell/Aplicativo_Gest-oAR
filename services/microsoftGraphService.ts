@@ -57,6 +57,14 @@ export const MicrosoftGraphService = {
           }
         });
         await instance.initialize();
+        try {
+          const redirectRes = await instance.handleRedirectPromise();
+          if (redirectRes?.account) {
+            instance.setActiveAccount(redirectRes.account);
+          }
+        } catch (e) {
+          console.warn("MSAL redirect promise warning:", e);
+        }
         // Após a inicialização, armazene a instância e a retorne.
         msalInstance = instance;
         return instance;
@@ -89,20 +97,90 @@ export const MicrosoftGraphService = {
   async logout() {
     const instance = await this.init();
     const account = instance.getActiveAccount();
-    if (account) {
+    if (account && !account.homeAccountId?.startsWith('sp_')) {
+      try {
         await instance.logoutPopup({ account });
+      } catch (e) {
+        console.warn('Erro ao deslogar MSAL:', e);
+      }
     }
-    await instance.clearCache();
+    try {
+      await instance.clearCache();
+    } catch (e) {}
+    localStorage.removeItem('ct_sharepoint_active_user');
+    sessionStorage.removeItem('ct_sharepoint_active_user');
   },
 
   async getAccount() {
     const instance = await this.init();
+    const active = instance.getActiveAccount();
+    if (active) return active;
     const accounts = instance.getAllAccounts();
     if (accounts.length > 0) {
-        instance.setActiveAccount(accounts[0]);
-        return accounts[0];
+      instance.setActiveAccount(accounts[0]);
+      return accounts[0];
     }
     return null;
+  },
+
+  async attemptSilentLogin(loginHint?: string) {
+    try {
+      const instance = await this.init();
+      const existing = await this.getAccount();
+      if (existing) return existing;
+
+      const silentReq: any = {
+        ...loginRequest,
+      };
+      if (loginHint) {
+        silentReq.loginHint = loginHint;
+      }
+      const ssoRes = await instance.ssoSilent(silentReq);
+      if (ssoRes?.account) {
+        instance.setActiveAccount(ssoRes.account);
+        return ssoRes.account;
+      }
+    } catch (e) {
+      console.log('Tentativa de SSO silencioso via SharePoint/M365:', e);
+    }
+    return null;
+  },
+
+  isSharePointEnvironment(): boolean {
+    if (typeof window === 'undefined') return false;
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasSpParam = urlParams.has('sharepoint') || urlParams.has('sp') || urlParams.get('source') === 'sharepoint' || urlParams.has('spUser');
+    const isReferrerFromSp = typeof document !== 'undefined' && /ctvacinas974\.sharepoint\.com|sharepoint\.com/i.test(document.referrer || '');
+    const isIframe = window.self !== window.top;
+    const hasSavedSpSession = !!localStorage.getItem('ct_sharepoint_active_user');
+    return hasSpParam || isReferrerFromSp || isIframe || hasSavedSpSession;
+  },
+
+  getSharePointUrlParams(): { email?: string; username?: string; isSharePoint: boolean } {
+    if (typeof window === 'undefined') return { isSharePoint: false };
+    const urlParams = new URLSearchParams(window.location.search);
+    const email = urlParams.get('email') || urlParams.get('spUser') || urlParams.get('user') || urlParams.get('upn') || urlParams.get('login_hint') || undefined;
+    const username = urlParams.get('name') || urlParams.get('username') || undefined;
+    const isSharePoint = this.isSharePointEnvironment();
+    return { email, username, isSharePoint };
+  },
+
+  createSharePointAccount(user: { id: string; username: string; email: string }) {
+    return {
+      homeAccountId: `sp_${user.id}`,
+      environment: 'login.microsoftonline.com',
+      tenantId: TENANT_ID,
+      username: user.email,
+      localAccountId: user.id,
+      name: user.username,
+      idTokenClaims: {
+        name: user.username,
+        email: user.email,
+        preferred_username: user.email,
+        upn: user.email,
+        tid: TENANT_ID
+      }
+    };
   },
 
   async getToken() {

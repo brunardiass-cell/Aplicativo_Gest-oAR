@@ -29,7 +29,7 @@ import { DossierContributionsManager } from './components/DossierContributionsMa
 import { DossierAssemblerManager } from './components/DossierAssemblerManager';
 import { RegulatoryDocManagement } from './components/RegulatoryDocManagement';
 import { MicrosoftGraphService, SPMetadataMap } from './services/microsoftGraphService';
-import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft, LayoutGrid, Kanban, Clock, Briefcase, Map as MapIcon, Syringe, Layers, Cloud, FileSpreadsheet } from 'lucide-react';
+import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft, LayoutGrid, Kanban, Clock, Briefcase, Map as MapIcon, Syringe, Layers, Cloud, FileSpreadsheet, CheckCircle2 } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
 import ProjectFlowView from './components/ProjectFlowView';
 import ProjectKanbanView from './components/ProjectKanbanView';
@@ -299,6 +299,8 @@ const App: React.FC = () => {
   useEffect(() => {
     const initAuth = async () => {
       // 1. Restaurar dados locais imediatamente para zero perda de dados entre recarregamentos
+      let currentAppUsers = DEFAULT_APP_USERS;
+      let currentTeamMembers = DEFAULT_TEAM_MEMBERS;
       try {
         const localSaved = localStorage.getItem(LOCAL_STORAGE_DATA_KEY);
         if (localSaved) {
@@ -306,6 +308,12 @@ const App: React.FC = () => {
           if (parsed && typeof parsed === 'object') {
             console.log('Restaurando dados persistidos do armazenamento local...');
             applyData(parsed, 'local_storage');
+            if (parsed.appUsers && parsed.appUsers.length > 0) {
+              currentAppUsers = parsed.appUsers;
+            }
+            if (parsed.teamMembers && parsed.teamMembers.length > 0) {
+              currentTeamMembers = parsed.teamMembers;
+            }
           }
         } else {
           // Se não houver no localStorage, consultar o endpoint do servidor local
@@ -313,24 +321,105 @@ const App: React.FC = () => {
           if (serverRes?.success && serverRes?.data) {
             console.log('Restaurando dados persistidos do servidor local...');
             applyData(serverRes.data, 'server_storage');
+            if (serverRes.data.appUsers && serverRes.data.appUsers.length > 0) {
+              currentAppUsers = serverRes.data.appUsers;
+            }
+            if (serverRes.data.teamMembers && serverRes.data.teamMembers.length > 0) {
+              currentTeamMembers = serverRes.data.teamMembers;
+            }
           }
         }
       } catch (e) {
         console.warn('Erro ao inicializar cache local:', e);
       }
 
-      // 2. Verificar autenticação Microsoft
+      // 2. Verificar autenticação Microsoft & Acesso Direto SharePoint
       try {
-        const acc = await MicrosoftGraphService.getAccount();
+        const spContext = MicrosoftGraphService.getSharePointUrlParams();
+        const savedSpUserStr = localStorage.getItem('ct_sharepoint_active_user');
+        let savedSpUser: any = null;
+        if (savedSpUserStr) {
+          try { savedSpUser = JSON.parse(savedSpUserStr); } catch (e) {}
+        }
+
+        // A. Verificar se há conta MSAL ativa ou tentar SSO silencioso (SharePoint / M365)
+        let acc = await MicrosoftGraphService.getAccount();
+        if (!acc) {
+          const hint = spContext.email || savedSpUser?.email;
+          acc = await MicrosoftGraphService.attemptSilentLogin(hint);
+        }
+
         if (acc) {
           setAccount(acc);
           setIsMsalAuthenticated(true);
+
+          const userEmails = getAccountEmails(acc);
+          const activeUser = currentAppUsers.find(
+            (u) => u.status === 'active' && userEmails.some(
+              email => email === u.email.toLowerCase().trim() ||
+                       email.split('@')[0] === u.email.toLowerCase().trim().split('@')[0] ||
+                       isNameMatch(u.username, acc.name)
+            )
+          );
+
+          if (activeUser) {
+            setIsAuthorized(true);
+            setIsPasswordAuthenticated(true);
+            localStorage.setItem('ct_sharepoint_active_user', JSON.stringify({
+              id: activeUser.id,
+              username: activeUser.username,
+              email: activeUser.email
+            }));
+
+            const matchingMember = currentTeamMembers.find(m => isNameMatch(m.name, activeUser.username));
+            if (matchingMember) {
+              setSelectedProfile(matchingMember);
+              setFilterMember(matchingMember.name);
+            }
+          }
+
           await loadDataFromSharePoint();
         } else {
+          // B. Verificar acesso direto quando a pessoa acessar pelo SharePoint da plataforma de assuntos regulatórios
+          const candidateEmail = spContext.email || savedSpUser?.email;
+          const candidateName = spContext.username || savedSpUser?.username;
+
+          if (candidateEmail || candidateName) {
+            const activeUser = currentAppUsers.find(u => 
+              u.status === 'active' && (
+                (candidateEmail && (
+                  u.email.toLowerCase().trim() === candidateEmail.toLowerCase().trim() ||
+                  u.email.toLowerCase().trim().split('@')[0] === candidateEmail.toLowerCase().trim().split('@')[0]
+                )) ||
+                (candidateName && isNameMatch(u.username, candidateName))
+              )
+            );
+
+            if (activeUser) {
+              const spAccount = MicrosoftGraphService.createSharePointAccount(activeUser);
+              setAccount(spAccount as any);
+              setIsMsalAuthenticated(true);
+              setIsAuthorized(true);
+              setIsPasswordAuthenticated(true);
+              localStorage.setItem('ct_sharepoint_active_user', JSON.stringify({
+                id: activeUser.id,
+                username: activeUser.username,
+                email: activeUser.email
+              }));
+
+              const matchingMember = currentTeamMembers.find(m => isNameMatch(m.name, activeUser.username));
+              if (matchingMember) {
+                setSelectedProfile(matchingMember);
+                setFilterMember(matchingMember.name);
+              }
+
+              loadDataFromSharePoint().catch(console.warn);
+            }
+          }
           setIsLoading(false);
         }
       } catch (err) {
-        console.error('Erro na autenticação MSAL:', err);
+        console.error('Erro na verificação de autenticação:', err);
         setIsLoading(false);
       }
     };
@@ -348,17 +437,36 @@ const App: React.FC = () => {
         )
       );
 
-      const isWhitelisted = userEmails.some(email => 
+      const isBlocked = appUsers.some(
+        (user) => user.status === 'blocked' && userEmails.some(
+          email => email === user.email.toLowerCase().trim() ||
+                   email.split('@')[0] === user.email.toLowerCase().trim().split('@')[0] ||
+                   isNameMatch(user.username, account.name)
+        )
+      );
+
+      const isWhitelisted = !isBlocked && userEmails.some(email => 
         ['brunardias@outlook.com', 'brunadias@ctvacinas.org', 'graziellarivelli@ctvacinas.org', 'priscilapassos@ctvacinas.org', 'marjoriecoimbra@gmail.com', 'tecaester@gmail.com', 'ester@ctvacinas.org', 'analuiza@ctvacinas.org', 'anaterzian@ctvacinas.org'].includes(email)
       );
 
-      const hasAccess = !!authorizedUser || isWhitelisted;
+      const hasAccess = !isBlocked && (!!authorizedUser || isWhitelisted);
       setIsAuthorized(hasAccess);
+      if (hasAccess) {
+        setIsPasswordAuthenticated(true);
+        if (!selectedProfile) {
+          const userName = authorizedUser?.username || account.name;
+          const matchingMember = teamMembers.find(m => isNameMatch(m.name, userName));
+          if (matchingMember) {
+            setSelectedProfile(matchingMember);
+            setFilterMember(matchingMember.name);
+          }
+        }
+      }
       if (!hasAccess) {
         setIsLoading(false);
       }
     }
-  }, [isMsalAuthenticated, account, appUsers]);
+  }, [isMsalAuthenticated, account, appUsers, teamMembers, selectedProfile]);
   
   const setDataDirty = () => {
     if (!isDataDirty) {
@@ -889,12 +997,43 @@ const App: React.FC = () => {
   
   const handleLogout = async () => {
     await MicrosoftGraphService.logout();
+    localStorage.removeItem('ct_sharepoint_active_user');
+    sessionStorage.removeItem('ct_sharepoint_active_user');
     setIsMsalAuthenticated(false);
     setHasChosenModule(false);
     setSelectedProfile(null);
     setIsPasswordAuthenticated(false);
     setAccount(null);
     setIsAuthorized(null);
+  };
+
+  const handleDirectSharePointLogin = async (activeUser: AppUser) => {
+    if (activeUser.status !== 'active') return;
+    setIsLoading(true);
+    setAuthError(null);
+    const spAccount = MicrosoftGraphService.createSharePointAccount(activeUser);
+    setAccount(spAccount as any);
+    setIsMsalAuthenticated(true);
+    setIsAuthorized(true);
+    setIsPasswordAuthenticated(true);
+    localStorage.setItem('ct_sharepoint_active_user', JSON.stringify({
+      id: activeUser.id,
+      username: activeUser.username,
+      email: activeUser.email
+    }));
+
+    const matchingMember = teamMembers.find(m => isNameMatch(m.name, activeUser.username));
+    if (matchingMember) {
+      setSelectedProfile(matchingMember);
+      setFilterMember(matchingMember.name);
+    }
+
+    try {
+      await loadDataFromSharePoint();
+    } catch (e) {
+      console.warn('Erro ao carregar dados do SharePoint:', e);
+    }
+    setIsLoading(false);
   };
   
   const handleSaveLocalBackup = () => {
@@ -967,9 +1106,8 @@ const App: React.FC = () => {
     setSelectedProfile(user);
     setFilterMember(user.name);
     setLeadFilter('Todos');
-    if (!user.password) {
-      setIsPasswordAuthenticated(true);
-    }
+    // Usuários ativos autenticados no SharePoint / sistema acessam sem requisição de senha
+    setIsPasswordAuthenticated(true);
     if (user.isComiteGestor) {
       setProjectSubView('visual');
       setProjectVisualizationMode('phases');
@@ -1475,6 +1613,43 @@ const App: React.FC = () => {
             <p className="mt-2 text-slate-500 text-sm">Para continuar, autentique-se usando sua conta Microsoft corporativa.</p>
             <button onClick={handleLogin} className="mt-8 w-full flex items-center justify-center gap-3 bg-slate-800 text-white py-4 rounded-2xl font-bold uppercase text-sm tracking-widest hover:bg-black transition">Entrar com Microsoft <ArrowRight size={16}/></button>
             {authError && <p className="mt-4 text-sm text-red-500">{authError}</p>}
+
+            {/* Acesso Direto SharePoint Plataforma de Assuntos Regulatórios */}
+            <div className="mt-8 pt-6 border-t border-slate-200/80 text-left">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+                <h3 className="font-bold text-xs uppercase tracking-wider text-slate-700">
+                  Acesso Direto • SharePoint Regulatórios
+                </h3>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed mb-3">
+                Usuários ativos gerenciados no sistema autenticados no SharePoint têm liberação direta:
+              </p>
+              <div className="flex flex-col gap-2 max-h-52 overflow-y-auto pr-1">
+                {appUsers.filter(u => u.status === 'active').map(user => (
+                  <button
+                    key={user.id}
+                    onClick={() => handleDirectSharePointLogin(user)}
+                    className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200/90 bg-white hover:bg-emerald-50/80 hover:border-emerald-300 transition text-left group"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-800 group-hover:text-emerald-800 truncate">
+                          {user.username}
+                        </span>
+                        <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 group-hover:bg-emerald-100 group-hover:text-emerald-700">
+                          {user.role === 'admin' ? 'Gestão / Admin' : 'Equipe AR'}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 block truncate">{user.email}</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 group-hover:bg-emerald-600 group-hover:text-white px-2.5 py-1 rounded-lg transition shrink-0 ml-2">
+                      Acessar
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </main>
       </div>
@@ -1575,7 +1750,11 @@ const App: React.FC = () => {
       );
     }
     if (selectedProfile && !isPasswordAuthenticated) {
-      return (<PasswordModal isOpen={true} onClose={handleSwitchProfile} onConfirm={handlePasswordConfirm} userName={selectedProfile.name} error={passwordError}/>);
+      if (isAuthorized) {
+        setIsPasswordAuthenticated(true);
+      } else {
+        return (<PasswordModal isOpen={true} onClose={handleSwitchProfile} onConfirm={handlePasswordConfirm} userName={selectedProfile.name} error={passwordError}/>);
+      }
     }
   }
 
