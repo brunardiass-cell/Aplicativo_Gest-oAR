@@ -28,7 +28,7 @@ let msalInstance: msal.PublicClientApplication | null = null;
 let msalInstancePromise: Promise<msal.PublicClientApplication> | null = null;
 
 const loginRequest = {
-  scopes: ["User.Read", "Files.ReadWrite", "Sites.ReadWrite.All", "Mail.Send"]
+  scopes: ["User.Read", "Files.ReadWrite", "Sites.ReadWrite.All"]
 };
 
 const SHAREPOINT_HOST = "ctvacinas974.sharepoint.com";
@@ -78,10 +78,25 @@ export const MicrosoftGraphService = {
   async login() {
     const instance = await this.init();
     try {
-      const loginResponse = await instance.loginPopup({
-        ...loginRequest,
-        prompt: "select_account"
-      });
+      // Tenta primeiro autenticar sem forçar 'select_account', para que a sessão
+      // corporativa já autenticada no SharePoint/M365 seja reaproveitada de imediato
+      // sem desafiar o usuário com novos prompts de aplicativo Microsoft Authenticator
+      let loginResponse: msal.AuthenticationResult;
+      try {
+        loginResponse = await instance.loginPopup({
+          ...loginRequest
+        });
+      } catch (promptErr: any) {
+        if (promptErr instanceof msal.BrowserAuthError && promptErr.errorCode === 'user_cancelled') {
+          throw promptErr;
+        }
+        // Se a sessão exigir interação explícita de seleção de conta
+        loginResponse = await instance.loginPopup({
+          ...loginRequest,
+          prompt: "select_account"
+        });
+      }
+
       instance.setActiveAccount(loginResponse.account);
       return { success: true, account: loginResponse.account };
     } catch (error: any) {
@@ -97,7 +112,7 @@ export const MicrosoftGraphService = {
   async logout() {
     const instance = await this.init();
     const account = instance.getActiveAccount();
-    if (account && !account.homeAccountId?.startsWith('sp_')) {
+    if (account) {
       try {
         await instance.logoutPopup({ account });
       } catch (e) {
@@ -107,8 +122,6 @@ export const MicrosoftGraphService = {
     try {
       await instance.clearCache();
     } catch (e) {}
-    localStorage.removeItem('ct_sharepoint_active_user');
-    sessionStorage.removeItem('ct_sharepoint_active_user');
   },
 
   async getAccount() {
@@ -141,46 +154,32 @@ export const MicrosoftGraphService = {
         return ssoRes.account;
       }
     } catch (e) {
-      console.log('Tentativa de SSO silencioso via SharePoint/M365:', e);
+      // Silenciosamente ignorado caso não haja sessão prévia nos cookies
     }
     return null;
   },
 
-  isSharePointEnvironment(): boolean {
-    if (typeof window === 'undefined') return false;
-    const urlParams = new URLSearchParams(window.location.search);
-    const hasSpParam = urlParams.has('sharepoint') || urlParams.has('sp') || urlParams.get('source') === 'sharepoint' || urlParams.has('spUser');
-    const isReferrerFromSp = typeof document !== 'undefined' && /ctvacinas974\.sharepoint\.com|sharepoint\.com/i.test(document.referrer || '');
-    const isIframe = window.self !== window.top;
-    const hasSavedSpSession = !!localStorage.getItem('ct_sharepoint_active_user');
-    return hasSpParam || isReferrerFromSp || isIframe || hasSavedSpSession;
-  },
-
-  getSharePointUrlParams(): { email?: string; username?: string; isSharePoint: boolean } {
-    if (typeof window === 'undefined') return { isSharePoint: false };
-    const urlParams = new URLSearchParams(window.location.search);
-    const email = urlParams.get('email') || urlParams.get('spUser') || urlParams.get('user') || urlParams.get('upn') || urlParams.get('login_hint') || undefined;
-    const username = urlParams.get('name') || urlParams.get('username') || undefined;
-    const isSharePoint = this.isSharePointEnvironment();
-    return { email, username, isSharePoint };
-  },
-
-  createSharePointAccount(user: { id: string; username: string; email: string }) {
-    return {
-      homeAccountId: `sp_${user.id}`,
-      environment: 'login.microsoftonline.com',
-      tenantId: TENANT_ID,
-      username: user.email,
-      localAccountId: user.id,
-      name: user.username,
-      idTokenClaims: {
-        name: user.username,
-        email: user.email,
-        preferred_username: user.email,
-        upn: user.email,
-        tid: TENANT_ID
+  async checkSharePointRegulatoryAccess(token?: string): Promise<{ hasAccess: boolean; siteId?: string; error?: string }> {
+    try {
+      const effectiveToken = token || await this.getToken();
+      if (!effectiveToken) {
+        return { hasAccess: false, error: "Não foi possível obter o token de autenticação Microsoft." };
       }
-    };
+      const siteRes = await fetch(`https://graph.microsoft.com/v1.0/sites/${SHAREPOINT_HOST}:${SITE_PATH}?$select=id,name,webUrl`, {
+        headers: { Authorization: `Bearer ${effectiveToken}` }
+      });
+      if (!siteRes.ok) {
+        const err = await siteRes.json().catch(() => ({}));
+        return { 
+          hasAccess: false, 
+          error: err?.error?.message || `Sem permissão de acesso ao site ${SITE_PATH} no SharePoint.` 
+        };
+      }
+      const siteData = await siteRes.json();
+      return { hasAccess: true, siteId: siteData.id };
+    } catch (e: any) {
+      return { hasAccess: false, error: e?.message || "Erro ao consultar permissões no SharePoint." };
+    }
   },
 
   async getToken() {
