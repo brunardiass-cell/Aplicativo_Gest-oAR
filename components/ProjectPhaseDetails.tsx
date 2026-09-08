@@ -49,8 +49,24 @@ import {
   Kanban,
   Eye,
   Copy,
-  Save
+  Save,
+  CheckSquare,
+  Square,
+  HelpCircle,
+  ToggleLeft,
+  ToggleRight,
+  History
 } from 'lucide-react';
+import { DateInput } from './DateInput';
+import { CompleteActivityModal } from './CompleteActivityModal';
+import { 
+  detectMacroActivityType, 
+  getOperationalTemplate, 
+  updateMacroContracting, 
+  updateMicroContracting, 
+  checkIsBlockedByDependencies,
+  complementMacroActivityWithTemplate
+} from '../utils/operationalTemplates';
 
 interface ProjectPhaseDetailsProps {
   project: Project;
@@ -133,6 +149,18 @@ export const ProjectPhaseDetails: React.FC<ProjectPhaseDetailsProps> = ({
     acoes: true
   });
 
+  // Modal de Conclusão com link de documento (Imagem 3)
+  const [completeModalMicro, setCompleteModalMicro] = useState<MicroActivity | null>(null);
+  
+  // Controle de edição rápida de prazo por digitação direta na tabela
+  const [editingInlineDueDateId, setEditingInlineDueDateId] = useState<string | null>(null);
+  
+  // Novo item de checklist no painel lateral
+  const [newChecklistText, setNewChecklistText] = useState('');
+  
+  // Opções avançadas no drawer lateral
+  const [showMoreDrawerOptions, setShowMoreDrawerOptions] = useState(false);
+
   // Salvar/carregar preferências de colunas no localStorage
   useEffect(() => {
     try {
@@ -194,6 +222,22 @@ export const ProjectPhaseDetails: React.FC<ProjectPhaseDetailsProps> = ({
     if (currentMacro?.relationshipType === 'dependent') return 'DEPENDENTE';
     return 'PLANEJADA';
   }, [macroProgress, inProgressCount, currentMacro]);
+
+  // Identificação automática do tipo de template operacional
+  const detectedTemplateType = useMemo(() => {
+    if (!currentMacro) return 'desenvolvimento_tecnico';
+    return (currentMacro.templateType as any) || detectMacroActivityType(currentMacro.name);
+  }, [currentMacro]);
+
+  const templateDef = useMemo(() => {
+    return getOperationalTemplate(detectedTemplateType);
+  }, [detectedTemplateType]);
+
+  // Verificação de dependências bloqueantes da macroatividade
+  const dependencyCheck = useMemo(() => {
+    if (!currentMacro) return { isBlocked: false, blockingNames: [] };
+    return checkIsBlockedByDependencies(currentMacro.dependsOnMacroIds, project.macroActivities);
+  }, [project.macroActivities, currentMacro]);
 
   // Lista filtrada de microatividades
   const filteredMicros = useMemo(() => {
@@ -321,6 +365,160 @@ export const ProjectPhaseDetails: React.FC<ProjectPhaseDetailsProps> = ({
 
     setSelectedMicro(updatedMicro);
     setIsDrawerOpen(false);
+  };
+
+  // Alternar checkbox de item da lista de checklist
+  const handleToggleChecklistItem = (itemId: string) => {
+    if (!selectedMicro) return;
+    const currentList = selectedMicro.checklist || [];
+    const updatedList = currentList.map(item =>
+      item.id === itemId ? { ...item, completed: !item.completed } : item
+    );
+    const updated = { ...selectedMicro, checklist: updatedList };
+    setSelectedMicro(updated);
+
+    if (currentMacro) {
+      const updatedMicros = currentMacro.microActivities.map(m =>
+        m.id === updated.id ? updated : m
+      );
+      const updatedMacros = project.macroActivities.map(m =>
+        m.id === currentMacro.id ? { ...m, microActivities: updatedMicros } : m
+      );
+      onUpdateProject({ ...project, macroActivities: updatedMacros });
+    }
+  };
+
+  // Adicionar novo item ao checklist da microatividade
+  const handleAddChecklistItem = () => {
+    if (!selectedMicro || !newChecklistText.trim()) return;
+    const currentList = selectedMicro.checklist || [];
+    const newItem = {
+      id: `chk_${Date.now()}`,
+      item: newChecklistText.trim(),
+      completed: false
+    };
+    const updated = { ...selectedMicro, checklist: [...currentList, newItem] };
+    setSelectedMicro(updated);
+    setNewChecklistText('');
+
+    if (currentMacro) {
+      const updatedMicros = currentMacro.microActivities.map(m =>
+        m.id === updated.id ? updated : m
+      );
+      const updatedMacros = project.macroActivities.map(m =>
+        m.id === currentMacro.id ? { ...m, microActivities: updatedMicros } : m
+      );
+      onUpdateProject({ ...project, macroActivities: updatedMacros });
+    }
+  };
+
+  // Concluir atividade com documento / relatório comprovatório (Modal da Imagem 3)
+  const handleConfirmCompleteActivity = (microId: string, docLink?: string) => {
+    if (!currentMacro) return;
+    const today = new Date().toISOString().split('T')[0];
+    const updatedMicros = currentMacro.microActivities.map(m => {
+      if (m.id === microId) {
+        return {
+          ...m,
+          status: 'Concluído e aprovado' as MicroActivityStatus,
+          progress: 100,
+          completionDate: today,
+          documentLink: docLink || m.documentLink,
+          reportLink: docLink || m.reportLink
+        };
+      }
+      return m;
+    });
+
+    const updatedMacros = project.macroActivities.map(m =>
+      m.id === currentMacro.id ? { ...m, microActivities: updatedMicros } : m
+    );
+
+    onUpdateProject({ ...project, macroActivities: updatedMacros });
+
+    if (selectedMicro?.id === microId) {
+      setSelectedMicro({
+        ...selectedMicro,
+        status: 'Concluído e aprovado',
+        progress: 100,
+        completionDate: today,
+        documentLink: docLink || selectedMicro.documentLink
+      });
+    }
+  };
+
+  // Atualização rápida de prazo digitando (usado tanto no drawer quanto inline na tabela)
+  const handleQuickUpdateDueDate = (microId: string, newDueDate: string) => {
+    if (!currentMacro) return;
+    const updatedMicros = currentMacro.microActivities.map(m =>
+      m.id === microId ? { ...m, dueDate: newDueDate } : m
+    );
+    const updatedMacros = project.macroActivities.map(m =>
+      m.id === currentMacro.id ? { ...m, microActivities: updatedMicros } : m
+    );
+    onUpdateProject({ ...project, macroActivities: updatedMacros });
+
+    if (selectedMicro?.id === microId) {
+      setSelectedMicro({ ...selectedMicro, dueDate: newDueDate });
+    }
+    setEditingInlineDueDateId(null);
+  };
+
+  // Alterna contratação na Macroatividade e propaga para quem herda
+  const handleToggleMacroContracting = (isContracted: boolean) => {
+    if (!currentMacro) return;
+    const updatedMacro = updateMacroContracting(currentMacro, isContracted);
+    const updatedMacros = project.macroActivities.map(m =>
+      m.id === currentMacro.id ? updatedMacro : m
+    );
+    onUpdateProject({ ...project, macroActivities: updatedMacros });
+  };
+
+  // Alterna contratação individualmente na Microatividade
+  const handleToggleMicroContracting = (isContracted: boolean) => {
+    if (!currentMacro || !selectedMicro) return;
+    const updated = {
+      ...selectedMicro,
+      isContracted,
+      contractedCustomized: true
+    };
+    setSelectedMicro(updated);
+
+    const updatedMacro = updateMicroContracting(currentMacro, selectedMicro.id, isContracted);
+    const updatedMacros = project.macroActivities.map(m =>
+      m.id === currentMacro.id ? updatedMacro : m
+    );
+    onUpdateProject({ ...project, macroActivities: updatedMacros });
+  };
+
+  // Restaurar herança da Macroatividade na Microatividade
+  const handleResetMicroContractingInheritance = () => {
+    if (!currentMacro || !selectedMicro) return;
+    const macroContracted = currentMacro.isContracted ?? false;
+    const updated = {
+      ...selectedMicro,
+      isContracted: macroContracted,
+      contractedCustomized: false
+    };
+    setSelectedMicro(updated);
+
+    const updatedMicros = currentMacro.microActivities.map(m =>
+      m.id === selectedMicro.id ? updated : m
+    );
+    const updatedMacros = project.macroActivities.map(m =>
+      m.id === currentMacro.id ? { ...m, microActivities: updatedMicros } : m
+    );
+    onUpdateProject({ ...project, macroActivities: updatedMacros });
+  };
+
+  // Complementar macroatividade com template padrão
+  const handleComplementWithTemplate = () => {
+    if (!currentMacro) return;
+    const complemented = complementMacroActivityWithTemplate(currentMacro);
+    const updatedMacros = project.macroActivities.map(m =>
+      m.id === currentMacro.id ? complemented : m
+    );
+    onUpdateProject({ ...project, macroActivities: updatedMacros });
   };
 
   // Alternar status rápido da microatividade diretamente na tabela
@@ -571,6 +769,57 @@ export const ProjectPhaseDetails: React.FC<ProjectPhaseDetailsProps> = ({
                 }`}>
                   {macroStatusBadge}
                 </span>
+
+                {/* Badge do template operacional identificado */}
+                <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-1">
+                  <Sparkles size={11} className="text-purple-600" />
+                  <span>Template: {templateDef.name}</span>
+                </span>
+              </div>
+
+              {/* Contratação no nível da Macroatividade (Propagação com Herança) */}
+              <div className="flex items-center gap-3 mt-2 flex-wrap">
+                <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200 text-xs">
+                  <span className="font-bold text-slate-700">Será contratado?</span>
+                  <div className="flex items-center gap-1 ml-1">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleMacroContracting(true)}
+                      className={`px-2 py-0.5 rounded-lg text-[11px] font-black transition ${
+                        currentMacro?.isContracted
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'text-slate-600 hover:bg-slate-200/60'
+                      }`}
+                    >
+                      Sim
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleMacroContracting(false)}
+                      className={`px-2 py-0.5 rounded-lg text-[11px] font-black transition ${
+                        !currentMacro?.isContracted
+                          ? 'bg-slate-800 text-white shadow-2xs'
+                          : 'text-slate-600 hover:bg-slate-200/60'
+                      }`}
+                    >
+                      Não
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-slate-400 pl-1 border-l border-slate-200">
+                    (propaga para as microatividades)
+                  </span>
+                </div>
+
+                {/* Botão para complementar com template padrão */}
+                <button
+                  type="button"
+                  onClick={handleComplementWithTemplate}
+                  className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                  title="Complementa esta macroatividade com o checklist e fluxo técnico do template sem apagar dados pré-existentes"
+                >
+                  <Plus size={13} />
+                  Complementar com template
+                </button>
               </div>
             </div>
           </div>
@@ -609,6 +858,19 @@ export const ProjectPhaseDetails: React.FC<ProjectPhaseDetailsProps> = ({
             </button>
           </div>
         </div>
+
+        {/* ALERTA DE DEPENDÊNCIA BLOQUEANTE */}
+        {dependencyCheck.isBlocked && (
+          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 text-xs text-amber-900 animate-in fade-in duration-200">
+            <span className="text-base leading-none">⚠️</span>
+            <div className="flex-1">
+              <span className="font-black block uppercase tracking-tight">Macroatividade com pré-requisitos pendentes:</span>
+              <p className="mt-0.5 text-amber-800">
+                Esta etapa técnica possui dependências diretas de: <strong className="font-black">{dependencyCheck.blockingNames.join(', ')}</strong>. A finalização e auditoria recomendam a conclusão prévia destas etapas.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* METRICS ROW (MATCHING IMAGE 2) */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -904,15 +1166,36 @@ export const ProjectPhaseDetails: React.FC<ProjectPhaseDetailsProps> = ({
                               </div>
                             )}
 
-                            {/* Prazo */}
+                            {/* Prazo com digitação direta ou clique rápido */}
                             {visibleColumns.prazo && (
-                              <div className="col-span-2 sm:col-span-1">
-                                <div className="text-xs font-bold text-slate-800">
-                                  {formatDateBR(micro.dueDate)}
-                                </div>
-                                <span className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-black mt-0.5 border ${deadline.color}`}>
-                                  {deadline.text}
-                                </span>
+                              <div className="col-span-2 sm:col-span-1" onClick={e => e.stopPropagation()}>
+                                {editingInlineDueDateId === micro.id ? (
+                                  <div className="min-w-[130px]">
+                                    <DateInput
+                                      autoFocus
+                                      value={micro.dueDate || ''}
+                                      onChange={val => handleQuickUpdateDueDate(micro.id, val)}
+                                      onBlur={() => setEditingInlineDueDateId(null)}
+                                      placeholder="dd/mm/aaaa"
+                                      className="w-full px-2 py-1 bg-white border-2 border-blue-500 rounded-lg text-xs font-bold text-slate-900 shadow-md"
+                                    />
+                                    <span className="text-[9px] text-blue-600 font-bold block mt-0.5">Digite o prazo (Enter)</span>
+                                  </div>
+                                ) : (
+                                  <div 
+                                    onClick={() => setEditingInlineDueDateId(micro.id)}
+                                    className="cursor-pointer group/date p-1 -m-1 rounded-lg hover:bg-slate-100 transition"
+                                    title="Clique para alterar o prazo digitando diretamente com o teclado"
+                                  >
+                                    <div className="text-xs font-bold text-slate-800 group-hover/date:text-blue-600 flex items-center gap-1">
+                                      <span>{formatDateBR(micro.dueDate)}</span>
+                                      <Edit size={11} className="opacity-0 group-hover/date:opacity-100 text-slate-400 transition" />
+                                    </div>
+                                    <span className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-black mt-0.5 border ${deadline.color}`}>
+                                      {deadline.text}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             )}
 
@@ -1505,8 +1788,8 @@ export const ProjectPhaseDetails: React.FC<ProjectPhaseDetailsProps> = ({
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
               
               {drawerTab === 'geral' && (
-                <div className="space-y-4">
-                  {/* Name */}
+                <div className="space-y-5">
+                  {/* Nome da Microatividade */}
                   <div>
                     <label className="text-[11px] font-black uppercase tracking-wider text-slate-600 block mb-1">
                       Nome da Microatividade
@@ -1515,102 +1798,346 @@ export const ProjectPhaseDetails: React.FC<ProjectPhaseDetailsProps> = ({
                       type="text"
                       value={selectedMicro.name}
                       onChange={e => setSelectedMicro({ ...selectedMicro, name: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-blue-500 focus:bg-white"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-blue-500 focus:bg-white transition"
                     />
                   </div>
 
-                  {/* Observations */}
-                  <div>
-                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-600 block mb-1">
-                      Descrição / Subtítulo
+                  {/* 1. SEÇÃO CHECKLIST (CONFORME IMAGEM 2) */}
+                  <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-200/90 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CheckSquare size={16} className="text-blue-600" />
+                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                          Checklist de Execução
+                        </h4>
+                      </div>
+                      <span className="text-[11px] font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                        {((selectedMicro.checklist || []).filter(c => c.completed).length)} / {((selectedMicro.checklist || []).length)}
+                      </span>
+                    </div>
+
+                    {/* Lista de itens do checklist */}
+                    <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                      {(!selectedMicro.checklist || selectedMicro.checklist.length === 0) ? (
+                        <p className="text-xs text-slate-400 italic py-2 text-center">
+                          Nenhum item no checklist. Adicione itens operacionais abaixo.
+                        </p>
+                      ) : (
+                        selectedMicro.checklist.map((chk) => (
+                          <div
+                            key={chk.id}
+                            onClick={() => handleToggleChecklistItem(chk.id)}
+                            className={`flex items-start gap-2.5 p-2 rounded-xl border transition cursor-pointer select-none group ${
+                              chk.completed
+                                ? 'bg-emerald-50/50 border-emerald-200/80 text-slate-500'
+                                : 'bg-white border-slate-200 hover:border-blue-300 text-slate-800'
+                            }`}
+                          >
+                            <div className="mt-0.5 shrink-0">
+                              {chk.completed ? (
+                                <CheckSquare size={16} className="text-emerald-600" />
+                              ) : (
+                                <Square size={16} className="text-slate-400 group-hover:text-blue-500" />
+                              )}
+                            </div>
+                            <span className={`text-xs font-semibold leading-snug flex-1 ${
+                              chk.completed ? 'line-through text-slate-400 font-normal' : 'text-slate-800'
+                            }`}>
+                              {chk.item}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Adicionar novo item ao checklist */}
+                    <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60">
+                      <input
+                        type="text"
+                        placeholder="Adicionar item ao checklist..."
+                        value={newChecklistText}
+                        onChange={e => setNewChecklistText(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddChecklistItem();
+                          }
+                        }}
+                        className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 outline-none focus:border-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddChecklistItem}
+                        disabled={!newChecklistText.trim()}
+                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shrink-0"
+                      >
+                        <Plus size={14} /> Adicionar
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 2. PRAZO ESTIMADO COM DIGITAÇÃO DIRETA (RESOLUÇÃO DO BUG REPORTADO) */}
+                  <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-200/90 space-y-2">
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-700 block">
+                      Prazo Estimado (Entrega)
                     </label>
-                    <textarea 
-                      rows={2}
-                      value={selectedMicro.observations || ''}
-                      onChange={e => setSelectedMicro({ ...selectedMicro, observations: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 outline-none focus:border-blue-500 focus:bg-white"
+                    <p className="text-[10px] text-slate-500 mb-2">
+                      Digite o prazo diretamente com o teclado no formato <span className="font-bold">DD/MM/AAAA</span> ou use o seletor.
+                    </p>
+                    <DateInput
+                      value={selectedMicro.dueDate || ''}
+                      onChange={val => {
+                        setSelectedMicro({ ...selectedMicro, dueDate: val });
+                      }}
+                      placeholder="dd/mm/aaaa"
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 shadow-2xs"
                     />
                   </div>
 
-                  {/* Status & Assignee */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* 3. TOGGLE: CONTRIBUI PARA DOCUMENTO REGULATÓRIO (IMAGEM 2) */}
+                  <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-200/90 flex items-center justify-between">
                     <div>
-                      <label className="text-[11px] font-black uppercase tracking-wider text-slate-600 block mb-1">
-                        Status
-                      </label>
-                      <select 
-                        value={selectedMicro.status || 'Planejado'}
-                        onChange={e => setSelectedMicro({ ...selectedMicro, status: e.target.value as MicroActivityStatus })}
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
-                      >
-                        <option value="Planejado">Planejado</option>
-                        <option value="Em andamento">Em andamento</option>
-                        <option value="Concluído e aprovado">Concluído e aprovado</option>
-                        <option value="Concluído com restrições">Concluído com restrições</option>
-                        <option value="Cancelado">Cancelado</option>
-                      </select>
+                      <p className="text-xs font-black text-slate-900 uppercase tracking-tight">
+                        Contribui para documento regulatório
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Gera evidência, narrativa ou dossiê técnico de submissão
+                      </p>
                     </div>
-
-                    <div>
-                      <label className="text-[11px] font-black uppercase tracking-wider text-slate-600 block mb-1">
-                        Responsável
-                      </label>
-                      <select 
-                        value={selectedMicro.assignee || ''}
-                        onChange={e => setSelectedMicro({ ...selectedMicro, assignee: e.target.value })}
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
-                      >
-                        <option value="">Selecione...</option>
-                        {teamMembers.map(tm => (
-                          <option key={tm.id} value={tm.name}>{tm.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Dates: Start & Due */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[11px] font-black uppercase tracking-wider text-slate-600 block mb-1">
-                        Data de Início
-                      </label>
-                      <input 
-                        type="date"
-                        value={selectedMicro.startDate || ''}
-                        onChange={e => setSelectedMicro({ ...selectedMicro, startDate: e.target.value })}
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const val = !selectedMicro.generatesRegulatoryContent;
+                        setSelectedMicro({ ...selectedMicro, generatesRegulatoryContent: val });
+                      }}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        selectedMicro.generatesRegulatoryContent ? 'bg-blue-600' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                          selectedMicro.generatesRegulatoryContent ? 'translate-x-5' : 'translate-x-0'
+                        }`}
                       />
-                    </div>
+                    </button>
+                  </div>
 
+                  {/* 4. AÇÃO RETROATIVA (IMAGEM 2) */}
+                  <div className="p-3 bg-amber-50/60 border border-amber-200/80 rounded-2xl flex items-center justify-between">
                     <div>
-                      <label className="text-[11px] font-black uppercase tracking-wider text-slate-600 block mb-1">
-                        Prazo de Entrega
-                      </label>
-                      <input 
-                        type="date"
-                        value={selectedMicro.dueDate || ''}
-                        onChange={e => setSelectedMicro({ ...selectedMicro, dueDate: e.target.value })}
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
-                      />
+                      <p className="text-xs font-bold text-amber-900">
+                        Marcar como retroativa
+                      </p>
+                      <p className="text-[10px] text-amber-700">
+                        Atividade finalizada antes da implantação do sistema
+                      </p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const isRet = !selectedMicro.isRetroactive;
+                        const today = new Date().toISOString().split('T')[0];
+                        setSelectedMicro({
+                          ...selectedMicro,
+                          isRetroactive: isRet,
+                          status: isRet ? 'Concluído e aprovado' : selectedMicro.status,
+                          progress: isRet ? 100 : selectedMicro.progress,
+                          completionDate: isRet ? (selectedMicro.completionDate || today) : undefined
+                        });
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition border ${
+                        selectedMicro.isRetroactive
+                          ? 'bg-amber-600 text-white border-amber-600'
+                          : 'bg-white text-amber-800 border-amber-300 hover:bg-amber-100/50'
+                      }`}
+                    >
+                      {selectedMicro.isRetroactive ? '✓ Retroativa' : 'Marcar retroativa'}
+                    </button>
                   </div>
 
-                  {/* Progress Slider */}
-                  <div>
-                    <div className="flex items-center justify-between text-xs font-black text-slate-700 mb-1">
-                      <span>Progresso da Atividade</span>
-                      <span className="text-blue-700">{selectedMicro.progress || 0}%</span>
-                    </div>
-                    <input 
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="5"
-                      value={selectedMicro.progress || 0}
-                      onChange={e => setSelectedMicro({ ...selectedMicro, progress: Number(e.target.value) })}
-                      className="w-full accent-blue-600"
-                    />
+                  {/* 5. AÇÕES DE CONCLUSÃO & FLUXO (IMAGEM 2 & 3) */}
+                  <div className="space-y-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setCompleteModalMicro(selectedMicro)}
+                      className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2 active:scale-98"
+                    >
+                      <CheckCircle2 size={16} /> Concluir atividade com entrega
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const today = new Date().toISOString().split('T')[0];
+                        const updated = {
+                          ...selectedMicro,
+                          status: 'Concluído e aprovado' as MicroActivityStatus,
+                          progress: 100,
+                          completionDate: today
+                        };
+                        setSelectedMicro(updated);
+                        handleSaveMicroActivity(updated);
+                      }}
+                      className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+                    >
+                      <Check size={14} className="text-emerald-600" /> Aprovar sem checklist completo
+                    </button>
                   </div>
+
+                  {/* 6. ACORDEÃO EXPANSÍVEL: MOSTRAR MAIS OPÇÕES & CONTRATAÇÃO */}
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setShowMoreDrawerOptions(!showMoreDrawerOptions)}
+                      className="w-full p-3.5 bg-slate-50 hover:bg-slate-100 text-left flex items-center justify-between text-xs font-black uppercase tracking-wider text-slate-700 transition"
+                    >
+                      <span>Mais opções e detalhes operacionais</span>
+                      <ChevronDown size={16} className={`text-slate-400 transition-transform duration-200 ${showMoreDrawerOptions ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showMoreDrawerOptions && (
+                      <div className="p-4 bg-white border-t border-slate-200 space-y-4">
+                        
+                        {/* REGRA DE CONTRATAÇÃO COM HERANÇA */}
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs font-black text-slate-800">Será contratado?</p>
+                              <p className="text-[10px] text-slate-500">Execução via fornecedor ou laboratório externo</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleMicroContracting(true)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-black transition border ${
+                                  selectedMicro.isContracted
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                Sim
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleMicroContracting(false)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-black transition border ${
+                                  !selectedMicro.isContracted
+                                    ? 'bg-slate-800 text-white border-slate-800 shadow-2xs'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                Não
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Badge indicativo de herança vs personalizado */}
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-200/70 text-[10px]">
+                            {selectedMicro.contractedCustomized ? (
+                              <span className="text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                Personalizado nesta microatividade
+                              </span>
+                            ) : (
+                              <span className="text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                Herdado da macroatividade: {currentMacro?.isContracted ? 'Sim' : 'Não'}
+                              </span>
+                            )}
+
+                            {selectedMicro.contractedCustomized && (
+                              <button
+                                type="button"
+                                onClick={handleResetMicroContractingInheritance}
+                                className="text-blue-600 hover:underline font-bold"
+                              >
+                                Restaurar herança
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Status & Responsável */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[11px] font-black uppercase tracking-wider text-slate-600 block mb-1">
+                              Status
+                            </label>
+                            <select 
+                              value={selectedMicro.status || 'Planejado'}
+                              onChange={e => setSelectedMicro({ ...selectedMicro, status: e.target.value as MicroActivityStatus })}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                            >
+                              <option value="Planejado">Planejado</option>
+                              <option value="Em andamento">Em andamento</option>
+                              <option value="Concluído e aprovado">Concluído e aprovado</option>
+                              <option value="Concluído com restrições">Concluído com restrições</option>
+                              <option value="Cancelado">Cancelado</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[11px] font-black uppercase tracking-wider text-slate-600 block mb-1">
+                              Responsável
+                            </label>
+                            <select 
+                              value={selectedMicro.assignee || ''}
+                              onChange={e => setSelectedMicro({ ...selectedMicro, assignee: e.target.value })}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                            >
+                              <option value="">Selecione...</option>
+                              {teamMembers.map(tm => (
+                                <option key={tm.id} value={tm.name}>{tm.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Data de Início com DateInput */}
+                        <div>
+                          <label className="text-[11px] font-black uppercase tracking-wider text-slate-600 block mb-1">
+                            Data de Início
+                          </label>
+                          <DateInput 
+                            value={selectedMicro.startDate || ''}
+                            onChange={val => setSelectedMicro({ ...selectedMicro, startDate: val })}
+                            placeholder="dd/mm/aaaa"
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                          />
+                        </div>
+
+                        {/* Progresso Slider */}
+                        <div>
+                          <div className="flex items-center justify-between text-xs font-black text-slate-700 mb-1">
+                            <span>Progresso</span>
+                            <span className="text-blue-700">{selectedMicro.progress || 0}%</span>
+                          </div>
+                          <input 
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="5"
+                            value={selectedMicro.progress || 0}
+                            onChange={e => setSelectedMicro({ ...selectedMicro, progress: Number(e.target.value) })}
+                            className="w-full accent-blue-600"
+                          />
+                        </div>
+
+                        {/* Observações / Descrição */}
+                        <div>
+                          <label className="text-[11px] font-black uppercase tracking-wider text-slate-600 block mb-1">
+                            Observações / Detalhes
+                          </label>
+                          <textarea 
+                            rows={2}
+                            value={selectedMicro.observations || ''}
+                            onChange={e => setSelectedMicro({ ...selectedMicro, observations: e.target.value })}
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 outline-none focus:border-blue-500 focus:bg-white"
+                          />
+                        </div>
+
+                      </div>
+                    )}
+                  </div>
+
                 </div>
               )}
 
@@ -1960,6 +2487,14 @@ export const ProjectPhaseDetails: React.FC<ProjectPhaseDetailsProps> = ({
           </div>
         </div>
       )}
+
+      {/* 5. MODAL DE CONCLUSÃO DE ATIVIDADE COM LINK COMPROVATÓRIO (IMAGEM 3) */}
+      <CompleteActivityModal
+        isOpen={!!completeModalMicro}
+        onClose={() => setCompleteModalMicro(null)}
+        microActivity={completeModalMicro}
+        onConfirm={handleConfirmCompleteActivity}
+      />
 
     </div>
   );

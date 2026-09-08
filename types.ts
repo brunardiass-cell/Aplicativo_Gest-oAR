@@ -354,6 +354,8 @@ export interface MacroActivityTemplate {
   deliverableType?: string;
   isPhasePrerequisite?: boolean;
   unlocksPhases?: string[];
+  templateType?: string;
+  isContracted?: boolean;
 }
 
 export interface RegulatoryChecklistItem {
@@ -408,6 +410,12 @@ export interface MicroActivity {
   evidenceUrl?: string;
   evidenceDescription?: string;
   evidenceFileName?: string;
+  checklist?: { id: string; item: string; completed: boolean; }[];
+  isContracted?: boolean;
+  contractedCustomized?: boolean;
+  isRetroactive?: boolean;
+  documentLink?: string;
+  templateType?: string;
 }
 
 export interface MacroActivity {
@@ -432,6 +440,8 @@ export interface MacroActivity {
   isDeliverableRegistered?: boolean;
   isPhasePrerequisite?: boolean;
   unlocksPhases?: string[];
+  templateType?: string;
+  isContracted?: boolean;
 }
 
 export interface Project {
