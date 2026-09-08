@@ -20,6 +20,8 @@ import {
   ResponsiveContainer, Cell, PieChart as RePieChart, Pie
 } from 'recharts';
 import PlanManagerModal from './PlanManagerModal';
+import { CreatePlanModal } from './CreatePlanModal';
+import { ProjectDetailView } from './ProjectDetailView';
 import NewProjectModal from './NewProjectModal';
 import ProjectTimeline from './ProjectTimeline';
 import ProjectKanbanView from './ProjectKanbanView';
@@ -96,7 +98,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'initial' | 'selection' | 'dashboard'>('selection');
   const [projectDetailView, setProjectDetailView] = useState<'dashboard' | 'timeline' | 'kanban' | 'phases' | 'gantt' | 'regulatory_docs'>('dashboard');
-  const [projectPhaseTab, setProjectPhaseTab] = useState<'map' | 'details' | 'regulatory_docs'>('map');
+  const [projectPhaseTab, setProjectPhaseTab] = useState<'overview' | 'map' | 'details' | 'regulatory_docs'>('overview');
   const [selectedPhaseMacroId, setSelectedPhaseMacroId] = useState<string>('');
   const [isNewMicroModalOpen, setIsNewMicroModalOpen] = useState(false);
   const [isPrerequisitesModalOpen, setIsPrerequisitesModalOpen] = useState(false);
@@ -1193,15 +1195,34 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           />
         )}
         {isPlanModalOpen && (
-          <PlanManagerModal 
+          <CreatePlanModal 
             isOpen={isPlanModalOpen} 
             onClose={() => setIsPlanModalOpen(false)} 
-            plans={activityPlans} 
-            onSave={onUpdateActivityPlans}
-            projects={projects}
-            onUpdateProjects={onUpdateProjects}
+            onSave={(newPlan, saveAsDefault) => {
+              const updatedPlans = [...activityPlans, newPlan];
+              onUpdateActivityPlans(updatedPlans);
+              setIsPlanModalOpen(false);
+            }}
+            existingPlans={activityPlans}
           />
         )}
+      </div>
+    );
+  }
+
+  if (projectPhaseTab === 'overview' && selectedProject) {
+    return (
+      <div className="project-manager-container animate-in fade-in duration-300">
+        <ProjectDetailView
+          project={selectedProject}
+          onBack={() => setViewMode('selection')}
+          onUpdateProject={handleUpdateProject}
+          teamMembers={teamMembers}
+          regulatoryStandards={regulatoryStandards}
+          onOpenRegulatoryModal={onOpenRegulatoryModal}
+          onPrint={handlePrint}
+          onSwitchTab={(tab) => setProjectPhaseTab(tab)}
+        />
       </div>
     );
   }
@@ -1225,8 +1246,19 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {/* Primary Two Tabs: MAPA DE FASES | DETALHAMENTO DAS FASES */}
+            {/* Primary Tabs */}
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200/60">
+              <button 
+                onClick={() => setProjectPhaseTab('overview')} 
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                  projectPhaseTab === 'overview' 
+                    ? 'bg-blue-600 text-white shadow-xs font-black' 
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <LayoutGrid size={15} /> VISUALIZAÇÃO GERAL
+              </button>
+
               <button 
                 onClick={() => setProjectPhaseTab('map')} 
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
@@ -1235,7 +1267,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <LayoutGrid size={15} /> MAPA DE FASES
+                <Layers size={15} /> MAPA DE FASES
               </button>
 
               <button 

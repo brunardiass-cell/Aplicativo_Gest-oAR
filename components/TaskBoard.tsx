@@ -31,6 +31,8 @@ import {
   Cloud
 } from 'lucide-react';
 
+import { DateInput } from './DateInput';
+
 interface TaskBoardProps {
   tasks: Task[];
   currentUser: string | 'Todos';
@@ -948,15 +950,14 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
                       {/* PRAZO COLUMN */}
                       <td className="py-2.5 px-2 min-w-0">
                         {inlineEdit?.taskId === task.id && inlineEdit?.field === 'date' ? (
-                          <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
-                            <input
-                              type="date"
+                          <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 min-w-[120px]">
+                            <DateInput
                               autoFocus
                               value={inlineEdit.value || ''}
-                              onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
+                              onChange={(newDate) => handleSaveInlineEdit(task, newDate)}
                               onBlur={handleCancelInlineEdit}
                               onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold px-1 py-0.5 bg-white border border-teal-500 rounded outline-none text-slate-800 shadow-sm w-full"
+                              className="text-xs font-bold"
                             />
                           </div>
                         ) : (

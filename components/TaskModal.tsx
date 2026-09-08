@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Task, Priority, Status, TaskNote, ReportStage, TeamMember } from '../types';
 import { X, Plus, ChevronDown, ChevronUp, Users, ShieldCheck, FileText, Info, UserCheck, Link as LinkIcon, PlusCircle, Check } from 'lucide-react';
 import { DossierContributionSection } from './DossierContributionSection';
+import { DateInput } from './DateInput';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -273,12 +274,10 @@ const TaskModal: React.FC<TaskModalProps> = ({
               <label className="text-[11px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
                 Data Prevista <span className="text-red-500">*</span>
               </label>
-              <input
-                type="date"
-                required
+              <DateInput
                 value={formData.completionDate}
-                onChange={e => setFormData({ ...formData, completionDate: e.target.value })}
-                className="w-full px-4 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-[#008779] focus:border-transparent transition"
+                onChange={val => setFormData({ ...formData, completionDate: val })}
+                className="w-full"
               />
             </div>
           </div>
