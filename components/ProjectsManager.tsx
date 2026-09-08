@@ -1612,13 +1612,13 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
       )}
 
       {isPlanModalOpen && (
-        <PlanManagerModal 
+        <CreatePlanModal 
           isOpen={isPlanModalOpen} 
           onClose={() => setIsPlanModalOpen(false)} 
-          plans={activityPlans} 
-          onSave={onUpdateActivityPlans}
-          projects={projects}
-          onUpdateProjects={onUpdateProjects}
+          existingPlans={activityPlans}
+          onSave={(newPlan) => {
+            onUpdateActivityPlans([...activityPlans, newPlan]);
+          }}
         />
       )}
       {isNewProjectModalOpen && (

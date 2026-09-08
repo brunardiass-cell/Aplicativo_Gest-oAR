@@ -1,117 +1,282 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  X, 
-  Check, 
+  ArrowLeft, 
+  Settings, 
+  Plus, 
   ChevronDown, 
+  ChevronRight, 
   ChevronUp, 
   GripVertical, 
-  RefreshCw, 
-  MoreHorizontal, 
-  Plus, 
-  Layers, 
-  BarChart2, 
+  MoreVertical, 
+  FileText, 
   Sparkles, 
-  Flag, 
-  Info, 
-  Pencil, 
-  Trash2,
-  SlidersHorizontal
+  Dna, 
+  Activity, 
+  ShieldCheck, 
+  Check, 
+  Trash2, 
+  Edit2, 
+  Copy, 
+  Layers,
+  X
 } from 'lucide-react';
 import { ActivityPlanTemplate, MacroActivityTemplate } from '../types';
 import { 
-  DEFAULT_OPERATIONAL_TEMPLATES, 
-  detectMacroActivityType,
-  applyAutomaticDependencies,
-  OperationalTemplateKey
-} from '../utils/operationalTemplates';
+  MicroOperationalTemplate, 
+  loadMicroTemplates, 
+  saveMicroTemplates, 
+  DEFAULT_MICRO_TEMPLATES 
+} from '../utils/microTemplates';
+import { ManageTemplatesDrawer } from './ManageTemplatesDrawer';
+
+export type PlanTypeKey = 'recombinant_protein' | 'attenuated_virus' | 'dna_vaccine' | 'custom';
+
+interface PlanTypeOption {
+  key: PlanTypeKey;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+}
+
+export interface PlanPhaseItem {
+  id: string;
+  name: string;
+  description: string;
+  expanded: boolean;
+  macros: PlanMacroItem[];
+}
+
+export interface PlanMacroItem {
+  id: string;
+  name: string;
+  description: string;
+  expanded: boolean;
+  micros: PlanMicroItem[];
+}
+
+export interface PlanMicroItem {
+  id: string;
+  name: string;
+  description: string;
+  appliedTemplateId?: string;
+  appliedTemplateName?: string;
+  checklist?: { id: string; item: string; completed?: boolean }[];
+  internalDependencies?: { id: string; fromItem: string; toItem: string }[];
+}
 
 interface CreatePlanModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (newPlan: ActivityPlanTemplate, saveAsDefaultTemplates: boolean) => void;
+  onSave: (newPlan: ActivityPlanTemplate, saveAsDefaultTemplates?: boolean) => void;
   existingPlans?: ActivityPlanTemplate[];
 }
 
-interface PhaseDefinition {
-  id: string;
-  name: string;
-  description: string;
-  badgeNumber: number;
-  badgeColor: string;
-  selected: boolean;
-  macros: Array<{
-    id: string;
-    code: string;
-    name: string;
-    templateType: OperationalTemplateKey;
-    templateLabel: string;
-    isContracted?: boolean;
-  }>;
-}
-
-const DEFAULT_PHASES_SETUP: PhaseDefinition[] = [
+const INITIAL_PROTEIN_PLAN: PlanPhaseItem[] = [
   {
-    id: 'fase_poc',
+    id: 'ph_poc',
     name: 'Prova de Conceito',
     description: 'Estudos iniciais e comprovação do conceito',
-    badgeNumber: 1,
-    badgeColor: 'bg-emerald-600 text-white',
-    selected: true,
+    expanded: true,
     macros: [
-      { id: 'poc_1', code: '1.1', name: 'Desenvolvimento do bioprocesso inicial', templateType: 'development_process', templateLabel: 'Desenvolvimento técnico/processo' },
-      { id: 'poc_2', code: '1.2', name: 'Caracterização preliminar do antígeno', templateType: 'characterization', templateLabel: 'Caracterização' },
-      { id: 'poc_3', code: '1.3', name: 'Controle de qualidade analítico', templateType: 'quality_control', templateLabel: 'Controle de qualidade' },
-      { id: 'poc_4', code: '1.4', name: 'Ensaio de imunogenicidade preliminar', templateType: 'biological_assay', templateLabel: 'Atividade biológica/laboratorial' },
-      { id: 'poc_5', code: '1.5', name: 'Relatório técnico de prova de conceito', templateType: 'regulatory_document', templateLabel: 'Documento regulatório' },
+      {
+        id: 'mac_ifa',
+        name: 'IFA – Definição do antígeno',
+        description: 'Desenvolvimento e caracterização do antígeno candidato',
+        expanded: true,
+        micros: [
+          {
+            id: 'mic_1',
+            name: 'Definição da sequência do antígeno',
+            description: 'Planejamento e definição da sequência.',
+          },
+          {
+            id: 'mic_2',
+            name: 'Análise bioinformática',
+            description: 'Análise e validação in silico.',
+          },
+          {
+            id: 'mic_3',
+            name: 'Contratação do serviço',
+            description: 'Contratação de parceiro para síntese do antígeno.',
+            appliedTemplateId: 'tmpl_servico_contratacao',
+            appliedTemplateName: 'Serviço / contratação',
+            checklist: [
+              { id: 'c1', item: 'Definir escopo' },
+              { id: 'c2', item: 'Solicitar orçamento' },
+              { id: 'c3', item: 'Avaliar propostas' },
+              { id: 'c4', item: 'Aprovar contrato' },
+              { id: 'c5', item: 'Revisar relatório final' }
+            ],
+            internalDependencies: [
+              { id: 'd1', fromItem: 'Solicitar orçamento', toItem: 'Avaliar propostas' },
+              { id: 'd2', fromItem: 'Aprovar contrato', toItem: 'Revisar relatório final' }
+            ]
+          },
+          {
+            id: 'mic_4',
+            name: 'Caracterização inicial',
+            description: 'Ensaios iniciais de caracterização.',
+          }
+        ]
+      },
+      {
+        id: 'mac_adj',
+        name: 'Adjuvante – Desenvolvimento farmacotécnico',
+        description: 'Estudo de adjuvantes e formulação',
+        expanded: false,
+        micros: []
+      },
+      {
+        id: 'mac_carac',
+        name: 'Caracterização da formulação',
+        description: 'Avaliação da formulação vacinal',
+        expanded: false,
+        micros: []
+      }
     ]
   },
   {
-    id: 'fase_nao_clinica',
+    id: 'ph_nao_clinica',
     name: 'Fase Não Clínica',
     description: 'Estudos não clínicos (pré-clínicos)',
-    badgeNumber: 2,
-    badgeColor: 'bg-blue-600 text-white',
-    selected: true,
+    expanded: false,
     macros: [
-      { id: 'nc_1', code: '2.1', name: 'Controle de qualidade', templateType: 'quality_control', templateLabel: 'Controle de qualidade' },
-      { id: 'nc_2', code: '2.2', name: 'Estabilidade', templateType: 'stability', templateLabel: 'Estabilidade' },
-      { id: 'nc_3', code: '2.3', name: 'Serviços / contratos', templateType: 'glp_safety', templateLabel: 'Serviços / contratos' },
-      { id: 'nc_4', code: '2.4', name: 'Fabricação de lote', templateType: 'batch_manufacturing', templateLabel: 'Fabricação de lote' },
-      { id: 'nc_5', code: '2.5', name: 'Caracterização', templateType: 'characterization', templateLabel: 'Caracterização' },
-      { id: 'nc_6', code: '2.6', name: 'Documento regulatório', templateType: 'regulatory_document', templateLabel: 'Documento regulatório' },
+      {
+        id: 'mac_nc_1',
+        name: 'Controle de qualidade e estabilidade',
+        description: 'Ensaios físico-químicos e estabilidade acelerada',
+        expanded: false,
+        micros: []
+      },
+      {
+        id: 'mac_nc_2',
+        name: 'Toxicologia e segurança GLP',
+        description: 'Estudos de toxicidade pré-clínica',
+        expanded: false,
+        micros: []
+      }
     ]
   },
   {
-    id: 'fase_1_2',
+    id: 'ph_1_2',
     name: 'Fase 1/2',
     description: 'Estudos clínicos de Fase 1 e 2',
-    badgeNumber: 3,
-    badgeColor: 'bg-purple-600 text-white',
-    selected: true,
+    expanded: false,
     macros: [
-      { id: 'c12_1', code: '3.1', name: 'Produção do lote clínico (GMP)', templateType: 'batch_manufacturing', templateLabel: 'Fabricação de lote' },
-      { id: 'c12_2', code: '3.2', name: 'Controle de qualidade de liberação clínica', templateType: 'quality_control', templateLabel: 'Controle de qualidade' },
-      { id: 'c12_3', code: '3.3', name: 'Estudo de estabilidade em tempo real', templateType: 'stability', templateLabel: 'Estabilidade' },
-      { id: 'c12_4', code: '3.4', name: 'Preparação e submissão do protocolo clínico', templateType: 'regulatory_document', templateLabel: 'Documento regulatório' },
-      { id: 'c12_5', code: '3.5', name: 'Ensaios clínicos Fase 1/2', templateType: 'biological_assay', templateLabel: 'Atividade biológica/laboratorial' },
-      { id: 'c12_6', code: '3.6', name: 'Relatório clínico consolidado', templateType: 'regulatory_document', templateLabel: 'Documento regulatório' },
+      {
+        id: 'mac_c1',
+        name: 'Produção do lote clínico (GMP)',
+        description: 'Fabricação com controle de qualidade para liberação',
+        expanded: false,
+        micros: []
+      },
+      {
+        id: 'mac_c2',
+        name: 'Submissão e condução do ensaio clínico',
+        description: 'Protocolo clínico e recrutamento',
+        expanded: false,
+        micros: []
+      }
     ]
   },
   {
-    id: 'fase_3',
+    id: 'ph_3',
     name: 'Fase 3',
     description: 'Estudos clínicos de Fase 3',
-    badgeNumber: 4,
-    badgeColor: 'bg-slate-600 text-white',
-    selected: false,
+    expanded: false,
     macros: [
-      { id: 'c3_1', code: '4.1', name: 'Escalonamento industrial do bioprocesso', templateType: 'batch_manufacturing', templateLabel: 'Fabricação de lote' },
-      { id: 'c3_2', code: '4.2', name: 'Validação de métodos analíticos e CQ', templateType: 'quality_control', templateLabel: 'Controle de qualidade' },
-      { id: 'c3_3', code: '4.3', name: 'Estudo de comparabilidade analítica', templateType: 'comparability', templateLabel: 'Comparabilidade' },
-      { id: 'c3_4', code: '4.4', name: 'Estudo clínico multicêntrico de Fase 3', templateType: 'biological_assay', templateLabel: 'Atividade biológica/laboratorial' },
-      { id: 'c3_5', code: '4.5', name: 'Dossiê consolidado para registro sanitário', templateType: 'regulatory_document', templateLabel: 'Documento regulatório' },
-      { id: 'c3_6', code: '4.6', name: 'Suporte de submissão e cumprimento de exigências', templateType: 'regulatory_document', templateLabel: 'Gestão regulatória' },
+      {
+        id: 'mac_c3',
+        name: 'Ensaio clínico multicêntrico de eficácia',
+        description: 'Avaliação de eficácia e segurança em larga escala',
+        expanded: false,
+        micros: []
+      }
     ]
+  }
+];
+
+const INITIAL_VIRUS_PLAN: PlanPhaseItem[] = [
+  {
+    id: 'ph_poc',
+    name: 'Prova de Conceito',
+    description: 'Atenuação viral e testes de passagem',
+    expanded: true,
+    macros: [
+      {
+        id: 'mac_virus_1',
+        name: 'Isolamento e clonagem da cepa viral',
+        description: 'Caracterização genética e passagens em cultivo celular',
+        expanded: true,
+        micros: [
+          { id: 'mv_1', name: 'Sequenciamento genômico viral', description: 'Validação da sequência da cepa' },
+          { id: 'mv_2', name: 'Cinética de replicação viral', description: 'Curvas de crescimento in vitro' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'ph_nao_clinica',
+    name: 'Fase Não Clínica',
+    description: 'Ensaios de segurança e patogenicidade',
+    expanded: false,
+    macros: []
+  },
+  {
+    id: 'ph_1_2',
+    name: 'Fase 1/2',
+    description: 'Estudos clínicos de Fase 1 e 2',
+    expanded: false,
+    macros: []
+  },
+  {
+    id: 'ph_3',
+    name: 'Fase 3',
+    description: 'Estudos clínicos de Fase 3',
+    expanded: false,
+    macros: []
+  }
+];
+
+const INITIAL_DNA_PLAN: PlanPhaseItem[] = [
+  {
+    id: 'ph_poc',
+    name: 'Prova de Conceito',
+    description: 'Construção plasmídica e ensaios de expressão in vitro',
+    expanded: true,
+    macros: [
+      {
+        id: 'mac_dna_1',
+        name: 'Construção e clonagem do plasmídeo',
+        description: 'Desenho de vetor e síntese gênica',
+        expanded: true,
+        micros: [
+          { id: 'md_1', name: 'Desenho e síntese do gene de interesse', description: 'Otimização de códons' },
+          { id: 'md_2', name: 'Transfecção e validação de expressão', description: 'Western blot e citometria' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'ph_nao_clinica',
+    name: 'Fase Não Clínica',
+    description: 'Biodistribuição e toxicologia pré-clínica',
+    expanded: false,
+    macros: []
+  },
+  {
+    id: 'ph_1_2',
+    name: 'Fase 1/2',
+    description: 'Estudos clínicos de Fase 1 e 2',
+    expanded: false,
+    macros: []
+  },
+  {
+    id: 'ph_3',
+    name: 'Fase 3',
+    description: 'Estudos clínicos de Fase 3',
+    expanded: false,
+    macros: []
   }
 ];
 
@@ -121,614 +286,721 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
   onSave,
   existingPlans = []
 }) => {
-  const [phases, setPhases] = useState<PhaseDefinition[]>(DEFAULT_PHASES_SETUP);
-  const [expandedPhaseId, setExpandedPhaseId] = useState<string>('fase_nao_clinica');
-  const [templateApplyMode, setTemplateApplyMode] = useState<'only_this_plan' | 'save_for_future'>('only_this_plan');
-  const [planName, setPlanName] = useState('Plano Padrão de Vacinas');
-  const [isEditingPlan, setIsEditingPlan] = useState(false);
-  const [editingMacroId, setEditingMacroId] = useState<string | null>(null);
-  const [tempMacroName, setTempMacroName] = useState('');
+  const [selectedPlanType, setSelectedPlanType] = useState<PlanTypeKey>('recombinant_protein');
+  const [planTitle, setPlanTitle] = useState('Plano de Desenvolvimento – Proteína Recombinante');
+  const [phases, setPhases] = useState<PlanPhaseItem[]>(() => JSON.parse(JSON.stringify(INITIAL_PROTEIN_PLAN)));
+  
+  // Reusable templates state
+  const [availableTemplates, setAvailableTemplates] = useState<MicroOperationalTemplate[]>(() => loadMicroTemplates());
+  const [isTemplateDrawerOpen, setIsTemplateDrawerOpen] = useState(false);
+  const [templateToEdit, setTemplateToEdit] = useState<MicroOperationalTemplate | null>(null);
+
+  // Active dropdown for "Aplicar template"
+  const [openTemplateDropdownMicroId, setOpenTemplateDropdownMicroId] = useState<string | null>(null);
+
+  // Inline additions
+  const [newPhaseName, setNewPhaseName] = useState('');
+  const [isAddingPhase, setIsAddingPhase] = useState(false);
   const [newMacroPhaseId, setNewMacroPhaseId] = useState<string | null>(null);
-  const [newMacroNameInput, setNewMacroNameInput] = useState('');
-  const [newMacroTemplateType, setNewMacroTemplateType] = useState<OperationalTemplateKey>('quality_control');
+  const [newMacroName, setNewMacroName] = useState('');
+  const [newMicroMacroId, setNewMicroMacroId] = useState<string | null>(null);
+  const [newMicroName, setNewMicroName] = useState('');
 
-  // Toggle seleção de fase
-  const handleTogglePhase = (phaseId: string) => {
-    setPhases(prev => prev.map(p => {
-      if (p.id === phaseId) {
-        const nextSelected = !p.selected;
-        if (nextSelected && !expandedPhaseId) {
-          setExpandedPhaseId(p.id);
+  // Switch plan type
+  const handleSelectPlanType = (typeKey: PlanTypeKey) => {
+    setSelectedPlanType(typeKey);
+    if (typeKey === 'recombinant_protein') {
+      setPlanTitle('Plano de Desenvolvimento – Proteína Recombinante');
+      setPhases(JSON.parse(JSON.stringify(INITIAL_PROTEIN_PLAN)));
+    } else if (typeKey === 'attenuated_virus') {
+      setPlanTitle('Plano de Desenvolvimento – Vírus Atenuado');
+      setPhases(JSON.parse(JSON.stringify(INITIAL_VIRUS_PLAN)));
+    } else if (typeKey === 'dna_vaccine') {
+      setPlanTitle('Plano de Desenvolvimento – Vacina de DNA');
+      setPhases(JSON.parse(JSON.stringify(INITIAL_DNA_PLAN)));
+    } else {
+      setPlanTitle('Plano de Desenvolvimento Personalizado');
+      setPhases([
+        {
+          id: 'ph_custom_1',
+          name: 'Prova de Conceito',
+          description: 'Estudos iniciais',
+          expanded: true,
+          macros: []
         }
-        return { ...p, selected: nextSelected };
-      }
-      return p;
+      ]);
+    }
+  };
+
+  // Expand / Collapse all
+  const allExpanded = useMemo(() => {
+    return phases.every(p => p.expanded && p.macros.every(m => m.expanded));
+  }, [phases]);
+
+  const toggleExpandAll = () => {
+    const nextState = !allExpanded;
+    setPhases(phases.map(p => ({
+      ...p,
+      expanded: nextState,
+      macros: p.macros.map(m => ({ ...m, expanded: nextState }))
+    })));
+  };
+
+  // Phase operations
+  const togglePhaseExpand = (phaseId: string) => {
+    setPhases(phases.map(p => p.id === phaseId ? { ...p, expanded: !p.expanded } : p));
+  };
+
+  const handleAddPhase = () => {
+    if (!newPhaseName.trim()) return;
+    const newPh: PlanPhaseItem = {
+      id: `ph_${Date.now()}`,
+      name: newPhaseName.trim(),
+      description: 'Nova fase do projeto',
+      expanded: true,
+      macros: []
+    };
+    setPhases([...phases, newPh]);
+    setNewPhaseName('');
+    setIsAddingPhase(false);
+  };
+
+  const handleDeletePhase = (phaseId: string) => {
+    setPhases(phases.filter(p => p.id !== phaseId));
+  };
+
+  // Macro operations
+  const toggleMacroExpand = (phaseId: string, macroId: string) => {
+    setPhases(phases.map(p => {
+      if (p.id !== phaseId) return p;
+      return {
+        ...p,
+        macros: p.macros.map(m => m.id === macroId ? { ...m, expanded: !m.expanded } : m)
+      };
     }));
   };
 
-  // Alternar accordion
-  const handleToggleAccordion = (phaseId: string) => {
-    setExpandedPhaseId(prev => prev === phaseId ? '' : phaseId);
-  };
-
-  // Adicionar nova macroatividade a uma fase
-  const handleAddMacroToPhase = (phaseId: string) => {
-    if (!newMacroNameInput.trim()) return;
-    const templateDef = DEFAULT_OPERATIONAL_TEMPLATES[newMacroTemplateType];
-    setPhases(prev => prev.map(p => {
-      if (p.id === phaseId) {
-        const nextIndex = p.macros.length + 1;
-        const phaseNumber = p.badgeNumber;
-        const newMacro = {
-          id: `macro_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-          code: `${phaseNumber}.${nextIndex}`,
-          name: newMacroNameInput.trim(),
-          templateType: newMacroTemplateType,
-          templateLabel: templateDef ? templateDef.name : 'Controle de qualidade'
-        };
-        return { ...p, macros: [...p.macros, newMacro] };
-      }
-      return p;
+  const handleAddMacro = (phaseId: string) => {
+    if (!newMacroName.trim()) return;
+    setPhases(phases.map(p => {
+      if (p.id !== phaseId) return p;
+      const newM: PlanMacroItem = {
+        id: `mac_${Date.now()}`,
+        name: newMacroName.trim(),
+        description: 'Descrição da macroatividade',
+        expanded: true,
+        micros: []
+      };
+      return { ...p, macros: [...p.macros, newM] };
     }));
-    setNewMacroNameInput('');
+    setNewMacroName('');
     setNewMacroPhaseId(null);
   };
 
-  // Trocar template de uma macroatividade
-  const handleChangeTemplate = (phaseId: string, macroId: string, nextType: OperationalTemplateKey) => {
-    const templateDef = DEFAULT_OPERATIONAL_TEMPLATES[nextType];
-    setPhases(prev => prev.map(p => {
-      if (p.id === phaseId) {
-        return {
-          ...p,
-          macros: p.macros.map(m => {
-            if (m.id === macroId) {
-              return {
-                ...m,
-                templateType: nextType,
-                templateLabel: templateDef ? templateDef.name : m.templateLabel
-              };
-            }
-            return m;
-          })
-        };
-      }
-      return p;
-    }));
-  };
-
-  // Excluir macroatividade
   const handleDeleteMacro = (phaseId: string, macroId: string) => {
-    setPhases(prev => prev.map(p => {
-      if (p.id === phaseId) {
-        const filtered = p.macros.filter(m => m.id !== macroId);
-        // reindexa códigos
-        const reindexed = filtered.map((m, idx) => ({
-          ...m,
-          code: `${p.badgeNumber}.${idx + 1}`
-        }));
-        return { ...p, macros: reindexed };
-      }
-      return p;
+    setPhases(phases.map(p => {
+      if (p.id !== phaseId) return p;
+      return { ...p, macros: p.macros.filter(m => m.id !== macroId) };
     }));
   };
 
-  // Adicionar nova fase
-  const handleAddNewPhase = () => {
-    const nextNumber = phases.length + 1;
-    const newPhase: PhaseDefinition = {
-      id: `custom_phase_${Date.now()}`,
-      name: `Fase ${nextNumber}`,
-      description: 'Fase complementar personalizada',
-      badgeNumber: nextNumber,
-      badgeColor: 'bg-indigo-600 text-white',
-      selected: true,
-      macros: [
-        {
-          id: `macro_${Date.now()}_1`,
-          code: `${nextNumber}.1`,
-          name: 'Planejamento e alinhamento da fase',
-          templateType: 'development_process',
-          templateLabel: 'Desenvolvimento técnico/processo'
-        }
-      ]
-    };
-    setPhases(prev => [...prev, newPhase]);
-    setExpandedPhaseId(newPhase.id);
+  // Micro operations
+  const handleAddMicro = (phaseId: string, macroId: string) => {
+    if (!newMicroName.trim()) return;
+    setPhases(phases.map(p => {
+      if (p.id !== phaseId) return p;
+      return {
+        ...p,
+        macros: p.macros.map(m => {
+          if (m.id !== macroId) return m;
+          const newMi: PlanMicroItem = {
+            id: `mic_${Date.now()}`,
+            name: newMicroName.trim(),
+            description: 'Descrição da microatividade',
+          };
+          return { ...m, micros: [...m.micros, newMi], expanded: true };
+        })
+      };
+    }));
+    setNewMicroName('');
+    setNewMicroMacroId(null);
   };
 
-  // Resumo do plano calculado
-  const selectedPhases = useMemo(() => phases.filter(p => p.selected), [phases]);
-  
-  const estimatedMacros = useMemo(() => {
-    return selectedPhases.reduce((acc, p) => acc + p.macros.length, 0);
-  }, [selectedPhases]);
+  const handleDeleteMicro = (phaseId: string, macroId: string, microId: string) => {
+    setPhases(phases.map(p => {
+      if (p.id !== phaseId) return p;
+      return {
+        ...p,
+        macros: p.macros.map(m => {
+          if (m.id !== macroId) return m;
+          return { ...m, micros: m.micros.filter(mi => mi.id !== microId) };
+        })
+      };
+    }));
+  };
 
-  const estimatedMicros = useMemo(() => {
-    let count = 0;
-    selectedPhases.forEach(p => {
-      p.macros.forEach(m => {
-        const tmpl = DEFAULT_OPERATIONAL_TEMPLATES[m.templateType];
-        count += tmpl && tmpl.steps ? tmpl.steps.length : 4;
-      });
-    });
-    return count;
-  }, [selectedPhases]);
+  // Apply template to a microactivity
+  const handleApplyTemplate = (phaseId: string, macroId: string, microId: string, template: MicroOperationalTemplate) => {
+    setPhases(phases.map(p => {
+      if (p.id !== phaseId) return p;
+      return {
+        ...p,
+        macros: p.macros.map(m => {
+          if (m.id !== macroId) return m;
+          return {
+            ...m,
+            micros: m.micros.map(mi => {
+              if (mi.id !== microId) return mi;
+              return {
+                ...mi,
+                appliedTemplateId: template.id,
+                appliedTemplateName: template.name,
+                checklist: template.checklist.map(c => ({ id: c.id, item: c.item, completed: false })),
+                internalDependencies: template.internalDependencies?.map(d => ({ ...d })) || []
+              };
+            })
+          };
+        })
+      };
+    }));
+    setOpenTemplateDropdownMicroId(null);
+  };
 
-  // Concluir criação do plano
-  const handleCreatePlan = () => {
-    const activePhasesList = selectedPhases.map(p => p.name);
-    
-    // Converte para MacroActivityTemplate
+  // Remove template from microactivity
+  const handleRemoveTemplate = (phaseId: string, macroId: string, microId: string) => {
+    setPhases(phases.map(p => {
+      if (p.id !== phaseId) return p;
+      return {
+        ...p,
+        macros: p.macros.map(m => {
+          if (m.id !== macroId) return m;
+          return {
+            ...m,
+            micros: m.micros.map(mi => {
+              if (mi.id !== microId) return mi;
+              const { appliedTemplateId, appliedTemplateName, ...rest } = mi;
+              return rest;
+            })
+          };
+        })
+      };
+    }));
+  };
+
+  // Save Plan
+  const handleSavePlan = () => {
     const macroTemplates: MacroActivityTemplate[] = [];
-    selectedPhases.forEach(p => {
-      p.macros.forEach(m => {
-        const tmpl = DEFAULT_OPERATIONAL_TEMPLATES[m.templateType];
-        const microNames = tmpl && tmpl.steps ? tmpl.steps.map(s => s.name) : [];
+
+    phases.forEach(phase => {
+      phase.macros.forEach(macro => {
         macroTemplates.push({
-          name: m.name,
-          phase: p.name,
-          microActivities: microNames,
-          templateType: m.templateType,
-          isContracted: m.isContracted || false
+          name: macro.name,
+          phase: phase.name,
+          expectedResults: macro.description,
+          microActivities: macro.micros.map(mi => mi.name)
         });
       });
     });
 
     const newPlan: ActivityPlanTemplate = {
-      id: 'plan_' + Date.now(),
-      name: planName.trim() || 'Plano de Trabalho Padrão',
-      phases: activePhasesList,
-      macroActivities: macroTemplates,
-      objective: 'Plano base operacional gerado automaticamente conforme diretrizes de assuntos regulatórios'
+      id: `plan_${Date.now()}`,
+      name: planTitle.trim() || 'Novo Plano de Atividades',
+      phases: phases.map(p => p.name),
+      macroActivities: macroTemplates
     };
 
-    onSave(newPlan, templateApplyMode === 'save_for_future');
+    onSave(newPlan, false);
     onClose();
   };
 
   if (!isOpen) return null;
 
+  const planOptions: PlanTypeOption[] = [
+    {
+      key: 'recombinant_protein',
+      title: 'Proteína recombinante',
+      description: 'Planos baseados em proteínas recombinantes.',
+      icon: <Dna className="text-blue-600" size={20} />
+    },
+    {
+      key: 'attenuated_virus',
+      title: 'Vírus atenuado',
+      description: 'Planos para vírus atenuados.',
+      icon: <Sparkles className="text-emerald-600" size={20} />
+    },
+    {
+      key: 'dna_vaccine',
+      title: 'Vacina de DNA',
+      description: 'Planos para vacinas de DNA.',
+      icon: <Activity className="text-purple-600" size={20} />
+    },
+    {
+      key: 'custom',
+      title: 'Outro / Personalizado',
+      description: 'Começar do zero.',
+      icon: <FileText className="text-slate-600" size={20} />
+    }
+  ];
+
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[90] flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <div 
-        className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-6xl max-h-[94vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* TOP HEADER */}
-        <div className="p-6 sm:p-8 pb-5 border-b border-slate-100 flex items-start justify-between">
-          <div className="space-y-1">
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-              Criar plano do projeto
-            </h2>
-            <p className="text-sm font-medium text-slate-500">
-              Selecione as fases que farão parte do seu projeto. O sistema irá gerar automaticamente um plano base com as macroatividades padrão.
+    <div className="fixed inset-0 z-[70] bg-[#F8FAFC] flex flex-col overflow-hidden animate-in fade-in duration-200">
+      
+      {/* Top Bar (Image 4) */}
+      <header className="h-16 px-6 bg-white border-b border-slate-200 flex items-center justify-between shadow-xs shrink-0">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 transition px-2 py-1.5 rounded-lg hover:bg-slate-100 cursor-pointer"
+          >
+            <ArrowLeft size={16} /> Voltar
+          </button>
+          <div className="h-5 w-px bg-slate-200" />
+          <div>
+            <h1 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
+              Criar novo plano de projeto
+            </h1>
+            <p className="text-xs text-slate-500 hidden sm:block">
+              Defina o tipo de plano e construa a estrutura do seu projeto com fases, macroatividades e microatividades.
             </p>
           </div>
-          <button 
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-2xl transition"
-            title="Fechar"
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setTemplateToEdit(null);
+              setIsTemplateDrawerOpen(true);
+            }}
+            className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-2xs cursor-pointer"
           >
-            <X size={20} />
+            <Settings size={15} className="text-slate-500" /> Gerenciar templates
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSavePlan}
+            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-sm flex items-center gap-1.5 cursor-pointer"
+          >
+            Salvar plano
           </button>
         </div>
+      </header>
 
-        {/* STEPPER BAR (Matching Image 1) */}
-        <div className="px-6 sm:px-8 py-4 bg-slate-50/70 border-b border-slate-150 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
-          {/* Step 1 */}
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-black text-sm flex items-center justify-center shadow-xs">
-              1
-            </div>
+      {/* Main Content Area: 2 to 3 Columns Layout (Image 4) */}
+      <div className="flex-1 overflow-hidden flex flex-col md:flex-row p-6 gap-6 max-w-[1700px] w-full mx-auto">
+
+        {/* Column 1: Tipo de plano (Image 4) */}
+        <div className="w-full md:w-80 lg:w-96 shrink-0 flex flex-col space-y-4">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
             <div>
-              <p className="text-xs font-black text-slate-900">Selecionar fases</p>
-              <p className="text-[10px] text-slate-500">Escolha as fases do projeto</p>
-            </div>
-          </div>
-
-          <div className="flex-1 h-0.5 bg-slate-200 min-w-[24px] mx-2" />
-
-          {/* Step 2 */}
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-600 font-black text-sm flex items-center justify-center">
-              2
-            </div>
-            <div>
-              <p className="text-xs font-black text-slate-700">Plano base automático</p>
-              <p className="text-[10px] text-slate-500">Macroatividades sugeridas</p>
-            </div>
-          </div>
-
-          <div className="flex-1 h-0.5 bg-slate-200 min-w-[24px] mx-2" />
-
-          {/* Step 3 */}
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-600 font-black text-sm flex items-center justify-center">
-              3
-            </div>
-            <div>
-              <p className="text-xs font-black text-slate-700">Editar plano</p>
-              <p className="text-[10px] text-slate-500">Ajuste macroatividades e templates</p>
-            </div>
-          </div>
-
-          <div className="flex-1 h-0.5 bg-slate-200 min-w-[24px] mx-2" />
-
-          {/* Step 4 */}
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-600 font-black text-sm flex items-center justify-center">
-              4
-            </div>
-            <div>
-              <p className="text-xs font-black text-slate-700">Revisar e criar</p>
-              <p className="text-[10px] text-slate-500">Confira e crie o plano do projeto</p>
-            </div>
-          </div>
-        </div>
-
-        {/* 3-COLUMN MAIN BODY (Matching Image 1) */}
-        <div className="flex-1 p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-y-auto bg-slate-50/40">
-          
-          {/* COLUMN 1: Selecionar fases do projeto (lg:col-span-4) */}
-          <div className="lg:col-span-4 bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs flex flex-col justify-between">
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-base font-black text-slate-900 tracking-tight">
-                  1. Selecionar fases do projeto
-                </h3>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Escolha as fases que farão parte do plano. O sistema trará as macroatividades padrão para cada fase selecionada.
-                </p>
-              </div>
-
-              {/* Phase Checkboxes List */}
-              <div className="space-y-3 pt-2">
-                {phases.map((phase) => (
-                  <label
-                    key={phase.id}
-                    className={`flex items-start gap-3.5 p-3.5 rounded-2xl border transition-all cursor-pointer ${
-                      phase.selected 
-                        ? 'border-blue-300 bg-blue-50/40 shadow-xs' 
-                        : 'border-slate-200/80 hover:bg-slate-50/80 opacity-70'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={phase.selected}
-                      onChange={() => handleTogglePhase(phase.id)}
-                      className="w-5 h-5 rounded-md text-blue-600 border-slate-300 focus:ring-blue-500 mt-0.5"
-                    />
-                    <div className="flex items-start gap-2.5 flex-1">
-                      <div className={`w-6 h-6 rounded-full ${phase.badgeColor} font-black text-xs flex items-center justify-center shrink-0 mt-0.5`}>
-                        {phase.badgeNumber}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-black text-slate-900 leading-tight">
-                          {phase.name}
-                        </p>
-                        <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
-                          {phase.description}
-                        </p>
-                      </div>
-                    </div>
-                  </label>
-                ))}
-
-                <button
-                  type="button"
-                  onClick={handleAddNewPhase}
-                  className="w-full py-2.5 px-4 border border-dashed border-blue-300 text-blue-700 bg-blue-50/30 hover:bg-blue-50/80 rounded-2xl text-xs font-black transition flex items-center justify-center gap-2"
-                >
-                  <Plus size={15} /> Adicionar fase
-                </button>
-              </div>
-            </div>
-
-            {/* Bottom Alert Box */}
-            <div className="mt-6 p-4 rounded-2xl bg-blue-50 border border-blue-100 flex items-start gap-3">
-              <Info size={18} className="text-blue-600 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-blue-900 leading-relaxed font-medium">
-                Após selecionar as fases, o sistema irá gerar automaticamente um plano base com as macroatividades e templates adequados.
+              <h2 className="text-sm font-black text-slate-900">1. Tipo de plano</h2>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Selecione o tipo de projeto para carregar as fases e macroatividades padrão, ou crie um plano personalizado.
               </p>
             </div>
-          </div>
 
-          {/* COLUMN 2: Plano base gerado automaticamente (lg:col-span-5) */}
-          <div className="lg:col-span-5 bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-4 overflow-hidden flex flex-col">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-base font-black text-slate-900 tracking-tight">
-                  2. Plano base gerado automaticamente
-                </h3>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  O sistema sugeriu as macroatividades padrão para as fases selecionadas. Você pode editar o plano, alterar templates e adicionar novas macroatividades.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsEditingPlan(!isEditingPlan)}
-                className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-2xs"
-              >
-                <Pencil size={13} /> {isEditingPlan ? 'Concluir' : 'Editar plano'}
-              </button>
+            {/* Plan Title edit */}
+            <div className="space-y-1 pt-1">
+              <label className="text-[11px] font-bold text-slate-500">Nome do plano:</label>
+              <input
+                type="text"
+                value={planTitle}
+                onChange={e => setPlanTitle(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-500 transition"
+              />
             </div>
 
-            {/* Accordions for selected phases */}
-            <div className="space-y-3 pt-2 overflow-y-auto pr-1 flex-1">
-              {selectedPhases.map((phase) => {
-                const isExpanded = expandedPhaseId === phase.id;
+            {/* Radio options */}
+            <div className="space-y-2.5 pt-2">
+              {planOptions.map(option => {
+                const isSelected = selectedPlanType === option.key;
                 return (
-                  <div 
-                    key={phase.id} 
-                    className="border border-slate-200 rounded-2xl overflow-hidden transition-all duration-200 bg-white"
+                  <div
+                    key={option.key}
+                    onClick={() => handleSelectPlanType(option.key)}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start gap-3.5 ${
+                      isSelected 
+                        ? 'bg-blue-50/50 border-blue-500 shadow-xs' 
+                        : 'bg-white hover:bg-slate-50 border-slate-200'
+                    }`}
                   >
-                    {/* Accordion Header */}
-                    <div 
-                      onClick={() => handleToggleAccordion(phase.id)}
-                      className="px-4 py-3.5 bg-slate-50/80 hover:bg-slate-100/80 flex items-center justify-between cursor-pointer select-none transition"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-6 h-6 rounded-full ${phase.badgeColor} font-black text-xs flex items-center justify-center shrink-0`}>
-                          {phase.badgeNumber}
-                        </div>
-                        <span className="text-xs font-black text-slate-900">
-                          {phase.name}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-bold text-slate-500">
-                          {phase.macros.length} macroatividades sugeridas
-                        </span>
-                        {isExpanded ? (
-                          <ChevronUp size={16} className="text-slate-400" />
-                        ) : (
-                          <ChevronDown size={16} className="text-slate-400" />
-                        )}
+                    <div className="mt-0.5">
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                        isSelected ? 'border-blue-600' : 'border-slate-300'
+                      }`}>
+                        {isSelected && <div className="w-2 h-2 rounded-full bg-blue-600" />}
                       </div>
                     </div>
 
-                    {/* Accordion Content (List of Macroactivities) */}
-                    {isExpanded && (
-                      <div className="p-3 bg-white space-y-2 border-t border-slate-100 animate-in fade-in duration-150">
-                        {phase.macros.map((macro) => (
-                          <div 
-                            key={macro.id}
-                            className="p-2.5 rounded-xl border border-slate-100 hover:border-slate-200 hover:bg-slate-50/50 flex items-center justify-between gap-2 group transition"
-                          >
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <GripVertical size={14} className="text-slate-300 group-hover:text-slate-500 cursor-grab shrink-0" />
-                              <span className="text-xs font-bold text-slate-400 shrink-0">
-                                {macro.code}
-                              </span>
-                              <span className="text-xs font-bold text-slate-800 truncate">
-                                {macro.name}
-                              </span>
-                            </div>
+                    <div className="p-2 rounded-xl bg-slate-50 border border-slate-100 shrink-0">
+                      {option.icon}
+                    </div>
 
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {/* Template Badge */}
-                              <span className="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded-lg text-[10px] font-bold">
-                                Template: {macro.templateLabel}
-                              </span>
-
-                              {/* Switch template dropdown */}
-                              <select
-                                value={macro.templateType}
-                                onChange={e => handleChangeTemplate(phase.id, macro.id, e.target.value as OperationalTemplateKey)}
-                                className="opacity-0 group-hover:opacity-100 transition p-1 text-slate-400 hover:text-blue-600 bg-transparent text-[10px] font-bold cursor-pointer"
-                                title="Trocar template operacional"
-                              >
-                                {Object.entries(DEFAULT_OPERATIONAL_TEMPLATES).map(([key, def]) => (
-                                  <option key={key} value={key}>{def.name}</option>
-                                ))}
-                              </select>
-
-                              {/* Delete macro */}
-                              {isEditingPlan && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteMacro(phase.id, macro.id)}
-                                  className="p-1 text-slate-300 hover:text-red-500 transition"
-                                  title="Excluir macroatividade"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-
-                        {/* Add Macro Inline Form */}
-                        {newMacroPhaseId === phase.id ? (
-                          <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200 space-y-2.5 mt-2">
-                            <input
-                              type="text"
-                              value={newMacroNameInput}
-                              onChange={e => setNewMacroNameInput(e.target.value)}
-                              placeholder="Nome da nova macroatividade..."
-                              className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none focus:border-blue-500"
-                              autoFocus
-                            />
-                            <div className="flex items-center justify-between gap-2">
-                              <select
-                                value={newMacroTemplateType}
-                                onChange={e => setNewMacroTemplateType(e.target.value as OperationalTemplateKey)}
-                                className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-[11px] font-medium text-slate-700 outline-none"
-                              >
-                                {Object.entries(DEFAULT_OPERATIONAL_TEMPLATES).map(([key, def]) => (
-                                  <option key={key} value={key}>Template: {def.name}</option>
-                                ))}
-                              </select>
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => setNewMacroPhaseId(null)}
-                                  className="px-2.5 py-1 text-[11px] font-bold text-slate-500 hover:text-slate-800"
-                                >
-                                  Cancelar
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleAddMacroToPhase(phase.id)}
-                                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold shadow-2xs"
-                                >
-                                  Salvar
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setNewMacroPhaseId(phase.id);
-                              setNewMacroNameInput('');
-                            }}
-                            className="w-full py-2 text-center text-xs font-bold text-blue-600 hover:text-blue-800 hover:bg-blue-50/50 rounded-xl transition flex items-center justify-center gap-1.5"
-                          >
-                            <Plus size={14} /> Adicionar macroatividade
-                          </button>
-                        )}
-                      </div>
-                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-black text-slate-900">{option.title}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">{option.description}</div>
+                    </div>
                   </div>
                 );
               })}
             </div>
           </div>
+        </div>
 
-          {/* COLUMN 3: Configuração dos templates & Resumo (lg:col-span-3) */}
-          <div className="lg:col-span-3 space-y-5 flex flex-col justify-between">
-            
-            {/* Template Configuration Card (Matching Image 1) */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs space-y-3.5">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
-                  <Layers size={16} />
-                </div>
-                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                  Configuração dos templates
-                </h4>
-              </div>
-
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                Os templates são aplicados automaticamente com base no tipo de macroatividade. Você pode alterar o template manualmente e escolher como aplicar a alteração.
+        {/* Column 2: Estrutura do plano (Image 4) */}
+        <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-2xs flex flex-col overflow-hidden">
+          
+          {/* Header of column 2 */}
+          <div className="p-5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-white">
+            <div>
+              <h2 className="text-sm font-black text-slate-900">2. Estrutura do plano</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Edite, adicione ou remova fases, macroatividades e microatividades. Templates são aplicados às microatividades.
               </p>
-
-              {/* Info pill */}
-              <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-100 flex items-start gap-2">
-                <Info size={15} className="text-blue-600 shrink-0 mt-0.5" />
-                <p className="text-[10px] text-blue-900 leading-tight">
-                  Ao alterar um template, você pode aplicar a mudança apenas neste plano ou salvar para futuros planos.
-                </p>
-              </div>
-
-              {/* Radio Group */}
-              <div className="space-y-2.5 pt-1">
-                <p className="text-[11px] font-black text-slate-800">
-                  Quando eu alterar um template:
-                </p>
-
-                <label className="flex items-start gap-2.5 cursor-pointer p-2 rounded-xl hover:bg-slate-50 transition">
-                  <input
-                    type="radio"
-                    name="template_apply_mode"
-                    value="only_this_plan"
-                    checked={templateApplyMode === 'only_this_plan'}
-                    onChange={() => setTemplateApplyMode('only_this_plan')}
-                    className="text-blue-600 border-slate-300 focus:ring-blue-500 mt-0.5"
-                  />
-                  <div>
-                    <p className="text-xs font-black text-slate-900 leading-snug">
-                      Aplicar alterações somente neste plano
-                    </p>
-                    <p className="text-[10px] text-slate-400 leading-tight">
-                      A mudança vale apenas para o plano que estou criando agora.
-                    </p>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-2.5 cursor-pointer p-2 rounded-xl hover:bg-slate-50 transition">
-                  <input
-                    type="radio"
-                    name="template_apply_mode"
-                    value="save_for_future"
-                    checked={templateApplyMode === 'save_for_future'}
-                    onChange={() => setTemplateApplyMode('save_for_future')}
-                    className="text-blue-600 border-slate-300 focus:ring-blue-500 mt-0.5"
-                  />
-                  <div>
-                    <p className="text-xs font-black text-slate-900 leading-snug">
-                      Salvar alteração para planos futuros
-                    </p>
-                    <p className="text-[10px] text-slate-400 leading-tight">
-                      A mudança será salva e usada como padrão em novos planos.
-                    </p>
-                  </div>
-                </label>
-              </div>
             </div>
 
-            {/* Plan Summary Card (Matching Image 1) */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
-                  <BarChart2 size={16} />
-                </div>
-                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                  Resumo do plano
-                </h4>
-              </div>
-
-              <div className="space-y-2.5 text-xs">
-                <div className="flex items-center justify-between text-slate-600">
-                  <span className="flex items-center gap-2">
-                    <Layers size={14} className="text-slate-400" /> Fases selecionadas
-                  </span>
-                  <span className="font-black text-slate-900">{selectedPhases.length}</span>
-                </div>
-
-                <div className="flex items-center justify-between text-slate-600">
-                  <span className="flex items-center gap-2">
-                    <SlidersHorizontal size={14} className="text-slate-400" /> Macroatividades (estimado)
-                  </span>
-                  <span className="font-black text-slate-900">{estimatedMacros}</span>
-                </div>
-
-                <div className="flex items-center justify-between text-slate-600">
-                  <span className="flex items-center gap-2">
-                    <Check size={14} className="text-slate-400" /> Microatividades (estimado)
-                  </span>
-                  <span className="font-black text-slate-900">{estimatedMicros}</span>
-                </div>
-              </div>
-
-              {/* Primary Action Button */}
+            <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={handleCreatePlan}
-                className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 active:scale-95"
+                onClick={() => setIsAddingPhase(true)}
+                className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
               >
-                <Sparkles size={16} /> Criar plano
+                <Plus size={14} /> Adicionar fase
               </button>
 
-              {/* Next Steps Box */}
-              <div className="pt-2 border-t border-slate-100 flex items-start gap-2.5">
-                <Flag size={15} className="text-blue-600 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-[11px] font-black text-slate-800">Próximos passos</p>
-                  <p className="text-[10px] text-slate-500 leading-snug">
-                    Após criar o plano, você poderá acompanhar a execução e gerenciar as atividades do projeto.
-                  </p>
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={toggleExpandAll}
+                className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition cursor-pointer"
+              >
+                {allExpanded ? 'Recolher todos' : 'Expandir todos'}
+              </button>
             </div>
+          </div>
 
+          {/* New Phase inline input */}
+          {isAddingPhase && (
+            <div className="p-4 bg-blue-50/60 border-b border-blue-200 flex items-center gap-3">
+              <input
+                type="text"
+                value={newPhaseName}
+                onChange={e => setNewPhaseName(e.target.value)}
+                placeholder="Nome da nova fase (Ex: Estudos Clínicos Fase 4)..."
+                className="flex-1 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-blue-500"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={handleAddPhase}
+                className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-xs hover:bg-blue-700"
+              >
+                Salvar fase
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAddingPhase(false)}
+                className="px-3 py-2 text-slate-500 hover:text-slate-700 text-xs font-bold"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
+
+          {/* List of Phases, Macros, Micros (Image 4 central tree) */}
+          <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
+            {phases.map((phase, pIndex) => (
+              <div 
+                key={phase.id} 
+                className="border border-slate-200/90 rounded-2xl bg-white overflow-hidden shadow-2xs"
+              >
+                {/* Phase Header */}
+                <div className="p-3.5 bg-slate-50/80 hover:bg-slate-100/70 border-b border-slate-200/80 flex items-center justify-between gap-3 group">
+                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                    <GripVertical size={15} className="text-slate-400 shrink-0 cursor-grab" />
+                    <button
+                      type="button"
+                      onClick={() => togglePhaseExpand(phase.id)}
+                      className="p-1 rounded-lg text-slate-500 hover:text-slate-900 transition"
+                    >
+                      {phase.expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    </button>
+                    <div className="min-w-0">
+                      <span className="text-xs font-black text-slate-900 truncate block">
+                        {phase.name}
+                      </span>
+                      <span className="text-[11px] text-slate-500 truncate block">
+                        {phase.description}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePhase(phase.id)}
+                      className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg transition"
+                      title="Excluir fase"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Phase Content (Macros) */}
+                {phase.expanded && (
+                  <div className="p-4 space-y-3 bg-white">
+                    {phase.macros.map((macro, mIndex) => (
+                      <div 
+                        key={macro.id}
+                        className="border border-slate-200/80 rounded-xl overflow-hidden bg-white"
+                      >
+                        {/* Macro Header */}
+                        <div className="p-3 bg-slate-50/50 hover:bg-slate-100/50 flex items-center justify-between gap-3 border-b border-slate-100">
+                          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                            <GripVertical size={13} className="text-slate-400 shrink-0 cursor-grab" />
+                            <button
+                              type="button"
+                              onClick={() => toggleMacroExpand(phase.id, macro.id)}
+                              className="p-1 rounded text-slate-500 hover:text-slate-900 transition"
+                            >
+                              {macro.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                            </button>
+                            <div className="min-w-0">
+                              <span className="text-xs font-black text-slate-800 block truncate">
+                                {macro.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400 block truncate">
+                                {macro.description}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {/* If collapsed, show button to add/view microactivities */}
+                            {!macro.expanded && macro.micros.length === 0 && (
+                              <button
+                                type="button"
+                                onClick={() => toggleMacroExpand(phase.id, macro.id)}
+                                className="px-2.5 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-[11px] font-bold transition"
+                              >
+                                Adicionar microatividades
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteMacro(phase.id, macro.id)}
+                              className="p-1 text-slate-400 hover:text-red-500 rounded transition"
+                              title="Excluir macroatividade"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Macro Content (Microactivities) */}
+                        {macro.expanded && (
+                          <div className="p-3 space-y-2 bg-slate-50/30">
+                            {macro.micros.map((micro) => {
+                              const hasTemplate = !!micro.appliedTemplateName;
+                              const isDropdownOpen = openTemplateDropdownMicroId === micro.id;
+
+                              return (
+                                <div 
+                                  key={micro.id}
+                                  className="p-2.5 bg-white hover:bg-slate-50 rounded-xl border border-slate-200/80 flex items-center justify-between gap-3 transition group relative"
+                                >
+                                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                    <FileText size={15} className="text-slate-400 shrink-0" />
+                                    <div className="min-w-0">
+                                      <span className="text-xs font-bold text-slate-800 block truncate">
+                                        {micro.name}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 block truncate">
+                                        {micro.description}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Template Action Button / Badge (Image 4) */}
+                                  <div className="flex items-center gap-2 relative">
+                                    {hasTemplate ? (
+                                      <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-[11px] font-bold shadow-2xs">
+                                        <FileText size={12} className="text-blue-600" />
+                                        <span>{micro.appliedTemplateName}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveTemplate(phase.id, macro.id, micro.id)}
+                                          className="text-blue-400 hover:text-red-500 transition ml-1"
+                                          title="Remover template desta microatividade"
+                                        >
+                                          <X size={11} />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="relative">
+                                        <button
+                                          type="button"
+                                          onClick={() => setOpenTemplateDropdownMicroId(isDropdownOpen ? null : micro.id)}
+                                          className="px-3 py-1 bg-white hover:bg-slate-50 text-blue-600 border border-blue-200 rounded-xl text-[11px] font-bold transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                                        >
+                                          Aplicar template <ChevronDown size={12} />
+                                        </button>
+
+                                        {/* Dropdown Menu */}
+                                        {isDropdownOpen && (
+                                          <div className="absolute right-0 top-full mt-1 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-30 animate-in fade-in zoom-in-95 duration-150">
+                                            <div className="px-2 py-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                              Selecione um template:
+                                            </div>
+                                            <div className="max-h-48 overflow-y-auto space-y-1">
+                                              {availableTemplates.map(tmpl => (
+                                                <button
+                                                  key={tmpl.id}
+                                                  type="button"
+                                                  onClick={() => handleApplyTemplate(phase.id, macro.id, micro.id, tmpl)}
+                                                  className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-blue-50 text-xs font-bold text-slate-800 hover:text-blue-700 transition flex items-center justify-between"
+                                                >
+                                                  <span>{tmpl.name}</span>
+                                                  <span className="text-[10px] text-slate-400 font-normal">{tmpl.checklist.length} itens</span>
+                                                </button>
+                                              ))}
+                                            </div>
+                                            <div className="border-t border-slate-100 pt-1.5 mt-1">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setOpenTemplateDropdownMicroId(null);
+                                                  setTemplateToEdit(null);
+                                                  setIsTemplateDrawerOpen(true);
+                                                }}
+                                                className="w-full text-left px-2.5 py-1.5 rounded-xl bg-slate-50 hover:bg-blue-50 text-xs font-bold text-blue-600 transition flex items-center gap-1.5"
+                                              >
+                                                <Plus size={12} /> Criar novo template
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteMicro(phase.id, macro.id, micro.id)}
+                                      className="p-1 text-slate-300 hover:text-red-500 rounded transition"
+                                      title="Excluir microatividade"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {/* Add Micro inline form */}
+                            {newMicroMacroId === macro.id ? (
+                              <div className="flex items-center gap-2 pt-1">
+                                <input
+                                  type="text"
+                                  value={newMicroName}
+                                  onChange={e => setNewMicroName(e.target.value)}
+                                  placeholder="Nome da microatividade..."
+                                  className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
+                                  autoFocus
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddMicro(phase.id, macro.id)}
+                                  className="px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold"
+                                >
+                                  Salvar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setNewMicroMacroId(null)}
+                                  className="px-2 py-1.5 text-slate-400 text-xs font-bold"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setNewMicroMacroId(macro.id);
+                                  setNewMicroName('');
+                                }}
+                                className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 pt-1 cursor-pointer"
+                              >
+                                <Plus size={13} /> Adicionar microatividade
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {/* Add Macro Button or inline input */}
+                    {newMacroPhaseId === phase.id ? (
+                      <div className="flex items-center gap-2 pt-2">
+                        <input
+                          type="text"
+                          value={newMacroName}
+                          onChange={e => setNewMacroName(e.target.value)}
+                          placeholder="Nome da macroatividade..."
+                          className="flex-1 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleAddMacro(phase.id)}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold"
+                        >
+                          Salvar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewMacroPhaseId(null)}
+                          className="px-3 py-2 text-slate-400 text-xs font-bold"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewMacroPhaseId(phase.id);
+                          setNewMacroName('');
+                        }}
+                        className="w-full py-2.5 border border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50/30 text-slate-600 hover:text-blue-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                      >
+                        <Plus size={14} /> Adicionar macroatividade
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
 
         </div>
+
       </div>
+
+      {/* Template Manager Drawer (Image 4 right drawer) */}
+      <ManageTemplatesDrawer
+        isOpen={isTemplateDrawerOpen}
+        onClose={() => setIsTemplateDrawerOpen(false)}
+        initialTemplateToEdit={templateToEdit}
+        onTemplateSaved={(savedTmpl) => {
+          const updated = loadMicroTemplates();
+          setAvailableTemplates(updated);
+        }}
+      />
+
     </div>
   );
 };
