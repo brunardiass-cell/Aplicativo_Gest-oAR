@@ -1,6 +1,6 @@
 
 
-// Versão corrigida para sincronização
+// Versão 1.0.1 - Sincronização operacional e gestão de prazos
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
 import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity, RegulatoryEvidence, MacroActivityConfig, RegulatoryInfoItem, RepeatableRecord, RegulatoryNarrative, RegulatoryDocument, Meeting, DossierContribution } from './types';
