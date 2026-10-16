@@ -278,23 +278,34 @@ const Sidebar: React.FC<SidebarProps> = ({
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Database size={14} className="text-emerald-400 group-hover:scale-110 transition-transform" />
+              {hasFullAccess ? (
+                <Database size={14} className="text-emerald-400 group-hover:scale-110 transition-transform" />
+              ) : (
+                <Cloud size={14} className="text-emerald-400 group-hover:scale-110 transition-transform" />
+              )}
               <div>
                 <span className="text-[10px] font-black uppercase text-emerald-200 tracking-wider block">
-                  Metadados Supabase
+                  {hasFullAccess ? 'Metadados Supabase' : 'Armazenamento & Nuvem'}
                 </span>
                 <span className="text-[8px] text-emerald-400/80 font-mono block">
-                  Schema: ctvacinas
+                  {hasFullAccess ? 'Schema: ctvacinas' : 'Dados protegidos'}
                 </span>
               </div>
             </div>
-            <span className="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 uppercase tracking-widest">
-              Manutenção
-            </span>
+            {hasFullAccess ? (
+              <span className="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 uppercase tracking-widest">
+                Admin
+              </span>
+            ) : (
+              <span className="text-[8px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 uppercase tracking-widest flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                Ativo
+              </span>
+            )}
           </div>
         </button>
         
-        {/* SharePoint Cloud Sync Indicator & Action Widget */}
+        {/* SharePoint / Supabase Cloud Sync Indicator & Action Widget */}
         <div className={`p-3 rounded-xl border transition-all ${
           !isMsalAuthenticated || lastSync?.status === 'disconnected'
             ? 'bg-amber-950/40 border-amber-500/40 text-amber-100'
@@ -318,19 +329,23 @@ const Sidebar: React.FC<SidebarProps> = ({
               
               <div className="text-left leading-tight">
                 <span className="text-[9px] font-black uppercase tracking-wider block">
-                  {!isMsalAuthenticated || lastSync?.status === 'disconnected'
+                  {lastSync?.status === 'synced'
+                    ? 'Nuvem Conectada'
+                    : (!isMsalAuthenticated || lastSync?.status === 'disconnected')
                     ? 'Nuvem Desconectada'
                     : (lastSync?.status === 'syncing' || isSyncingSharePoint)
-                    ? 'Enviando ao SharePoint...'
+                    ? 'Sincronizando...'
                     : lastSync?.status === 'error'
-                    ? 'Erro SharePoint'
-                    : 'SharePoint OK'}
+                    ? 'Erro de Sincronização'
+                    : 'Nuvem OK'}
                 </span>
-                <span className="text-[8px] opacity-75 block">
-                  {!isMsalAuthenticated || lastSync?.status === 'disconnected'
+                <span className="text-[8px] opacity-90 block">
+                  {lastSync?.message 
+                    ? `✅ ${lastSync.message}`
+                    : (!isMsalAuthenticated || lastSync?.status === 'disconnected')
                     ? 'Salvo apenas no navegador'
                     : (lastSync?.status === 'syncing' || isSyncingSharePoint)
-                    ? 'Atualizando JSONs...'
+                    ? 'Atualizando...'
                     : lastSync?.status === 'error'
                     ? (lastSync.error || 'Falha ao sincronizar')
                     : `Sincronizado • ${formatSyncTime(lastSync?.timestamp)}`}

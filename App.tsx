@@ -386,7 +386,16 @@ const App: React.FC = () => {
         const supaRes = await SupabaseService.loadAllData();
         if (supaRes.success && supaRes.data && (supaRes.data.projects?.length > 0 || supaRes.data.tasks?.length > 0)) {
           applyData(supaRes.data, 'supabase');
-          setLastSync({ status: 'synced', isCloud: true, timestamp: new Date().toISOString(), user: 'Supabase (ctvacinas)', message: 'Metadados carregados do Supabase' });
+          const now = new Date();
+          const dateStr = now.toLocaleDateString('pt-BR');
+          const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          setLastSync({ 
+            status: 'synced', 
+            isCloud: true, 
+            timestamp: now.toISOString(), 
+            user: 'Supabase', 
+            message: `Dados sincronizados com o Supabase em ${dateStr} às ${timeStr}` 
+          });
           setIsLoading(false);
           isInitialLoad.current = false;
 
@@ -722,12 +731,15 @@ const App: React.FC = () => {
       try {
         const supaRes = await SupabaseService.saveAllData(currentState, currentUser);
         if (supaRes.success) {
+          const now = new Date();
+          const dateStr = now.toLocaleDateString('pt-BR');
+          const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
           setLastSync({ 
             status: 'synced', 
             isCloud: true, 
-            timestamp: new Date().toISOString(), 
+            timestamp: now.toISOString(), 
             user: currentUser,
-            message: 'Metadados salvos no Supabase (ctvacinas)' 
+            message: `Dados sincronizados com o Supabase em ${dateStr} às ${timeStr}` 
           });
           if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: currentUser }));
@@ -1807,14 +1819,19 @@ const App: React.FC = () => {
             managerEmail
           }}
           currentUser={selectedProfile?.name || account?.name || 'Sistema'}
+          isAdmin={hasFullAccess}
+          lastSync={lastSync}
           onDataMigrated={() => {
             setIsDataDirty(false);
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('pt-BR');
+            const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
             setLastSync({ 
               status: 'synced', 
               isCloud: true, 
-              timestamp: new Date().toISOString(), 
+              timestamp: now.toISOString(), 
               user: selectedProfile?.name || account?.name || 'Sistema', 
-              message: 'Metadados gravados no Supabase (Schema ctvacinas)' 
+              message: `Dados sincronizados com o Supabase em ${dateStr} às ${timeStr}` 
             });
           }}
         />
@@ -2282,14 +2299,19 @@ const App: React.FC = () => {
           managerEmail
         }}
         currentUser={selectedProfile?.name || 'Sistema'}
+        isAdmin={hasFullAccess}
+        lastSync={lastSync}
         onDataMigrated={() => {
           setIsDataDirty(false);
+          const now = new Date();
+          const dateStr = now.toLocaleDateString('pt-BR');
+          const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
           setLastSync({ 
             status: 'synced', 
             isCloud: true, 
-            timestamp: new Date().toISOString(), 
+            timestamp: now.toISOString(), 
             user: selectedProfile?.name || 'Sistema', 
-            message: 'Metadados gravados no Supabase (Schema ctvacinas)' 
+            message: `Dados sincronizados com o Supabase em ${dateStr} às ${timeStr}` 
           });
         }}
       />
