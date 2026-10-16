@@ -551,20 +551,6 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => onSwitchTab('map')}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 transition"
-              >
-                Mapa
-              </button>
-              <button
-                type="button"
-                onClick={() => onSwitchTab('details')}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 transition"
-              >
-                Fases
-              </button>
-              <button
-                type="button"
                 onClick={() => onSwitchTab('regulatory_docs')}
                 className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 transition"
               >

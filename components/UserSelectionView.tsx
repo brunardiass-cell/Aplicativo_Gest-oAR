@@ -11,6 +11,7 @@ interface UserSelectionViewProps {
   onLogout: () => void;
   currentUserRole: AppUserRole | null;
   onBackToModules?: () => void;
+  onOpenSupabaseMigration?: () => void;
 }
 
 const getInitials = (name: string): string => {
@@ -30,7 +31,15 @@ const ROLE_TO_MEMBER_NAMES: Record<string, string[]> = {
   user_leader: ['Graziella', 'Graziella Rivelli', 'tm_1'],
 };
 
-const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSelectUser, onSelectTeamView, onLogout, currentUserRole, onBackToModules }) => {
+const UserSelectionView: React.FC<UserSelectionViewProps> = ({ 
+  teamMembers, 
+  onSelectUser, 
+  onSelectTeamView, 
+  onLogout, 
+  currentUserRole, 
+  onBackToModules,
+  onOpenSupabaseMigration
+}) => {
   // Ensure Comitê Gestor is in the list if not already present
   const displayMembers = React.useMemo(() => {
     const list = [...teamMembers];
@@ -50,7 +59,15 @@ const UserSelectionView: React.FC<UserSelectionViewProps> = ({ teamMembers, onSe
           </button>
         </div>
       )}
-      <div className="absolute top-6 right-6">
+      <div className="absolute top-6 right-6 flex items-center gap-3">
+        {onOpenSupabaseMigration && (
+          <button 
+            onClick={onOpenSupabaseMigration}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-bold transition shadow-xs"
+          >
+            Manutenção &amp; Supabase
+          </button>
+        )}
         <button onClick={onLogout} className="flex items-center gap-2 text-slate-400 hover:text-red-500 text-xs font-bold uppercase tracking-widest transition">
           <LogOut size={16}/> Sair
         </button>

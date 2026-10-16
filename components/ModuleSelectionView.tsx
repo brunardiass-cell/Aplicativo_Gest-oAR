@@ -26,13 +26,15 @@ interface ModuleSelectionViewProps {
   onLogout: () => void;
   accountName?: string;
   accountEmail?: string;
+  onOpenSupabaseMigration?: () => void;
 }
 
 const ModuleSelectionView: React.FC<ModuleSelectionViewProps> = ({
   onSelectModule,
   onLogout,
   accountName,
-  accountEmail
+  accountEmail,
+  onOpenSupabaseMigration
 }) => {
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
@@ -54,10 +56,22 @@ const ModuleSelectionView: React.FC<ModuleSelectionViewProps> = ({
           </span>
         </div>
 
-        {/* Menu do Ambiente de Trabalho / Usuário */}
-        <div className="relative">
-          <button
-            onClick={() => setIsEnvMenuOpen(!isEnvMenuOpen)}
+        <div className="flex items-center gap-2.5">
+          {onOpenSupabaseMigration && (
+            <button
+              onClick={onOpenSupabaseMigration}
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-sm border border-emerald-600/50 transition cursor-pointer"
+            >
+              <Database size={15} className="text-emerald-300" />
+              <span className="hidden sm:inline">Manutenção &amp; Supabase</span>
+              <span className="sm:hidden">Supabase</span>
+            </button>
+          )}
+
+          {/* Menu do Ambiente de Trabalho / Usuário */}
+          <div className="relative">
+            <button
+              onClick={() => setIsEnvMenuOpen(!isEnvMenuOpen)}
             className="flex items-center gap-3 bg-white px-3.5 py-2 rounded-xl border border-slate-200/90 shadow-xs hover:border-emerald-500/50 transition cursor-pointer"
           >
             <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -90,7 +104,8 @@ const ModuleSelectionView: React.FC<ModuleSelectionViewProps> = ({
             </div>
           )}
         </div>
-      </header>
+      </div>
+    </header>
 
       {/* 2. Conteúdo Central */}
       <main className="max-w-5xl w-full mx-auto my-auto py-8 sm:py-12 space-y-8">

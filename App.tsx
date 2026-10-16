@@ -29,7 +29,9 @@ import { DossierContributionsManager } from './components/DossierContributionsMa
 import { DossierAssemblerManager } from './components/DossierAssemblerManager';
 import { RegulatoryDocManagement } from './components/RegulatoryDocManagement';
 import { MicrosoftGraphService, SPMetadataMap } from './services/microsoftGraphService';
-import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft, LayoutGrid, Kanban, Clock, Briefcase, Map as MapIcon, Syringe, Layers, Cloud, FileSpreadsheet, CheckCircle2 } from 'lucide-react';
+import { SupabaseService } from './services/supabaseService';
+import { SupabaseMigrationModal } from './components/SupabaseMigrationModal';
+import { PlusCircle, Loader2, Bell, FileText, ShieldCheck, ArrowRight, ShieldAlert, AlertTriangle, Activity, FolderKanban, ListTodo, GanttChartSquare, Workflow, X, Menu, Users, ArrowLeft, LayoutGrid, Kanban, Clock, Briefcase, Map as MapIcon, Syringe, Layers, Cloud, FileSpreadsheet, CheckCircle2, Database } from 'lucide-react';
 import ProjectsVisualBoard from './components/ProjectsVisualBoard';
 import ProjectFlowView from './components/ProjectFlowView';
 import ProjectKanbanView from './components/ProjectKanbanView';
@@ -129,6 +131,7 @@ const App: React.FC = () => {
   const [filterMember, setFilterMember] = useState<string | 'Todos'>('Todos');
   const [isSyncingSharePoint, setIsSyncingSharePoint] = useState(false);
   const [syncToastMessage, setSyncToastMessage] = useState<string | null>(null);
+  const [isSupabaseMigrationOpen, setIsSupabaseMigrationOpen] = useState(false);
   
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -377,6 +380,40 @@ const App: React.FC = () => {
   const loadDataFromSharePoint = async () => {
     setIsLoading(true);
     try {
+      // 1. Prioridade: Carregar metadados do Supabase (schema ctvacinas)
+      if (SupabaseService.isConfigured()) {
+        console.log('[Supabase] Carregando metadados do banco de dados (schema ctvacinas)...');
+        const supaRes = await SupabaseService.loadAllData();
+        if (supaRes.success && supaRes.data && (supaRes.data.projects?.length > 0 || supaRes.data.tasks?.length > 0)) {
+          applyData(supaRes.data, 'supabase');
+          setLastSync({ status: 'synced', isCloud: true, timestamp: new Date().toISOString(), user: 'Supabase (ctvacinas)', message: 'Metadados carregados do Supabase' });
+          setIsLoading(false);
+          isInitialLoad.current = false;
+
+          // Backup diário no SharePoint no primeiro acesso do dia
+          try {
+            const today = new Date().toISOString().split('T')[0];
+            const lastDailyBackup = localStorage.getItem('ct_last_sharepoint_daily_backup');
+            if (lastDailyBackup !== today) {
+              console.log(`[Backup Diário] Primeiro acesso do dia (${today}): salvando cópia de backup no SharePoint...`);
+              MicrosoftGraphService.saveModularToSharePoint(supaRes.data)
+                .then(bRes => {
+                  if (bRes.success) {
+                    localStorage.setItem('ct_last_sharepoint_daily_backup', today);
+                    console.log('[Backup Diário] Backup de metadados no SharePoint realizado com sucesso.');
+                  }
+                })
+                .catch(bErr => console.warn('[Backup Diário] Falha silenciosa no backup do SharePoint:', bErr));
+            }
+          } catch (bErr) {
+            console.warn('[Backup Diário] Erro ao verificar backup diário:', bErr);
+          }
+
+          return;
+        }
+      }
+
+      // 2. Fallback durante período de migração ou se Supabase estiver vazio
       const result = await MicrosoftGraphService.loadFromSharePointLists();
       if (result && result.data && (result.data.projects?.length > 0 || result.data.tasks?.length > 0)) {
         if (result.spMetadataMap) {
@@ -392,7 +429,7 @@ const App: React.FC = () => {
       }
       setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'Cloud' });
     } catch (error) {
-      console.warn("Aviso ao carregar do SharePoint (usando dados locais persistidos):", error);
+      console.warn("Aviso ao carregar dados remotos (usando dados locais persistidos):", error);
       setLastSync({ status: 'synced', timestamp: new Date().toISOString(), user: 'Local' });
     } finally {
       if (isAuthorized !== false) {
@@ -591,6 +628,25 @@ const App: React.FC = () => {
         console.warn('Erro ao inicializar cache local:', e);
       }
 
+      // 1.5 Carregar do Supabase imediatamente se configurado (metadados sempre disponíveis em todo acesso)
+      if (SupabaseService.isConfigured()) {
+        try {
+          console.log('[Supabase] Inicializando metadados do Supabase (Schema ctvacinas)...');
+          const supaRes = await SupabaseService.loadAllData();
+          if (supaRes.success && supaRes.data && (supaRes.data.projects?.length > 0 || supaRes.data.tasks?.length > 0)) {
+            applyData(supaRes.data, 'supabase_init');
+            if (supaRes.data.appUsers && supaRes.data.appUsers.length > 0) {
+              currentAppUsers = supaRes.data.appUsers;
+            }
+            if (supaRes.data.teamMembers && supaRes.data.teamMembers.length > 0) {
+              currentTeamMembers = supaRes.data.teamMembers;
+            }
+          }
+        } catch (supaErr) {
+          console.warn('Aviso ao carregar do Supabase no boot:', supaErr);
+        }
+      }
+
       // 2. Autenticação estritamente via conta Microsoft (sessão ativa existente ou silent SSO corporativo)
       try {
         let acc = await MicrosoftGraphService.getAccount();
@@ -661,27 +717,46 @@ const App: React.FC = () => {
     setBaseData(updatedBase);
     setIsDataDirty(false);
 
-    // Se não estiver autenticado com a Microsoft, informa com clareza no menu lateral
+    // 2. Armazenamento primário de metadados: Supabase (Schema ctvacinas)
+    if (SupabaseService.isConfigured()) {
+      try {
+        const supaRes = await SupabaseService.saveAllData(currentState, currentUser);
+        if (supaRes.success) {
+          setLastSync({ 
+            status: 'synced', 
+            isCloud: true, 
+            timestamp: new Date().toISOString(), 
+            user: currentUser,
+            message: 'Metadados salvos no Supabase (ctvacinas)' 
+          });
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: currentUser }));
+          }
+          return;
+        } else {
+          console.warn('[Supabase] Falha ao salvar no banco:', supaRes.error);
+        }
+      } catch (err: any) {
+        console.error('[Supabase] Exceção ao salvar:', err);
+      }
+    }
+
+    // 3. Fallback de persistência no SharePoint caso o Supabase não esteja configurado
     if (!isMsalAuthenticated || !isAuthorized) {
       setLastSync({ 
         status: 'disconnected', 
         isCloud: false, 
         timestamp: new Date().toISOString(), 
         user: currentUser,
-        message: 'Salvo localmente (Sem conexão Microsoft 365)' 
+        message: 'Salvo localmente (Supabase ou SharePoint pendente)' 
       });
       return;
     }
 
-    // 2. Se autenticado com a Microsoft e autorizado, sincroniza com SharePoint
     setIsSyncingSharePoint(true);
     setLastSync({ status: 'syncing', isCloud: true, timestamp: new Date().toISOString(), user: 'SharePoint' });
     try {
-      console.log('Iniciando sincronização de arquivos modulares JSON no SharePoint...');
-      // Salva a estrutura modular JSON por módulo e cria arquivo de auditoria da edição
       const modularRes = await MicrosoftGraphService.saveModularToSharePoint(currentState);
-
-      // Também sincroniza as listas granulares do SharePoint
       const effectiveBase = baseData || currentState;
       const granularRes = await MicrosoftGraphService.saveGranularToSharePoint(
         effectiveBase,
@@ -908,7 +983,11 @@ const App: React.FC = () => {
         const res = await MicrosoftGraphService.saveDailyBackupToSharePoint(fullData);
         if (res.success) {
           localStorage.setItem('ct_last_daily_backup_date', todayStr);
-          console.log(`[Backup Diário] Snapshot de ${todayStr} salvo com sucesso no SharePoint.`);
+          await SupabaseService.recordDailyBackupSuccess(todayStr, {
+            projetos: (fullData.projects || []).length,
+            tarefas: (fullData.tasks || []).length
+          }, `Sistema/Backups_Diarios/backup_${todayStr}.json`, currentUserRole || 'Sistema');
+          console.log(`[Backup Diário] Snapshot de ${todayStr} salvo com sucesso no SharePoint e registrado no Supabase.`);
         }
       }
     };
@@ -1547,80 +1626,6 @@ const App: React.FC = () => {
     return <div className="flex h-screen w-screen items-center justify-center bg-brand-light"><Loader2 size={48} className="animate-spin text-brand-primary" /></div>;
   }
   
-  if (!isMsalAuthenticated) {
-    return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4 font-sans">
-        <main className="w-full max-w-md mx-auto text-center animate-in-slow">
-          <div className="mb-8 inline-block"><div className="bg-slate-100 p-5 rounded-3xl shadow-sm"><FileText size={36} className="text-brand-primary" strokeWidth={2.5}/></div></div>
-          <h1 className="text-5xl font-black tracking-tighter"><span className="text-slate-900">GESTÃO</span><span className="text-brand-primary"> REGULATÓRIA</span></h1>
-          <p className="mt-4 text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center justify-center gap-2"><ShieldCheck size={14} className="text-emerald-500"/>Portal de Atividades • CTVacinas</p>
-          <div className="mt-12 bg-slate-50/70 p-8 sm:p-10 rounded-[2.5rem] border border-slate-200/80 shadow-sm text-center">
-            <h2 className="font-black text-slate-800 uppercase tracking-wider">Bem-vindo ao sistema</h2>
-            <p className="mt-2 text-slate-500 text-sm">Para continuar, autentique-se usando sua conta Microsoft corporativa.</p>
-            <button onClick={handleLogin} className="mt-8 w-full flex items-center justify-center gap-3 bg-slate-800 text-white py-4 rounded-2xl font-bold uppercase text-sm tracking-widest hover:bg-black transition">Entrar com Microsoft <ArrowRight size={16}/></button>
-            {authError && <p className="mt-4 text-sm text-red-500">{authError}</p>}
-
-            <div className="mt-8 pt-6 border-t border-slate-200/80 text-center">
-              <p className="text-xs text-slate-400 leading-relaxed flex items-center justify-center gap-1.5">
-                <ShieldCheck size={14} className="text-emerald-500 shrink-0" />
-                Acesso direto automático para contas Microsoft com permissão no SharePoint regulatório e cadastro ativo.
-              </p>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
-  
-  if (isAuthorized === false) {
-    const userEmails = getAccountEmails(account);
-    const displayedEmail = userEmails[0] || account?.username || 'sua conta';
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans text-center">
-        <div className="w-full max-w-md mx-auto bg-white p-8 sm:p-10 rounded-[2.5rem] border border-slate-200/80 shadow-sm">
-            <div className="mb-6 inline-block"><div className="bg-amber-50 p-5 rounded-3xl border border-amber-100 shadow-sm"><ShieldAlert size={36} className="text-amber-500" strokeWidth={2.5}/></div></div>
-            <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Acesso Pendente de Liberação</h1>
-            
-            {unauthorizedReason === 'not_in_system' ? (
-              <p className="mt-3 text-slate-500 text-sm leading-relaxed">
-                Sua conta Microsoft (<strong className="text-slate-800">{displayedEmail}</strong>) foi autenticada, mas ainda não possui cadastro ativo em <strong>Controle de Acesso &gt; Gestão de Usuários</strong>. Solicite a liberação ao administrador da plataforma.
-              </p>
-            ) : unauthorizedReason === 'no_sharepoint_access' ? (
-              <p className="mt-3 text-slate-500 text-sm leading-relaxed">
-                Sua conta Microsoft (<strong className="text-slate-800">{displayedEmail}</strong>) está cadastrada no sistema, mas não possui permissão de acesso ao site do SharePoint da plataforma de <strong>Assuntos Regulatórios</strong>.
-              </p>
-            ) : (
-              <p className="mt-3 text-slate-500 text-sm leading-relaxed">
-                O e-mail conectado (<strong className="text-slate-800">{displayedEmail}</strong>) precisa estar cadastrado e ativo em <strong>Controle de Acesso &gt; Gestão de Usuários</strong> e possuir permissão no site do SharePoint da plataforma.
-              </p>
-            )}
-
-            <div className="mt-8 flex flex-col gap-3">
-              <button 
-                onClick={async () => {
-                  setIsLoading(true);
-                  if (account) {
-                    await verifyAndAuthorize(account, appUsers, teamMembers);
-                  } else {
-                    await handleLogin();
-                  }
-                }} 
-                className="w-full bg-brand-primary text-white py-3.5 rounded-2xl font-bold uppercase text-xs tracking-widest hover:bg-brand-accent transition shadow-lg shadow-teal-500/20"
-              >
-                Reverificar Acesso
-              </button>
-              <button 
-                onClick={handleLogout} 
-                className="w-full bg-slate-100 text-slate-600 py-3.5 rounded-2xl font-bold uppercase text-xs tracking-widest hover:bg-slate-200 transition"
-              >
-                Entrar com Outra Conta / Sair
-              </button>
-            </div>
-        </div>
-      </div>
-    );
-  }
-  
   const handleSelectModule = (mod: 'activities_projects' | 'regulatory_standards' | 'vaccines_components') => {
     setCurrentModule(mod);
     setHasChosenModule(true);
@@ -1657,37 +1662,164 @@ const App: React.FC = () => {
     setIsDetailsOpen(false);
   };
 
-  if (!hasChosenModule) {
-    return (
-      <ModuleSelectionView
-        onSelectModule={handleSelectModule}
-        onLogout={handleLogout}
-        accountName={account?.name}
-        accountEmail={account?.username}
-      />
-    );
-  }
-
-  if (!selectedProfile || !isPasswordAuthenticated) {
-    if (!selectedProfile) {
+  const renderEarlyScreen = () => {
+    if (!isMsalAuthenticated) {
       return (
-        <UserSelectionView 
-          teamMembers={teamMembers} 
-          onSelectUser={handleProfileSelect} 
-          onSelectTeamView={handleTeamViewSelect} 
-          onLogout={handleLogout} 
-          currentUserRole={currentUserRole}
-          onBackToModules={() => setHasChosenModule(false)}
+        <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4 font-sans relative">
+          <main className="w-full max-w-md mx-auto text-center animate-in-slow">
+            <div className="mb-8 inline-block"><div className="bg-slate-100 p-5 rounded-3xl shadow-sm"><FileText size={36} className="text-brand-primary" strokeWidth={2.5}/></div></div>
+            <h1 className="text-5xl font-black tracking-tighter"><span className="text-slate-900">GESTÃO</span><span className="text-brand-primary"> REGULATÓRIA</span></h1>
+            <p className="mt-4 text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center justify-center gap-2"><ShieldCheck size={14} className="text-emerald-500"/>Portal de Atividades • CTVacinas</p>
+            <div className="mt-12 bg-slate-50/70 p-8 sm:p-10 rounded-[2.5rem] border border-slate-200/80 shadow-sm text-center">
+              <h2 className="font-black text-slate-800 uppercase tracking-wider">Bem-vindo ao sistema</h2>
+              <p className="mt-2 text-slate-500 text-sm">Para continuar, autentique-se usando sua conta Microsoft corporativa.</p>
+              <button onClick={handleLogin} className="mt-8 w-full flex items-center justify-center gap-3 bg-slate-800 text-white py-4 rounded-2xl font-bold uppercase text-sm tracking-widest hover:bg-black transition cursor-pointer">Entrar com Microsoft <ArrowRight size={16}/></button>
+              {authError && <p className="mt-4 text-sm text-red-500">{authError}</p>}
+
+              <div className="mt-8 pt-4 border-t border-slate-200/80 text-center">
+                <p className="text-xs text-slate-400 leading-relaxed flex items-center justify-center gap-1.5">
+                  <ShieldCheck size={14} className="text-emerald-500 shrink-0" />
+                  Acesso direto automático para contas Microsoft com permissão no SharePoint regulatório e cadastro ativo.
+                </p>
+              </div>
+            </div>
+          </main>
+        </div>
+      );
+    }
+    
+    if (isAuthorized === false) {
+      const userEmails = getAccountEmails(account);
+      const displayedEmail = userEmails[0] || account?.username || 'sua conta';
+      return (
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans text-center">
+          <div className="w-full max-w-md mx-auto bg-white p-8 sm:p-10 rounded-[2.5rem] border border-slate-200/80 shadow-sm">
+              <div className="mb-6 inline-block"><div className="bg-amber-50 p-5 rounded-3xl border border-amber-100 shadow-sm"><ShieldAlert size={36} className="text-amber-500" strokeWidth={2.5}/></div></div>
+              <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Acesso Pendente de Liberação</h1>
+              
+              {unauthorizedReason === 'not_in_system' ? (
+                <p className="mt-3 text-slate-500 text-sm leading-relaxed">
+                  Sua conta Microsoft (<strong className="text-slate-800">{displayedEmail}</strong>) foi autenticada, mas ainda não possui cadastro ativo em <strong>Controle de Acesso &gt; Gestão de Usuários</strong>. Solicite a liberação ao administrador da plataforma.
+                </p>
+              ) : unauthorizedReason === 'no_sharepoint_access' ? (
+                <p className="mt-3 text-slate-500 text-sm leading-relaxed">
+                  Sua conta Microsoft (<strong className="text-slate-800">{displayedEmail}</strong>) está cadastrada no sistema, mas não possui permissão de acesso ao site do SharePoint da plataforma de <strong>Assuntos Regulatórios</strong>.
+                </p>
+              ) : (
+                <p className="mt-3 text-slate-500 text-sm leading-relaxed">
+                  O e-mail conectado (<strong className="text-slate-800">{displayedEmail}</strong>) precisa estar cadastrado e ativo em <strong>Controle de Acesso &gt; Gestão de Usuários</strong> e possuir permissão no site do SharePoint da plataforma.
+                </p>
+              )}
+
+              <div className="mt-8 flex flex-col gap-3">
+                <button 
+                  onClick={async () => {
+                    setIsLoading(true);
+                    if (account) {
+                      await verifyAndAuthorize(account, appUsers, teamMembers);
+                    } else {
+                      await handleLogin();
+                    }
+                  }} 
+                  className="w-full bg-brand-primary text-white py-3.5 rounded-2xl font-bold uppercase text-xs tracking-widest hover:bg-brand-accent transition shadow-lg shadow-teal-500/20"
+                >
+                  Reverificar Acesso
+                </button>
+                <button 
+                  onClick={handleLogout} 
+                  className="w-full bg-slate-100 text-slate-600 py-3.5 rounded-2xl font-bold uppercase text-xs tracking-widest hover:bg-slate-200 transition"
+                >
+                  Entrar com Outra Conta / Sair
+                </button>
+              </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (!hasChosenModule) {
+      return (
+        <ModuleSelectionView
+          onSelectModule={handleSelectModule}
+          onLogout={handleLogout}
+          accountName={account?.name}
+          accountEmail={account?.username}
         />
       );
     }
-    if (selectedProfile && !isPasswordAuthenticated) {
-      if (isAuthorized) {
-        setIsPasswordAuthenticated(true);
-      } else {
-        return (<PasswordModal isOpen={true} onClose={handleSwitchProfile} onConfirm={handlePasswordConfirm} userName={selectedProfile.name} error={passwordError}/>);
+
+    if (!selectedProfile || !isPasswordAuthenticated) {
+      if (!selectedProfile) {
+        return (
+          <UserSelectionView 
+            teamMembers={teamMembers} 
+            onSelectUser={handleProfileSelect} 
+            onSelectTeamView={handleTeamViewSelect} 
+            onLogout={handleLogout} 
+            currentUserRole={currentUserRole}
+            onBackToModules={() => setHasChosenModule(false)}
+          />
+        );
+      }
+      if (selectedProfile && !isPasswordAuthenticated) {
+        if (isAuthorized) {
+          setIsPasswordAuthenticated(true);
+        } else {
+          return (<PasswordModal isOpen={true} onClose={handleSwitchProfile} onConfirm={handlePasswordConfirm} userName={selectedProfile.name} error={passwordError}/>);
+        }
       }
     }
+
+    return null;
+  };
+
+  const earlyScreen = renderEarlyScreen();
+  if (earlyScreen) {
+    return (
+      <>
+        {earlyScreen}
+
+        <SupabaseMigrationModal 
+          isOpen={isSupabaseMigrationOpen}
+          onClose={() => setIsSupabaseMigrationOpen(false)}
+          fullData={{
+            tasks,
+            projects: activeProjects,
+            teamMembers,
+            activityPlans,
+            notifications,
+            logs,
+            appUsers,
+            regulatoryStandards,
+            regulatorySubjects,
+            vaccineCandidates,
+            vaccineComponents,
+            formulationBatches,
+            vaccineImpurities,
+            regulatoryEvidence,
+            macroActivityConfigs,
+            regulatoryInfoItems,
+            repeatableRecords,
+            regulatoryNarratives,
+            regulatoryDocs,
+            meetings,
+            dossierContributions,
+            managerEmail
+          }}
+          currentUser={selectedProfile?.name || account?.name || 'Sistema'}
+          onDataMigrated={() => {
+            setIsDataDirty(false);
+            setLastSync({ 
+              status: 'synced', 
+              isCloud: true, 
+              timestamp: new Date().toISOString(), 
+              user: selectedProfile?.name || account?.name || 'Sistema', 
+              message: 'Metadados gravados no Supabase (Schema ctvacinas)' 
+            });
+          }}
+        />
+      </>
+    );
   }
 
   return (
@@ -1731,6 +1863,7 @@ const App: React.FC = () => {
           onConnectMsal={handleLogin}
           onForceCloudSync={handleForceCloudSync}
           isSyncingSharePoint={isSyncingSharePoint}
+          onOpenSupabaseMigration={() => setIsSupabaseMigrationOpen(true)}
         />
       )}
       <input type="file" ref={fileInputRef} onChange={handleLoadLocalBackup} accept=".json" className="hidden" />
@@ -1740,6 +1873,8 @@ const App: React.FC = () => {
           ? (isDesktop ? 'p-6 sm:p-8' : 'p-4 pt-6') 
           : (isDesktop ? 'ml-64 p-6 sm:p-8' : 'ml-0 p-4 pt-20')
       }`}>
+
+
 
         {syncToastMessage && (
           <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-xl border border-slate-700 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3 duration-300">
@@ -2117,6 +2252,46 @@ const App: React.FC = () => {
         regulatoryDocs={regulatoryDocs}
         dossierContributions={dossierContributions}
         currentProfileName={selectedProfile?.name}
+      />
+
+      <SupabaseMigrationModal 
+        isOpen={isSupabaseMigrationOpen}
+        onClose={() => setIsSupabaseMigrationOpen(false)}
+        fullData={{
+          tasks,
+          projects: activeProjects,
+          teamMembers,
+          activityPlans,
+          notifications,
+          logs,
+          appUsers,
+          regulatoryStandards,
+          regulatorySubjects,
+          vaccineCandidates,
+          vaccineComponents,
+          formulationBatches,
+          vaccineImpurities,
+          regulatoryEvidence,
+          macroActivityConfigs,
+          regulatoryInfoItems,
+          repeatableRecords,
+          regulatoryNarratives,
+          regulatoryDocs,
+          meetings,
+          dossierContributions,
+          managerEmail
+        }}
+        currentUser={selectedProfile?.name || 'Sistema'}
+        onDataMigrated={() => {
+          setIsDataDirty(false);
+          setLastSync({ 
+            status: 'synced', 
+            isCloud: true, 
+            timestamp: new Date().toISOString(), 
+            user: selectedProfile?.name || 'Sistema', 
+            message: 'Metadados gravados no Supabase (Schema ctvacinas)' 
+          });
+        }}
       />
     </div>
     </>

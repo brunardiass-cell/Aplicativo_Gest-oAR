@@ -69,6 +69,7 @@ interface CreatePlanModalProps {
   onClose: () => void;
   onSave: (newPlan: ActivityPlanTemplate, saveAsDefaultTemplates?: boolean) => void;
   existingPlans?: ActivityPlanTemplate[];
+  onDeletePlan?: (planId: string) => void;
 }
 
 const INITIAL_PROTEIN_PLAN: PlanPhaseItem[] = [
@@ -284,9 +285,11 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
   isOpen,
   onClose,
   onSave,
-  existingPlans = []
+  existingPlans = [],
+  onDeletePlan
 }) => {
   const [selectedPlanType, setSelectedPlanType] = useState<PlanTypeKey>('recombinant_protein');
+  const [selectedExistingPlanId, setSelectedExistingPlanId] = useState<string | null>(null);
   const [planTitle, setPlanTitle] = useState('Plano de Desenvolvimento – Proteína Recombinante');
   const [phases, setPhases] = useState<PlanPhaseItem[]>(() => JSON.parse(JSON.stringify(INITIAL_PROTEIN_PLAN)));
   
@@ -309,6 +312,7 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
   // Switch plan type
   const handleSelectPlanType = (typeKey: PlanTypeKey) => {
     setSelectedPlanType(typeKey);
+    setSelectedExistingPlanId(null);
     if (typeKey === 'recombinant_protein') {
       setPlanTitle('Plano de Desenvolvimento – Proteína Recombinante');
       setPhases(JSON.parse(JSON.stringify(INITIAL_PROTEIN_PLAN)));
@@ -329,6 +333,39 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
           macros: []
         }
       ]);
+    }
+  };
+
+  // Select an existing plan from the system
+  const handleSelectExistingPlan = (plan: ActivityPlanTemplate) => {
+    setSelectedExistingPlanId(plan.id);
+    setSelectedPlanType('custom');
+    setPlanTitle(plan.name);
+
+    if (plan.phases && plan.phases.length > 0) {
+      const convertedPhases: PlanPhaseItem[] = plan.phases.map((phName, pIdx) => {
+        const matchingMacros = (plan.macroActivities || []).filter(m => m.phase === phName);
+        return {
+          id: `ph_ex_${plan.id}_${pIdx}`,
+          name: phName,
+          description: `Fase ${pIdx + 1} do plano`,
+          expanded: pIdx === 0,
+          macros: matchingMacros.map((mac, mIdx) => ({
+            id: `mac_ex_${plan.id}_${pIdx}_${mIdx}`,
+            name: mac.name,
+            description: mac.expectedResults || '',
+            expanded: mIdx === 0,
+            micros: (mac.microActivities || []).map((micName, micIdx) => ({
+              id: `mic_ex_${plan.id}_${pIdx}_${mIdx}_${micIdx}`,
+              name: micName,
+              description: ''
+            }))
+          }))
+        };
+      });
+      setPhases(convertedPhases);
+    } else {
+      setPhases([]);
     }
   };
 
@@ -503,7 +540,7 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
     });
 
     const newPlan: ActivityPlanTemplate = {
-      id: `plan_${Date.now()}`,
+      id: selectedExistingPlanId || `plan_${Date.now()}`,
       name: planTitle.trim() || 'Novo Plano de Atividades',
       phases: phases.map(p => p.name),
       macroActivities: macroTemplates
@@ -646,6 +683,75 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                 );
               })}
             </div>
+
+            {/* Existing Plans Section */}
+            {existingPlans && existingPlans.length > 0 && (
+              <div className="pt-4 border-t border-slate-200/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">
+                    Planos Existentes ({existingPlans.length})
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    Carregar ou excluir
+                  </span>
+                </div>
+
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {existingPlans.map(plan => {
+                    const isSelected = selectedExistingPlanId === plan.id;
+                    const macroCount = plan.macroActivities?.length || 0;
+                    const phaseCount = plan.phases?.length || 0;
+
+                    return (
+                      <div
+                        key={plan.id}
+                        className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-2.5 ${
+                          isSelected
+                            ? 'bg-blue-50/80 border-blue-500 shadow-2xs'
+                            : 'bg-white hover:bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <div
+                          onClick={() => handleSelectExistingPlan(plan)}
+                          className="flex-1 min-w-0 cursor-pointer"
+                          title="Clique para carregar e editar a estrutura deste plano"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Layers size={14} className={isSelected ? 'text-blue-600 shrink-0' : 'text-slate-400 shrink-0'} />
+                            <span className="text-xs font-black text-slate-900 truncate">
+                              {plan.name}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 mt-0.5 pl-5">
+                            {phaseCount} {phaseCount === 1 ? 'fase' : 'fases'} • {macroCount} {macroCount === 1 ? 'macro' : 'macros'}
+                          </p>
+                        </div>
+
+                        {onDeletePlan && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`Tem certeza que deseja excluir o plano "${plan.name}"? Esta ação removerá o modelo do sistema.`)) {
+                                onDeletePlan(plan.id);
+                                if (selectedExistingPlanId === plan.id) {
+                                  setSelectedExistingPlanId(null);
+                                  handleSelectPlanType('recombinant_protein');
+                                }
+                              }
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition cursor-pointer shrink-0"
+                            title={`Excluir plano "${plan.name}"`}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

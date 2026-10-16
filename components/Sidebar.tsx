@@ -65,6 +65,7 @@ interface SidebarProps {
   onConnectMsal?: () => void;
   onForceCloudSync?: () => void;
   isSyncingSharePoint?: boolean;
+  onOpenSupabaseMigration?: () => void;
 }
 
 const getInitials = (name?: string): string => {
@@ -102,7 +103,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   isMsalAuthenticated = false,
   onConnectMsal,
   onForceCloudSync,
-  isSyncingSharePoint = false
+  isSyncingSharePoint = false,
+  onOpenSupabaseMigration
 }) => {
 
   const formatSyncTime = (timestamp?: string) => {
@@ -268,6 +270,29 @@ const Sidebar: React.FC<SidebarProps> = ({
             <button onClick={onLoadBackup} className={`px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase flex items-center justify-center gap-1.5 transition ${isVaccinesModule ? 'bg-emerald-800/60 hover:bg-emerald-800 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}><Upload size={11}/> Subir</button>
           </div>
         </div>
+
+        {/* Supabase Metadata & Maintenance Access Widget */}
+        <button
+          onClick={onOpenSupabaseMigration}
+          className="w-full mb-3 p-2.5 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/50 rounded-xl text-left transition group shadow-xs cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Database size={14} className="text-emerald-400 group-hover:scale-110 transition-transform" />
+              <div>
+                <span className="text-[10px] font-black uppercase text-emerald-200 tracking-wider block">
+                  Metadados Supabase
+                </span>
+                <span className="text-[8px] text-emerald-400/80 font-mono block">
+                  Schema: ctvacinas
+                </span>
+              </div>
+            </div>
+            <span className="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 uppercase tracking-widest">
+              Manutenção
+            </span>
+          </div>
+        </button>
         
         {/* SharePoint Cloud Sync Indicator & Action Widget */}
         <div className={`p-3 rounded-xl border transition-all ${

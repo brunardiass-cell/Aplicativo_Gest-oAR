@@ -552,6 +552,175 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
       });
   }, [accessibleProjects, searchTerm, statusFilter, responsibleFilter, sortBy]);
 
+  const renderNewModelModal = () => {
+    if (!isNewModelModalOpen) return null;
+    return (
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="p-8 space-y-6">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+              <div className="space-y-1">
+                <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                  <FilePlus className="text-indigo-600" size={22} /> Criar Novo Modelo de Dossiê Regulatório
+                </h2>
+                <p className="text-xs text-slate-500 font-medium">
+                  Defina um novo modelo ou padrão de documento regulatório (Exclusivo para Líderes e Administradores).
+                </p>
+              </div>
+              <button 
+                onClick={() => setIsNewModelModalOpen(false)} 
+                className="p-2 hover:bg-slate-100 rounded-xl transition text-slate-400 cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-left max-h-[60vh] overflow-y-auto pr-1">
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">Título do Modelo *</label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: Dossiê do IFA - Proteína Recombinante Liofilizada"
+                  value={newModelTitle}
+                  onChange={e => setNewModelTitle(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">Grupo do Modelo</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: Dossiê do IFA - Proteína Recombinante"
+                    value={newModelGroup}
+                    onChange={e => setNewModelGroup(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">Tipo de Documento</label>
+                  <select 
+                    value={newModelType}
+                    onChange={e => setNewModelType(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                  >
+                    <option value="Dossiê Regulatório">Dossiê Regulatório</option>
+                    <option value="DDCM">DDCM</option>
+                    <option value="Brochura do Investigador">Brochura do Investigador</option>
+                    <option value="DEEC">DEEC</option>
+                    <option value="Outro Modelo">Outro Modelo</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">Descrição</label>
+                <textarea 
+                  rows={2}
+                  placeholder="Descrição breve do objetivo do modelo..."
+                  value={newModelDesc}
+                  onChange={e => setNewModelDesc(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">
+                  Texto / Marcadores Iniciais [MARCADOR] (Opcional)
+                </label>
+                <textarea 
+                  rows={4}
+                  placeholder="Cole ou insira o modelo com marcadores entre colchetes, por exemplo:&#10;Vacina [NOME DA VACINA] indicada para [INDICAÇÃO TERAPÊUTICA] com lote [LOTE DO PRODUTO]."
+                  value={newModelText}
+                  onChange={e => setNewModelText(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <button 
+                onClick={() => setIsNewModelModalOpen(false)}
+                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => {
+                  if (!newModelTitle.trim()) {
+                    alert('Por favor, informe o título do modelo.');
+                    return;
+                  }
+                  const markerMatches = newModelText.match(/\[([^\]]+)\]/g) || [];
+                  const uniqueMarkers = Array.from(new Set(markerMatches));
+                  const defaultItems: RegulatoryDocumentItem[] = uniqueMarkers.map((marker, idx) => {
+                    const cleanName = marker.replace(/[\[\]]/g, '');
+                    return {
+                      id: `item_m_${Date.now()}_${idx}`,
+                      code: `1.${idx + 1}`,
+                      name: cleanName,
+                      type: 'Informação Estruturada' as RegulatoryDocItemType,
+                      required: true,
+                      sourceInternalId: cleanName.toUpperCase().replace(/\s+/g, '_'),
+                      status: 'Vazio' as RegulatoryDocItemStatus,
+                      marker: marker,
+                      value: ''
+                    };
+                  });
+
+                  const newDoc: RegulatoryDocument = {
+                    id: `doc_model_${Date.now()}`,
+                    projectId: selectedProject?.id || projects[0]?.id || 'p1',
+                    title: newModelTitle.trim(),
+                    type: newModelType,
+                    group: newModelGroup.trim(),
+                    description: newModelDesc.trim() || 'Modelo regulatório customizado.',
+                    currentVersion: '1.0',
+                    currentVersionStatus: 'Ativo',
+                    updatedAt: new Date().toISOString(),
+                    chapters: [
+                      {
+                        id: `cap_m_${Date.now()}`,
+                        code: '1.0',
+                        title: '1. Estrutura e Marcadores do Modelo',
+                        description: 'Itens gerados a partir do modelo',
+                        items: defaultItems.length > 0 ? defaultItems : [
+                          {
+                            id: `item_def_${Date.now()}`,
+                            code: '1.1',
+                            name: 'Nome da Vacina / Candidato',
+                            type: 'Informação Estruturada',
+                            required: true,
+                            sourceInternalId: 'PRODUCT_NAME',
+                            status: 'Vazio',
+                            marker: '[NOME DA VACINA]',
+                            value: ''
+                          }
+                        ]
+                      }
+                    ]
+                  };
+
+                  onUpdateDocs([...regulatoryDocs, newDoc]);
+                  setIsNewModelModalOpen(false);
+                  setNewModelTitle('');
+                  setNewModelDesc('');
+                  setNewModelText('');
+                  alert(`Modelo "${newDoc.title}" criado com sucesso!`);
+                }}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase transition shadow-md cursor-pointer"
+              >
+                Salvar Modelo
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (viewMode === 'selection' || viewMode === 'initial') {
     return (
       <div className="space-y-4 animate-in fade-in duration-500 pb-12">
@@ -1177,6 +1346,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
         )}
 
         {/* Modals preserved */}
+        {renderNewModelModal()}
         {isNewProjectModalOpen && (
           <NewProjectModal 
             isOpen={isNewProjectModalOpen} 
@@ -1198,12 +1368,22 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           <CreatePlanModal 
             isOpen={isPlanModalOpen} 
             onClose={() => setIsPlanModalOpen(false)} 
-            onSave={(newPlan, saveAsDefault) => {
-              const updatedPlans = [...activityPlans, newPlan];
+            onSave={(newPlan) => {
+              const existingIdx = activityPlans.findIndex(p => p.id === newPlan.id);
+              let updatedPlans: ActivityPlanTemplate[];
+              if (existingIdx >= 0) {
+                updatedPlans = activityPlans.map(p => p.id === newPlan.id ? newPlan : p);
+              } else {
+                updatedPlans = [...activityPlans, newPlan];
+              }
               onUpdateActivityPlans(updatedPlans);
               setIsPlanModalOpen(false);
             }}
             existingPlans={activityPlans}
+            onDeletePlan={(planId) => {
+              const updatedPlans = activityPlans.filter(p => p.id !== planId);
+              onUpdateActivityPlans(updatedPlans);
+            }}
           />
         )}
       </div>
@@ -1250,7 +1430,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200/60">
               <button 
                 onClick={() => setProjectPhaseTab('overview')} 
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                   projectPhaseTab === 'overview' 
                     ? 'bg-blue-600 text-white shadow-xs font-black' 
                     : 'text-slate-600 hover:text-slate-900'
@@ -1260,30 +1440,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
               </button>
 
               <button 
-                onClick={() => setProjectPhaseTab('map')} 
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-                  projectPhaseTab === 'map' 
-                    ? 'bg-teal-700 text-white shadow-xs font-black' 
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Layers size={15} /> MAPA DE FASES
-              </button>
-
-              <button 
-                onClick={() => setProjectPhaseTab('details')} 
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-                  projectPhaseTab === 'details' 
-                    ? 'bg-teal-700 text-white shadow-xs font-black' 
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <ListOrdered size={15} /> DETALHAMENTO DAS FASES
-              </button>
-
-              <button 
                 onClick={() => setProjectPhaseTab('regulatory_docs')} 
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer ${
                   projectPhaseTab === 'regulatory_docs' 
                     ? 'bg-indigo-600 text-white shadow-xs font-black' 
                     : 'text-slate-500 hover:text-slate-800'
@@ -1445,171 +1603,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
       )}
 
       {/* Modal para Líderes e Administradores criarem novos Modelos de Dossiê */}
-      {isNewModelModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-8 space-y-6">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-4">
-                <div className="space-y-1">
-                  <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
-                    <FilePlus className="text-indigo-600" size={22} /> Criar Novo Modelo de Dossiê Regulatório
-                  </h2>
-                  <p className="text-xs text-slate-500 font-medium">
-                    Defina um novo modelo ou padrão de documento regulatório (Exclusivo para Líderes e Administradores).
-                  </p>
-                </div>
-                <button 
-                  onClick={() => setIsNewModelModalOpen(false)} 
-                  className="p-2 hover:bg-slate-100 rounded-xl transition text-slate-400"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="space-y-4 text-left max-h-[60vh] overflow-y-auto pr-1">
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">Título do Modelo *</label>
-                  <input 
-                    type="text" 
-                    placeholder="Ex: Dossiê do IFA - Proteína Recombinante Liofilizada"
-                    value={newModelTitle}
-                    onChange={e => setNewModelTitle(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">Grupo do Modelo</label>
-                    <input 
-                      type="text" 
-                      placeholder="Ex: Dossiê do IFA - Proteína Recombinante"
-                      value={newModelGroup}
-                      onChange={e => setNewModelGroup(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">Tipo de Documento</label>
-                    <select 
-                      value={newModelType}
-                      onChange={e => setNewModelType(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-                    >
-                      <option value="Dossiê Regulatório">Dossiê Regulatório</option>
-                      <option value="DDCM">DDCM</option>
-                      <option value="Brochura do Investigador">Brochura do Investigador</option>
-                      <option value="DEEC">DEEC</option>
-                      <option value="Outro Modelo">Outro Modelo</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">Descrição</label>
-                  <textarea 
-                    rows={2}
-                    placeholder="Descrição breve do objetivo do modelo..."
-                    value={newModelDesc}
-                    onChange={e => setNewModelDesc(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider block mb-1">
-                    Texto / Marcadores Iniciais [MARCADOR] (Opcional)
-                  </label>
-                  <textarea 
-                    rows={4}
-                    placeholder="Cole ou insira o modelo com marcadores entre colchetes, por exemplo:&#10;Vacina [NOME DA VACINA] indicada para [INDICAÇÃO TERAPÊUTICA] com lote [LOTE DO PRODUTO]."
-                    value={newModelText}
-                    onChange={e => setNewModelText(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button 
-                  onClick={() => setIsNewModelModalOpen(false)}
-                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase transition"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  onClick={() => {
-                    if (!newModelTitle.trim()) {
-                      alert('Por favor, informe o título do modelo.');
-                      return;
-                    }
-                    const markerMatches = newModelText.match(/\[([^\]]+)\]/g) || [];
-                    const uniqueMarkers = Array.from(new Set(markerMatches));
-                    const defaultItems: RegulatoryDocumentItem[] = uniqueMarkers.map((marker, idx) => {
-                      const cleanName = marker.replace(/[\[\]]/g, '');
-                      return {
-                        id: `item_m_${Date.now()}_${idx}`,
-                        code: `1.${idx + 1}`,
-                        name: cleanName,
-                        type: 'Informação Estruturada' as RegulatoryDocItemType,
-                        required: true,
-                        sourceInternalId: cleanName.toUpperCase().replace(/\s+/g, '_'),
-                        status: 'Vazio' as RegulatoryDocItemStatus,
-                        marker: marker,
-                        value: ''
-                      };
-                    });
-
-                    const newDoc: RegulatoryDocument = {
-                      id: `doc_model_${Date.now()}`,
-                      projectId: selectedProject?.id || projects[0]?.id || 'p1',
-                      title: newModelTitle.trim(),
-                      type: newModelType,
-                      group: newModelGroup.trim(),
-                      description: newModelDesc.trim() || 'Modelo regulatório customizado.',
-                      currentVersion: '1.0',
-                      currentVersionStatus: 'Ativo',
-                      updatedAt: new Date().toISOString(),
-                      chapters: [
-                        {
-                          id: `cap_m_${Date.now()}`,
-                          code: '1.0',
-                          title: '1. Estrutura e Marcadores do Modelo',
-                          description: 'Itens gerados a partir do modelo',
-                          items: defaultItems.length > 0 ? defaultItems : [
-                            {
-                              id: `item_def_${Date.now()}`,
-                              code: '1.1',
-                              name: 'Nome da Vacina / Candidato',
-                              type: 'Informação Estruturada',
-                              required: true,
-                              sourceInternalId: 'PRODUCT_NAME',
-                              status: 'Vazio',
-                              marker: '[NOME DA VACINA]',
-                              value: ''
-                            }
-                          ]
-                        }
-                      ]
-                    };
-
-                    onUpdateDocs([...regulatoryDocs, newDoc]);
-                    setIsNewModelModalOpen(false);
-                    setNewModelTitle('');
-                    setNewModelDesc('');
-                    setNewModelText('');
-                    alert(`Modelo "${newDoc.title}" criado com sucesso!`);
-                  }}
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase transition shadow-md"
-                >
-                  Salvar Modelo
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {renderNewModelModal()}
 
       {isPlanModalOpen && (
         <CreatePlanModal 
@@ -1617,7 +1611,19 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           onClose={() => setIsPlanModalOpen(false)} 
           existingPlans={activityPlans}
           onSave={(newPlan) => {
-            onUpdateActivityPlans([...activityPlans, newPlan]);
+            const existingIdx = activityPlans.findIndex(p => p.id === newPlan.id);
+            let updatedPlans: ActivityPlanTemplate[];
+            if (existingIdx >= 0) {
+              updatedPlans = activityPlans.map(p => p.id === newPlan.id ? newPlan : p);
+            } else {
+              updatedPlans = [...activityPlans, newPlan];
+            }
+            onUpdateActivityPlans(updatedPlans);
+            setIsPlanModalOpen(false);
+          }}
+          onDeletePlan={(planId) => {
+            const updatedPlans = activityPlans.filter(p => p.id !== planId);
+            onUpdateActivityPlans(updatedPlans);
           }}
         />
       )}
