@@ -1,6 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Task, Priority, Status, TaskNote, ReportStage, TeamMember } from '../types';
-import { X, Plus, ChevronDown, ChevronUp, Users, ShieldCheck, FileText, Info, UserCheck, Link as LinkIcon, PlusCircle, Check } from 'lucide-react';
+import { Task, Priority, Status, TaskNote, ReportStage, TeamMember, ActivityType, TaskAttachment } from '../types';
+import { 
+  X, 
+  Plus, 
+  FileText, 
+  Users, 
+  Calendar, 
+  Clock, 
+  Link as LinkIcon, 
+  Check, 
+  StickyNote, 
+  CheckCircle,
+  Paperclip,
+  Trash2,
+  ChevronDown
+} from 'lucide-react';
 import { DossierContributionSection } from './DossierContributionSection';
 import { DateInput } from './DateInput';
 
@@ -15,7 +29,7 @@ interface TaskModalProps {
   currentProfileName?: string;
 }
 
-const TaskModal: React.FC<TaskModalProps> = ({ 
+export const TaskModal: React.FC<TaskModalProps> = ({ 
   isOpen, 
   onClose, 
   onSave, 
@@ -25,13 +39,22 @@ const TaskModal: React.FC<TaskModalProps> = ({
   hasFullAccess, 
   currentProfileName 
 }) => {
+  // Determine initial activity type
+  const getInitialType = (): ActivityType => {
+    if (initialData?.activityType) return initialData.activityType;
+    if (initialData?.isReport) return 'report';
+    return 'general';
+  };
+
+  const [activeType, setActiveType] = useState<ActivityType>(getInitialType());
+
   const [formData, setFormData] = useState<Partial<Task>>({
     activity: '',
     project: projects[0] || 'Geral',
     description: '',
     projectLead: currentProfileName || teamMembers[0]?.name || 'Usuário',
     collaborators: [],
-    priority: 'Média',
+    priority: 'Sem prioridade',
     status: 'Planejada',
     requestDate: new Date().toISOString().split('T')[0],
     plannedStartDate: new Date().toISOString().split('T')[0],
@@ -46,29 +69,44 @@ const TaskModal: React.FC<TaskModalProps> = ({
     committeeReviewerName: '',
     fileLocation: '',
     updates: [],
-    generatesRegulatoryContent: false
+    generatesRegulatoryContent: false,
+    activityType: 'general',
+    meetingTime: '',
+    meetingParticipants: [],
+    meetingLink: '',
+    meetingAgenda: '',
+    reportType: 'Relatório Técnico',
+    attachments: []
   });
 
-  const [showOptionalDetails, setShowOptionalDetails] = useState(false);
+  // Notes state
   const [note, setNote] = useState('');
   const [isNoteImportant, setIsNoteImportant] = useState(false);
-  const [isCollaboratorDropdownOpen, setIsCollaboratorDropdownOpen] = useState(false);
-  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
-  const [editingNoteText, setEditingNoteText] = useState('');
+  const [noteAttachmentName, setNoteAttachmentName] = useState('');
+  const [noteAttachmentUrl, setNoteAttachmentUrl] = useState('');
+  const [showNoteAttachmentInputs, setShowNoteAttachmentInputs] = useState(false);
+  
+  // Participants dropdown
+  const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
 
   useEffect(() => {
     if (initialData) {
-      setFormData(initialData);
-      // When editing an existing task, always show all details expanded
-      setShowOptionalDetails(true);
+      const type = initialData.activityType || (initialData.isReport ? 'report' : 'general');
+      setActiveType(type);
+      setFormData({
+        ...initialData,
+        activityType: type,
+        priority: initialData.priority || 'Sem prioridade'
+      });
     } else {
+      setActiveType('general');
       setFormData({
         activity: '',
         project: projects[0] || 'Geral',
         description: '',
         projectLead: currentProfileName || teamMembers[0]?.name || 'Usuário',
         collaborators: [],
-        priority: 'Média',
+        priority: 'Sem prioridade',
         status: 'Planejada',
         requestDate: new Date().toISOString().split('T')[0],
         plannedStartDate: new Date().toISOString().split('T')[0],
@@ -83,70 +121,145 @@ const TaskModal: React.FC<TaskModalProps> = ({
         committeeReviewerName: '',
         fileLocation: '',
         updates: [],
-        generatesRegulatoryContent: false
+        generatesRegulatoryContent: false,
+        activityType: 'general',
+        meetingTime: '',
+        meetingParticipants: [],
+        meetingLink: '',
+        meetingAgenda: '',
+        reportType: 'Relatório Técnico',
+        attachments: []
       });
-      setShowOptionalDetails(false);
     }
   }, [initialData, isOpen, teamMembers, projects, currentProfileName]);
+
+  // When active type changes on creation
+  const handleTypeSelect = (type: ActivityType) => {
+    setActiveType(type);
+    if (!initialData) {
+      if (type === 'note') {
+        setFormData(prev => ({
+          ...prev,
+          activityType: 'note',
+          isReport: false,
+          status: 'Concluída',
+          progress: 100,
+          completionDate: ''
+        }));
+      } else if (type === 'report') {
+        setFormData(prev => ({
+          ...prev,
+          activityType: 'report',
+          isReport: true,
+          reportStage: prev.reportStage || 'Em Elaboração',
+          status: 'Em Andamento',
+          progress: prev.progress || 25
+        }));
+      } else if (type === 'meeting') {
+        setFormData(prev => ({
+          ...prev,
+          activityType: 'meeting',
+          isReport: false,
+          status: 'Planejada'
+        }));
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          activityType: 'general',
+          isReport: false,
+          status: 'Planejada'
+        }));
+      }
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        activityType: type,
+        isReport: type === 'report'
+      }));
+    }
+  };
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.activity?.trim()) {
-      alert('Por favor, informe o nome da atividade.');
+      alert('Por favor, informe o título da atividade.');
       return;
     }
+
+    const isNote = activeType === 'note';
+    const isReport = activeType === 'report';
 
     const taskToSave: Task = {
       ...(formData as Task),
       id: formData.id || Math.random().toString(36).substring(2, 11),
+      activity: formData.activity.trim(),
+      project: formData.project || 'Geral',
+      activityType: activeType,
+      isReport: isReport,
+      status: isNote ? 'Concluída' : (formData.status || 'Planejada'),
+      progress: isNote ? 100 : (formData.progress || 0),
+      priority: formData.priority || 'Sem prioridade',
       updates: formData.updates || []
     };
+
     onSave(taskToSave);
   };
 
   const addNote = () => {
     if (!note.trim()) return;
+    
+    const attachments: TaskAttachment[] = [];
+    if (noteAttachmentName.trim()) {
+      attachments.push({
+        id: Math.random().toString(36).substring(2, 11),
+        name: noteAttachmentName.trim(),
+        url: noteAttachmentUrl.trim() || undefined,
+        date: new Date().toISOString()
+      });
+    }
+
     const newNote: TaskNote = {
       id: Math.random().toString(36).substring(2, 11),
       date: new Date().toISOString(),
       user: currentProfileName || 'Usuário',
       note: note.trim(),
       isImportant: isNoteImportant,
-      acknowledgedBy: isNoteImportant && currentProfileName ? [currentProfileName] : []
+      acknowledgedBy: isNoteImportant && currentProfileName ? [currentProfileName] : [],
+      attachments: attachments.length > 0 ? attachments : undefined
     };
-    setFormData({ ...formData, updates: [newNote, ...(formData.updates || [])] });
+
+    setFormData(prev => ({
+      ...prev,
+      updates: [newNote, ...(prev.updates || [])]
+    }));
+
     setNote('');
     setIsNoteImportant(false);
-  };
-
-  const startEditingNote = (n: TaskNote) => {
-    setEditingNoteId(n.id);
-    setEditingNoteText(n.note);
-  };
-
-  const saveEditedNote = () => {
-    if (!editingNoteId) return;
-    const updatedUpdates = (formData.updates || []).map(u => 
-      u.id === editingNoteId ? { ...u, note: editingNoteText } : u
-    );
-    setFormData({ ...formData, updates: updatedUpdates });
-    setEditingNoteId(null);
-    setEditingNoteText('');
+    setNoteAttachmentName('');
+    setNoteAttachmentUrl('');
+    setShowNoteAttachmentInputs(false);
   };
 
   const deleteNote = (id: string) => {
-    setFormData({ ...formData, updates: (formData.updates || []).filter(u => u.id !== id) });
+    setFormData(prev => ({
+      ...prev,
+      updates: (prev.updates || []).filter(u => u.id !== id)
+    }));
   };
 
-  const toggleCollaborator = (name: string) => {
-    const current = formData.collaborators || [];
-    if (current.includes(name)) {
-      setFormData({ ...formData, collaborators: current.filter(c => c !== name) });
-    } else {
-      setFormData({ ...formData, collaborators: [...current, name] });
-    }
+  const toggleParticipant = (name: string) => {
+    const current = formData.meetingParticipants || formData.collaborators || [];
+    const updated = current.includes(name) 
+      ? current.filter(c => c !== name) 
+      : [...current, name];
+    
+    setFormData(prev => ({
+      ...prev,
+      meetingParticipants: updated,
+      collaborators: updated
+    }));
   };
 
   const getInitials = (name?: string) => {
@@ -155,304 +268,387 @@ const TaskModal: React.FC<TaskModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
       <div 
-        className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-5xl my-auto overflow-hidden border border-slate-100 flex flex-col animate-in fade-in zoom-in-95 duration-150"
+        className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-4xl my-auto overflow-hidden border border-slate-100 flex flex-col max-h-[94vh] animate-in fade-in zoom-in-95 duration-150"
         onClick={() => {
-          if (isCollaboratorDropdownOpen) setIsCollaboratorDropdownOpen(false);
+          if (isParticipantsOpen) setIsParticipantsOpen(false);
         }}
       >
-        {/* Modal Header */}
-        <header className="bg-[#008779] px-6 sm:px-8 py-5 flex justify-between items-center text-white shrink-0">
+        {/* Header */}
+        <header className="bg-slate-900 px-5 sm:px-8 py-4 sm:py-5 flex justify-between items-center text-white shrink-0">
           <div>
-            <h2 className="text-lg sm:text-xl font-black uppercase tracking-tight">
-              {initialData ? 'Editar Atividade' : 'Nova Atividade Setorial'}
-            </h2>
-            <p className="text-[9px] sm:text-[10px] font-bold text-teal-100 uppercase tracking-widest mt-0.5">
-              Garantindo a integridade dos dados regulatórios
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-teal-400"></span>
+              <h2 className="text-base sm:text-lg font-black uppercase tracking-tight">
+                {initialData ? 'Editar Atividade' : 'Nova Atividade'}
+              </h2>
+            </div>
+            <p className="text-[10px] sm:text-xs font-semibold text-slate-400 mt-0.5">
+              CTVacinas • Gestão e Acompanhamento Estratégico
             </p>
           </div>
           <button 
             type="button"
             onClick={onClose} 
-            className="w-9 h-9 flex items-center justify-center bg-white/15 hover:bg-white/25 rounded-full text-white transition-colors"
+            className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
             title="Fechar"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </header>
 
-        {/* Modal Form Content */}
-        <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6 max-h-[80vh] overflow-y-auto custom-scrollbar">
-          {/* Main Essential Fields Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 sm:gap-5 items-start">
-            {/* Nome da Atividade */}
-            <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
-              <label className="text-[11px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
-                Nome da Atividade <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.activity}
-                onChange={e => setFormData({ ...formData, activity: e.target.value })}
-                placeholder="Ex.: Atualização de procedimento"
-                className="w-full px-4 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-[#008779] focus:border-transparent transition"
-              />
-            </div>
-
-            {/* Projeto Relacionado */}
-            <div className="space-y-1.5 lg:col-span-2">
-              <label className="text-[11px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
-                Projeto Relacionado <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.project}
-                onChange={e => setFormData({ ...formData, project: e.target.value })}
-                className="w-full px-4 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-[#008779] focus:border-transparent transition cursor-pointer"
-              >
-                {projects.map(p => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Responsável pela Atividade */}
-            <div className="space-y-1.5 lg:col-span-2">
-              <label className="text-[11px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
-                Responsável <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <select
-                  value={formData.projectLead}
-                  onChange={e => setFormData({ ...formData, projectLead: e.target.value })}
-                  className="w-full pl-9 pr-4 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-[#008779] cursor-pointer appearance-none"
-                >
-                  {teamMembers.map(m => (
-                    <option key={m.id} value={m.name}>{m.name}</option>
-                  ))}
-                </select>
-                <div className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-[#008779] text-white flex items-center justify-center text-[9px] font-black pointer-events-none">
-                  {getInitials(formData.projectLead)}
+        {/* 4 Activity Types Selector */}
+        <div className="p-4 sm:p-6 pb-2 border-b border-slate-100 bg-slate-50/70">
+          <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2 block">
+            Selecione o Tipo de Atividade
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+            {/* 1. Atividade Geral */}
+            <button
+              type="button"
+              onClick={() => handleTypeSelect('general')}
+              className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${
+                activeType === 'general'
+                  ? 'bg-teal-600 text-white border-teal-600 shadow-md ring-2 ring-teal-200'
+                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${activeType === 'general' ? 'bg-white/20 text-white' : 'bg-teal-50 text-teal-700'}`}>
+                  <FileText size={16} />
                 </div>
+                {activeType === 'general' && <Check size={14} className="text-white" />}
               </div>
-            </div>
-
-            {/* Nível de Prioridade */}
-            <div className="space-y-1.5 lg:col-span-2">
-              <label className="text-[11px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
-                Prioridade <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.priority}
-                onChange={e => setFormData({ ...formData, priority: e.target.value as Priority })}
-                className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-[#008779] cursor-pointer"
-              >
-                <option value="Baixa">Baixa</option>
-                <option value="Média">Média</option>
-                <option value="Alta">Alta</option>
-                <option value="Urgente">Urgente</option>
-              </select>
-            </div>
-
-            {/* Data de Solicitação */}
-            <div className="space-y-1.5 lg:col-span-2">
-              <label className="text-[11px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
-                Data de Solicitação <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                required
-                value={formData.requestDate}
-                onChange={e => setFormData({ ...formData, requestDate: e.target.value })}
-                className="w-full px-4 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-[#008779] focus:border-transparent transition"
-              />
-            </div>
-
-            {/* Data Prevista */}
-            <div className="space-y-1.5 lg:col-span-2">
-              <label className="text-[11px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
-                Data Prevista <span className="text-red-500">*</span>
-              </label>
-              <DateInput
-                value={formData.completionDate}
-                onChange={val => setFormData({ ...formData, completionDate: val })}
-                className="w-full"
-              />
-            </div>
-          </div>
-
-          {/* Optional Details Trigger Button (when collapsed) */}
-          {!showOptionalDetails ? (
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => setShowOptionalDetails(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 border-2 border-[#008779] text-[#008779] hover:bg-teal-50/50 rounded-full font-black text-xs uppercase tracking-wider transition active:scale-95"
-              >
-                <Plus size={15} className="stroke-[3]" />
-                Adicionar detalhes opcionais
-              </button>
-              <p className="text-[11px] font-medium text-slate-400 mt-1.5 ml-1">
-                Descrição, responsável, prioridade, fluxo de revisão e mais.
-              </p>
-            </div>
-          ) : (
-            /* Expanded Optional Details Section */
-            <div className="space-y-6 pt-4 border-t border-slate-200 animate-in fade-in duration-200">
-              {/* Optional Section Header */}
-              <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                <span className="text-xs font-black text-[#008779] uppercase tracking-wider flex items-center gap-1.5">
-                  <ChevronDown size={16} className="stroke-[2.5]" /> Detalhes Opcionais
+              <div>
+                <span className="text-xs font-black uppercase block tracking-tight">Geral</span>
+                <span className={`text-[9px] font-medium leading-tight block mt-0.5 ${activeType === 'general' ? 'text-teal-100' : 'text-slate-400'}`}>
+                  Tarefas e planos
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setShowOptionalDetails(false)}
-                  className="text-xs font-black text-slate-500 hover:text-slate-700 uppercase tracking-wider flex items-center gap-1 transition"
-                >
-                  Ocultar Detalhes <ChevronUp size={16} />
-                </button>
               </div>
+            </button>
 
-              {/* Row 1 of Optional Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
-                {/* Descrição */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">
-                    Descrição
+            {/* 2. Reunião */}
+            <button
+              type="button"
+              onClick={() => handleTypeSelect('meeting')}
+              className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${
+                activeType === 'meeting'
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-200'
+                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${activeType === 'meeting' ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-700'}`}>
+                  <Users size={16} />
+                </div>
+                {activeType === 'meeting' && <Check size={14} className="text-white" />}
+              </div>
+              <div>
+                <span className="text-xs font-black uppercase block tracking-tight">Reunião</span>
+                <span className={`text-[9px] font-medium leading-tight block mt-0.5 ${activeType === 'meeting' ? 'text-blue-100' : 'text-slate-400'}`}>
+                  Pautas e encontros
+                </span>
+              </div>
+            </button>
+
+            {/* 3. Relatório */}
+            <button
+              type="button"
+              onClick={() => handleTypeSelect('report')}
+              className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${
+                activeType === 'report'
+                  ? 'bg-purple-600 text-white border-purple-600 shadow-md ring-2 ring-purple-200'
+                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${activeType === 'report' ? 'bg-white/20 text-white' : 'bg-purple-50 text-purple-700'}`}>
+                  <FileText size={16} />
+                </div>
+                {activeType === 'report' && <Check size={14} className="text-white" />}
+              </div>
+              <div>
+                <span className="text-xs font-black uppercase block tracking-tight">Relatório</span>
+                <span className={`text-[9px] font-medium leading-tight block mt-0.5 ${activeType === 'report' ? 'text-purple-100' : 'text-slate-400'}`}>
+                  Fluxo de revisão
+                </span>
+              </div>
+            </button>
+
+            {/* 4. Nota */}
+            <button
+              type="button"
+              onClick={() => handleTypeSelect('note')}
+              className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${
+                activeType === 'note'
+                  ? 'bg-amber-600 text-white border-amber-600 shadow-md ring-2 ring-amber-200'
+                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${activeType === 'note' ? 'bg-white/20 text-white' : 'bg-amber-50 text-amber-700'}`}>
+                  <StickyNote size={16} />
+                </div>
+                {activeType === 'note' && <Check size={14} className="text-white" />}
+              </div>
+              <div>
+                <span className="text-xs font-black uppercase block tracking-tight">Nota</span>
+                <span className={`text-[9px] font-medium leading-tight block mt-0.5 ${activeType === 'note' ? 'text-amber-100' : 'text-slate-400'}`}>
+                  Registro rápido
+                </span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* Modal Form Content */}
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 md:p-8 space-y-5 overflow-y-auto custom-scrollbar flex-1">
+          
+          {/* ======================= 1. ATIVIDADE GERAL FORM ======================= */}
+          {activeType === 'general' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Título */}
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Título da Atividade <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    value={formData.description || ''}
-                    onChange={e => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Descreva o objetivo da atividade..."
-                    className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-[#008779] transition"
+                    required
+                    value={formData.activity || ''}
+                    onChange={e => setFormData({ ...formData, activity: e.target.value })}
+                    placeholder="Ex.: Elaboração do protocolo de purificação da SpiN-UTG"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-teal-500 transition"
                   />
                 </div>
 
-                {/* Responsável pela Atividade */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">
-                    Responsável pela Atividade
+                {/* Projeto */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Projeto <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.project}
+                    onChange={e => setFormData({ ...formData, project: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+                  >
+                    {projects.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Responsável */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Responsável <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <select
                       value={formData.projectLead}
                       onChange={e => setFormData({ ...formData, projectLead: e.target.value })}
-                      className="w-full pl-9 pr-4 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-[#008779] cursor-pointer appearance-none"
+                      className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer appearance-none"
                     >
                       {teamMembers.map(m => (
                         <option key={m.id} value={m.name}>{m.name}</option>
                       ))}
                     </select>
-                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-[#008779] text-white flex items-center justify-center text-[9px] font-black pointer-events-none">
+                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-teal-600 text-white flex items-center justify-center text-[9px] font-black pointer-events-none">
                       {getInitials(formData.projectLead)}
                     </div>
                   </div>
                 </div>
 
-                {/* Nível de Prioridade */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">
-                    Nível de Prioridade
+                {/* Data de Solicitação */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Data de Solicitação <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    value={formData.priority}
-                    onChange={e => setFormData({ ...formData, priority: e.target.value as Priority })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-[#008779] cursor-pointer"
-                  >
-                    <option value="Baixa">Baixa</option>
-                    <option value="Média">Média</option>
-                    <option value="Alta">Alta</option>
-                    <option value="Urgente">Urgente</option>
-                  </select>
+                  <input
+                    type="date"
+                    required
+                    value={formData.requestDate}
+                    onChange={e => setFormData({ ...formData, requestDate: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                  />
                 </div>
 
-                {/* Status Atual */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">
-                    Status Atual
+                {/* Data Prevista */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Data Prevista (Prazo) <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    value={formData.status}
-                    onChange={e => {
-                      const newStatus = e.target.value as Status;
-                      const updates: any = { status: newStatus };
-                      if (newStatus === 'Concluída') {
-                        updates.progress = 100;
-                      }
-                      setFormData({ ...formData, ...updates });
-                    }}
-                    className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-[#008779] cursor-pointer"
-                  >
-                    <option value="Planejada">Planejada</option>
-                    <option value="Em Andamento">Em Andamento</option>
-                    <option value="Concluída">Concluída</option>
-                    <option value="Pausado">Pausado</option>
-                    <option value="Não Aplicável">Não Aplicável</option>
-                  </select>
+                  <DateInput
+                    value={formData.completionDate || ''}
+                    onChange={val => setFormData({ ...formData, completionDate: val })}
+                    className="w-full"
+                  />
                 </div>
 
-                {/* % de Progresso */}
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">
-                      % de Progresso
-                    </label>
-                    <span className="text-xs font-black text-[#008779]">
-                      {formData.progress || 0}%
-                    </span>
-                  </div>
-                  <div className="py-2">
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="5"
-                      value={formData.progress || 0}
-                      onChange={e => setFormData({ ...formData, progress: parseInt(e.target.value) })}
-                      className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#008779]"
-                    />
-                  </div>
+                {/* Descrição */}
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight">
+                    Descrição Detalhada
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={formData.description || ''}
+                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Descreva o escopo, requisitos e orientações desta atividade..."
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+
+                {/* Próximo Passo Estratégico */}
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight">
+                    Próximo Passo Estratégico
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.nextStep || ''}
+                    onChange={e => setFormData({ ...formData, nextStep: e.target.value })}
+                    placeholder="Ex.: Submeter para aprovação da liderança técnica"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-teal-500"
+                  />
                 </div>
               </div>
+            </div>
+          )}
 
-              {/* Row 2 of Optional Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
-                {/* Equipe de Apoio */}
-                <div className="space-y-1.5 relative">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">
-                    Equipe de Apoio
+          {/* ======================= 2. REUNIÃO FORM ======================= */}
+          {activeType === 'meeting' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Título */}
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Título da Reunião <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.activity || ''}
+                    onChange={e => setFormData({ ...formData, activity: e.target.value })}
+                    placeholder="Ex.: Alinhamento Regulatório - Dossiê SpiN-UTG"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500 transition"
+                  />
+                </div>
+
+                {/* Projeto */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Projeto <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.project}
+                    onChange={e => setFormData({ ...formData, project: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  >
+                    {projects.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Responsável / Organizador */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Responsável (Organizador) <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={formData.projectLead}
+                      onChange={e => setFormData({ ...formData, projectLead: e.target.value })}
+                      className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer appearance-none"
+                    >
+                      {teamMembers.map(m => (
+                        <option key={m.id} value={m.name}>{m.name}</option>
+                      ))}
+                    </select>
+                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[9px] font-black pointer-events-none">
+                      {getInitials(formData.projectLead)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Data da Reunião */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Data da Reunião <span className="text-red-500">*</span>
+                  </label>
+                  <DateInput
+                    value={formData.completionDate || ''}
+                    onChange={val => setFormData({ ...formData, completionDate: val })}
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Horário */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    <Clock size={12} /> Horário <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="time"
+                    value={formData.meetingTime || '14:00'}
+                    onChange={e => setFormData({ ...formData, meetingTime: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Link da Reunião */}
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    <LinkIcon size={12} /> Link da Reunião (Teams, Google Meet, Zoom)
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.meetingLink || formData.fileLocation || ''}
+                    onChange={e => setFormData({ ...formData, meetingLink: e.target.value, fileLocation: e.target.value })}
+                    placeholder="https://teams.microsoft.com/l/meetup-join/..."
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Participantes */}
+                <div className="space-y-1 sm:col-span-2 relative">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center justify-between">
+                    <span>Participantes</span>
+                    <span className="text-[10px] text-blue-600 font-bold">
+                      {(formData.meetingParticipants || formData.collaborators || []).length} selecionado(s)
+                    </span>
                   </label>
                   <div
                     onClick={(e) => {
                       e.stopPropagation();
-                      setIsCollaboratorDropdownOpen(!isCollaboratorDropdownOpen);
+                      setIsParticipantsOpen(!isParticipantsOpen);
                     }}
-                    className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 flex items-center justify-between cursor-pointer hover:border-slate-300"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 flex items-center justify-between cursor-pointer hover:border-slate-300"
                   >
                     <span className="truncate">
-                      {formData.collaborators && formData.collaborators.length > 0
-                        ? `${formData.collaborators.length} selecionado(s)`
-                        : 'Selecione os integrantes'}
+                      {(formData.meetingParticipants || formData.collaborators || []).length > 0
+                        ? (formData.meetingParticipants || formData.collaborators || []).join(', ')
+                        : 'Clique para selecionar participantes'}
                     </span>
                     <ChevronDown size={14} className="text-slate-400 shrink-0 ml-1" />
                   </div>
 
-                  {/* Dropdown Menu for Collaborators */}
-                  {isCollaboratorDropdownOpen && (
+                  {isParticipantsOpen && (
                     <div 
                       onClick={(e) => e.stopPropagation()}
                       className="absolute z-50 left-0 right-0 mt-1 p-2 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto custom-scrollbar space-y-1 animate-in fade-in zoom-in-95 duration-100"
                     >
                       {teamMembers.map(m => {
-                        const isSelected = (formData.collaborators || []).includes(m.name);
+                        const isSelected = (formData.meetingParticipants || formData.collaborators || []).includes(m.name);
                         return (
                           <div
                             key={m.id}
-                            onClick={() => toggleCollaborator(m.name)}
+                            onClick={() => toggleParticipant(m.name)}
                             className={`flex items-center justify-between p-2 rounded-lg text-xs font-bold cursor-pointer transition ${
-                              isSelected ? 'bg-teal-50 text-[#008779]' : 'text-slate-700 hover:bg-slate-50'
+                              isSelected ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'
                             }`}
                           >
                             <span className="flex items-center gap-2">
@@ -461,7 +657,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
                               </span>
                               {m.name}
                             </span>
-                            {isSelected && <Check size={14} className="text-[#008779]" />}
+                            {isSelected && <Check size={14} className="text-blue-600" />}
                           </div>
                         );
                       })}
@@ -469,287 +665,462 @@ const TaskModal: React.FC<TaskModalProps> = ({
                   )}
                 </div>
 
-                {/* Fluxo de Revisão Toggle */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">
-                    Fluxo de Revisão
+                {/* Pauta */}
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight">
+                    Pauta da Reunião
                   </label>
-                  <div className="flex items-center justify-between px-3.5 py-2 bg-slate-50/70 border border-slate-200 rounded-xl h-[42px]">
-                    <span className="text-xs font-bold text-slate-700">Ativar controle de etapas</span>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.isReport || false}
-                        onChange={e => {
-                          const isChecked = e.target.checked;
-                          const updates: Partial<Task> = { isReport: isChecked };
-                          if (isChecked) {
-                            updates.status = 'Em Andamento';
-                            if (!formData.reportStage || formData.reportStage === 'Em Elaboração') {
-                              updates.reportStage = 'Revisão Colaboradores';
-                            }
-                          }
-                          setFormData({ ...formData, ...updates });
-                        }}
-                        className="sr-only peer"
-                      />
-                      <div className="w-9 h-5 bg-slate-300 rounded-full peer peer-checked:bg-[#008779] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
-                    </label>
+                  <textarea
+                    rows={3}
+                    value={formData.meetingAgenda || formData.description || ''}
+                    onChange={e => setFormData({ ...formData, meetingAgenda: e.target.value, description: e.target.value })}
+                    placeholder="Pontos a serem discutidos, objetivos e deliberações esperadas..."
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ======================= 3. RELATÓRIO FORM ======================= */}
+          {activeType === 'report' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Título */}
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Título do Relatório <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.activity || ''}
+                    onChange={e => setFormData({ ...formData, activity: e.target.value })}
+                    placeholder="Ex.: Relatório de Validação de Método Analítico"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-purple-500 transition"
+                  />
+                </div>
+
+                {/* Projeto */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Projeto <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.project}
+                    onChange={e => setFormData({ ...formData, project: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+                  >
+                    {projects.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Tipo de Relatório */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Tipo de Relatório <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.reportType || 'Relatório Técnico'}
+                    onChange={e => setFormData({ ...formData, reportType: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+                  >
+                    <option value="Relatório Técnico">Relatório Técnico</option>
+                    <option value="Relatório Mensal">Relatório Mensal</option>
+                    <option value="Relatório de Validação">Relatório de Validação</option>
+                    <option value="Relatório de Estabilidade">Relatório de Estabilidade</option>
+                    <option value="Relatório Regulatório">Relatório Regulatório</option>
+                    <option value="Relatório de Qualidade">Relatório de Qualidade</option>
+                    <option value="Outro">Outro</option>
+                  </select>
+                </div>
+
+                {/* Responsável */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Responsável <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={formData.projectLead}
+                      onChange={e => setFormData({ ...formData, projectLead: e.target.value })}
+                      className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer appearance-none"
+                    >
+                      {teamMembers.map(m => (
+                        <option key={m.id} value={m.name}>{m.name}</option>
+                      ))}
+                    </select>
+                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[9px] font-black pointer-events-none">
+                      {getInitials(formData.projectLead)}
+                    </div>
                   </div>
                 </div>
 
+                {/* Prazo */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Prazo Final <span className="text-red-500">*</span>
+                  </label>
+                  <DateInput
+                    value={formData.completionDate || ''}
+                    onChange={val => setFormData({ ...formData, completionDate: val })}
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Descrição */}
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight">
+                    Descrição do Relatório
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={formData.description || ''}
+                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Finalidade e dados contemplados no documento..."
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
                 {/* Próximo Passo Estratégico */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight">
                     Próximo Passo Estratégico
                   </label>
                   <input
                     type="text"
                     value={formData.nextStep || ''}
                     onChange={e => setFormData({ ...formData, nextStep: e.target.value })}
-                    placeholder="Defina a próxima ação..."
-                    className="w-full px-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-[#008779] transition"
+                    placeholder="Ex.: Enviar para aprovação dos revisores"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-purple-500"
                   />
-                </div>
-
-                {/* Notas de Atualização */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-tight">
-                      Notas de Atualização
-                    </label>
-                    <label className="flex items-center gap-1 text-[10px] font-bold text-amber-600 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={isNoteImportant}
-                        onChange={e => setIsNoteImportant(e.target.checked)}
-                        className="rounded text-amber-600 focus:ring-amber-500 w-3 h-3"
-                      />
-                      <span>⭐ Importante</span>
-                    </label>
-                  </div>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      value={note}
-                      onChange={e => setNote(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addNote();
-                        }
-                      }}
-                      placeholder={isNoteImportant ? "⭐ Digite uma nota importante..." : "Adicione uma nota..."}
-                      className={`w-full px-3.5 py-2.5 border rounded-xl text-xs font-semibold placeholder-slate-400 outline-none transition ${
-                        isNoteImportant 
-                          ? 'bg-amber-50/60 border-amber-300 text-amber-900 focus:ring-2 focus:ring-amber-400' 
-                          : 'bg-slate-50/70 border-slate-200 text-slate-800 focus:ring-2 focus:ring-[#008779]'
-                      }`}
-                    />
-                    {note.trim() && (
-                      <button
-                        type="button"
-                        onClick={addNote}
-                        className={`px-3 text-white rounded-xl transition shrink-0 flex items-center justify-center ${
-                          isNoteImportant ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#008779] hover:bg-[#007367]'
-                        }`}
-                        title="Adicionar nota"
-                      >
-                        <Plus size={16} />
-                      </button>
-                    )}
-                  </div>
                 </div>
               </div>
 
-              {/* Sub-Panel: Review Details if isReport is true */}
-              {formData.isReport && (
-                <div className="p-4 bg-teal-50/60 border border-teal-200 rounded-2xl space-y-4 animate-in slide-in-from-top-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs font-black text-[#008779] uppercase tracking-wide">
-                      <FileText size={16} /> Detalhes do Fluxo de Revisão
-                    </div>
-                    <span className="px-2.5 py-1 bg-purple-100 text-purple-700 rounded-lg text-[10px] font-black uppercase tracking-wider">
-                      Status Automático: Em Revisão
-                    </span>
+              {/* Fluxo de Revisão Integrado (Sem botão de ativar, diretamente visível como solicitado) */}
+              <div className="p-4 bg-purple-50/70 border border-purple-200/90 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText size={15} /> Fluxo de Revisão Regulatório
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-purple-200 text-purple-900">
+                    Status Automático: {formData.status || 'Em Revisão'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {/* Etapa */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-purple-900 uppercase tracking-tight">
+                      Etapa Atual
+                    </label>
+                    <select
+                      value={formData.reportStage || 'Em Elaboração'}
+                      onChange={e => {
+                        const newStage = e.target.value as ReportStage;
+                        const isDone = newStage === 'Concluído' || newStage === 'Concluído e Assinado';
+                        setFormData({
+                          ...formData,
+                          reportStage: newStage,
+                          status: isDone ? 'Concluída' : 'Em Andamento',
+                          progress: isDone ? 100 : (formData.progress || 50)
+                        });
+                      }}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl text-xs font-bold text-purple-900 outline-none"
+                    >
+                      <option value="Em Elaboração">Em Elaboração</option>
+                      <option value="Próximo Revisor (equipe AR)">Próximo Revisor (equipe AR)</option>
+                      <option value="Revisão Colaboradores">Revisão Colaboradores</option>
+                      <option value="Revisão Comitê Gestor">Revisão Comitê Gestor</option>
+                      <option value="Concluído">Concluído</option>
+                      <option value="Concluído e Assinado">Concluído e Assinado</option>
+                    </select>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
-                        <Info size={12} /> Etapa da Revisão
-                      </label>
-                      <select
-                        value={formData.reportStage}
-                        onChange={e => {
-                          const newStage = e.target.value as ReportStage;
-                          const updates: Partial<Task> = { reportStage: newStage };
-                          if (newStage === 'Concluído' || newStage === 'Concluído e Assinado') {
-                            updates.status = 'Concluída';
-                            updates.progress = 100;
-                          } else {
-                            updates.status = 'Em Andamento';
-                          }
-                          setFormData({ ...formData, ...updates });
-                        }}
-                        className="w-full px-3.5 py-2 bg-white border border-teal-200 rounded-xl text-xs font-bold text-[#008779] outline-none"
-                      >
-                        <option value="Em Elaboração">Em Elaboração</option>
-                        <option value="Próximo Revisor (equipe AR)">Próximo Revisor (equipe AR)</option>
-                        <option value="Revisão Colaboradores">Em Revisão (Colaboradores)</option>
-                        <option value="Revisão Comitê Gestor">Em Revisão (Comitê Gestor)</option>
-                        <option value="Concluído">Concluído</option>
-                        <option value="Concluído e Assinado">Concluído e Assinado</option>
-                      </select>
-                    </div>
 
-                    {formData.reportStage === 'Em Elaboração' && (
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
-                          <UserCheck size={12} /> Responsável pela Elaboração
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.elaboratorName || ''}
-                          onChange={e => setFormData({ ...formData, elaboratorName: e.target.value })}
-                          placeholder="Nome de quem está elaborando..."
-                          className="w-full px-3.5 py-2 bg-white border border-teal-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
-                        />
-                      </div>
-                    )}
+                  {/* Revisor */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-purple-900 uppercase tracking-tight">
+                      Revisor Designado
+                    </label>
+                    <select
+                      value={formData.currentReviewer || ''}
+                      onChange={e => setFormData({ ...formData, currentReviewer: e.target.value })}
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                    >
+                      <option value="">Selecione o revisor...</option>
+                      {teamMembers.map(m => (
+                        <option key={m.id} value={m.name}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                    {formData.reportStage === 'Próximo Revisor (equipe AR)' && (
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
-                          <UserCheck size={12} /> Revisor (Equipe AR)
-                        </label>
-                        <select
-                          value={formData.currentReviewer || ''}
-                          onChange={e => setFormData({ ...formData, currentReviewer: e.target.value })}
-                          className="w-full px-3.5 py-2 bg-white border border-amber-300 rounded-xl text-xs font-bold text-amber-800 outline-none"
-                        >
-                          <option value="">Selecione um revisor...</option>
-                          {teamMembers.map(m => (
-                            <option key={m.id} value={m.name}>{m.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    {formData.reportStage === 'Revisão Colaboradores' && (
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
-                          <UserCheck size={12} /> Revisor (Colaboradores)
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.collaboratorReviewerName || ''}
-                          onChange={e => setFormData({ ...formData, collaboratorReviewerName: e.target.value })}
-                          placeholder="Nome do revisor colaborador..."
-                          className="w-full px-3.5 py-2 bg-white border border-teal-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
-                        />
-                      </div>
-                    )}
-
-                    {formData.reportStage === 'Revisão Comitê Gestor' && (
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
-                          <UserCheck size={12} /> Revisor (Comitê Gestor)
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.committeeReviewerName || ''}
-                          onChange={e => setFormData({ ...formData, committeeReviewerName: e.target.value })}
-                          placeholder="Nome do revisor do comitê..."
-                          className="w-full px-3.5 py-2 bg-white border border-teal-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
-                        />
-                      </div>
-                    )}
-
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-600 uppercase tracking-tight flex items-center gap-1">
-                        <LinkIcon size={12} /> Link do Arquivo
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.fileLocation || ''}
-                        onChange={e => setFormData({ ...formData, fileLocation: e.target.value })}
-                        placeholder="Link do SharePoint, Drive, etc."
-                        className="w-full px-3.5 py-2 bg-white border border-teal-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
-                      />
-                    </div>
+                  {/* Link do Arquivo */}
+                  <div className="space-y-1 sm:col-span-2 lg:col-span-1">
+                    <label className="text-[10px] font-black text-purple-900 uppercase tracking-tight flex items-center gap-1">
+                      <LinkIcon size={12} /> Link do Arquivo
+                    </label>
+                    <input
+                      type="url"
+                      value={formData.fileLocation || ''}
+                      onChange={e => setFormData({ ...formData, fileLocation: e.target.value })}
+                      placeholder="Link do SharePoint ou Drive..."
+                      className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                    />
                   </div>
                 </div>
-              )}
-
-              {/* Note History List (if any exist) */}
-              {formData.updates && formData.updates.length > 0 && (
-                <div className="space-y-2 pt-2">
-                  <div className="text-[10px] font-black text-slate-500 uppercase tracking-tight">
-                    Histórico de Notas ({formData.updates.length})
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto custom-scrollbar">
-                    {formData.updates.map(u => (
-                      <div key={u.id} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl group relative">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-[9px] font-black text-[#008779] uppercase">{u.user}</span>
-                          <span className="text-[8px] font-bold text-slate-400">{new Date(u.date).toLocaleDateString()}</span>
-                        </div>
-                        {editingNoteId === u.id ? (
-                          <div className="space-y-1">
-                            <textarea
-                              value={editingNoteText}
-                              onChange={e => setEditingNoteText(e.target.value)}
-                              className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs font-semibold"
-                              rows={2}
-                            />
-                            <div className="flex justify-end gap-1">
-                              <button type="button" onClick={() => setEditingNoteId(null)} className="text-[9px] text-slate-400 hover:text-slate-600">Cancelar</button>
-                              <button type="button" onClick={saveEditedNote} className="text-[9px] font-bold text-[#008779]">Salvar</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <p className="text-xs text-slate-700 font-medium">{u.note}</p>
-                            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button type="button" onClick={() => startEditingNote(u)} className="text-slate-400 hover:text-[#008779]" title="Editar"><FileText size={11} /></button>
-                              <button type="button" onClick={() => deleteNote(u.id)} className="text-slate-400 hover:text-red-500" title="Excluir"><X size={11} /></button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Row 3 of Optional Details: Regulatory Checkbox Card */}
-              <DossierContributionSection
-                activityId={formData.id || 'new_task'}
-                activityName={formData.activity || 'Nova Atividade'}
-                projectName={formData.project || 'Geral'}
-                generatesRegulatoryContent={formData.generatesRegulatoryContent || false}
-                onToggleGeneratesRegulatoryContent={(val) => setFormData({ ...formData, generatesRegulatoryContent: val })}
-                contribution={formData.dossierContribution}
-                onSaveContribution={(contrib) => setFormData({ ...formData, dossierContribution: contrib, generatesRegulatoryContent: true })}
-                currentUser={currentProfileName}
-              />
+              </div>
             </div>
           )}
 
-          {/* Modal Footer / Action Buttons */}
-          <div className="pt-4 flex justify-end items-center gap-3">
+          {/* ======================= 4. NOTA FORM ======================= */}
+          {activeType === 'note' && (
+            <div className="space-y-4">
+              <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-amber-900 text-xs font-bold flex items-center gap-2">
+                <CheckCircle size={16} className="text-amber-600 shrink-0" />
+                <span>Notas não requerem prazo e são criadas como <strong>Concluídas</strong> por padrão para registro histórico rápido.</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Título */}
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Título da Nota <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.activity || ''}
+                    onChange={e => setFormData({ ...formData, activity: e.target.value })}
+                    placeholder="Ex.: Registro de deliberação técnica sobre adjuvante"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-amber-500 transition"
+                  />
+                </div>
+
+                {/* Projeto (Opcional) */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight">
+                    Projeto (Opcional)
+                  </label>
+                  <select
+                    value={formData.project || 'Geral'}
+                    onChange={e => setFormData({ ...formData, project: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                  >
+                    <option value="Geral">Geral (Nenhum projeto específico)</option>
+                    {projects.filter(p => p !== 'Geral').map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Responsável */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Responsável (Autor) <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={formData.projectLead}
+                      onChange={e => setFormData({ ...formData, projectLead: e.target.value })}
+                      className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer appearance-none"
+                    >
+                      {teamMembers.map(m => (
+                        <option key={m.id} value={m.name}>{m.name}</option>
+                      ))}
+                    </select>
+                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-amber-600 text-white flex items-center justify-center text-[9px] font-black pointer-events-none">
+                      {getInitials(formData.projectLead)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Descrição */}
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-tight flex items-center gap-1">
+                    Conteúdo da Nota <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    rows={4}
+                    required
+                    value={formData.description || ''}
+                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Escreva a anotação, contexto, decisão técnica ou lembrete importante..."
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ======================= NOTAS DE ATUALIZAÇÃO (TODOS OS TIPOS) ======================= */}
+          <div className="pt-4 border-t border-slate-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Paperclip size={14} className="text-teal-600" /> Notas de Atualização e Anexos
+              </label>
+              <label className="flex items-center gap-1.5 text-xs font-bold text-amber-700 cursor-pointer bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                <input
+                  type="checkbox"
+                  checked={isNoteImportant}
+                  onChange={e => setIsNoteImportant(e.target.checked)}
+                  className="rounded text-amber-600 focus:ring-amber-500 w-3.5 h-3.5 cursor-pointer"
+                />
+                <span>Marcar como importante ⭐</span>
+              </label>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={note}
+                  onChange={e => setNote(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addNote();
+                    }
+                  }}
+                  placeholder={isNoteImportant ? "⭐ Escreva uma atualização importante..." : "Adicionar nota de atualização..."}
+                  className={`flex-1 px-3.5 py-2.5 rounded-xl text-xs font-semibold placeholder-slate-400 outline-none border transition ${
+                    isNoteImportant 
+                      ? 'bg-amber-50/70 border-amber-300 text-amber-950 focus:ring-2 focus:ring-amber-400' 
+                      : 'bg-slate-50 border-slate-200 text-slate-800 focus:ring-2 focus:ring-teal-500'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNoteAttachmentInputs(!showNoteAttachmentInputs)}
+                  className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center transition shrink-0 ${
+                    showNoteAttachmentInputs || noteAttachmentName
+                      ? 'bg-teal-50 border-teal-300 text-teal-700'
+                      : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                  }`}
+                  title="Anexar link ou documento"
+                >
+                  <Paperclip size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={addNote}
+                  disabled={!note.trim()}
+                  className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition shrink-0"
+                >
+                  <Plus size={15} /> Adicionar
+                </button>
+              </div>
+
+              {/* Optional Anexo Inputs for Note */}
+              {showNoteAttachmentInputs && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-2 animate-in fade-in duration-150">
+                  <input
+                    type="text"
+                    value={noteAttachmentName}
+                    onChange={e => setNoteAttachmentName(e.target.value)}
+                    placeholder="Nome do anexo (ex: Parecer_Tecnico.pdf)"
+                    className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800"
+                  />
+                  <input
+                    type="url"
+                    value={noteAttachmentUrl}
+                    onChange={e => setNoteAttachmentUrl(e.target.value)}
+                    placeholder="Link do anexo (SharePoint/Drive)"
+                    className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800"
+                  />
+                </div>
+              )}
+
+              {/* List of existing updates */}
+              {formData.updates && formData.updates.length > 0 && (
+                <div className="space-y-2 pt-2 max-h-44 overflow-y-auto custom-scrollbar">
+                  {formData.updates.map((u) => (
+                    <div 
+                      key={u.id}
+                      className={`p-3 rounded-xl border text-xs relative ${
+                        u.isImportant 
+                          ? 'bg-amber-50/80 border-amber-300 text-amber-950 ring-1 ring-amber-200' 
+                          : 'bg-slate-50 border-slate-200 text-slate-800'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-slate-900 text-[10px] uppercase">
+                            {u.user}
+                          </span>
+                          {u.isImportant && (
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">
+                              Importante
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] font-bold text-slate-400">
+                            {new Date(u.date).toLocaleDateString('pt-BR')} às {new Date(u.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => deleteNote(u.id)}
+                            className="text-slate-400 hover:text-red-500 p-0.5 transition"
+                            title="Remover nota"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-xs leading-relaxed font-medium">{u.note}</p>
+                      {u.attachments && u.attachments.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {u.attachments.map(att => (
+                            <a
+                              key={att.id}
+                              href={att.url || '#'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-slate-200 hover:border-teal-400 rounded-lg text-[10px] font-bold text-teal-800 transition shadow-2xs"
+                            >
+                              <Paperclip size={10} /> {att.name}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Dossier Regulatory Check (Preserved) */}
+          <div className="pt-2">
+            <DossierContributionSection
+              activityId={formData.id || 'new_task'}
+              activityName={formData.activity || 'Nova Atividade'}
+              projectName={formData.project || 'Geral'}
+              generatesRegulatoryContent={formData.generatesRegulatoryContent || false}
+              onToggleGeneratesRegulatoryContent={(val) => setFormData({ ...formData, generatesRegulatoryContent: val })}
+              contribution={formData.dossierContribution}
+              onSaveContribution={(contrib) => setFormData({ ...formData, dossierContribution: contrib, generatesRegulatoryContent: true })}
+              currentUser={currentProfileName}
+            />
+          </div>
+
+          {/* Sticky Modal Footer */}
+          <div className="sticky bottom-0 bg-white pt-4 pb-1 border-t border-slate-100 flex justify-end items-center gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2.5 text-slate-500 hover:text-slate-800 font-black uppercase text-xs tracking-wider transition"
+              className="px-5 py-2.5 text-slate-600 hover:text-slate-900 font-bold text-xs uppercase tracking-wider transition rounded-xl"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-8 py-3 bg-[#008779] hover:bg-[#007367] text-white rounded-xl font-black uppercase text-xs tracking-wider shadow-md hover:shadow-lg transition active:scale-95 flex items-center gap-2"
+              className="px-7 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition active:scale-95 flex items-center gap-2"
             >
-              {initialData ? 'Atualizar Atividade' : 'Publicar Atividade'}
+              <Check size={16} />
+              {initialData ? 'Atualizar Atividade' : 'Salvar Atividade'}
             </button>
           </div>
         </form>

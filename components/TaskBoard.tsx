@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Task, AppNotification, Status, Priority, TaskNote } from '../types';
+import { Task, AppNotification, Status, Priority, TaskNote, ActivityType, TeamMember } from '../types';
 import { TaskNotesModal } from './TaskNotesModal';
+import { ChangeDeadlineModal } from './ChangeDeadlineModal';
+import { GeneralActivitiesModal } from './GeneralActivitiesModal';
 import { 
   ArrowRight, 
   MessageSquare, 
@@ -11,27 +13,29 @@ import {
   Edit2,
   Trash2,
   AlertTriangle,
-  SlidersHorizontal,
   CheckCircle,
-  UserCheck,
   Calendar,
   Filter,
   RotateCcw,
   Search,
   LayoutGrid,
   List,
-  Kanban,
   MoreVertical,
   Plus,
   FileText,
   ChevronLeft,
   ChevronRight,
-  Layers,
   FileSpreadsheet,
-  Cloud
+  Cloud,
+  Users,
+  StickyNote,
+  AlertCircle,
+  Flag,
+  CalendarDays,
+  Sparkles,
+  ChevronDown,
+  UserCheck
 } from 'lucide-react';
-
-import { DateInput } from './DateInput';
 
 interface TaskBoardProps {
   tasks: Task[];
@@ -66,122 +70,89 @@ interface TaskBoardProps {
   onDownloadExcel?: () => void;
   onSyncSharePoint?: () => void;
   isSyncingSharePoint?: boolean;
+  hasFullAccess?: boolean;
+  isLeader?: boolean;
 }
 
+// Helpers for Priority Visuals according to Prompt 3 and 4
 const getPriorityVisuals = (priority?: Priority) => {
-  const p = priority || 'Média';
+  const p = priority || 'Sem prioridade';
   switch (p) {
+    case 'Alta':
     case 'Urgente':
       return {
-        badgeClass: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 ring-1 ring-rose-200/50',
+        badgeClass: 'bg-rose-50 text-rose-700 border-rose-200',
         dotClass: 'bg-rose-500',
-        label: 'Urgente'
-      };
-    case 'Alta':
-      return {
-        badgeClass: 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 ring-1 ring-amber-200/50',
-        dotClass: 'bg-amber-500',
-        label: 'Alta'
+        circleBg: 'bg-rose-100 text-rose-700 ring-4 ring-rose-50',
+        iconColor: 'text-rose-600',
+        label: 'Alta prioridade',
+        shortLabel: 'Alta',
+        level: 1
       };
     case 'Média':
       return {
-        badgeClass: 'bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100 ring-1 ring-sky-200/50',
-        dotClass: 'bg-sky-500',
-        label: 'Média'
+        badgeClass: 'bg-amber-50 text-amber-800 border-amber-300',
+        dotClass: 'bg-amber-500',
+        circleBg: 'bg-amber-100 text-amber-800 ring-4 ring-amber-50',
+        iconColor: 'text-amber-600',
+        label: 'Média prioridade',
+        shortLabel: 'Média',
+        level: 2
       };
     case 'Baixa':
+      return {
+        badgeClass: 'bg-sky-50 text-sky-700 border-sky-200',
+        dotClass: 'bg-sky-500',
+        circleBg: 'bg-sky-100 text-sky-700 ring-4 ring-sky-50',
+        iconColor: 'text-sky-600',
+        label: 'Baixa prioridade',
+        shortLabel: 'Baixa',
+        level: 3
+      };
+    case 'Sem prioridade':
     default:
       return {
-        badgeClass: 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100',
-        dotClass: 'bg-slate-400',
-        label: 'Baixa'
+        badgeClass: 'bg-slate-100 text-slate-500 border-slate-200',
+        dotClass: 'bg-slate-300',
+        circleBg: 'bg-slate-100 text-slate-400 ring-4 ring-slate-50',
+        iconColor: 'text-slate-400',
+        label: 'Sem prioridade',
+        shortLabel: 'Sem prioridade',
+        level: 4
       };
   }
 };
 
-const getTaskReviewerInfo = (task: Task) => {
-  const isInReview = 
-    task.status === 'Pausado' || 
-    (task.isReport && task.reportStage && task.reportStage !== 'Concluído' && task.reportStage !== 'Concluído e Assinado') ||
-    (Boolean(task.reportStage) && (task.reportStage?.includes('Revisão') || task.reportStage === 'Próximo Revisor (equipe AR)'));
-  
-  if (!isInReview) return null;
-
-  let reviewer = task.currentReviewer;
-  if (!reviewer || !reviewer.trim()) {
-    if (task.reportStage === 'Revisão Colaboradores') {
-      reviewer = task.collaboratorReviewerName || (task.collaborators && task.collaborators.length > 0 ? task.collaborators.join(', ') : 'Colaboradores');
-    } else if (task.reportStage === 'Revisão Comitê Gestor') {
-      reviewer = task.committeeReviewerName || 'Comitê Gestor';
-    } else if (task.reportStage === 'Próximo Revisor (equipe AR)') {
-      reviewer = 'Equipe AR';
-    } else if (task.reportStage === 'Em Elaboração') {
-      reviewer = task.elaboratorName || task.projectLead;
-    } else {
-      reviewer = task.projectLead;
-    }
-  }
-
-  return {
-    isInReview: true,
-    reviewer: reviewer || 'Equipe AR',
-    stage: task.reportStage || 'Em Revisão'
-  };
-};
-
-const getTaskStatusVisuals = (status: Status, isReport?: boolean, reportStage?: string) => {
-  if (status === 'Concluída') {
-    return {
-      accentBar: 'bg-emerald-500',
-      borderColor: 'border-emerald-250 hover:border-emerald-350',
-      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      iconBox: 'bg-emerald-100 text-emerald-700',
-      label: 'CONCLUÍDA'
-    };
-  }
-  if (status === 'Em Andamento') {
-    if (isReport && (reportStage?.includes('Revisão') || reportStage === 'Próximo Revisor (equipe AR)')) {
+// Activity Type Visuals
+const getActivityTypeVisuals = (type?: ActivityType, isReport?: boolean) => {
+  const resolvedType = type || (isReport ? 'report' : 'general');
+  switch (resolvedType) {
+    case 'meeting':
       return {
-        accentBar: 'bg-purple-500',
-        borderColor: 'border-purple-250 hover:border-purple-350',
-        badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
-        iconBox: 'bg-purple-100 text-purple-700',
-        label: 'EM REVISÃO'
+        label: 'REUNIÃO',
+        badge: 'bg-blue-50 text-blue-700 border-blue-200',
+        icon: <Users size={12} className="shrink-0" />
       };
-    }
-    return {
-      accentBar: 'bg-blue-500',
-      borderColor: 'border-blue-250 hover:border-blue-350',
-      badgeClass: 'bg-blue-50 text-blue-700 border-blue-100',
-      iconBox: 'bg-blue-100 text-blue-700',
-      label: 'EM ANDAMENTO'
-    };
+    case 'report':
+      return {
+        label: 'RELATÓRIO',
+        badge: 'bg-purple-50 text-purple-700 border-purple-200',
+        icon: <FileText size={12} className="shrink-0" />
+      };
+    case 'note':
+      return {
+        label: 'NOTA',
+        badge: 'bg-amber-50 text-amber-700 border-amber-200',
+        icon: <StickyNote size={12} className="shrink-0" />
+      };
+    case 'general':
+    default:
+      return {
+        label: 'ATIVIDADE GERAL',
+        badge: 'bg-teal-50 text-teal-800 border-teal-200',
+        icon: <FileText size={12} className="shrink-0" />
+      };
   }
-  if (status === 'Pausado') {
-    return {
-      accentBar: 'bg-purple-500',
-      borderColor: 'border-purple-250 hover:border-purple-350',
-      badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
-      iconBox: 'bg-purple-100 text-purple-700',
-      label: 'EM REVISÃO'
-    };
-  }
-  if (status === 'Planejada') {
-    return {
-      accentBar: 'bg-amber-500',
-      borderColor: 'border-amber-250 hover:border-amber-350',
-      badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
-      iconBox: 'bg-amber-100 text-amber-700',
-      label: 'PLANEJADA'
-    };
-  }
-  return {
-    accentBar: 'bg-slate-350',
-    borderColor: 'border-slate-200 hover:border-slate-300',
-    badgeClass: 'bg-slate-50 text-slate-500 border-slate-100',
-    iconBox: 'bg-slate-100 text-slate-500',
-    label: status.toUpperCase()
-  };
 };
 
 const formatDateBR = (dateStr?: string) => {
@@ -196,10 +167,14 @@ const formatDateBR = (dateStr?: string) => {
 const getInitials = (name?: string) => {
   if (!name) return 'U';
   const trimmed = name.trim();
+  const parts = trimmed.split(' ');
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
   return trimmed ? trimmed.charAt(0).toUpperCase() : 'U';
 };
 
-const TaskBoard: React.FC<TaskBoardProps> = ({ 
+export const TaskBoard: React.FC<TaskBoardProps> = ({ 
   tasks, 
   currentUser, 
   onEdit, 
@@ -231,190 +206,328 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
   onSaveTask,
   onDownloadExcel,
   onSyncSharePoint,
-  isSyncingSharePoint
+  isSyncingSharePoint,
+  hasFullAccess = true,
+  isLeader = true
 }) => {
-  const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
+  const [calendarMode, setCalendarMode] = useState<'week' | 'month'>('week');
+  const [calendarDate, setCalendarDate] = useState<Date>(new Date());
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState<string | null>(null);
+
+  // Modals state
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
   const [notesModalTask, setNotesModalTask] = useState<Task | null>(null);
+  const [deadlineModalTask, setDeadlineModalTask] = useState<Task | null>(null);
+  const [isGeneralActivitiesModalOpen, setIsGeneralActivitiesModalOpen] = useState(false);
 
-  // Inline editing state
-  const [inlineEdit, setInlineEdit] = useState<{
-    taskId: string;
-    field: 'activity' | 'project' | 'lead' | 'priority' | 'status' | 'date' | 'progress';
-    value: any;
-  } | null>(null);
+  // Type & Priority filter dropdowns
+  const [typeFilter, setTypeFilter] = useState<'Todos' | ActivityType>('Todos');
+  const [priorityFilter, setPriorityFilter] = useState<'Todos' | 'Alta' | 'Média' | 'Baixa' | 'Sem prioridade'>('Todos');
 
-  const handleStartInlineEdit = (e: React.MouseEvent, task: Task, field: 'activity' | 'project' | 'lead' | 'priority' | 'status' | 'date' | 'progress') => {
-    e.stopPropagation();
-    if (!onSaveTask) return;
-    setInlineEdit({
-      taskId: task.id,
-      field,
-      value: field === 'date' ? (task.completionDate || '') :
-             field === 'progress' ? task.progress :
-             field === 'status' ? task.status :
-             field === 'priority' ? (task.priority || 'Média') :
-             field === 'project' ? task.project :
-             field === 'lead' ? task.projectLead :
-             task.activity
-    });
-  };
-
-  const handleCancelInlineEdit = (e?: React.MouseEvent | React.SyntheticEvent) => {
-    if (e) e.stopPropagation();
-    setInlineEdit(null);
-  };
-
-  const handleSaveInlineEdit = (task: Task, overrideValue?: any) => {
-    if (!inlineEdit || !onSaveTask) return;
-    const valueToSave = overrideValue !== undefined ? overrideValue : inlineEdit.value;
-    
-    const updatedTask: Task = { ...task };
-    if (inlineEdit.field === 'activity') {
-      if (!String(valueToSave).trim()) {
-        setInlineEdit(null);
-        return;
-      }
-      updatedTask.activity = String(valueToSave).trim();
-    } else if (inlineEdit.field === 'project') {
-      updatedTask.project = String(valueToSave);
-    } else if (inlineEdit.field === 'lead') {
-      updatedTask.projectLead = String(valueToSave);
-    } else if (inlineEdit.field === 'priority') {
-      updatedTask.priority = valueToSave as any;
-    } else if (inlineEdit.field === 'status') {
-      updatedTask.status = valueToSave as Status;
-      if (valueToSave === 'Concluída' && updatedTask.progress < 100) {
-        updatedTask.progress = 100;
-      } else if (valueToSave !== 'Concluída' && updatedTask.progress === 100) {
-        updatedTask.progress = 75;
-      }
-    } else if (inlineEdit.field === 'date') {
-      updatedTask.completionDate = String(valueToSave);
-    } else if (inlineEdit.field === 'progress') {
-      const num = Math.min(100, Math.max(0, Number(valueToSave) || 0));
-      updatedTask.progress = num;
-      if (num === 100 && updatedTask.status !== 'Concluída') {
-        updatedTask.status = 'Concluída';
-      } else if (num < 100 && updatedTask.status === 'Concluída') {
-        updatedTask.status = 'Em Andamento';
-      }
-    }
-
-    onSaveTask(updatedTask);
-    setInlineEdit(null);
-  };
+  // Close menus on click outside
+  useEffect(() => {
+    const handleOutsideClick = () => setOpenMenuTaskId(null);
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, []);
 
   const activeTasks = useMemo(() => tasks.filter(t => !t.deleted), [tasks]);
   const activeReviews = notifications.filter(n => n.userId === currentUser && !n.read && n.type === 'REVIEW_ASSIGNED');
-  const isTeamView = currentUser === 'Visão Geral da Equipe';
 
-  // Statistics
-  const stats = useMemo(() => {
-    const total = activeTasks.length;
-    const planned = activeTasks.filter(t => t.status === 'Planejada').length;
-    const inProgress = activeTasks.filter(t => t.status === 'Em Andamento' && (!t.isReport || !t.reportStage?.includes('Revisão'))).length;
-    const inReview = activeTasks.filter(t => t.status === 'Pausado' || (t.isReport && t.reportStage?.includes('Revisão'))).length;
-    const completed = activeTasks.filter(t => t.status === 'Concluída').length;
+  // Today boundaries
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
 
-    const getPct = (cnt: number) => (total > 0 ? Math.round((cnt / total) * 100) : 0);
+  // Week boundaries (Monday to Sunday)
+  const currentWeekInfo = useMemo(() => {
+    const curr = new Date(calendarDate);
+    const day = curr.getDay();
+    // In JS Sunday is 0. Shift so Monday is 0
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    
+    const monday = new Date(curr);
+    monday.setDate(curr.getDate() + diffToMonday);
+    monday.setHours(0, 0, 0, 0);
+
+    const weekDays: { date: Date; dateStr: string; dayName: string; dayNumber: number; isToday: boolean }[] = [];
+    const dayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const iso = d.toISOString().split('T')[0];
+      weekDays.push({
+        date: d,
+        dateStr: iso,
+        dayName: dayNames[i],
+        dayNumber: d.getDate(),
+        isToday: d.getTime() === today.getTime()
+      });
+    }
+
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+
+    return { monday, sunday, weekDays };
+  }, [calendarDate, today]);
+
+  // Top 4 Indicators (Requirement 1)
+  const indicators = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    // 1. Pendentes esta semana:
+    // "Importante: as atividades da semana devem incluir também aquelas criadas anteriormente que continuam pendentes, inclusive as atrasadas."
+    const pendingThisWeekOrOverdue = activeTasks.filter(t => {
+      if (t.status === 'Concluída') return false;
+      if (!t.completionDate) return true; // Tasks without deadline pending
+      const dueDate = new Date(t.completionDate + 'T00:00:00');
+      // Due this week or overdue/earlier
+      return dueDate <= currentWeekInfo.sunday;
+    });
+
+    // 2. Alta prioridade
+    const highPriority = activeTasks.filter(t => 
+      t.status !== 'Concluída' && (t.priority === 'Alta' || t.priority === 'Urgente')
+    );
+
+    // 3. Em andamento
+    const inProgress = activeTasks.filter(t => t.status === 'Em Andamento');
+
+    // 4. Concluídas no mês
+    const completedThisMonth = activeTasks.filter(t => {
+      if (t.status !== 'Concluída') return false;
+      if (!t.completionDate) return true;
+      const compDate = new Date(t.completionDate + 'T00:00:00');
+      return compDate.getMonth() === currentMonth && compDate.getFullYear() === currentYear;
+    });
 
     return {
-      total,
-      planned,
-      plannedPct: getPct(planned),
-      inProgress,
-      inProgressPct: getPct(inProgress),
-      inReview,
-      inReviewPct: getPct(inReview),
-      completed,
-      completedPct: getPct(completed)
+      pendingWeek: pendingThisWeekOrOverdue.length,
+      highPriority: highPriority.length,
+      inProgress: inProgress.length,
+      completedMonth: completedThisMonth.length
     };
+  }, [activeTasks, currentWeekInfo.sunday]);
+
+  // Próximas do Prazo (Requirement 1: Substitui "Atividades recentes")
+  const upcomingTasks = useMemo(() => {
+    const pendingTasks = activeTasks.filter(t => t.status !== 'Concluída' && t.completionDate);
+    return pendingTasks.sort((a, b) => {
+      const dateA = new Date(a.completionDate + 'T00:00:00').getTime();
+      const dateB = new Date(b.completionDate + 'T00:00:00').getTime();
+      return dateA - dateB;
+    }).slice(0, 6);
   }, [activeTasks]);
 
-  const filteredTasks = useMemo(() => {
-    if (!searchTerm) return activeTasks;
-    const term = searchTerm.toLowerCase();
-    return activeTasks.filter(t => 
-      t.activity.toLowerCase().includes(term) || 
-      t.description.toLowerCase().includes(term) ||
-      t.project.toLowerCase().includes(term) ||
-      t.nextStep?.toLowerCase().includes(term) ||
-      t.projectLead?.toLowerCase().includes(term)
-    );
-  }, [activeTasks, searchTerm]);
+  // Filtered & Automatically Sorted Tasks (Requirement 3: Alta -> Média -> Baixa -> Sem prioridade; dentro de cada uma, prazo mais próximo)
+  const sortedAndFilteredTasks = useMemo(() => {
+    // 1. Filter
+    const filtered = activeTasks.filter(t => {
+      // Search
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        const matches = 
+          t.activity.toLowerCase().includes(term) ||
+          t.description?.toLowerCase().includes(term) ||
+          t.project.toLowerCase().includes(term) ||
+          t.projectLead?.toLowerCase().includes(term) ||
+          t.nextStep?.toLowerCase().includes(term);
+        if (!matches) return false;
+      }
 
-  const sortedTasks = useMemo(() => {
-    return [...filteredTasks].sort((a, b) => {
-        const aIsCompleted = a.status === 'Concluída';
-        const bIsCompleted = b.status === 'Concluída';
+      // Type filter
+      if (typeFilter !== 'Todos') {
+        const tType = t.activityType || (t.isReport ? 'report' : 'general');
+        if (tType !== typeFilter) return false;
+      }
 
-        if (aIsCompleted !== bIsCompleted) {
-            return aIsCompleted ? 1 : -1;
+      // Priority filter
+      if (priorityFilter !== 'Todos') {
+        const p = t.priority || 'Sem prioridade';
+        if (priorityFilter === 'Alta') {
+          if (p !== 'Alta' && p !== 'Urgente') return false;
+        } else if (p !== priorityFilter) {
+          return false;
         }
+      }
 
-        if (aIsCompleted) {
-            const dateA = a.completionDate ? new Date(a.completionDate + 'T00:00:00').getTime() : 0;
-            const dateB = b.completionDate ? new Date(b.completionDate + 'T00:00:00').getTime() : 0;
-            return dateB - dateA;
+      // Status filter
+      if (statusFilter !== 'Todos' && t.status !== statusFilter) return false;
+
+      // Project filter
+      if (projectFilter !== 'Todos' && t.project !== projectFilter) return false;
+
+      // Lead filter
+      if (leadFilter !== 'Todos' && t.projectLead !== leadFilter) return false;
+
+      // Selected calendar day filter if active
+      if (selectedCalendarDay) {
+        if (selectedCalendarDay === 'overdue') {
+          if (t.status === 'Concluída') return false;
+          if (!t.completionDate) return false;
+          return new Date(t.completionDate + 'T00:00:00') < currentWeekInfo.monday;
         }
+        if (t.completionDate !== selectedCalendarDay) return false;
+      }
 
-        const dateA = a.completionDate ? new Date(a.completionDate + 'T00:00:00').getTime() : Number.MAX_SAFE_INTEGER;
-        const dateB = b.completionDate ? new Date(b.completionDate + 'T00:00:00').getTime() : Number.MAX_SAFE_INTEGER;
-        
-        if (dateA === dateB) return 0;
-        return dateA - dateB;
+      return true;
     });
-  }, [filteredTasks]);
 
-  // Reset pagination on filter change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statusFilter, leadFilter, projectFilter, dateFilterType, startDateFilter, endDateFilter]);
+    // 2. Sort according to Requirement 3:
+    // Completed cards are grouped or separated, but for active cards:
+    // Organizadas automaticamente por prioridade (Alta -> Média -> Baixa -> Sem prioridade)
+    // Dentro de cada classificação, ordenar pelo prazo mais próximo.
+    return [...filtered].sort((a, b) => {
+      const aIsCompleted = a.status === 'Concluída';
+      const bIsCompleted = b.status === 'Concluída';
+      if (aIsCompleted !== bIsCompleted) {
+        return aIsCompleted ? 1 : -1;
+      }
 
-  const totalItems = sortedTasks.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+      const pA = getPriorityVisuals(a.priority).level;
+      const pB = getPriorityVisuals(b.priority).level;
+      if (pA !== pB) {
+        return pA - pB;
+      }
 
-  const paginatedTasks = useMemo(() => {
-    return sortedTasks.slice(startIndex, endIndex);
-  }, [sortedTasks, startIndex, endIndex]);
+      // Within same priority, order by closest deadline
+      const dateA = a.completionDate ? new Date(a.completionDate + 'T00:00:00').getTime() : Number.MAX_SAFE_INTEGER;
+      const dateB = b.completionDate ? new Date(b.completionDate + 'T00:00:00').getTime() : Number.MAX_SAFE_INTEGER;
+      return dateA - dateB;
+    });
+  }, [activeTasks, searchTerm, typeFilter, priorityFilter, statusFilter, projectFilter, leadFilter, selectedCalendarDay, currentWeekInfo.monday]);
 
-  const handleClearFilters = () => {
-    onProjectFilterChange('Todos');
-    onStatusFilterChange('Todos');
-    if (isTeamView) onLeadFilterChange('Todos');
-    onDateFilterTypeChange('all');
-    onStartDateFilterChange('');
-    onEndDateFilterChange('');
-    onSearchTermChange('');
+  // Handle Priority Change by Leadership (Requirement 3)
+  const handleSetPriority = (e: React.MouseEvent, task: Task, newPriority: Priority) => {
+    e.stopPropagation();
+    if (!onSaveTask) return;
+
+    const previousPriority = task.priority || 'Sem prioridade';
+    const updatedTask: Task = {
+      ...task,
+      priority: newPriority,
+      changeHistory: [
+        {
+          id: `ch_prio_${Date.now()}`,
+          field: 'priority',
+          previousValue: previousPriority,
+          newValue: newPriority,
+          changedBy: currentUser,
+          changedAt: new Date().toISOString(),
+          reason: 'Prioridade definida pela liderança'
+        },
+        ...(task.changeHistory || [])
+      ]
+    };
+
+    onSaveTask(updatedTask);
+    setOpenMenuTaskId(null);
   };
 
-  const isCollaborator = (task: Task) => currentUser !== 'Todos' && task.collaborators?.includes(currentUser) && task.projectLead !== currentUser;
+  // Handle Save Deadline Change from Modal (Requirement 5)
+  const handleSaveDeadlineChange = (taskId: string, newDate: string, reason?: string) => {
+    if (!onSaveTask) return;
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const previousDate = task.completionDate || '';
+    const updatedTask: Task = {
+      ...task,
+      completionDate: newDate,
+      deadlineHistory: [
+        {
+          id: `dl_${Date.now()}`,
+          previousDate,
+          newDate,
+          changedBy: currentUser,
+          changedAt: new Date().toISOString(),
+          reason: reason || 'Prazo alterado'
+        },
+        ...(task.deadlineHistory || [])
+      ],
+      changeHistory: [
+        {
+          id: `ch_dl_${Date.now()}`,
+          field: 'deadline',
+          previousValue: previousDate || 'Sem prazo',
+          newValue: newDate,
+          changedBy: currentUser,
+          changedAt: new Date().toISOString(),
+          reason: reason || 'Prazo alterado'
+        },
+        ...(task.changeHistory || [])
+      ]
+    };
+
+    onSaveTask(updatedTask);
+  };
+
+  // Clear all filters
+  const handleResetFilters = () => {
+    onSearchTermChange('');
+    setTypeFilter('Todos');
+    setPriorityFilter('Todos');
+    onStatusFilterChange('Todos');
+    onProjectFilterChange('Todos');
+    onLeadFilterChange('Todos');
+    setSelectedCalendarDay(null);
+  };
+
+  // Activities due per day in the week
+  const weekDayTasksCount = useMemo(() => {
+    const map: Record<string, number> = {};
+    activeTasks.forEach(t => {
+      if (t.completionDate) {
+        map[t.completionDate] = (map[t.completionDate] || 0) + 1;
+      }
+    });
+    return map;
+  }, [activeTasks]);
+
+  // Overdue / Prior Pending tasks
+  const overduePriorPendingTasks = useMemo(() => {
+    return activeTasks.filter(t => {
+      if (t.status === 'Concluída') return false;
+      if (!t.completionDate) return false;
+      const d = new Date(t.completionDate + 'T00:00:00');
+      return d < currentWeekInfo.monday;
+    });
+  }, [activeTasks, currentWeekInfo.monday]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       
-      {/* 1. SUB HEADER */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-transparent">
+      {/* 1. SUB HEADER & ACTION BUTTONS */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-transparent">
         <div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight">Atividades</h2>
-          <p className="text-xs font-bold text-slate-500">Acompanhe e gerencie suas atividades e prazos.</p>
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse"></span>
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+              Painel de Atividades
+            </h2>
+          </div>
+          <p className="text-xs font-bold text-slate-500 mt-0.5">
+            Acompanhamento centralizado por prioridades, prazos e tipos de atividade.
+          </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
           {onDownloadExcel && (
             <button
               type="button"
               onClick={onDownloadExcel}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-black rounded-xl shadow-2xs transition hover:border-emerald-300"
-              title="Baixar planilha Excel com as atividades deste contexto"
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl shadow-2xs transition"
+              title="Baixar planilha Excel"
             >
               <FileSpreadsheet size={15} className="text-emerald-600" />
-              <span>Baixar Excel</span>
+              <span className="hidden sm:inline">Excel</span>
             </button>
           )}
 
@@ -423,177 +536,441 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
               type="button"
               onClick={onSyncSharePoint}
               disabled={isSyncingSharePoint}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-black rounded-xl shadow-2xs transition hover:border-teal-300 disabled:opacity-50"
-              title="Sincronizar dados e planilhas com o SharePoint"
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl shadow-2xs transition disabled:opacity-50"
+              title="Sincronizar com SharePoint"
             >
               <Cloud size={15} className={`text-teal-600 ${isSyncingSharePoint ? 'animate-pulse' : ''}`} />
-              <span>{isSyncingSharePoint ? 'Sincronizando...' : 'Sincronizar com SharePoint'}</span>
+              <span className="hidden sm:inline">{isSyncingSharePoint ? 'Sincronizando...' : 'SharePoint'}</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => setIsGeneralActivitiesModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition"
+            title="Consultar todas as atividades gerais"
+          >
+            <Search size={14} className="text-slate-600" />
+            <span>Consultar Gerais</span>
+          </button>
 
           {onNewTask && (
             <button
               type="button"
               onClick={onNewTask}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-black rounded-xl shadow-sm transition"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-black rounded-xl shadow-sm transition active:scale-95"
             >
-              <Plus size={15} />
+              <Plus size={16} />
               <span>Nova Atividade</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* 2. STATS SUMMARY CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Planejadas */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs relative overflow-hidden flex flex-col justify-between min-h-[110px]">
+      {/* 2. OS QUATRO INDICADORES SUPERIORES (Requirement 1 & Responsividade: 2 colunas no celular) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        
+        {/* Card 1: Pendentes esta semana */}
+        <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-2xs relative overflow-hidden flex flex-col justify-between min-h-[105px]">
           <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center font-black">
-              <Calendar size={18} />
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-black border border-amber-200">
+              <Clock size={19} />
             </div>
             <div className="text-right">
-              <span className="text-[11px] font-black text-slate-500 uppercase tracking-tight block">Planejadas</span>
-              <span className="text-2xl font-black text-slate-900">{stats.planned}</span>
+              <span className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-tight block">
+                Pendentes esta semana
+              </span>
+              <span className="text-2xl sm:text-3xl font-black text-slate-900 leading-none mt-1 block">
+                {indicators.pendingWeek}
+              </span>
             </div>
           </div>
-          <div className="mt-3 flex items-center justify-between text-[11px] font-bold text-slate-400">
-            <span>{stats.plannedPct}% do total</span>
+          <div className="mt-3 flex items-center justify-between text-[10px] font-bold text-amber-700">
+            <span>Inclui atrasadas anteriores</span>
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-amber-500" />
         </div>
 
-        {/* Em andamento */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs relative overflow-hidden flex flex-col justify-between min-h-[110px]">
+        {/* Card 2: Alta prioridade */}
+        <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-2xs relative overflow-hidden flex flex-col justify-between min-h-[105px]">
           <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-black">
-              <ArrowRight size={18} />
+            <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center font-black border border-rose-200">
+              <AlertTriangle size={19} />
             </div>
             <div className="text-right">
-              <span className="text-[11px] font-black text-slate-500 uppercase tracking-tight block">Em andamento</span>
-              <span className="text-2xl font-black text-slate-900">{stats.inProgress}</span>
+              <span className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-tight block">
+                Alta prioridade
+              </span>
+              <span className="text-2xl sm:text-3xl font-black text-rose-600 leading-none mt-1 block">
+                {indicators.highPriority}
+              </span>
             </div>
           </div>
-          <div className="mt-3 flex items-center justify-between text-[11px] font-bold text-slate-400">
-            <span>{stats.inProgressPct}% do total</span>
+          <div className="mt-3 flex items-center justify-between text-[10px] font-bold text-rose-700">
+            <span>Atenção prioritária</span>
+            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-rose-500" />
+        </div>
+
+        {/* Card 3: Em andamento */}
+        <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-2xs relative overflow-hidden flex flex-col justify-between min-h-[105px]">
+          <div className="flex items-center justify-between">
+            <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-black border border-blue-200">
+              <ArrowRight size={19} />
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-tight block">
+                Em andamento
+              </span>
+              <span className="text-2xl sm:text-3xl font-black text-slate-900 leading-none mt-1 block">
+                {indicators.inProgress}
+              </span>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between text-[10px] font-bold text-blue-700">
+            <span>Execução ativa</span>
+            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-500" />
         </div>
 
-        {/* Em revisão */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs relative overflow-hidden flex flex-col justify-between min-h-[110px]">
+        {/* Card 4: Concluídas no mês */}
+        <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-2xs relative overflow-hidden flex flex-col justify-between min-h-[105px]">
           <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-black">
-              <FileText size={18} />
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black border border-emerald-200">
+              <CheckCircle size={19} />
             </div>
             <div className="text-right">
-              <span className="text-[11px] font-black text-slate-500 uppercase tracking-tight block">Em revisão</span>
-              <span className="text-2xl font-black text-slate-900">{stats.inReview}</span>
+              <span className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-tight block">
+                Concluídas no mês
+              </span>
+              <span className="text-2xl sm:text-3xl font-black text-emerald-700 leading-none mt-1 block">
+                {indicators.completedMonth}
+              </span>
             </div>
           </div>
-          <div className="mt-3 flex items-center justify-between text-[11px] font-bold text-slate-400">
-            <span>{stats.inReviewPct}% do total</span>
-          </div>
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-purple-500" />
-        </div>
-
-        {/* Concluídas */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs relative overflow-hidden flex flex-col justify-between min-h-[110px]">
-          <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-black">
-              <CheckCircle size={18} />
-            </div>
-            <div className="text-right">
-              <span className="text-[11px] font-black text-slate-500 uppercase tracking-tight block">Concluídas</span>
-              <span className="text-2xl font-black text-slate-900">{stats.completed}</span>
-            </div>
-          </div>
-          <div className="mt-3 flex items-center justify-between text-[11px] font-bold text-slate-400">
-            <span>{stats.completedPct}% do total</span>
+          <div className="mt-3 flex items-center justify-between text-[10px] font-bold text-emerald-700">
+            <span>Finalizadas com sucesso</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-500" />
         </div>
 
-        {/* Total */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs relative overflow-hidden flex flex-col justify-between min-h-[110px]">
-          <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center font-black">
-              <List size={18} />
-            </div>
-            <div className="text-right">
-              <span className="text-[11px] font-black text-slate-500 uppercase tracking-tight block">Total</span>
-              <span className="text-2xl font-black text-slate-900">{stats.total}</span>
-            </div>
-          </div>
-          <div className="mt-3 flex items-center justify-between text-[11px] font-bold text-slate-400">
-            <span>100% do total</span>
-          </div>
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-400" />
-        </div>
       </div>
 
-      {/* ACTIVE REVIEWS BANNER IF ANY */}
-      {activeReviews.length > 0 && currentUser !== 'Todos' && (
-        <div className="bg-[#1e293b] rounded-2xl p-6 shadow-lg animate-in slide-in-from-top duration-500 space-y-4">
-           <div className="flex justify-between items-center">
-             <div className="flex items-center gap-4">
-                <button className="px-4 py-2 bg-amber-500 text-white rounded-lg text-xs font-bold flex items-center gap-2">
-                   <FileSignature size={14} /> {activeReviews.length} RELATÓRIOS PARA VOCÊ ANALISAR
+      {/* 3. CALENDÁRIO COMPACTO E SEÇÃO PRÓXIMAS DO PRAZO (Requirement 1) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        
+        {/* Coluna do Calendário da Semana / Mês (lg:col-span-8) */}
+        <div className="lg:col-span-8 bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <CalendarDays size={18} className="text-teal-600" />
+              <h3 className="text-sm font-black uppercase tracking-tight text-slate-900">
+                Calendário de Atividades
+              </h3>
+              <span className="text-xs text-slate-400 font-bold ml-1">
+                {calendarDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+              </span>
+            </div>
+
+            {/* Controls */}
+            <div className="flex items-center gap-1.5 self-end sm:self-auto">
+              <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setCalendarMode('week')}
+                  className={`px-2.5 py-1 rounded-lg transition ${
+                    calendarMode === 'week' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Semana
                 </button>
-                <button onClick={onClearAllNotifications} className="px-4 py-2 bg-white/10 text-slate-300 rounded-lg text-xs font-bold hover:bg-white/20 transition">Limpar Notificações</button>
-             </div>
-           </div>
-           
-           <div className="bg-[#0f172a] p-4 rounded-xl space-y-3">
-              <div className="flex items-center gap-3 px-2">
-                <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-white shadow-lg"><FileSignature size={16}/></div>
-                <div>
-                  <h3 className="text-white font-bold text-sm">RELATÓRIOS PENDENTES PARA SUA REVISÃO</h3>
-                  <p className="text-amber-400 text-[10px] font-bold uppercase tracking-wider">Ação necessária em {activeReviews.length} documentos</p>
+                <button
+                  type="button"
+                  onClick={() => setCalendarMode('month')}
+                  className={`px-2.5 py-1 rounded-lg transition ${
+                    calendarMode === 'month' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Mês
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const prev = new Date(calendarDate);
+                    if (calendarMode === 'week') prev.setDate(prev.getDate() - 7);
+                    else prev.setMonth(prev.getMonth() - 1);
+                    setCalendarDate(prev);
+                  }}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600"
+                  title="Anterior"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCalendarDate(new Date())}
+                  className="px-2 py-1 text-[10px] font-bold text-slate-600 border border-slate-200 rounded-lg bg-white hover:bg-slate-50"
+                >
+                  Hoje
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = new Date(calendarDate);
+                    if (calendarMode === 'week') next.setDate(next.getDate() + 7);
+                    else next.setMonth(next.getMonth() + 1);
+                    setCalendarDate(next);
+                  }}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600"
+                  title="Próxima"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Semana Compacta */}
+          {calendarMode === 'week' ? (
+            <div className="space-y-3">
+              {/* Grid dos 7 dias da semana + Pendentes Anteriores */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                {currentWeekInfo.weekDays.map(day => {
+                  const count = weekDayTasksCount[day.dateStr] || 0;
+                  const isSelected = selectedCalendarDay === day.dateStr;
+                  return (
+                    <button
+                      key={day.dateStr}
+                      type="button"
+                      onClick={() => setSelectedCalendarDay(isSelected ? null : day.dateStr)}
+                      className={`p-2.5 rounded-2xl border text-center transition flex flex-col items-center justify-between min-h-[75px] ${
+                        isSelected 
+                          ? 'bg-teal-600 text-white border-teal-600 shadow-sm ring-2 ring-teal-200'
+                          : day.isToday
+                          ? 'bg-teal-50/70 border-teal-300 text-slate-900'
+                          : 'bg-slate-50/60 border-slate-200 hover:border-slate-300 text-slate-700'
+                      }`}
+                    >
+                      <div className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-tight">
+                        <span className={isSelected ? 'text-teal-100' : 'text-slate-400'}>{day.dayName}</span>
+                        {day.isToday && (
+                          <span className={`text-[8px] font-black px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-white text-teal-800' : 'bg-teal-600 text-white'}`}>
+                            HOJE
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-base sm:text-lg font-black my-0.5">
+                        {day.dayNumber}
+                      </span>
+                      <div className="w-full flex items-center justify-center gap-1">
+                        {count > 0 ? (
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                            isSelected ? 'bg-white/20 text-white' : 'bg-teal-100 text-teal-800'
+                          }`}>
+                            {count} ativ.
+                          </span>
+                        ) : (
+                          <span className={`text-[9px] ${isSelected ? 'text-teal-100' : 'text-slate-400'}`}>
+                            -
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Bloco dedicado: Pendentes Anteriores / Atrasadas (Requirement 1) */}
+              {overduePriorPendingTasks.length > 0 && (
+                <div 
+                  onClick={() => setSelectedCalendarDay(selectedCalendarDay === 'overdue' ? null : 'overdue')}
+                  className={`p-3 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
+                    selectedCalendarDay === 'overdue'
+                      ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                      : 'bg-rose-50/70 border-rose-200 text-rose-900 hover:bg-rose-100/70'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={16} className={selectedCalendarDay === 'overdue' ? 'text-white' : 'text-rose-600'} />
+                    <div>
+                      <span className="text-xs font-black uppercase tracking-tight block">
+                        {overduePriorPendingTasks.length} Pendentes anteriores / Atrasadas
+                      </span>
+                      <span className={`text-[10px] font-medium block ${selectedCalendarDay === 'overdue' ? 'text-rose-100' : 'text-rose-700'}`}>
+                        Atividades criadas em períodos anteriores que necessitam de conclusão
+                      </span>
+                    </div>
+                  </div>
+                  <span className={`text-xs font-black px-2.5 py-1 rounded-xl uppercase ${
+                    selectedCalendarDay === 'overdue' ? 'bg-white text-rose-700' : 'bg-rose-200 text-rose-900'
+                  }`}>
+                    {selectedCalendarDay === 'overdue' ? 'Filtrando' : 'Ver Todas'}
+                  </span>
                 </div>
+              )}
+            </div>
+          ) : (
+            /* Visualização por Mês */
+            <div className="p-4 bg-slate-50/70 rounded-2xl border border-slate-200 text-center space-y-2">
+              <p className="text-xs font-bold text-slate-700">
+                Visualização Mensal de Atividades — {calendarDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+              </p>
+              <p className="text-[11px] text-slate-500">
+                Use o botão "Consultar Gerais" ou os filtros abaixo para visualizar todas as atividades por período.
+              </p>
+              <button
+                type="button"
+                onClick={() => setCalendarMode('week')}
+                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50"
+              >
+                Voltar à Semana Compacta
+              </button>
+            </div>
+          )}
+
+          {selectedCalendarDay && (
+            <div className="flex items-center justify-between text-xs pt-1 px-1 text-teal-800 font-bold">
+              <span>
+                Filtro ativo por data: <strong>{selectedCalendarDay === 'overdue' ? 'Pendentes anteriores' : formatDateBR(selectedCalendarDay)}</strong>
+              </span>
+              <button 
+                onClick={() => setSelectedCalendarDay(null)} 
+                className="text-xs text-rose-600 hover:underline flex items-center gap-1 font-bold"
+              >
+                <X size={12} /> Remover filtro de data
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Coluna Próximas do Prazo (lg:col-span-4) - Substitui "Atividades recentes" */}
+        <div className="lg:col-span-4 bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/90 shadow-2xs space-y-3 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
+                <Clock size={15} className="text-teal-600" /> Próximas do Prazo
+              </h3>
+              <span className="text-[10px] font-black uppercase text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                Urgência
+              </span>
+            </div>
+
+            <div className="space-y-2.5">
+              {upcomingTasks.slice(0, 5).map(task => {
+                const priorityVisuals = getPriorityVisuals(task.priority);
+                const typeVisuals = getActivityTypeVisuals(task.activityType, task.isReport);
+                
+                const dueDate = new Date(task.completionDate + 'T00:00:00');
+                const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                const isOverdue = diffDays < 0;
+
+                return (
+                  <div
+                    key={task.id}
+                    onClick={() => onView(task)}
+                    className="p-3 bg-slate-50/70 hover:bg-teal-50/50 rounded-2xl border border-slate-200/80 hover:border-teal-300 transition cursor-pointer group"
+                  >
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2.5 h-2.5 rounded-full ${priorityVisuals.dotClass} shrink-0`} title={priorityVisuals.label} />
+                        <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded-md bg-white border border-slate-200 text-slate-600">
+                          {typeVisuals.label}
+                        </span>
+                      </div>
+                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                        isOverdue 
+                          ? 'bg-rose-100 text-rose-700 animate-pulse'
+                          : diffDays === 0
+                          ? 'bg-amber-100 text-amber-800 font-black'
+                          : diffDays <= 3
+                          ? 'bg-amber-50 text-amber-700'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {isOverdue 
+                          ? `Atrasada (${Math.abs(diffDays)}d)` 
+                          : diffDays === 0 
+                          ? 'Hoje' 
+                          : diffDays === 1 
+                          ? 'Amanhã' 
+                          : `Em ${diffDays} dias`}
+                      </span>
+                    </div>
+
+                    <h4 className="text-xs font-black text-slate-900 group-hover:text-teal-700 transition truncate leading-snug">
+                      {task.activity}
+                    </h4>
+
+                    <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400 font-bold">
+                      <span className="truncate max-w-[130px]">{task.project}</span>
+                      <span className="text-slate-600">{formatDateBR(task.completionDate)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {upcomingTasks.length === 0 && (
+                <div className="py-6 text-center text-slate-400">
+                  <CheckCircle size={24} className="mx-auto text-emerald-500 mb-1" />
+                  <p className="text-xs font-bold">Nenhum prazo pendente próximo!</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsGeneralActivitiesModalOpen(true)}
+            className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1"
+          >
+            Ver todas as atividades gerais &rarr;
+          </button>
+        </div>
+
+      </div>
+
+      {/* 4. ACTIVE REVIEWS BANNER IF ANY */}
+      {activeReviews.length > 0 && currentUser !== 'Todos' && (
+        <div className="bg-slate-900 rounded-3xl p-5 sm:p-6 shadow-md space-y-4 animate-in slide-in-from-top-2">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold">
+                <FileSignature size={18} />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                 {activeReviews.map(notif => (
-                   <div key={notif.id} className="bg-[#1e293b] p-3 rounded-lg flex items-center justify-between group">
-                     <button onClick={() => onNotificationClick(notif)} className="flex-1 flex items-center justify-between pr-6 text-left">
-                       <p className="text-slate-300 text-xs font-bold uppercase truncate">{notif.message}</p>
-                       <ArrowRight size={16} className="text-amber-500 group-hover:translate-x-1 transition shrink-0" />
-                     </button>
-                     <button onClick={(e) => { e.stopPropagation(); onClearSingleNotification(notif.id); }} className="p-1 text-slate-500 hover:text-white hover:bg-slate-700 rounded-full transition-colors" title="Limpar notificação"><X size={14} /></button>
-                   </div>
-                 ))}
+              <div>
+                <h3 className="text-white font-black text-sm uppercase">Relatórios para sua revisão</h3>
+                <p className="text-amber-400 text-[10px] font-bold uppercase tracking-wider">{activeReviews.length} documento(s) aguardando sua análise</p>
               </div>
-           </div>
+            </div>
+            <button 
+              onClick={onClearAllNotifications} 
+              className="px-3 py-1.5 bg-white/10 text-slate-300 rounded-xl text-xs font-bold hover:bg-white/20 transition self-start sm:self-auto"
+            >
+              Limpar Notificações
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {activeReviews.map(notif => (
+              <div key={notif.id} className="bg-slate-800/80 p-3 rounded-xl flex items-center justify-between group">
+                <button onClick={() => onNotificationClick(notif)} className="flex-1 flex items-center justify-between pr-4 text-left">
+                  <span className="text-slate-200 text-xs font-bold uppercase truncate">{notif.message}</span>
+                  <ArrowRight size={14} className="text-amber-400 group-hover:translate-x-1 transition shrink-0 ml-2" />
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); onClearSingleNotification(notif.id); }} className="text-slate-400 hover:text-white p-1" title="Limpar"><X size={14} /></button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* 3. VIEW MODE SWITCHER TABS */}
-      <div className="flex items-center gap-2 border-b border-slate-200/80 pb-2">
-        <button 
-          onClick={() => setViewMode('list')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${
-            viewMode === 'list' 
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-xs' 
-              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-          }`}
-        >
-          <List size={15} /> Lista
-        </button>
-
-        <button 
-          onClick={() => setViewMode('cards')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${
-            viewMode === 'cards' 
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-xs' 
-              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-          }`}
-        >
-          <LayoutGrid size={15} /> Cards
-        </button>
-      </div>
-
-      {/* 4. SEARCH AND FILTERS BAR */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+      {/* 5. SEARCH & ADVANCED FILTERS BAR */}
+      <div className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-2xs space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center">
           
           {/* Search Input */}
@@ -603,770 +980,564 @@ const TaskBoard: React.FC<TaskBoardProps> = ({
               type="text" 
               value={searchTerm} 
               onChange={(e) => onSearchTermChange(e.target.value)} 
-              placeholder="Buscar por nome, descrição, projeto..." 
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-teal-500 transition"
+              placeholder="Buscar por título, descrição, projeto, responsável..." 
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:bg-white focus:border-teal-500 transition"
             />
           </div>
 
-          {/* Dropdown: Projeto */}
+          {/* Filtro: Tipo de Atividade */}
+          <div className="lg:col-span-2">
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as any)}
+              className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-teal-500 transition cursor-pointer"
+            >
+              <option value="Todos">Tipo: Todos</option>
+              <option value="general">Atividade Geral</option>
+              <option value="meeting">Reunião</option>
+              <option value="report">Relatório</option>
+              <option value="note">Nota</option>
+            </select>
+          </div>
+
+          {/* Filtro: Prioridade */}
+          <div className="lg:col-span-2">
+            <select
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value as any)}
+              className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-teal-500 transition cursor-pointer"
+            >
+              <option value="Todos">Prioridade: Todas</option>
+              <option value="Alta">🔴 Alta prioridade</option>
+              <option value="Média">🟡 Média prioridade</option>
+              <option value="Baixa">🔵 Baixa prioridade</option>
+              <option value="Sem prioridade">⚪ Sem prioridade</option>
+            </select>
+          </div>
+
+          {/* Filtro: Projeto */}
           <div className="lg:col-span-2">
             <select 
               value={projectFilter} 
               onChange={(e) => onProjectFilterChange(e.target.value)} 
-              className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-bold text-slate-800 outline-none focus:bg-white focus:border-teal-500 transition cursor-pointer"
+              className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-teal-500 transition cursor-pointer"
             >
               <option value="Todos">Projeto: Todos</option>
-              {uniqueProjects.filter(p => p !== 'Todos').map(project => (
-                <option key={project} value={project}>{project}</option>
+              {uniqueProjects.filter(p => p !== 'Todos').map(p => (
+                <option key={p} value={p}>{p}</option>
               ))}
             </select>
           </div>
 
-          {/* Dropdown: Responsável */}
+          {/* Filtro: Responsável */}
           <div className="lg:col-span-2">
             <select 
               value={leadFilter} 
               onChange={(e) => onLeadFilterChange(e.target.value)} 
-              className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-bold text-slate-800 outline-none focus:bg-white focus:border-teal-500 transition cursor-pointer"
+              className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-teal-500 transition cursor-pointer"
             >
               <option value="Todos">Responsável: Todos</option>
-              {uniqueLeads.filter(l => l !== 'Todos').map(lead => (
-                <option key={lead} value={lead}>{lead}</option>
+              {uniqueLeads.filter(l => l !== 'Todos').map(l => (
+                <option key={l} value={l}>{l}</option>
               ))}
             </select>
           </div>
 
-          {/* Dropdown: Status */}
-          <div className="lg:col-span-2">
-            <select 
-              value={statusFilter} 
-              onChange={(e) => onStatusFilterChange(e.target.value as 'Todos' | Status)} 
-              className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-bold text-slate-800 outline-none focus:bg-white focus:border-teal-500 transition cursor-pointer"
-            >
-              <option value="Todos">Status: Todos</option>
-              <option value="Planejada">Planejada</option>
-              <option value="Em Andamento">Em Andamento</option>
-              <option value="Concluída">Concluída</option>
-              <option value="Pausado">Pausado</option>
-              <option value="Não Aplicável">Não Aplicável</option>
-            </select>
+        </div>
+
+        {/* View Switcher & Counter bar */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-black text-slate-800">
+              {sortedAndFilteredTasks.length} atividade(s) encontrada(s)
+            </span>
+            {(searchTerm || typeFilter !== 'Todos' || priorityFilter !== 'Todos' || projectFilter !== 'Todos' || leadFilter !== 'Todos' || statusFilter !== 'Todos' || selectedCalendarDay) && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="text-[11px] font-bold text-rose-600 hover:underline flex items-center gap-1"
+              >
+                <RotateCcw size={12} /> Limpar filtros
+              </button>
+            )}
           </div>
 
-          {/* Action buttons: Filtros & Limpar */}
-          <div className="lg:col-span-2 flex items-center gap-2 justify-end">
-            <button 
-              onClick={handleClearFilters} 
-              className="px-3 py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1.5 transition"
-              title="Limpar todos os filtros"
-            >
-              <RotateCcw size={14} /> Limpar filtros
-            </button>
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <span className="text-[10px] font-black uppercase text-slate-400">Visualização:</span>
+            <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setViewMode('cards')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg transition ${
+                  viewMode === 'cards' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <LayoutGrid size={13} /> Cards
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg transition ${
+                  viewMode === 'list' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <List size={13} /> Lista
+              </button>
+            </div>
           </div>
-
         </div>
       </div>
 
-      {/* 5. MAIN CONTENT AREA (LIST VIEW DEFAULT / CARDS / KANBAN) */}
-      {viewMode === 'list' && (
-        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden space-y-0">
-          
-          {/* List Header Count Banner */}
-          <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between bg-white">
-            <span className="text-xs font-black text-slate-800 tracking-tight">
-              {sortedTasks.length} atividades encontradas
-            </span>
-          </div>
+      {/* 6. CARDS DE ATIVIDADES (Requirement 4 & Imagem 3 de Referência) */}
+      {viewMode === 'cards' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+          {sortedAndFilteredTasks.map((task) => {
+            const isCompleted = task.status === 'Concluída';
+            const priorityVisuals = getPriorityVisuals(task.priority);
+            const typeVisuals = getActivityTypeVisuals(task.activityType, task.isReport);
 
-          {/* Table Container - Fits screen completely without horizontal scroll */}
-          <div className="w-full overflow-hidden">
-            <table className="w-full text-left border-collapse table-fixed select-none">
+            const isOverdue = !isCompleted && task.completionDate && new Date(task.completionDate + 'T00:00:00') < today;
+            const noteCount = task.updates?.length || 0;
+            const hasImportantNote = Boolean(task.updates?.some((u: TaskNote) => u.isImportant));
+
+            // Card background:
+            // "Atividades concluídas com o card inteiro em verde-claro" (Requirement 4)
+            let cardBg = 'bg-white border-slate-200/90 hover:border-slate-300 hover:shadow-md';
+            if (isCompleted) {
+              cardBg = 'bg-emerald-50/80 border-emerald-300 ring-1 ring-emerald-250 hover:bg-emerald-50 shadow-2xs';
+            } else if (isOverdue) {
+              cardBg = 'bg-white border-rose-300 ring-2 ring-rose-100 hover:shadow-md';
+            }
+
+            return (
+              <div
+                key={task.id}
+                className={`rounded-3xl border p-5 shadow-2xs transition-all flex flex-col justify-between relative group ${cardBg}`}
+              >
+                {/* Top Row: Priority Icon on Left + Type Pill + 3-Dots Menu */}
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  
+                  {/* Left: Ícone grande representando exclusivamente a prioridade (Requirement 4) */}
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black shrink-0 transition-transform ${priorityVisuals.circleBg}`}
+                      title={`Prioridade: ${priorityVisuals.label}`}
+                    >
+                      {task.priority === 'Alta' || task.priority === 'Urgente' ? (
+                        <span className="text-rose-600 text-lg leading-none">🔴</span>
+                      ) : task.priority === 'Média' ? (
+                        <span className="text-amber-500 text-lg leading-none">🟡</span>
+                      ) : task.priority === 'Baixa' ? (
+                        <span className="text-sky-500 text-lg leading-none">🔵</span>
+                      ) : (
+                        <span className="text-slate-300 text-lg leading-none">⚪</span>
+                      )}
+                    </div>
+
+                    {/* Tag pequena identificando tipo de atividade */}
+                    <div className="flex flex-col">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${typeVisuals.badge}`}>
+                        {typeVisuals.icon}
+                        {typeVisuals.label}
+                      </span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight mt-0.5 truncate max-w-[120px]">
+                        {task.project}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 3-Dots Menu & Status */}
+                  <div className="flex items-center gap-1.5 relative">
+                    {isCompleted && (
+                      <span className="p-1 rounded-full bg-emerald-600 text-white" title="Concluída">
+                        <CheckCircle size={14} />
+                      </span>
+                    )}
+
+                    {/* Three dots button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuTaskId(openMenuTaskId === task.id ? null : task.id);
+                      }}
+                      className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+                      title="Opções da atividade"
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {openMenuTaskId === task.id && (
+                      <div 
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute right-0 top-8 z-50 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 animate-in fade-in zoom-in-95 duration-100 text-xs font-bold"
+                      >
+                        {/* Editar */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onEdit(task);
+                            setOpenMenuTaskId(null);
+                          }}
+                          className="w-full px-3.5 py-2 text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                        >
+                          <Edit2 size={13} className="text-amber-600" />
+                          <span>Editar Atividade</span>
+                        </button>
+
+                        {/* Alterar Prazo com Motivo (Requirement 5) */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeadlineModalTask(task);
+                            setOpenMenuTaskId(null);
+                          }}
+                          className="w-full px-3.5 py-2 text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                        >
+                          <Clock size={13} className="text-teal-600" />
+                          <span>Alterar Prazo</span>
+                        </button>
+
+                        {/* Notas / Observações */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNotesModalTask(task);
+                            setOpenMenuTaskId(null);
+                          }}
+                          className="w-full px-3.5 py-2 text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                        >
+                          <MessageSquare size={13} className="text-blue-600" />
+                          <span>Notas e Atualizações ({task.updates?.length || 0})</span>
+                        </button>
+
+                        {/* Sub-menu Definir Prioridade (Somente Liderança - Requirement 3) */}
+                        {isLeader && (
+                          <div className="pt-1 mt-1 border-t border-slate-100 px-3.5 py-1.5">
+                            <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">
+                              Definir Prioridade (Líder)
+                            </span>
+                            <div className="grid grid-cols-2 gap-1 text-[11px]">
+                              <button
+                                type="button"
+                                onClick={(e) => handleSetPriority(e, task, 'Alta')}
+                                className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 text-left flex items-center gap-1"
+                              >
+                                <span>🔴</span> Alta
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => handleSetPriority(e, task, 'Média')}
+                                className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 text-left flex items-center gap-1"
+                              >
+                                <span>🟡</span> Média
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => handleSetPriority(e, task, 'Baixa')}
+                                className="px-2 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-800 text-left flex items-center gap-1"
+                              >
+                                <span>🔵</span> Baixa
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => handleSetPriority(e, task, 'Sem prioridade')}
+                                className="px-2 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 text-left flex items-center gap-1"
+                              >
+                                <span>⚪</span> Nenhuma
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Excluir */}
+                        <div className="pt-1 mt-1 border-t border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onDelete(task);
+                              setOpenMenuTaskId(null);
+                            }}
+                            className="w-full px-3.5 py-2 text-left text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                          >
+                            <Trash2 size={13} />
+                            <span>Excluir Atividade</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Main Content: Title & Description */}
+                <div className="space-y-1.5 mb-4 flex-1">
+                  <h3 
+                    onClick={() => onView(task)}
+                    className={`font-black text-sm tracking-tight uppercase leading-snug cursor-pointer transition hover:text-teal-700 ${
+                      isCompleted ? 'text-emerald-950 line-through opacity-85' : 'text-slate-900'
+                    }`}
+                    title={task.activity}
+                  >
+                    {task.activity}
+                  </h3>
+
+                  {task.description && (
+                    <p className={`text-[11px] leading-relaxed line-clamp-2 ${isCompleted ? 'text-emerald-800' : 'text-slate-500'}`}>
+                      {task.description}
+                    </p>
+                  )}
+                </div>
+
+                {/* Progress bar (when applicable - notes don't need progress bar) */}
+                {task.activityType !== 'note' && (
+                  <div className="space-y-1 mb-4">
+                    <div className="flex justify-between items-center text-[10px] font-bold">
+                      <span className="text-slate-400 uppercase tracking-wider">Progresso</span>
+                      <span className={isCompleted ? 'text-emerald-700 font-black' : 'text-slate-700 font-black'}>
+                        {task.progress || 0}%
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-500 ${isCompleted ? 'bg-emerald-600' : 'bg-teal-600'}`} 
+                        style={{ width: `${task.progress || 0}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Bottom Row: Responsible & Due Date & Notes badge */}
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                  {/* Responsible */}
+                  <div className="flex items-center gap-1.5 min-w-0" title={`Responsável: ${task.projectLead}`}>
+                    <div className="w-6 h-6 rounded-full bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center text-[9px] font-black uppercase shrink-0">
+                      {getInitials(task.projectLead)}
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-700 truncate max-w-[90px]">
+                      {task.projectLead}
+                    </span>
+                  </div>
+
+                  {/* Due Date or Status */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {task.completionDate ? (
+                      <span className={`inline-flex items-center gap-1 text-[11px] font-bold ${
+                        isCompleted 
+                          ? 'text-emerald-800' 
+                          : isOverdue 
+                          ? 'text-rose-600 font-black' 
+                          : 'text-slate-500'
+                      }`}>
+                        <Clock size={12} className={isOverdue ? 'text-rose-500' : 'text-slate-400'} />
+                        {formatDateBR(task.completionDate)}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {task.activityType === 'note' ? 'Concluída' : 'Sem prazo'}
+                      </span>
+                    )}
+
+                    {/* Notes Count button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setNotesModalTask(task);
+                      }}
+                      className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] font-bold border transition ${
+                        hasImportantNote
+                          ? 'bg-amber-300 text-amber-950 border-amber-400 font-black'
+                          : noteCount > 0
+                          ? 'bg-teal-50 text-teal-800 border-teal-200'
+                          : 'bg-slate-50 text-slate-400 border-slate-200 hover:text-slate-700'
+                      }`}
+                      title="Notas e atualizações"
+                    >
+                      <MessageSquare size={11} />
+                      <span>{noteCount}</span>
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            );
+          })}
+
+          {sortedAndFilteredTasks.length === 0 && (
+            <div className="col-span-full py-16 text-center text-slate-400 bg-white rounded-3xl border border-slate-200/80 p-8">
+              <AlertCircle size={36} className="mx-auto mb-2 text-slate-300" />
+              <h4 className="text-sm font-black uppercase text-slate-700">Nenhuma atividade encontrada</h4>
+              <p className="text-xs font-semibold text-slate-400 mt-1 max-w-sm mx-auto">
+                Tente ajustar os filtros selecionados ou clique em "Nova Atividade" para adicionar uma nova demanda.
+              </p>
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition"
+              >
+                Limpar todos os filtros
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 7. MODO LISTA ALTERNATIVO (Mantém compatibilidade e visualização em tabela) */}
+      {viewMode === 'list' && (
+        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs overflow-hidden">
+          <div className="w-full overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse select-none text-xs">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                  <th className="py-2.5 px-3 w-[28%]">ATIVIDADE</th>
-                  <th className="py-2.5 px-2 w-[10%]">PROJETO</th>
-                  <th className="py-2.5 px-2 w-[13%]">RESPONSÁVEL</th>
-                  <th className="py-2.5 px-2 w-[9%]">PRIORIDADE</th>
-                  <th className="py-2.5 px-2 w-[13%]">STATUS</th>
-                  <th className="py-2.5 px-2 w-[9%]">PRAZO</th>
-                  <th className="py-2.5 px-2 w-[9%]">PROGRESSO</th>
-                  <th className="py-2.5 px-2.5 w-[9%] text-right">AÇÕES</th>
+                  <th className="py-3 px-4">Prioridade</th>
+                  <th className="py-3 px-3">Tipo</th>
+                  <th className="py-3 px-4">Atividade</th>
+                  <th className="py-3 px-3">Projeto</th>
+                  <th className="py-3 px-3">Responsável</th>
+                  <th className="py-3 px-3">Prazo</th>
+                  <th className="py-3 px-3">Status</th>
+                  <th className="py-3 px-4 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {paginatedTasks.map((task) => {
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
+                {sortedAndFilteredTasks.map(task => {
                   const isCompleted = task.status === 'Concluída';
-                  const isOverdue = !isCompleted && task.completionDate && new Date(task.completionDate + 'T00:00:00') < today;
-                  
-                  const visuals = getTaskStatusVisuals(task.status, task.isReport, task.reportStage);
                   const priorityVisuals = getPriorityVisuals(task.priority);
-                  const reviewInfo = getTaskReviewerInfo(task);
-
-                  const noteCount = task.updates?.length || 0;
-                  const hasImportantNote = Boolean(
-                    task.updates && task.updates.some((u: TaskNote) => u.isImportant)
-                  );
-                  const hasUnreadImportant = Boolean(
-                    task.updates && task.updates.some((u: TaskNote) => 
-                      u.isImportant && (
-                        !u.acknowledgedBy || 
-                        u.acknowledgedBy.length === 0 || 
-                        (currentUser && currentUser !== 'Todos' && currentUser !== 'Visão Geral da Equipe' && !u.acknowledgedBy.includes(currentUser))
-                      )
-                    )
-                  );
+                  const typeVisuals = getActivityTypeVisuals(task.activityType, task.isReport);
+                  const isOverdue = !isCompleted && task.completionDate && new Date(task.completionDate + 'T00:00:00') < today;
 
                   return (
                     <tr 
-                      key={task.id} 
-                      className="hover:bg-slate-50/80 transition group relative"
+                      key={task.id}
+                      className={`hover:bg-slate-50 transition cursor-pointer ${
+                        isCompleted ? 'bg-emerald-50/50' : ''
+                      }`}
+                      onClick={() => onView(task)}
                     >
-                      {/* ATIVIDADE COLUMN */}
-                      <td className="py-2.5 px-3 relative min-w-0">
-                        {/* Left color bar indicator */}
-                        <div className={`absolute left-0 top-0 bottom-0 w-1 ${visuals.accentBar}`} />
-                        
-                        <div className="flex items-center gap-2 min-w-0">
-                          {/* Status Icon Box */}
-                          <div className={`w-7 h-7 rounded-lg ${visuals.iconBox} flex items-center justify-center shrink-0 shadow-2xs font-bold`}>
-                            {task.status === 'Concluída' ? (
-                              <CheckCircle size={13} />
-                            ) : task.status === 'Em Andamento' ? (
-                              <ArrowRight size={13} />
-                            ) : task.status === 'Planejada' ? (
-                              <AlertTriangle size={13} />
-                            ) : (
-                              <FileText size={13} />
-                            )}
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            {inlineEdit?.taskId === task.id && inlineEdit?.field === 'activity' ? (
-                              <div className="flex items-center gap-1 w-full" onClick={(e) => e.stopPropagation()}>
-                                <input
-                                  type="text"
-                                  autoFocus
-                                  value={inlineEdit.value}
-                                  onChange={(e) => setInlineEdit({ ...inlineEdit, value: e.target.value })}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') handleSaveInlineEdit(task);
-                                    if (e.key === 'Escape') handleCancelInlineEdit();
-                                  }}
-                                  className="w-full text-xs font-bold px-1.5 py-0.5 bg-white border border-teal-500 rounded outline-none text-slate-900 shadow-sm"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => handleSaveInlineEdit(task)}
-                                  className="p-1 bg-teal-600 hover:bg-teal-700 text-white rounded transition shrink-0"
-                                  title="Confirmar"
-                                >
-                                  <CheckCircle size={12} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={handleCancelInlineEdit}
-                                  className="p-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded transition shrink-0"
-                                  title="Cancelar"
-                                >
-                                  <X size={12} />
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1 group/editTitle min-w-0">
-                                <button
-                                  onClick={() => onView(task)}
-                                  className="text-left font-bold text-slate-900 text-xs hover:text-teal-700 transition truncate block flex-1"
-                                  title={task.activity}
-                                >
-                                  {task.activity}
-                                </button>
-                                {onSaveTask && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => handleStartInlineEdit(e, task, 'activity')}
-                                    className="opacity-0 group-hover/editTitle:opacity-100 p-0.5 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded transition shrink-0"
-                                    title="Editar nome da atividade"
-                                  >
-                                    <Edit2 size={10} />
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                            {task.description && (
-                              <p className="text-[10px] font-medium text-slate-400 truncate block leading-tight" title={task.description}>
-                                {task.description}
-                              </p>
-                            )}
-                          </div>
-                        </div>
+                      {/* Prioridade */}
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black border ${priorityVisuals.badgeClass}`}>
+                          <span className={`w-2 h-2 rounded-full ${priorityVisuals.dotClass}`} />
+                          {priorityVisuals.shortLabel}
+                        </span>
                       </td>
 
-                      {/* PROJETO COLUMN */}
-                      <td className="py-2.5 px-2 min-w-0">
-                        {inlineEdit?.taskId === task.id && inlineEdit?.field === 'project' ? (
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <select
-                              autoFocus
-                              value={inlineEdit.value}
-                              onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
-                              onBlur={handleCancelInlineEdit}
-                              onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold px-1 py-0.5 bg-white border border-teal-500 rounded outline-none text-slate-800 shadow-sm w-full"
-                            >
-                              {uniqueProjects.filter(p => p !== 'Todos').map(p => (
-                                <option key={p} value={p}>{p}</option>
-                              ))}
-                            </select>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => handleStartInlineEdit(e, task, 'project')}
-                            className="text-left text-xs font-bold text-slate-700 hover:text-teal-700 hover:bg-teal-50 px-1 py-0.5 -mx-1 rounded transition flex items-center gap-1 group/proj w-full min-w-0"
-                            title={task.project}
-                          >
-                            <span className="truncate block flex-1">{task.project}</span>
-                            <Edit2 size={9} className="opacity-0 group-hover/proj:opacity-100 text-teal-600 shrink-0 transition" />
-                          </button>
+                      {/* Tipo */}
+                      <td className="py-3 px-3">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase border ${typeVisuals.badge}`}>
+                          {typeVisuals.label}
+                        </span>
+                      </td>
+
+                      {/* Atividade */}
+                      <td className="py-3 px-4 min-w-[200px]">
+                        <span className={`font-black text-xs block ${isCompleted ? 'text-emerald-950 line-through opacity-80' : 'text-slate-900'}`}>
+                          {task.activity}
+                        </span>
+                        {task.description && (
+                          <span className="text-[10px] text-slate-400 line-clamp-1">
+                            {task.description}
+                          </span>
                         )}
                       </td>
 
-                      {/* RESPONSÁVEL COLUMN */}
-                      <td className="py-2.5 px-2 min-w-0">
-                        {inlineEdit?.taskId === task.id && inlineEdit?.field === 'lead' ? (
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <select
-                              autoFocus
-                              value={inlineEdit.value}
-                              onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
-                              onBlur={handleCancelInlineEdit}
-                              onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold px-1 py-0.5 bg-white border border-teal-500 rounded outline-none text-slate-800 shadow-sm w-full"
-                            >
-                              {uniqueLeads.filter(l => l !== 'Todos').map(l => (
-                                <option key={l} value={l}>{l}</option>
-                              ))}
-                            </select>
-                          </div>
-                        ) : (
-                          <div className="space-y-0.5 min-w-0">
-                            <button
-                              type="button"
-                              onClick={(e) => handleStartInlineEdit(e, task, 'lead')}
-                              className="text-left hover:bg-teal-50 px-1 py-0.5 -mx-1 rounded transition flex items-center gap-1.5 group/lead w-full min-w-0"
-                              title={task.projectLead}
-                            >
-                              <div className="w-5 h-5 rounded-full bg-emerald-800 text-white flex items-center justify-center text-[9px] font-black uppercase shrink-0 shadow-2xs">
-                                {getInitials(task.projectLead)}
-                              </div>
-                              <span className="text-xs font-bold text-slate-800 truncate block flex-1">
-                                {task.projectLead}
-                              </span>
-                              <Edit2 size={9} className="opacity-0 group-hover/lead:opacity-100 text-teal-600 shrink-0 transition" />
-                            </button>
-                            {reviewInfo?.isInReview && (
-                              <div className="flex items-center gap-1 text-[9px] font-bold text-purple-800 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded truncate" title={`Em revisão com: ${reviewInfo.reviewer}`}>
-                                <FileSignature size={9} className="text-purple-700 shrink-0" />
-                                <span className="truncate">Rev: {reviewInfo.reviewer}</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                      {/* Projeto */}
+                      <td className="py-3 px-3">
+                        <span className="font-bold text-slate-700 text-xs">{task.project}</span>
                       </td>
 
-                      {/* PRIORIDADE COLUMN */}
-                      <td className="py-2.5 px-2 min-w-0">
-                        {inlineEdit?.taskId === task.id && inlineEdit?.field === 'priority' ? (
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <select
-                              autoFocus
-                              value={inlineEdit.value || task.priority || 'Média'}
-                              onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
-                              onBlur={handleCancelInlineEdit}
-                              onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold px-1 py-0.5 bg-white border border-teal-500 rounded outline-none text-slate-800 shadow-sm w-full"
-                            >
-                              <option value="Baixa">Baixa</option>
-                              <option value="Média">Média</option>
-                              <option value="Alta">Alta</option>
-                              <option value="Urgente">Urgente</option>
-                            </select>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => handleStartInlineEdit(e, task, 'priority')}
-                            className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border inline-flex items-center gap-1 hover:scale-105 transition active:scale-95 whitespace-nowrap ${priorityVisuals.badgeClass}`}
-                            title="Clique para alterar a prioridade"
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityVisuals.dotClass}`} />
-                            <span>{priorityVisuals.label}</span>
-                            <Edit2 size={8} className="opacity-40" />
-                          </button>
-                        )}
+                      {/* Responsável */}
+                      <td className="py-3 px-3">
+                        <span className="font-bold text-slate-700 text-xs">{task.projectLead}</span>
                       </td>
 
-                      {/* STATUS COLUMN */}
-                      <td className="py-2.5 px-2 min-w-0">
-                        {inlineEdit?.taskId === task.id && inlineEdit?.field === 'status' ? (
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <select
-                              autoFocus
-                              value={inlineEdit.value}
-                              onChange={(e) => handleSaveInlineEdit(task, e.target.value)}
-                              onBlur={handleCancelInlineEdit}
-                              onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold px-1 py-0.5 bg-white border border-teal-500 rounded outline-none text-slate-800 shadow-sm w-full"
-                            >
-                              <option value="Planejada">Planejada</option>
-                              <option value="Em Andamento">Em Andamento</option>
-                              <option value="Concluída">Concluída</option>
-                              <option value="Pausado">Pausado</option>
-                              <option value="Não Aplicável">Não Aplicável</option>
-                            </select>
-                          </div>
-                        ) : (
-                          <div className="space-y-0.5 min-w-0">
-                            <button
-                              type="button"
-                              onClick={(e) => handleStartInlineEdit(e, task, 'status')}
-                              className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border inline-flex items-center gap-1 hover:scale-105 hover:shadow-2xs transition whitespace-nowrap ${visuals.badgeClass}`}
-                              title="Clique para alterar o status"
-                            >
-                              <span>{visuals.label}</span>
-                              <Edit2 size={8} className="opacity-60" />
-                            </button>
-                            {reviewInfo?.isInReview && (
-                              <div className="text-[9px] font-bold text-purple-900 flex items-center gap-1 truncate" title={`Com: ${reviewInfo.reviewer}`}>
-                                <span className="text-purple-600 font-medium text-[8px]">Com:</span>
-                                <span className="font-bold truncate">{reviewInfo.reviewer}</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                      {/* Prazo */}
+                      <td className="py-3 px-3">
+                        <span className={`font-bold text-xs ${isOverdue ? 'text-rose-600 font-black' : 'text-slate-600'}`}>
+                          {formatDateBR(task.completionDate)}
+                        </span>
                       </td>
 
-                      {/* PRAZO COLUMN */}
-                      <td className="py-2.5 px-2 min-w-0">
-                        {inlineEdit?.taskId === task.id && inlineEdit?.field === 'date' ? (
-                          <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 min-w-[120px]">
-                            <DateInput
-                              autoFocus
-                              value={inlineEdit.value || ''}
-                              onChange={(newDate) => handleSaveInlineEdit(task, newDate)}
-                              onBlur={handleCancelInlineEdit}
-                              onKeyDown={(e) => { if (e.key === 'Escape') handleCancelInlineEdit(); }}
-                              className="text-xs font-bold"
-                            />
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => handleStartInlineEdit(e, task, 'date')}
-                            className={`flex items-center gap-1 text-[11px] font-semibold hover:bg-slate-100 px-1 py-0.5 -mx-1 rounded transition group/date whitespace-nowrap ${isOverdue ? 'text-red-500' : 'text-slate-600'}`}
-                            title="Clique para alterar o prazo"
-                          >
-                            <Calendar size={12} className={isOverdue ? 'text-red-500 shrink-0' : 'text-slate-400 shrink-0'} />
-                            <span>{formatDateBR(task.completionDate)}</span>
-                            <Edit2 size={9} className="opacity-0 group-hover/date:opacity-100 text-teal-600 shrink-0 transition" />
-                          </button>
-                        )}
+                      {/* Status */}
+                      <td className="py-3 px-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                          isCompleted ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {task.status}
+                        </span>
                       </td>
 
-                      {/* PROGRESSO COLUMN */}
-                      <td className="py-2.5 px-2 relative min-w-0">
-                        {inlineEdit?.taskId === task.id && inlineEdit?.field === 'progress' ? (
-                          <div onClick={(e) => e.stopPropagation()} className="absolute top-0 right-0 z-30 space-y-2 p-3 bg-white border-2 border-teal-500 rounded-xl shadow-xl min-w-[200px]">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-[10px] font-black text-slate-500 uppercase">Progresso:</span>
-                              <span className="text-xs font-black text-teal-700">{inlineEdit.value}%</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              step="5"
-                              value={inlineEdit.value}
-                              onChange={(e) => setInlineEdit({ ...inlineEdit, value: Number(e.target.value) })}
-                              className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-600"
-                            />
-                            <div className="flex items-center justify-between gap-1">
-                              {[0, 25, 50, 75, 100].map(pct => (
-                                <button
-                                  key={pct}
-                                  type="button"
-                                  onClick={() => setInlineEdit({ ...inlineEdit, value: pct })}
-                                  className={`px-1.5 py-0.5 rounded text-[9px] font-black transition ${
-                                    inlineEdit.value === pct ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                  }`}
-                                >
-                                  {pct}%
-                                </button>
-                              ))}
-                            </div>
-                            <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-100">
-                              <button
-                                type="button"
-                                onClick={handleCancelInlineEdit}
-                                className="px-2 py-1 text-[10px] font-bold text-slate-500 hover:bg-slate-100 rounded"
-                              >
-                                Cancelar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleSaveInlineEdit(task)}
-                                className="px-2.5 py-1 text-[10px] font-black text-white bg-teal-600 hover:bg-teal-700 rounded shadow-xs"
-                              >
-                                Salvar
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => handleStartInlineEdit(e, task, 'progress')}
-                            className="w-full text-left hover:bg-slate-100 p-1 -m-1 rounded transition group/prog min-w-0 block"
-                            title="Clique para alterar a porcentagem de progresso"
-                          >
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-black text-slate-800">
-                                  {task.progress}%
-                                </span>
-                                <Edit2 size={9} className="opacity-0 group-hover/prog:opacity-100 text-teal-600 transition" />
-                              </div>
-                              <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
-                                <div 
-                                  className={`h-full transition-all duration-500 ${task.progress === 100 ? 'bg-emerald-500' : 'bg-teal-600'}`}
-                                  style={{ width: `${task.progress}%` }}
-                                />
-                              </div>
-                            </div>
-                          </button>
-                        )}
-                      </td>
-
-                      {/* AÇÕES COLUMN */}
-                      <td className="py-2.5 px-2.5 text-right min-w-0">
+                      {/* Ações */}
+                      <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
-                          {/* Updates / Comments count button - Highlighted in yellow/amber when any note is marked as important */}
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setNotesModalTask(task);
-                            }}
-                            className={`relative flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] transition border shadow-2xs active:scale-95 shrink-0 ${
-                              hasImportantNote
-                                ? hasUnreadImportant
-                                  ? 'bg-amber-400 hover:bg-amber-500 text-amber-950 border-amber-500 ring-2 ring-amber-400/60 shadow-sm animate-pulse font-black'
-                                  : 'bg-amber-300 hover:bg-amber-400 text-amber-950 border-amber-400 ring-1 ring-amber-400/60 font-black shadow-2xs'
-                                : noteCount > 0
-                                ? 'text-[#008779] bg-teal-50 hover:bg-teal-100 border-teal-200 font-bold'
-                                : 'text-slate-400 hover:text-[#008779] hover:bg-teal-50/60 border-slate-200 hover:border-teal-200 font-bold'
-                            }`}
-                            title={
-                              hasImportantNote
-                                ? hasUnreadImportant
-                                  ? '⭐ NOTA IMPORTANTE NÃO CONFIRMADA: Clique para ler e confirmar ciência (OK).'
-                                  : '⭐ NOTA IMPORTANTE DESTACADA: Clique para ver o histórico de atualizações.'
-                                : 'Clique para ver o histórico e adicionar notas de atualização'
-                            }
+                            onClick={() => setNotesModalTask(task)}
+                            className="p-1 text-slate-400 hover:text-teal-600"
+                            title="Notas"
                           >
-                            <MessageSquare 
-                              size={11} 
-                              className={
-                                hasImportantNote 
-                                  ? 'text-amber-950 fill-amber-400/80 shrink-0' 
-                                  : noteCount > 0 
-                                  ? 'text-[#008779] shrink-0' 
-                                  : 'text-slate-400 shrink-0'
-                              } 
-                            />
-                            <span className={hasImportantNote ? 'text-amber-950 font-black' : ''}>{noteCount}</span>
-                            {hasUnreadImportant && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-red-600 absolute -top-0.5 -right-0.5 ring-2 ring-white animate-ping" />
-                            )}
+                            <MessageSquare size={14} />
                           </button>
-
-                          <button 
-                            onClick={() => onView(task)} 
-                            className="p-1 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded transition" 
-                            title="Visualizar"
-                          >
-                            <Eye size={14}/>
-                          </button>
-
-                          <button 
-                            onClick={() => onEdit(task)} 
-                            className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition" 
+                          <button
+                            type="button"
+                            onClick={() => onEdit(task)}
+                            className="p-1 text-slate-400 hover:text-amber-600"
                             title="Editar"
                           >
-                            <Edit2 size={14}/>
+                            <Edit2 size={14} />
                           </button>
-
-                          <button 
-                            onClick={() => onDelete(task)} 
-                            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition" 
+                          <button
+                            type="button"
+                            onClick={() => onDelete(task)}
+                            className="p-1 text-slate-400 hover:text-rose-600"
                             title="Excluir"
                           >
-                            <Trash2 size={14}/>
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
                     </tr>
                   );
                 })}
-
-                {paginatedTasks.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="py-12 text-center text-slate-400">
-                      <AlertTriangle className="mx-auto text-slate-300 mb-2" size={32} />
-                      <p className="text-xs font-bold uppercase tracking-widest">Nenhuma atividade encontrada para os filtros selecionados.</p>
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
-
-          {/* PAGINATION FOOTER */}
-          {totalItems > 0 && (
-            <div className="px-4 py-2.5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/50">
-              <span className="text-xs font-semibold text-slate-500">
-                Mostrando {startIndex + 1} a {endIndex} de {totalItems} atividades
-              </span>
-
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition"
-                  title="Página anterior"
-                >
-                  <ChevronLeft size={14} />
-                </button>
-
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-                  .map((page, idx, arr) => {
-                    const prevPage = arr[idx - 1];
-                    const showEllipsis = prevPage && page - prevPage > 1;
-
-                    return (
-                      <React.Fragment key={page}>
-                        {showEllipsis && <span className="text-xs text-slate-400 px-1">...</span>}
-                        <button
-                          onClick={() => setCurrentPage(page)}
-                          className={`w-7 h-7 rounded-lg text-xs font-black transition ${
-                            currentPage === page
-                              ? 'bg-emerald-800 text-white shadow-2xs'
-                              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      </React.Fragment>
-                    );
-                  })}
-
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition"
-                  title="Próxima página"
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-700 outline-none"
-                >
-                  <option value={10}>10 por página</option>
-                  <option value={20}>20 por página</option>
-                  <option value={50}>50 por página</option>
-                  <option value={100}>100 por página</option>
-                </select>
-              </div>
-            </div>
-          )}
-
         </div>
       )}
 
-      {/* 6. CARDS VIEW MODE */}
-      {viewMode === 'cards' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {sortedTasks.map(task => {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const isCompleted = task.status === 'Concluída';
-            const isOverdue = !isCompleted && task.completionDate && new Date(task.completionDate + 'T00:00:00') < today;
-            
-            const nextWeek = new Date(today);
-            nextWeek.setDate(today.getDate() + 7);
-            const isDueSoon = !isCompleted && !isOverdue && task.completionDate && new Date(task.completionDate + 'T00:00:00') <= nextWeek;
-
-            const isReviewer = task.isReport && task.currentReviewer === currentUser;
-            const hasCompletedReview = task.completedCollaborators?.includes(currentUser || '');
-
-            const noteCount = task.updates?.length || 0;
-            const hasImportantNote = Boolean(
-              task.updates && task.updates.some((u: TaskNote) => u.isImportant)
-            );
-            const hasUnreadImportant = Boolean(
-              task.updates && task.updates.some((u: TaskNote) => 
-                u.isImportant && (
-                  !u.acknowledgedBy || 
-                  u.acknowledgedBy.length === 0 || 
-                  (currentUser && currentUser !== 'Todos' && currentUser !== 'Visão Geral da Equipe' && !u.acknowledgedBy.includes(currentUser))
-                )
-              )
-            );
-
-            const visuals = getTaskStatusVisuals(task.status, task.isReport, task.reportStage);
-
-            let cardClasses = 'rounded-3xl border p-6 pl-8 shadow-xs transition-all duration-300 group flex flex-col h-full relative overflow-hidden bg-white';
-            if (isCompleted) cardClasses = 'rounded-3xl border p-6 pl-8 shadow-xs transition-all duration-300 group flex flex-col h-full relative overflow-hidden bg-slate-50 opacity-80 border-slate-200';
-            else if (isOverdue) cardClasses = 'rounded-3xl border p-6 pl-8 shadow-xs transition-all duration-300 group flex flex-col h-full relative overflow-hidden bg-white border-red-350 ring-2 ring-red-100';
-            else cardClasses = `rounded-3xl border p-6 pl-8 shadow-xs hover:shadow-md transition-all duration-300 group flex flex-col h-full relative overflow-hidden bg-white ${visuals.borderColor}`;
-
-            return (
-              <div key={task.id} className={cardClasses}>
-                <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${visuals.accentBar}`} />
-
-                {isCompleted && (
-                  <div className="absolute top-4 right-4 bg-emerald-500 text-white rounded-full p-1.5 z-10 shadow-lg">
-                    <CheckCircle size={16} />
-                  </div>
-                )}
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${visuals.badgeClass}`}>
-                        {task.status}
-                      </span>
-                      {isOverdue && <AlertTriangle size={14} className="text-red-500" />}
-                      {isDueSoon && <div className="w-3.5 h-3.5 rounded-full bg-amber-400 flex items-center justify-center text-white text-[8px] font-bold">!</div>}
-                    </div>
-                    {isReviewer && !hasCompletedReview && ( <span className="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest bg-amber-100 text-amber-700 border border-amber-200 animate-pulse">REVISÃO PENDENTE (VOCÊ)</span> )}
-                    {isReviewer && hasCompletedReview && ( <span className="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-700 border border-emerald-200">VOCÊ CONCLUIU SUA COLABORAÇÃO</span> )}
-                    {isCollaborator(task) && !isReviewer && (<span className="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-600 border border-indigo-100">Você é Colaborador</span>)}
-                  </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => onView(task)} className="p-2 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-xl transition" title="Visualizar"><Eye size={16}/></button>
-                    <button onClick={() => onEdit(task)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition" title="Editar"><Edit2 size={16}/></button>
-                    <button onClick={() => onDelete(task)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition" title="Excluir"><Trash2 size={16}/></button>
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <p className="text-[9px] font-black text-teal-800 uppercase tracking-widest mb-1">{task.project}</p>
-                  <h3 className="text-lg font-black text-slate-900 tracking-tight leading-tight uppercase" title={task.activity}>{task.activity}</h3>
-                  <p className="text-[10px] font-medium text-slate-500 mt-1.5 leading-relaxed whitespace-pre-wrap">{task.description}</p>
-                </div>
-
-                <div className="space-y-1 mb-5">
-                   <div className="flex justify-between items-end"><span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Avanço</span><span className="text-[10px] font-black text-slate-900">{task.progress}%</span></div>
-                   <div className="w-full h-1 bg-slate-200 rounded-full overflow-hidden"><div className={`h-full transition-all duration-700 ${task.progress === 100 ? 'bg-emerald-500' : 'bg-teal-700'}`} style={{width: `${task.progress}%`}}></div></div>
-                </div>
-
-                <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
-                   <div className="flex flex-col">
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Líder</span>
-                      <div className="flex items-center gap-2 mt-1">
-                         <div className="w-5 h-5 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center text-[9px] font-black uppercase">{getInitials(task.projectLead)}</div>
-                         <span className="text-[9px] font-bold text-slate-700 uppercase">{task.projectLead}</span>
-                      </div>
-                   </div>
-                </div>
-
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 mt-auto mb-4">
-                   <p className="text-[8px] font-black text-teal-800 uppercase tracking-widest flex items-center gap-1.5 mb-1"><ArrowRight size={10} /> Próximo Passo</p>
-                   <p className="text-[10px] font-black text-slate-800 leading-tight italic">"{task.nextStep || 'Não definido'}"</p>
-                </div>
-
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                  {!isCompleted && (
-                    <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-500' : 'text-slate-400'}`}>
-                        {isOverdue ? <AlertTriangle size={12} /> : <Clock size={12} />}
-                        <span className="text-[8px] font-bold uppercase">Prazo: {formatDateBR(task.completionDate)}</span>
-                    </div>
-                  )}
-                  {isCompleted && <div className="flex-1"></div>}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setNotesModalTask(task);
-                    }}
-                    className={`relative flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-bold transition ml-auto border ${
-                      hasImportantNote
-                        ? hasUnreadImportant
-                          ? 'bg-amber-400 hover:bg-amber-500 text-amber-950 border-amber-500 ring-2 ring-amber-400/60 shadow-sm animate-pulse font-black'
-                          : 'bg-amber-300 hover:bg-amber-400 text-amber-950 border-amber-400 ring-1 ring-amber-400/60 font-black shadow-2xs'
-                        : noteCount > 0
-                        ? 'text-[#008779] bg-teal-50 hover:bg-teal-100 border-teal-200 shadow-2xs'
-                        : 'text-slate-400 hover:text-[#008779] hover:bg-teal-50/60 border-slate-100 hover:border-teal-200'
-                    }`}
-                    title={
-                      hasImportantNote
-                        ? hasUnreadImportant
-                          ? '⭐ NOTA IMPORTANTE NÃO CONFIRMADA: Clique para ler e confirmar ciência (OK).'
-                          : '⭐ NOTA IMPORTANTE DESTACADA: Clique para ver o histórico de atualizações.'
-                        : 'Clique para ver o histórico e adicionar notas de atualização'
-                    }
-                  >
-                    <MessageSquare 
-                      size={13} 
-                      className={
-                        hasImportantNote 
-                          ? 'text-amber-950 fill-amber-400/80 shrink-0' 
-                          : noteCount > 0 
-                          ? 'text-[#008779]' 
-                          : 'text-slate-400'
-                      } 
-                    />
-                    <span className={`text-[10px] font-black ${hasImportantNote ? 'text-amber-950' : ''}`}>
-                      {noteCount}
-                    </span>
-                    {hasUnreadImportant && (
-                      <span className="w-2 h-2 rounded-full bg-red-600 absolute -top-0.5 -right-0.5 ring-2 ring-white animate-ping" />
-                    )}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-          {sortedTasks.length === 0 && (
-            <div className="col-span-full py-20 text-center bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
-              <AlertTriangle className="mx-auto text-slate-300 mb-4" size={48} />
-              <p className="text-slate-400 font-black uppercase text-xs tracking-widest italic">Nenhuma atividade encontrada para os filtros selecionados.</p>
-            </div>
-          )}
-        </div>
+      {/* MODAIS COMPLEMENTARES */}
+      {/* 1. Modal de Notas e Atualizações */}
+      {notesModalTask && (
+        <TaskNotesModal
+          isOpen={Boolean(notesModalTask)}
+          onClose={() => setNotesModalTask(null)}
+          task={notesModalTask}
+          currentUser={currentUser}
+          onSaveTask={(updatedTask) => {
+            if (onSaveTask) {
+              onSaveTask(updatedTask);
+            }
+          }}
+        />
       )}
 
-      {/* Quick Notes Modal */}
-      <TaskNotesModal
-        isOpen={Boolean(notesModalTask)}
-        task={notesModalTask}
-        onClose={() => setNotesModalTask(null)}
-        onSaveTask={(updated) => {
-          if (onSaveTask) {
-            onSaveTask(updated);
-          }
-          setNotesModalTask(updated);
-        }}
-        currentUser={currentUser === 'Todos' || currentUser === 'Visão Geral da Equipe' ? 'Usuário' : currentUser}
+      {/* 2. Modal de Alteração de Prazo com Motivo (Requirement 5) */}
+      {deadlineModalTask && (
+        <ChangeDeadlineModal
+          isOpen={Boolean(deadlineModalTask)}
+          onClose={() => setDeadlineModalTask(null)}
+          task={deadlineModalTask}
+          onSave={handleSaveDeadlineChange}
+        />
+      )}
+
+      {/* 3. Modal de Consulta a Todas as Atividades Gerais (Requirement 1) */}
+      <GeneralActivitiesModal
+        isOpen={isGeneralActivitiesModalOpen}
+        onClose={() => setIsGeneralActivitiesModalOpen(false)}
+        tasks={tasks}
+        onViewTask={onView}
       />
 
     </div>

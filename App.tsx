@@ -1261,6 +1261,65 @@ const App: React.FC = () => {
             if (oldTask.status !== taskToSave.status) {
                 createNote(`Status alterado de "${oldTask.status}" para "${taskToSave.status}".`);
             }
+            if (oldTask.priority !== taskToSave.priority) {
+                createNote(`Prioridade alterada de "${oldTask.priority || 'Sem prioridade'}" para "${taskToSave.priority}".`);
+                const prioLog: ActivityLog = {
+                  id: `log_${Date.now()}`,
+                  action: 'EDIÇÃO',
+                  taskTitle: taskToSave.activity,
+                  user: selectedProfile.name,
+                  timestamp: new Date().toISOString(),
+                  reason: `Prioridade alterada de "${oldTask.priority || 'Sem prioridade'}" para "${taskToSave.priority}".`,
+                  refId: taskToSave.id,
+                  refType: 'task'
+                };
+                setLogs(prev => { setDataDirty(); return [prioLog, ...prev]; });
+            }
+            if (oldTask.completionDate !== taskToSave.completionDate) {
+                createNote(`Prazo alterado de "${oldTask.completionDate || 'Sem prazo'}" para "${taskToSave.completionDate || 'Sem prazo'}".`);
+                
+                // Garantir histórico de alteração de prazo
+                const hasDlRecord = taskToSave.deadlineHistory?.some(dh => dh.newDate === taskToSave.completionDate);
+                if (!hasDlRecord && taskToSave.completionDate) {
+                  taskToSave.deadlineHistory = [
+                    {
+                      id: `dl_${Date.now()}`,
+                      previousDate: oldTask.completionDate || '',
+                      newDate: taskToSave.completionDate,
+                      changedBy: selectedProfile.name,
+                      changedAt: new Date().toISOString(),
+                      reason: 'Alteração de prazo na edição da atividade'
+                    },
+                    ...(taskToSave.deadlineHistory || [])
+                  ];
+                }
+
+                const dlLog: ActivityLog = {
+                  id: `log_${Date.now()}`,
+                  action: 'EDIÇÃO',
+                  taskTitle: taskToSave.activity,
+                  user: selectedProfile.name,
+                  timestamp: new Date().toISOString(),
+                  reason: `Prazo alterado de "${oldTask.completionDate || 'Sem prazo'}" para "${taskToSave.completionDate || 'Sem prazo'}".`,
+                  refId: taskToSave.id,
+                  refType: 'task'
+                };
+                setLogs(prev => { setDataDirty(); return [dlLog, ...prev]; });
+            }
+            if (oldTask.projectLead !== taskToSave.projectLead) {
+                createNote(`Responsável alterado de "${oldTask.projectLead}" para "${taskToSave.projectLead}".`);
+                const leadLog: ActivityLog = {
+                  id: `log_${Date.now()}`,
+                  action: 'EDIÇÃO',
+                  taskTitle: taskToSave.activity,
+                  user: selectedProfile.name,
+                  timestamp: new Date().toISOString(),
+                  reason: `Responsável alterado para "${taskToSave.projectLead}".`,
+                  refId: taskToSave.id,
+                  refType: 'task'
+                };
+                setLogs(prev => { setDataDirty(); return [leadLog, ...prev]; });
+            }
             if (oldTask.reportStage !== taskToSave.reportStage) {
                 createNote(`Etapa do fluxo de revisão alterada para "${taskToSave.reportStage}".`);
             }
@@ -1283,6 +1342,21 @@ const App: React.FC = () => {
             taskToSave.currentReviewer = undefined;
             taskToSave.reportStage = 'Em Elaboração';
         }
+    } else {
+      // Nova atividade criada
+      if (selectedProfile) {
+        const createLog: ActivityLog = {
+          id: `log_${Date.now()}`,
+          action: 'CRIAÇÃO',
+          taskTitle: taskToSave.activity,
+          user: selectedProfile.name,
+          timestamp: new Date().toISOString(),
+          reason: `Atividade criada no projeto ${taskToSave.project}.`,
+          refId: taskToSave.id,
+          refType: 'task'
+        };
+        setLogs(prev => { setDataDirty(); return [createLog, ...prev]; });
+      }
     }
     
     const wasJustCompleted = (taskToSave.status === 'Concluída' && oldTask?.status !== 'Concluída') || 
@@ -2052,8 +2126,8 @@ const App: React.FC = () => {
         {view === 'tasks' && (
           <div className="space-y-6">
             <div className={`bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-full sm:w-fit overflow-x-auto`}>
-              <button onClick={() => setTaskViewTab('sector')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${taskViewTab === 'sector' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><ListTodo size={14} /> {isMobile ? 'Setorial' : 'Painel Setorial'}</button>
-              <button onClick={() => setTaskViewTab('projects')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${taskViewTab === 'projects' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><FolderKanban size={14} /> {isMobile ? 'Projetos' : 'Painel de Projetos'}</button>
+              <button onClick={() => setTaskViewTab('sector')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${taskViewTab === 'sector' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><ListTodo size={14} /> Minhas Atividades</button>
+              <button onClick={() => setTaskViewTab('projects')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${taskViewTab === 'projects' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><FolderKanban size={14} /> Projeto</button>
             </div>
             
             {taskViewTab === 'sector' ? (
@@ -2090,6 +2164,8 @@ const App: React.FC = () => {
                 onDownloadExcel={() => handleDownloadContextualExcel('profile')}
                 onSyncSharePoint={() => handleSyncContextualExcel('profile')}
                 isSyncingSharePoint={isSyncingSharePoint}
+                hasFullAccess={hasFullAccess}
+                isLeader={hasFullAccess || Boolean(selectedProfile?.isComiteGestor) || currentUserRole === 'admin'}
               />
             ) : (
               <ProjectTaskBoard 

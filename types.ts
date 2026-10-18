@@ -1,5 +1,6 @@
 
-export type Priority = 'Baixa' | 'Média' | 'Alta' | 'Urgente';
+export type Priority = 'Alta' | 'Média' | 'Baixa' | 'Sem prioridade' | 'Urgente';
+export type ActivityType = 'general' | 'meeting' | 'report' | 'note';
 export type Status = 'Planejada' | 'Em Andamento' | 'Concluída' | 'Não Aplicável' | 'Pausado';
 export type ReportStage = 
   | 'Em Elaboração' 
@@ -37,6 +38,34 @@ export interface BudgetInfo {
   status: BudgetStatus;
 }
 
+export interface TaskAttachment {
+  id: string;
+  name: string;
+  url?: string;
+  size?: string;
+  date: string;
+  type?: string;
+}
+
+export interface TaskDeadlineHistory {
+  id: string;
+  previousDate: string;
+  newDate: string;
+  changedBy: string;
+  changedAt: string;
+  reason?: string;
+}
+
+export interface TaskChangeHistory {
+  id: string;
+  field: 'deadline' | 'priority' | 'status' | 'lead' | 'note';
+  previousValue: string;
+  newValue: string;
+  changedBy: string;
+  changedAt: string;
+  reason?: string;
+}
+
 export interface TaskNote {
   id: string;
   date: string;
@@ -45,6 +74,7 @@ export interface TaskNote {
   isImportant?: boolean;
   acknowledgedBy?: string[];
   acknowledgedAt?: string;
+  attachments?: TaskAttachment[];
 }
 
 export interface Task {
@@ -76,6 +106,17 @@ export interface Task {
   completedCollaborators?: string[]; // Adicionado para rastrear quem finalizou a revisão
   generatesRegulatoryContent?: boolean;
   dossierContribution?: DossierContribution;
+
+  // Novos campos para os 4 tipos de atividade e rastreabilidade
+  activityType?: ActivityType;
+  meetingTime?: string;
+  meetingParticipants?: string[];
+  meetingLink?: string;
+  meetingAgenda?: string;
+  reportType?: string;
+  deadlineHistory?: TaskDeadlineHistory[];
+  changeHistory?: TaskChangeHistory[];
+  attachments?: TaskAttachment[];
 }
 
 export type ViewMode = 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceability' | 'regulatory' | 'dossier_contributions' | 'dossier_assembler' | 'regulatory_docs' | 'meetings';

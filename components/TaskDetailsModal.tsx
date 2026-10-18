@@ -29,8 +29,18 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
             }`}>
               {task.status}
             </span>
-            <span className={`px-3 py-1 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border border-slate-200 text-slate-500 bg-white`}>
-              Prioridade {task.priority}
+            <span className={`px-3 py-1 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border border-slate-200 text-slate-600 bg-white`}>
+              Prioridade {task.priority || 'Sem prioridade'}
+            </span>
+            <span className={`px-3 py-1 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border ${
+              task.activityType === 'meeting' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+              task.activityType === 'report' || task.isReport ? 'bg-purple-50 text-purple-700 border-purple-200' :
+              task.activityType === 'note' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+              'bg-teal-50 text-teal-800 border-teal-200'
+            }`}>
+              {task.activityType === 'meeting' ? 'REUNIÃO' :
+               task.activityType === 'report' || task.isReport ? 'RELATÓRIO' :
+               task.activityType === 'note' ? 'NOTA' : 'ATIVIDADE GERAL'}
             </span>
           </div>
           
@@ -38,24 +48,92 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
             {task.activity}
           </h2>
           
-          <p className="text-slate-500 text-sm sm:text-lg leading-relaxed font-medium">
-            {task.description}
-          </p>
+          {task.description && (
+            <p className="text-slate-600 text-sm sm:text-base leading-relaxed font-medium">
+              {task.description}
+            </p>
+          )}
         </div>
 
-        <div className="p-6 sm:p-10 space-y-8 sm:space-y-10 flex-1 overflow-y-auto custom-scrollbar">
+        <div className="p-6 sm:p-10 space-y-6 sm:space-y-8 flex-1 overflow-y-auto custom-scrollbar">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
             <InfoBlock label="Solicitação" value={task.requestDate} icon={<Calendar size={14}/>} />
-            <InfoBlock label="Prazo Final" value={task.completionDate} icon={<Clock size={14}/>} highlight />
-            <InfoBlock label="Líder" value={task.projectLead} icon={<User size={14}/>} />
-            <div className="space-y-1">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Progresso</span>
-              <div className="h-2 bg-slate-200 rounded-full overflow-hidden mt-2">
-                <div className="h-full bg-brand-primary" style={{width: `${task.progress}%`}}></div>
+            <InfoBlock label="Prazo Final" value={task.completionDate || 'Sem prazo'} icon={<Clock size={14}/>} highlight />
+            <InfoBlock label="Responsável" value={task.projectLead} icon={<User size={14}/>} />
+            {task.activityType !== 'note' ? (
+              <div className="space-y-1">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Progresso</span>
+                <div className="h-2 bg-slate-200 rounded-full overflow-hidden mt-2">
+                  <div className="h-full bg-brand-primary" style={{width: `${task.progress}%`}}></div>
+                </div>
+                <p className="text-[10px] font-black text-brand-primary mt-1">{task.progress}% concluído</p>
               </div>
-              <p className="text-[10px] font-black text-brand-primary mt-1">{task.progress}% concluído</p>
-            </div>
+            ) : (
+              <div className="space-y-1">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</span>
+                <p className="text-sm font-black text-emerald-600 mt-1">Concluída (Nota)</p>
+              </div>
+            )}
           </div>
+
+          {/* Reunião Details if type is meeting */}
+          {task.activityType === 'meeting' && (
+            <div className="p-5 bg-blue-50/70 rounded-2xl border border-blue-200 space-y-3">
+              <h4 className="text-xs font-black uppercase text-blue-900 tracking-wider flex items-center gap-1.5">
+                <Clock size={14} /> Dados da Reunião
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                {task.meetingTime && (
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-slate-500 block">Horário</span>
+                    <span className="font-bold text-slate-800">{task.meetingTime}</span>
+                  </div>
+                )}
+                {(task.meetingParticipants || task.collaborators) && (
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-slate-500 block">Participantes</span>
+                    <span className="font-bold text-slate-800">
+                      {(task.meetingParticipants || task.collaborators || []).join(', ') || 'Nenhum participante listado'}
+                    </span>
+                  </div>
+                )}
+              </div>
+              {(task.meetingLink || task.fileLocation) && (
+                <div className="pt-2">
+                  <a
+                    href={task.meetingLink || task.fileLocation}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-blue-700 transition"
+                  >
+                    <ExternalLink size={14} /> Acessar Link da Reunião
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Histórico de Alterações de Prazo (Requirement 5) */}
+          {task.deadlineHistory && task.deadlineHistory.length > 0 && (
+            <div className="p-5 bg-amber-50/60 rounded-2xl border border-amber-200/80 space-y-2">
+              <h4 className="text-xs font-black uppercase text-amber-900 tracking-wider flex items-center gap-1.5">
+                <History size={14} /> Histórico de Alterações de Prazo ({task.deadlineHistory.length})
+              </h4>
+              <div className="space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar">
+                {task.deadlineHistory.map(dh => (
+                  <div key={dh.id} className="p-2.5 bg-white rounded-xl border border-amber-200/60 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <div>
+                      <span className="text-slate-500">De <strong>{dh.previousDate || 'Sem prazo'}</strong> para <strong className="text-amber-800">{dh.newDate}</strong></span>
+                      {dh.reason && <p className="text-[11px] text-slate-600 italic mt-0.5">Motivo: "{dh.reason}"</p>}
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-bold shrink-0">
+                      {dh.changedBy} • {new Date(dh.changedAt).toLocaleDateString('pt-BR')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {task.isReport && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
