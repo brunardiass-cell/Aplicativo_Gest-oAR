@@ -51,6 +51,8 @@ export interface TaskDeadlineHistory {
   id: string;
   previousDate: string;
   newDate: string;
+  previousDeadline?: string;
+  newDeadline?: string;
   changedBy: string;
   changedAt: string;
   reason?: string;
@@ -117,6 +119,32 @@ export interface Task {
   deadlineHistory?: TaskDeadlineHistory[];
   changeHistory?: TaskChangeHistory[];
   attachments?: TaskAttachment[];
+
+  // Campos para Atividades Rápidas, Grupos e Contribuições Regulatórias
+  group?: string;
+  groupId?: string;
+  isRegulatoryContribution?: boolean;
+  regulatoryStatus?: RegulatoryAssessmentStatus;
+  regulatoryEvaluatedBy?: string;
+  regulatoryEvaluatedAt?: string;
+  regulatoryLinkedPhase?: string;
+  regulatoryLinkedMacroId?: string;
+  regulatoryLinkedMacroName?: string;
+  regulatoryLinkedMicroId?: string;
+  regulatoryLinkedMicroName?: string;
+  regulatoryNotes?: string;
+}
+
+export type RegulatoryAssessmentStatus = 'pending' | 'approved' | 'rejected';
+
+export interface TaskGroup {
+  id: string;
+  name: string;
+  projectId?: string;
+  projectName?: string;
+  color?: string;
+  createdAt: string;
+  createdBy: string;
 }
 
 export type ViewMode = 'dashboard' | 'tasks' | 'projects' | 'quality' | 'traceability' | 'regulatory' | 'dossier_contributions' | 'dossier_assembler' | 'regulatory_docs' | 'meetings';

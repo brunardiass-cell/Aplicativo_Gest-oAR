@@ -1,5 +1,12 @@
 
-import { ActivityPlanTemplate, TeamMember, AppUser, RegulatoryStandard, Meeting } from './types';
+import { ActivityPlanTemplate, TeamMember, AppUser, RegulatoryStandard, Meeting, TaskGroup } from './types';
+
+export const DEFAULT_TASK_GROUPS: TaskGroup[] = [
+  { id: 'group_spin_utg', name: 'SpiN-UTG', projectName: 'SpiN-UTG', color: '#0d9488', createdAt: new Date().toISOString(), createdBy: 'Sistema' },
+  { id: 'group_leishtec', name: 'Leishtec', projectName: 'Leishtec', color: '#2563eb', createdAt: new Date().toISOString(), createdBy: 'Sistema' },
+  { id: 'group_regulatorio', name: 'Assuntos Regulatórios', color: '#7c3aed', createdAt: new Date().toISOString(), createdBy: 'Sistema' },
+  { id: 'group_geral', name: 'Geral', color: '#64748b', createdAt: new Date().toISOString(), createdBy: 'Sistema' }
+];
 
 export const DEFAULT_APP_USERS: AppUser[] = [
   {

@@ -11,6 +11,7 @@ import PasswordModal from './components/PasswordModal';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import ProjectsDashboard from './components/ProjectsDashboard';
+import { VisaoGeral } from './components/VisaoGeral';
 import TaskBoard from './components/TaskBoard';
 import ProjectTaskBoard from './components/ProjectTaskBoard';
 import TaskModal from './components/TaskModal';
@@ -2054,8 +2055,8 @@ const App: React.FC = () => {
               )}
               <div>
                 <h1 className={`${isMobile ? 'text-lg' : 'text-2xl sm:text-3xl'} font-black text-slate-800 uppercase tracking-tighter leading-none`}>
-                  {view === 'dashboard' && 'Dashboard'}
-                  {view === 'tasks' && 'Painel de Atividades'}
+                  {view === 'dashboard' && 'Visão Geral'}
+                  {view === 'tasks' && 'Atividades'}
                   {view === 'projects' && 'Projetos'}
                   {view === 'quality' && 'Controle de Acesso'}
                   {view === 'traceability' && 'Auditoria'}
@@ -2114,13 +2115,16 @@ const App: React.FC = () => {
               onOpenRegulatoryModal={openRegulatoryModal}
             />
           ) : (
-            <div className="space-y-6">
-              <div className={`bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex gap-2 w-full sm:w-fit overflow-x-auto`}>
-                <button onClick={() => setDashboardView('activities')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'activities' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><Activity size={14} /> {isMobile ? 'Atividades' : 'Dashboard de Atividades'}</button>
-                <button onClick={() => setDashboardView('projects')} className={`whitespace-nowrap px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2 ${dashboardView === 'projects' ? 'bg-brand-primary text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}><FolderKanban size={14} /> {isMobile ? 'Projetos' : 'Dashboard de Projetos'}</button>
-              </div>
-              {dashboardView === 'activities' ? (<Dashboard tasks={tasks} projects={activeProjects} filteredUser={filterMember} notifications={notifications} onViewTaskDetails={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} />) : (<ProjectsDashboard projects={activeProjects} tasks={tasks} filteredUser={filterMember} onNavigateToProject={handleNavigateToProject}/>)}
-            </div>
+            <VisaoGeral 
+              tasks={tasks}
+              projects={activeProjects}
+              currentUser={selectedProfile?.name || 'Todos'}
+              selectedProfile={selectedProfile}
+              onEditTask={(task) => { setSelectedTask(task); setIsModalOpen(true); }}
+              onViewTask={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }}
+              onSaveTask={handleSaveTask}
+              onNavigateToProject={handleNavigateToProject}
+            />
           )
         )}
         {view === 'tasks' && (
@@ -2133,7 +2137,9 @@ const App: React.FC = () => {
             {taskViewTab === 'sector' ? (
               <TaskBoard 
                 tasks={tasksForBoard} 
+                projects={activeProjects}
                 currentUser={selectedProfile?.name || 'Todos'} 
+                selectedProfile={selectedProfile}
                 onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} 
                 onView={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }} 
                 onDelete={(task) => {handleOpenDeleteItemModal({ type: 'task', name: task.activity, ids: { taskId: task.id } });}} 
@@ -2161,6 +2167,10 @@ const App: React.FC = () => {
                 searchTerm={searchTerm}
                 onSearchTermChange={setSearchTerm}
                 onSaveTask={handleSaveTask}
+                onBatchImportTasks={(newTasks) => {
+                  setTasks(prev => [...newTasks, ...prev]);
+                  setDataDirty();
+                }}
                 onDownloadExcel={() => handleDownloadContextualExcel('profile')}
                 onSyncSharePoint={() => handleSyncContextualExcel('profile')}
                 isSyncingSharePoint={isSyncingSharePoint}

@@ -217,7 +217,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         ) : (
           <nav className="space-y-2 flex-1">
-            <SidebarButton active={currentView === 'dashboard'} onClick={() => { onViewChange('dashboard'); onClose?.(); }} icon={<LayoutDashboard size={18} />} label="Dashboard" />
+            <SidebarButton active={currentView === 'dashboard'} onClick={() => { onViewChange('dashboard'); onClose?.(); }} icon={<LayoutDashboard size={18} />} label="Visão Geral" />
             {!selectedProfile?.isComiteGestor && (
               <SidebarButton active={currentView === 'tasks'} onClick={() => { onViewChange('tasks'); onClose?.(); }} icon={<ListTodo size={18} />} label="Atividades" />
             )}
