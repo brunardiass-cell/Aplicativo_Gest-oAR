@@ -133,6 +133,11 @@ export interface Task {
   regulatoryLinkedMicroId?: string;
   regulatoryLinkedMicroName?: string;
   regulatoryNotes?: string;
+
+  // Controle de exibição após conclusão (Modal de 7 dias vs imediato)
+  completedAt?: string;
+  showInActivitiesUntil?: string;
+  completionDisplayChoice?: 'keep_7_days' | 'hide_immediately';
 }
 
 export type RegulatoryAssessmentStatus = 'pending' | 'approved' | 'rejected';

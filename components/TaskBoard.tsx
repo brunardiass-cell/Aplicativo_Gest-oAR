@@ -13,6 +13,7 @@ import {
 import { DEFAULT_TASK_GROUPS } from '../constants';
 import { TaskNotesModal } from './TaskNotesModal';
 import { RetroactiveImportModal } from './RetroactiveImportModal';
+import { TaskCompletionModal } from './TaskCompletionModal';
 import { 
   Check, 
   X, 
@@ -136,6 +137,15 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   const [newGroupProject, setNewGroupProject] = useState('');
   const [newGroupColor, setNewGroupColor] = useState('#0d9488');
 
+  // Gerenciamento de Grupos (Renomear e Excluir)
+  const [activeGroupMenuId, setActiveGroupMenuId] = useState<string | null>(null);
+  const [renamingGroup, setRenamingGroup] = useState<TaskGroup | null>(null);
+  const [renameGroupName, setRenameGroupName] = useState('');
+  const [renameGroupProject, setRenameGroupProject] = useState('');
+
+  const [deletingGroup, setDeletingGroup] = useState<TaskGroup | null>(null);
+  const [transferTargetGroupId, setTransferTargetGroupId] = useState<string>('');
+
   const handleCreateGroup = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGroupName.trim()) return;
@@ -155,6 +165,86 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     setNewGroupName('');
     setNewGroupProject('');
     setIsNewGroupModalOpen(false);
+  };
+
+  // Iniciar renomeação de grupo
+  const handleOpenRenameGroup = (group: TaskGroup) => {
+    setRenamingGroup(group);
+    setRenameGroupName(group.name);
+    setRenameGroupProject(group.projectName || '');
+  };
+
+  // Salvar renomeação de grupo (mantendo registros e vínculos de projetos)
+  const handleSaveRenameGroup = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!renamingGroup || !renameGroupName.trim()) return;
+
+    const oldName = renamingGroup.name;
+    const newName = renameGroupName.trim();
+    const newProject = renameGroupProject.trim() || undefined;
+
+    const updatedGroups = groups.map(g => 
+      g.id === renamingGroup.id 
+        ? { ...g, name: newName, projectName: newProject }
+        : g
+    );
+    saveGroupsToStorage(updatedGroups);
+
+    // Renomear deve atualizar o nome do grupo sem perder seus registros ou vínculos com projetos
+    tasks.forEach(t => {
+      if (!t.deleted && (t.groupId === renamingGroup.id || t.group === oldName)) {
+        onSaveTask({
+          ...t,
+          groupId: renamingGroup.id,
+          group: newName,
+          project: t.project || newProject || 'Geral'
+        });
+      }
+    });
+
+    setRenamingGroup(null);
+  };
+
+  // Iniciar exclusão de grupo
+  const handleOpenDeleteGroup = (group: TaskGroup) => {
+    setDeletingGroup(group);
+    const other = groups.find(g => g.id !== group.id);
+    setTransferTargetGroupId(other ? other.id : '');
+  };
+
+  // Atividades vinculadas ao grupo em processo de exclusão
+  const tasksInDeletingGroup = useMemo(() => {
+    if (!deletingGroup) return [];
+    return tasks.filter(t => !t.deleted && (t.groupId === deletingGroup.id || t.group === deletingGroup.name));
+  }, [tasks, deletingGroup]);
+
+  // Confirmar exclusão com opção de transferir atividades
+  const handleConfirmDeleteGroup = () => {
+    if (!deletingGroup) return;
+
+    // Se existirem atividades associadas, transferi-las para o grupo de destino
+    if (tasksInDeletingGroup.length > 0) {
+      const targetGroup = groups.find(g => g.id === transferTargetGroupId && g.id !== deletingGroup.id)
+        || groups.find(g => g.id !== deletingGroup.id)
+        || { id: 'group_geral', name: 'Geral', projectName: undefined };
+
+      tasksInDeletingGroup.forEach(t => {
+        onSaveTask({
+          ...t,
+          groupId: targetGroup.id,
+          group: targetGroup.name,
+          project: t.project || targetGroup.projectName || 'Geral'
+        });
+      });
+    }
+
+    const updatedGroups = groups.filter(g => g.id !== deletingGroup.id);
+    saveGroupsToStorage(updatedGroups);
+
+    if (selectedGroupId === deletingGroup.id) {
+      setSelectedGroupId('all');
+    }
+    setDeletingGroup(null);
   };
 
   // ---------------------------------------------------------------------------
@@ -215,12 +305,19 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   const [typeFilter, setTypeFilter] = useState<'all' | ActivityType>('all');
   const [priorityFilter, setPriorityFilter] = useState<'all' | Priority>('all');
 
-  // Atividades em aberto
+  // Atividades em aberto (e concluídas mantidas por até 7 dias)
   const openTasks = useMemo(() => {
+    const nowMs = Date.now();
     return tasks.filter(t => {
       if (t.deleted) return false;
-      // Tela principal deve exibir somente registros em aberto
-      if (t.status === 'Concluída') return false;
+
+      // Se a tarefa estiver concluída:
+      if (t.status === 'Concluída') {
+        // Só exibe se showInActivitiesUntil estiver no futuro (até 7 dias após conclusão)
+        if (!t.showInActivitiesUntil) return false;
+        const untilMs = new Date(t.showInActivitiesUntil).getTime();
+        if (isNaN(untilMs) || untilMs <= nowMs) return false;
+      }
 
       // Filtro de Grupo
       if (selectedGroupId !== 'all') {
@@ -259,7 +356,18 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
       return true;
     }).sort((a, b) => {
-      // Ordenação: Alta prioridade primeiro, depois por prazo mais próximo
+      // 1. Registros em aberto primeiro, concluídos (mantidos por 7 dias) por último
+      if (a.status !== 'Concluída' && b.status === 'Concluída') return -1;
+      if (a.status === 'Concluída' && b.status !== 'Concluída') return 1;
+
+      // 2. Se ambos forem concluídos mantidos por 7 dias: mais recentemente concluídos primeiro
+      if (a.status === 'Concluída' && b.status === 'Concluída') {
+        const timeA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+        const timeB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+        return timeB - timeA;
+      }
+
+      // 3. Se ambos em aberto: Ordenação por Alta prioridade primeiro, depois por prazo mais próximo
       const priorityWeight: Record<Priority, number> = {
         'Alta': 1,
         'Urgente': 1,
@@ -304,33 +412,77 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     return tasks.filter(t => !t.deleted && t.status !== 'Concluída').length;
   }, [tasks]);
 
+  // Modal de Conclusão de Atividade (7 dias vs imediato)
+  const [completingTask, setCompletingTask] = useState<Task | null>(null);
+
   // ---------------------------------------------------------------------------
   // 4. CONCLUSÃO DE ATIVIDADES
   // ---------------------------------------------------------------------------
   const handleToggleComplete = (task: Task) => {
-    const isNowDone = task.status !== 'Concluída';
+    // Se já estiver concluída, clicar no checkbox reabre a atividade diretamente
+    if (task.status === 'Concluída') {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('pt-BR');
+      const updatedTask: Task = {
+        ...task,
+        status: 'Em Andamento',
+        progress: 50,
+        showInActivitiesUntil: undefined,
+        completionDisplayChoice: undefined,
+        updates: [
+          {
+            id: `note_${Date.now()}_${Math.random()}`,
+            date: now.toISOString(),
+            user: currentUser || 'Usuário',
+            note: `Atividade reaberta em ${dateStr}.`
+          },
+          ...(task.updates || [])
+        ]
+      };
+      onSaveTask(updatedTask);
+      return;
+    }
+
+    // Se estiver em aberto, apresenta o modal de escolha de exibição (7 dias vs imediato)
+    setCompletingTask(task);
+  };
+
+  const handleConfirmCompletion = (choice: 'keep_7_days' | 'hide_immediately') => {
+    if (!completingTask) return;
     const now = new Date();
     const dateStr = now.toLocaleDateString('pt-BR');
+    const todayStr = now.toISOString().split('T')[0];
+
+    const displayUntil = choice === 'keep_7_days'
+      ? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      : undefined;
+
+    const noteText = choice === 'keep_7_days'
+      ? `Atividade concluída em ${dateStr}. Mantida visível na lista por 7 dias.`
+      : `Atividade concluída em ${dateStr}. Movida para o histórico imediatamente.`;
 
     const updatedTask: Task = {
-      ...task,
-      status: isNowDone ? 'Concluída' : 'Em Andamento',
-      progress: isNowDone ? 100 : 50,
-      actualStartDate: task.actualStartDate || now.toISOString().split('T')[0],
+      ...completingTask,
+      status: 'Concluída',
+      progress: 100,
+      actualStartDate: completingTask.actualStartDate || todayStr,
+      completionDate: completingTask.completionDate || todayStr,
+      completedAt: now.toISOString(),
+      showInActivitiesUntil: displayUntil,
+      completionDisplayChoice: choice,
       updates: [
         {
           id: `note_${Date.now()}_${Math.random()}`,
           date: now.toISOString(),
           user: currentUser || 'Usuário',
-          note: isNowDone 
-            ? `Atividade concluída em ${dateStr}. Registro arquivado no Histórico.` 
-            : `Atividade reaberta em ${dateStr}.`
+          note: noteText
         },
-        ...(task.updates || [])
+        ...(completingTask.updates || [])
       ]
     };
 
     onSaveTask(updatedTask);
+    setCompletingTask(null);
   };
 
   // ---------------------------------------------------------------------------
@@ -358,6 +510,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     const handleOutside = () => {
       setActivePriorityTaskId(null);
       setActiveRowMenuTaskId(null);
+      setActiveGroupMenuId(null);
     };
     window.addEventListener('click', handleOutside);
     return () => window.removeEventListener('click', handleOutside);
@@ -695,6 +848,159 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         </div>
       )}
 
+      {/* MODAL DE RENOMEAR GRUPO */}
+      {renamingGroup && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95">
+            <header className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-tight">Renomear Grupo</h3>
+                <p className="text-[11px] text-slate-400">Atualiza o nome mantendo todos os registros e vínculos</p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setRenamingGroup(null)}
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
+              >
+                <X size={14} />
+              </button>
+            </header>
+
+            <form onSubmit={handleSaveRenameGroup} className="p-6 space-y-4">
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Nome do Grupo *</label>
+                <input 
+                  type="text"
+                  required
+                  value={renameGroupName}
+                  onChange={e => setRenameGroupName(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-teal-500"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
+                  Vínculo com Projeto (Opcional)
+                </label>
+                <select
+                  value={renameGroupProject}
+                  onChange={e => setRenameGroupProject(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+                >
+                  <option value="">Nenhum vínculo (Geral)</option>
+                  {projects.map(p => (
+                    <option key={p.id} value={p.name}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setRenamingGroup(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!renameGroupName.trim()}
+                  className="px-5 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-sm"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DE GRUPO */}
+      {deletingGroup && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95">
+            <header className="px-6 py-4 bg-rose-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle size={18} />
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-tight">Excluir Grupo</h3>
+                  <p className="text-[11px] text-rose-100">{deletingGroup.name}</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setDeletingGroup(null)}
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
+              >
+                <X size={14} />
+              </button>
+            </header>
+
+            <div className="p-6 space-y-4">
+              {tasksInDeletingGroup.length === 0 ? (
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-600 font-medium">
+                  Este grupo não possui atividades associadas. Tem certeza de que deseja excluí-lo permanentemente?
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-xs space-y-1">
+                    <p className="font-black text-amber-900">
+                      Atenção: Este grupo possui {tasksInDeletingGroup.length} atividade(s) associada(s).
+                    </p>
+                    <p className="text-amber-800 text-[11px] leading-relaxed">
+                      Nenhuma atividade, histórico ou contribuição regulatória será excluída. Selecione o grupo de destino para transferir esses registros antes da exclusão:
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
+                      Transferir atividades para o grupo: *
+                    </label>
+                    <select
+                      value={transferTargetGroupId}
+                      onChange={e => setTransferTargetGroupId(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+                    >
+                      {groups.filter(g => g.id !== deletingGroup.id).map(g => (
+                        <option key={g.id} value={g.id}>{g.name} {g.projectName ? `(${g.projectName})` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setDeletingGroup(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteGroup}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-sm"
+                >
+                  {tasksInDeletingGroup.length > 0 ? 'Transferir e Excluir' : 'Confirmar Exclusão'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE ESCOLHA DE CONCLUSÃO (7 DIAS VS IMEDIATO) */}
+      {completingTask && (
+        <TaskCompletionModal 
+          isOpen={true}
+          task={completingTask}
+          onClose={() => setCompletingTask(null)}
+          onConfirm={handleConfirmCompletion}
+        />
+      )}
+
       {/* DRAWER / MODAL DE HISTÓRICO CONCLUÍDO */}
       {isHistoryDrawerOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-end bg-slate-900/50 backdrop-blur-xs">
@@ -847,17 +1153,19 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
               const isSelected = selectedGroupId === g.id;
 
               return (
-                <button
+                <div
                   key={g.id}
-                  type="button"
-                  onClick={() => setSelectedGroupId(g.id)}
-                  className={`w-full p-2.5 rounded-2xl text-left transition flex items-center justify-between group ${
+                  className={`w-full p-2.5 rounded-2xl text-left transition flex items-center justify-between group relative ${
                     isSelected
                       ? 'bg-teal-600 text-white shadow-xs font-black'
                       : 'text-slate-700 hover:bg-slate-50 font-bold'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGroupId(g.id)}
+                    className="flex items-center gap-2.5 min-w-0 flex-1 text-left"
+                  >
                     <span 
                       className="w-2.5 h-2.5 rounded-full shrink-0" 
                       style={{ backgroundColor: g.color || '#0d9488' }} 
@@ -872,14 +1180,65 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                         </span>
                       )}
                     </div>
-                  </div>
+                  </button>
 
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 ${
-                    isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
-                  }`}>
-                    {count}
-                  </span>
-                </button>
+                  <div className="flex items-center gap-1 shrink-0 ml-1">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                      isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      {count}
+                    </span>
+
+                    {/* Menu de 3 pontos para opções do grupo */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveGroupMenuId(activeGroupMenuId === g.id ? null : g.id);
+                        }}
+                        className={`p-1 rounded-lg transition ${
+                          isSelected 
+                            ? 'text-teal-100 hover:text-white hover:bg-teal-700/60' 
+                            : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/60'
+                        }`}
+                        title="Opções do grupo (renomear, excluir)"
+                      >
+                        <MoreVertical size={13} />
+                      </button>
+
+                      {activeGroupMenuId === g.id && (
+                        <div 
+                          onClick={e => e.stopPropagation()}
+                          className="absolute right-0 top-7 z-50 w-44 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 text-xs animate-in fade-in zoom-in-95"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveGroupMenuId(null);
+                              handleOpenRenameGroup(g);
+                            }}
+                            className="w-full px-3.5 py-2 text-left hover:bg-slate-50 transition flex items-center gap-2 text-slate-700 font-bold"
+                          >
+                            <Edit2 size={13} className="text-teal-600" />
+                            <span>Renomear grupo</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveGroupMenuId(null);
+                              handleOpenDeleteGroup(g);
+                            }}
+                            className="w-full px-3.5 py-2 text-left hover:bg-rose-50 transition flex items-center gap-2 text-rose-600 font-bold"
+                          >
+                            <Trash2 size={13} />
+                            <span>Excluir grupo</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -1140,19 +1499,27 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
               return (
                 <div
                   key={task.id}
-                  className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs hover:shadow-xs hover:border-teal-200 transition p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 group relative"
+                  className={`rounded-2xl border shadow-2xs transition p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 group relative ${
+                    task.status === 'Concluída'
+                      ? 'bg-emerald-50/40 border-emerald-200/70 hover:bg-emerald-50/60'
+                      : 'bg-white border-slate-200/90 hover:shadow-xs hover:border-teal-200'
+                  }`}
                 >
                   {/* LADO ESQUERDO: CHECKBOX + TIPO + TÍTULO */}
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     
-                    {/* Checkbox para Concluir */}
+                    {/* Checkbox para Concluir / Reabrir */}
                     <button
                       type="button"
                       onClick={() => handleToggleComplete(task)}
-                      className="mt-0.5 w-5 h-5 rounded-lg border-2 border-slate-300 hover:border-emerald-500 hover:bg-emerald-50 transition flex items-center justify-center shrink-0 group/check"
-                      title="Marcar como concluída (arquiva no Histórico)"
+                      className={`mt-0.5 w-5 h-5 rounded-lg border-2 transition flex items-center justify-center shrink-0 ${
+                        task.status === 'Concluída'
+                          ? 'border-emerald-500 bg-emerald-500 text-white shadow-2xs'
+                          : 'border-slate-300 hover:border-emerald-500 hover:bg-emerald-50 group/check'
+                      }`}
+                      title={task.status === 'Concluída' ? "Clique para reabrir atividade" : "Marcar como concluída"}
                     >
-                      <Check size={12} className="text-emerald-600 opacity-0 group-hover/check:opacity-100 transition" />
+                      <Check size={12} className={task.status === 'Concluída' ? "text-white" : "text-emerald-600 opacity-0 group-hover/check:opacity-100 transition"} />
                     </button>
 
                     <div className="space-y-1 flex-1 min-w-0">
@@ -1161,6 +1528,13 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                         <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase border flex items-center gap-1 ${typeInfo.badgeClass}`}>
                           {typeInfo.icon} {typeInfo.label}
                         </span>
+
+                        {/* Tag de Concluída */}
+                        {task.status === 'Concluída' && (
+                          <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                            <Check size={10} /> Concluída (7 dias)
+                          </span>
+                        )}
 
                         {/* Tag de Grupo / Projeto */}
                         <span className="text-[10px] font-bold text-slate-400 truncate">
@@ -1172,11 +1546,17 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                       {!isEditingThisTitle ? (
                         <h4 
                           onClick={() => {
-                            setEditingTitleTaskId(task.id);
-                            setTempTitleValue(task.activity);
+                            if (task.status !== 'Concluída') {
+                              setEditingTitleTaskId(task.id);
+                              setTempTitleValue(task.activity);
+                            }
                           }}
-                          className="text-xs sm:text-sm font-bold text-slate-900 hover:text-teal-700 cursor-pointer transition leading-snug break-words"
-                          title="Clique para editar o título"
+                          className={`text-xs sm:text-sm font-bold transition leading-snug break-words ${
+                            task.status === 'Concluída'
+                              ? 'line-through text-slate-400 font-medium'
+                              : 'text-slate-900 hover:text-teal-700 cursor-pointer'
+                          }`}
+                          title={task.status === 'Concluída' ? 'Atividade concluída' : 'Clique para editar o título'}
                         >
                           {task.activity}
                         </h4>

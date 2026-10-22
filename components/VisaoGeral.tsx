@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Task, Project, TeamMember, Priority, Status, ActivityType } from '../types';
+import { Task, Project, TeamMember, Priority, Status, ActivityType, TaskNote } from '../types';
+import { TaskNotesModal } from './TaskNotesModal';
 import { 
   Calendar as CalendarIcon, 
   Clock, 
@@ -23,7 +24,9 @@ import {
   MessageSquare,
   BarChart2,
   PieChart as PieIcon,
-  ChevronDown
+  ChevronDown,
+  Plus,
+  Star
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -91,6 +94,11 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
   const [drawerTask, setDrawerTask] = useState<Task | null>(null);
   const [isEditingDrawer, setIsEditingDrawer] = useState(false);
   const [drawerEditForm, setDrawerEditForm] = useState<Partial<Task>>({});
+
+  // Notas de atualização (Requisito 2)
+  const [notesModalTask, setNotesModalTask] = useState<Task | null>(null);
+  const [drawerNewNoteText, setDrawerNewNoteText] = useState('');
+  const [drawerNewNoteIsImportant, setDrawerNewNoteIsImportant] = useState(false);
 
   // Lista única de projetos e grupos para filtros
   const uniqueProjects = useMemo(() => {
@@ -201,12 +209,62 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
 
       return true;
     }).sort((a, b) => {
-      // Ordenação: não concluídas primeiro, ordenadas por prazo
-      if (a.status === 'Concluída' && b.status !== 'Concluída') return 1;
-      if (a.status !== 'Concluída' && b.status === 'Concluída') return -1;
-      const dateA = a.completionDate ? new Date(a.completionDate + 'T00:00:00').getTime() : Number.MAX_SAFE_INTEGER;
-      const dateB = b.completionDate ? new Date(b.completionDate + 'T00:00:00').getTime() : Number.MAX_SAFE_INTEGER;
-      return dateA - dateB;
+      const aIsDone = a.status === 'Concluída';
+      const bIsDone = b.status === 'Concluída';
+
+      // 1. Atividades em aberto primeiro, concluídas depois
+      if (!aIsDone && bIsDone) return -1;
+      if (aIsDone && !bIsDone) return 1;
+
+      // 2. Se ambas em aberto: priorizar as atrasadas e próximas do vencimento
+      if (!aIsDone && !bIsDone) {
+        const timeToday = today.getTime();
+        const dateA = a.completionDate ? new Date(a.completionDate + 'T00:00:00').getTime() : Number.MAX_SAFE_INTEGER;
+        const dateB = b.completionDate ? new Date(b.completionDate + 'T00:00:00').getTime() : Number.MAX_SAFE_INTEGER;
+
+        const aIsOverdue = dateA < timeToday;
+        const bIsOverdue = dateB < timeToday;
+
+        // Atrasadas vêm primeiro
+        if (aIsOverdue && !bIsOverdue) return -1;
+        if (!aIsOverdue && bIsOverdue) return 1;
+
+        // Se ambas atrasadas ou ambas não atrasadas: ordenar pelo prazo mais próximo
+        if (dateA !== dateB) return dateA - dateB;
+
+        // Desempate por prioridade
+        const priorityRank: Record<string, number> = {
+          'Urgente': 1,
+          'Alta': 1,
+          'Média': 2,
+          'Baixa': 3,
+          'Sem prioridade': 4
+        };
+        const pA = priorityRank[a.priority || 'Sem prioridade'] || 4;
+        const pB = priorityRank[b.priority || 'Sem prioridade'] || 4;
+        return pA - pB;
+      }
+
+      // 3. Se ambas concluídas: ordenadas pela data de conclusão, da mais recente para a mais antiga
+      const getCompletionTimestamp = (t: Task) => {
+        if (t.completedAt) {
+          const ms = new Date(t.completedAt).getTime();
+          if (!isNaN(ms)) return ms;
+        }
+        if (t.completionDate) {
+          const ms = new Date(t.completionDate + 'T00:00:00').getTime();
+          if (!isNaN(ms)) return ms;
+        }
+        if (t.updates && t.updates.length > 0) {
+          const ms = new Date(t.updates[0].date).getTime();
+          if (!isNaN(ms)) return ms;
+        }
+        return 0;
+      };
+
+      const compA = getCompletionTimestamp(a);
+      const compB = getCompletionTimestamp(b);
+      return compB - compA; // Da mais recente para a mais antiga
     });
   }, [userTasks, searchTerm, statusFilter, typeFilter, priorityFilter, projectFilter, groupFilter, selectedCalendarDateStr, dateRangeFilter, today]);
 
@@ -215,6 +273,33 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
     setDrawerTask(task);
     setIsEditingDrawer(false);
     setDrawerEditForm({ ...task });
+    setDrawerNewNoteText('');
+    setDrawerNewNoteIsImportant(false);
+  };
+
+  // Adicionar nota de atualização pelo Drawer
+  const handleAddDrawerNote = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!drawerTask || !drawerNewNoteText.trim()) return;
+
+    const newNote: TaskNote = {
+      id: `note_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      date: new Date().toISOString(),
+      user: currentUser && currentUser !== 'Todos' ? currentUser : 'Usuário',
+      note: drawerNewNoteText.trim(),
+      isImportant: drawerNewNoteIsImportant,
+      acknowledgedBy: drawerNewNoteIsImportant && currentUser && currentUser !== 'Todos' ? [currentUser] : []
+    };
+
+    const updated: Task = {
+      ...drawerTask,
+      updates: [newNote, ...(drawerTask.updates || [])]
+    };
+
+    onSaveTask(updated);
+    setDrawerTask(updated);
+    setDrawerNewNoteText('');
+    setDrawerNewNoteIsImportant(false);
   };
 
   const handleSaveDrawerEdit = () => {
@@ -605,7 +690,21 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                       <h4 className="text-xs font-black text-rose-950 truncate mt-1">{task.activity}</h4>
                       <p className="text-[10px] text-rose-700 font-semibold">{task.project} • {formatDateBR(task.completionDate)}</p>
                     </div>
-                    <ArrowRight size={14} className="text-rose-600 shrink-0" />
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNotesModalTask(task);
+                        }}
+                        className="p-1.5 rounded-xl bg-white/80 hover:bg-white text-rose-700 hover:text-rose-900 border border-rose-200/60 shadow-2xs transition flex items-center gap-1 text-[10px] font-bold"
+                        title="Notas de atualização"
+                      >
+                        <MessageSquare size={13} />
+                        {task.updates && task.updates.length > 0 && <span>{task.updates.length}</span>}
+                      </button>
+                      <ArrowRight size={14} className="text-rose-600" />
+                    </div>
                   </div>
                 ))}
 
@@ -623,7 +722,21 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                       <h4 className="text-xs font-black text-amber-950 truncate mt-1">{task.activity}</h4>
                       <p className="text-[10px] text-amber-700 font-semibold">{task.project} • Prazo: {formatDateBR(task.completionDate)}</p>
                     </div>
-                    <ArrowRight size={14} className="text-amber-600 shrink-0" />
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNotesModalTask(task);
+                        }}
+                        className="p-1.5 rounded-xl bg-white/80 hover:bg-white text-amber-700 hover:text-amber-900 border border-amber-200/60 shadow-2xs transition flex items-center gap-1 text-[10px] font-bold"
+                        title="Notas de atualização"
+                      >
+                        <MessageSquare size={13} />
+                        {task.updates && task.updates.length > 0 && <span>{task.updates.length}</span>}
+                      </button>
+                      <ArrowRight size={14} className="text-amber-600" />
+                    </div>
                   </div>
                 ))}
 
@@ -840,17 +953,33 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                         </td>
 
                         <td className="py-3 px-3 text-right">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenDrawer(task);
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-teal-700 rounded-lg hover:bg-teal-50 transition"
-                            title="Consultar e editar"
-                          >
-                            <Eye size={14} />
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setNotesModalTask(task);
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-teal-700 rounded-lg hover:bg-teal-50 transition flex items-center gap-1"
+                              title="Visualizar e adicionar notas de atualização"
+                            >
+                              <MessageSquare size={13} />
+                              {task.updates && task.updates.length > 0 && (
+                                <span className="text-[10px] font-bold text-teal-700">{task.updates.length}</span>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenDrawer(task);
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-teal-700 rounded-lg hover:bg-teal-50 transition"
+                              title="Consultar e editar detalhes"
+                            >
+                              <Eye size={14} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1141,25 +1270,84 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                     </div>
                   </div>
 
-                  {/* Histórico de Notas */}
-                  {drawerTask.updates && drawerTask.updates.length > 0 && (
-                    <div className="space-y-2 pt-2 border-t border-slate-100">
-                      <span className="text-[10px] font-black uppercase text-slate-400 block">
-                        Notas de Atualização ({drawerTask.updates.length})
-                      </span>
-                      <div className="space-y-2 max-h-44 overflow-y-auto custom-scrollbar">
+                  {/* Histórico e Adição de Notas de Atualização (Requisito 2) */}
+                  <div className="space-y-3 pt-3 border-t border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <MessageSquare size={14} className="text-teal-600" />
+                        <span className="text-[10px] font-black uppercase text-slate-800 tracking-wider">
+                          Notas de Atualização ({drawerTask.updates?.length || 0})
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setNotesModalTask(drawerTask)}
+                        className="text-[10px] font-black uppercase text-teal-700 hover:text-teal-900 transition flex items-center gap-1 hover:underline"
+                      >
+                        Gerenciar Notas
+                      </button>
+                    </div>
+
+                    {/* Formulário rápido para adicionar nota */}
+                    <form onSubmit={handleAddDrawerNote} className="space-y-2 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                      <textarea
+                        rows={2}
+                        value={drawerNewNoteText}
+                        onChange={e => setDrawerNewNoteText(e.target.value)}
+                        placeholder="Adicionar nota de atualização a esta atividade..."
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-teal-500 resize-none transition"
+                      />
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={drawerNewNoteIsImportant}
+                            onChange={e => setDrawerNewNoteIsImportant(e.target.checked)}
+                            className="rounded text-teal-600 focus:ring-teal-500"
+                          />
+                          <span>Marcar como importante</span>
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={!drawerNewNoteText.trim()}
+                          className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition shadow-2xs flex items-center gap-1"
+                        >
+                          <Plus size={12} /> Salvar Nota
+                        </button>
+                      </div>
+                    </form>
+
+                    {/* Lista de Notas Existentes */}
+                    {drawerTask.updates && drawerTask.updates.length > 0 ? (
+                      <div className="space-y-2 max-h-52 overflow-y-auto custom-scrollbar pr-1">
                         {drawerTask.updates.map(u => (
-                          <div key={u.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-0.5">
-                            <div className="flex items-center justify-between text-[9px] font-bold text-slate-400">
-                              <span>{u.user}</span>
-                              <span>{new Date(u.date).toLocaleDateString('pt-BR')}</span>
+                          <div 
+                            key={u.id} 
+                            className={`p-2.5 rounded-xl border space-y-1 transition ${
+                              u.isImportant 
+                                ? 'bg-amber-50/80 border-amber-300 shadow-2xs' 
+                                : 'bg-slate-50 border-slate-200/80'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between text-[9px] font-bold">
+                              <span className={u.isImportant ? 'text-amber-900 font-black flex items-center gap-1' : 'text-slate-500'}>
+                                {u.isImportant && <Star size={10} className="fill-amber-500 text-amber-500" />}
+                                {u.user}
+                              </span>
+                              <span className="text-slate-400">
+                                {new Date(u.date).toLocaleDateString('pt-BR')} às {new Date(u.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
                             </div>
-                            <p className="text-xs text-slate-700 font-medium">{u.note}</p>
+                            <p className="text-xs text-slate-800 font-medium leading-relaxed whitespace-pre-wrap">{u.note}</p>
                           </div>
                         ))}
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <p className="text-[11px] text-slate-400 italic text-center py-2">
+                        Nenhuma nota de atualização registrada ainda.
+                      </p>
+                    )}
+                  </div>
                 </div>
               ) : (
                 /* MODO EDIÇÃO */
@@ -1285,6 +1473,23 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
 
           </div>
         </div>
+      )}
+
+      {/* MODAL DE NOTAS DE ATUALIZAÇÃO (Requisito 2) */}
+      {notesModalTask && (
+        <TaskNotesModal 
+          isOpen={true}
+          task={notesModalTask}
+          currentUser={currentUser && currentUser !== 'Todos' ? currentUser : 'Usuário'}
+          onClose={() => setNotesModalTask(null)}
+          onSaveTask={(updated) => {
+            onSaveTask(updated);
+            setNotesModalTask(updated);
+            if (drawerTask && drawerTask.id === updated.id) {
+              setDrawerTask(updated);
+            }
+          }}
+        />
       )}
 
     </div>
