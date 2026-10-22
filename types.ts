@@ -212,6 +212,8 @@ export interface MeetingAgendaItem {
   regulatoryImpactDetails?: string;
   actionItems?: MeetingActionItem[];
   attachedFiles?: MeetingAgendaFile[];
+  presentationLink?: string;
+  presentationUrl?: string;
 }
 
 export interface Meeting {
@@ -229,6 +231,8 @@ export interface Meeting {
   presentParticipants?: string[];
   absentParticipants?: string[];
   participantEmails?: string[];
+  presentationLink?: string;
+  presentationUrl?: string;
   headerText?: string;
   footerText?: string;
   headerLogoUrl?: string;

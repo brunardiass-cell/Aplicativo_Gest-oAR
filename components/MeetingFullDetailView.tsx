@@ -5,7 +5,7 @@ import {
   Check, RefreshCw, FileText, Sparkles, BookOpen, UserCheck, UserX, Plus, Trash2, 
   Calendar, Clock, MapPin, Users, CheckCircle2, MessageSquare, AlertCircle, 
   Paperclip, ExternalLink, ChevronLeft, ChevronRight, Monitor, Share2, FileSpreadsheet, File,
-  FolderKanban, Layers, ArrowRight
+  FolderKanban, Layers, ArrowRight, Edit, X, Link as LinkIcon, Play
 } from 'lucide-react';
 import { RegisterActionAsActivityModal } from './RegisterActionAsActivityModal';
 
@@ -148,8 +148,69 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
   const handleMarkAllPresent = () => {
     setMeetingState(prev => ({
       ...prev,
-      presentParticipants: [...prev.participants],
+      presentParticipants: [...(prev.participants || [])],
       absentParticipants: []
+    }));
+  };
+
+  const handleMarkAllAbsent = () => {
+    setMeetingState(prev => ({
+      ...prev,
+      presentParticipants: [],
+      absentParticipants: [...(prev.participants || [])]
+    }));
+  };
+
+  // State for adding participants dynamically
+  const [newParticipantInput, setNewParticipantInput] = useState('');
+  const [selectedTeamMemberId, setSelectedTeamMemberId] = useState('');
+
+  const handleAddParticipant = (nameToAdd: string) => {
+    const clean = nameToAdd.trim();
+    if (!clean) return;
+    setMeetingState(prev => {
+      const current = prev.participants || [];
+      if (current.includes(clean)) {
+        // If already in list but marked absent, mark as present
+        return {
+          ...prev,
+          presentParticipants: Array.from(new Set([...(prev.presentParticipants || []), clean])),
+          absentParticipants: (prev.absentParticipants || []).filter(p => p !== clean)
+        };
+      }
+      return {
+        ...prev,
+        participants: [...current, clean],
+        presentParticipants: [...(prev.presentParticipants || current), clean],
+        absentParticipants: (prev.absentParticipants || []).filter(p => p !== clean)
+      };
+    });
+    setNewParticipantInput('');
+    setSelectedTeamMemberId('');
+  };
+
+  const handleRemoveParticipant = (nameToRemove: string) => {
+    setMeetingState(prev => ({
+      ...prev,
+      participants: (prev.participants || []).filter(p => p !== nameToRemove),
+      presentParticipants: (prev.presentParticipants || []).filter(p => p !== nameToRemove),
+      absentParticipants: (prev.absentParticipants || []).filter(p => p !== nameToRemove)
+    }));
+  };
+
+  const handleDeletePauta = (agendaId: string) => {
+    if (window.confirm('Tem certeza de que deseja remover esta pauta da reunião?')) {
+      setMeetingState(prev => ({
+        ...prev,
+        agendaItems: prev.agendaItems.filter(ag => ag.id !== agendaId)
+      }));
+    }
+  };
+
+  const handleUpdatePautaField = (agendaId: string, field: keyof MeetingAgendaItem, value: any) => {
+    setMeetingState(prev => ({
+      ...prev,
+      agendaItems: prev.agendaItems.map(ag => ag.id === agendaId ? { ...ag, [field]: value } : ag)
     }));
   };
 
@@ -969,9 +1030,23 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
           </div>
         </div>
 
-        {/* Top Right Action Buttons (Matching Screenshot) */}
+        {/* Top Right Action Buttons */}
         <div className="flex items-center gap-2">
           
+          {/* Direct Presentation Link Button if available */}
+          {(meetingState.presentationLink || meetingState.presentationUrl) && (
+            <a
+              href={meetingState.presentationLink || meetingState.presentationUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 transition shadow-sm hover:shadow"
+              title="Abrir Apresentação da Reunião (Google Slides / Canva / PDF)"
+            >
+              <ExternalLink size={14} />
+              <span>Abrir Apresentação</span>
+            </a>
+          )}
+
           <button
             onClick={handleCopyPautaSummary}
             className="px-3.5 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs flex items-center gap-1.5 transition shadow-sm"
@@ -1050,7 +1125,7 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
               const percent = Math.round((presentCount / totalParts) * 100);
 
               return (
-                <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+                <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
                     <div className="flex items-center gap-2">
                       <UserCheck size={18} className="text-emerald-600" />
@@ -1062,46 +1137,175 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
                       </span>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handleMarkAllPresent}
-                      className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition shadow-xs flex items-center gap-1"
-                    >
-                      <CheckCircle2 size={13} />
-                      <span>Marcar Todos Presentes</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleMarkAllPresent}
+                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition shadow-xs flex items-center gap-1"
+                      >
+                        <CheckCircle2 size={13} />
+                        <span>Todos Presentes</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleMarkAllAbsent}
+                        className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-xs transition flex items-center gap-1"
+                      >
+                        <UserX size={13} />
+                        <span>Todos Ausentes</span>
+                      </button>
+                    </div>
                   </div>
 
+                  {/* Presence Chips */}
                   <div className="flex flex-wrap gap-2 pt-1">
                     {allParts.map(partName => {
                       const isPresent = presentParts.includes(partName);
                       return (
-                        <button
+                        <div
                           key={partName}
-                          type="button"
-                          onClick={() => handleToggleParticipantPresence(partName)}
-                          className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition border ${
+                          className={`inline-flex items-center rounded-xl font-bold text-xs border transition shadow-2xs ${
                             isPresent
-                              ? 'bg-emerald-50 border-emerald-200 text-emerald-900 hover:bg-emerald-100'
-                              : 'bg-rose-50 border-rose-200 text-rose-800 hover:bg-rose-100 line-through'
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                              : 'bg-rose-50 border-rose-200 text-rose-800'
                           }`}
-                          title={isPresent ? 'Clique para marcar como ausente' : 'Clique para marcar como presente'}
                         >
-                          {isPresent ? <UserCheck size={13} className="text-emerald-600 shrink-0" /> : <UserX size={13} className="text-rose-600 shrink-0" />}
-                          <span>{partName}</span>
-                          <span className="text-[10px] font-black uppercase ml-1 opacity-75">
-                            {isPresent ? '(Presente)' : '(Ausente)'}
-                          </span>
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleParticipantPresence(partName)}
+                            className="px-3 py-1.5 flex items-center gap-1.5 hover:opacity-80 transition"
+                            title={isPresent ? 'Clique para marcar como ausente' : 'Clique para marcar como presente'}
+                          >
+                            {isPresent ? (
+                              <UserCheck size={13} className="text-emerald-600 shrink-0" />
+                            ) : (
+                              <UserX size={13} className="text-rose-600 shrink-0" />
+                            )}
+                            <span className={isPresent ? '' : 'line-through'}>{partName}</span>
+                            <span className="text-[10px] font-black uppercase opacity-75">
+                              {isPresent ? '(Presente)' : '(Ausente)'}
+                            </span>
+                          </button>
+
+                          {/* Remove button */}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveParticipant(partName)}
+                            className="pr-2 pl-0.5 py-1.5 text-slate-400 hover:text-rose-600 transition"
+                            title="Remover participante da lista"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
                       );
                     })}
+
                     {allParts.length === 0 && (
-                      <p className="text-xs text-slate-400 italic">Nenhum participante listado nesta reunião.</p>
+                      <p className="text-xs text-slate-400 italic">Nenhum participante listado ainda nesta reunião.</p>
                     )}
+                  </div>
+
+                  {/* Quick Add Participant Input / Select */}
+                  <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <span className="text-[10px] font-black uppercase text-slate-400 shrink-0">
+                      + Adicionar Participante:
+                    </span>
+
+                    <select
+                      value={selectedTeamMemberId}
+                      onChange={e => {
+                        const sel = teamMembers.find(tm => tm.id === e.target.value);
+                        if (sel) {
+                          handleAddParticipant(sel.name);
+                        }
+                      }}
+                      className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none max-w-xs cursor-pointer"
+                    >
+                      <option value="">Selecionar membro cadastrado...</option>
+                      {teamMembers
+                        .filter(tm => !allParts.includes(tm.name))
+                        .map(tm => (
+                          <option key={tm.id} value={tm.id}>{tm.name} ({tm.role})</option>
+                        ))
+                      }
+                    </select>
+
+                    <div className="flex-1 flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="Ou digite o nome de quem participou..."
+                        value={newParticipantInput}
+                        onChange={e => setNewParticipantInput(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddParticipant(newParticipantInput);
+                          }
+                        }}
+                        className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAddParticipant(newParticipantInput)}
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-1 transition shrink-0 shadow-2xs"
+                      >
+                        <Plus size={13} />
+                        <span>Adicionar</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
             })()}
+
+            {/* Apresentação Geral da Reunião (Link de Apresentação) */}
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                    <ExternalLink size={16} />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
+                      Link de Apresentação da Reunião (Google Slides / Canva / PDF)
+                    </h3>
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Anexe o link dos slides ou apresentação para projetar e compartilhar durante a reunião.
+                    </p>
+                  </div>
+                </div>
+
+                {(meetingState.presentationLink || meetingState.presentationUrl) && (
+                  <a
+                    href={meetingState.presentationLink || meetingState.presentationUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 transition shadow-2xs"
+                  >
+                    <ExternalLink size={13} />
+                    <span>Abrir Apresentação</span>
+                  </a>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="url"
+                  value={meetingState.presentationLink || meetingState.presentationUrl || ''}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setMeetingState(prev => ({
+                      ...prev,
+                      presentationLink: val,
+                      presentationUrl: val
+                    }));
+                  }}
+                  placeholder="Cole aqui o link da apresentação (ex: https://docs.google.com/presentation/d/... ou link Canva)"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
 
             {/* Section Header */}
             <div className="flex items-center justify-between">
@@ -1128,45 +1332,116 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
                 return (
                   <div key={agenda.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-6 space-y-5">
                     
-                    {/* Pauta Title & Badges */}
-                    <div className="flex items-start justify-between gap-4 pb-4 border-b border-slate-100">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-teal-50 border border-teal-200 text-teal-700 font-black text-sm flex items-center justify-center shrink-0">
+                    {/* Pauta Title, Controls & Actions */}
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-4 border-b border-slate-100">
+                      <div className="flex items-start gap-3 flex-1">
+                        <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-200 text-teal-700 font-black text-sm flex items-center justify-center shrink-0 mt-0.5">
                           {idx + 1}
                         </div>
-                        <div>
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-teal-700 bg-teal-50 px-2 py-0.5 rounded-lg border border-teal-200">
+                              Pauta N.º {idx + 1}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400">
+                              Moderador: {meetingState.moderator || 'Não informado'}
+                            </span>
+                          </div>
                           <input
                             type="text"
                             value={agenda.title}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setMeetingState(prev => ({
-                                ...prev,
-                                agendaItems: prev.agendaItems.map(ag => ag.id === agenda.id ? { ...ag, title: val } : ag)
-                              }));
-                            }}
-                            className="text-base font-black text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-500 outline-none w-full"
+                            onChange={e => handleUpdatePautaField(agenda.id, 'title', e.target.value)}
+                            placeholder="Título da pauta..."
+                            className="text-base font-black text-slate-900 bg-transparent border-b border-dashed border-slate-300 hover:border-slate-500 focus:border-indigo-600 focus:bg-white outline-none w-full px-1 py-0.5 rounded transition"
                           />
-                          <p className="text-xs text-slate-400 font-semibold mt-0.5">Moderador: {meetingState.moderator || 'Não informado'}</p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 self-start">
                         <span className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-[10px] font-extrabold flex items-center gap-1">
                           <MessageSquare size={12} /> {notes.length}
                         </span>
                         <span className="px-2.5 py-1 bg-indigo-50 text-indigo-800 border border-indigo-200 rounded-xl text-[10px] font-extrabold flex items-center gap-1">
                           <Paperclip size={12} /> {files.length}
                         </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePauta(agenda.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition text-xs font-bold flex items-center gap-1"
+                          title="Remover esta pauta"
+                        >
+                          <Trash2 size={14} />
+                          <span className="hidden sm:inline">Excluir</span>
+                        </button>
                       </div>
                     </div>
 
-                    {/* Description */}
-                    {agenda.description && (
-                      <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-2xl border border-slate-100 italic">
-                        {agenda.description}
-                      </p>
-                    )}
+                    {/* Editable Description / Objective of this Pauta */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1">
+                          <FileText size={12} className="text-teal-600" /> Objetivo & Contexto da Pauta
+                        </label>
+                        <span className="text-[10px] text-slate-400">Editável em tempo real</span>
+                      </div>
+                      <textarea
+                        rows={2}
+                        value={agenda.description || ''}
+                        onChange={e => handleUpdatePautaField(agenda.id, 'description', e.target.value)}
+                        placeholder="Descreva o contexto, objetivo ou pontos específicos a deliberar nesta pauta..."
+                        className="w-full p-3 bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 rounded-2xl text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-teal-500 transition leading-relaxed"
+                      />
+                    </div>
+
+                    {/* Regulatory Impact Toggle and Presentation Link for this specific Pauta */}
+                    <div className="p-3.5 bg-slate-50/60 rounded-2xl border border-slate-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
+                      
+                      {/* Regulatory Impact Checkbox */}
+                      <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(agenda.hasRegulatoryImpact)}
+                          onChange={e => handleUpdatePautaField(agenda.id, 'hasRegulatoryImpact', e.target.checked)}
+                          className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                        />
+                        <span className={agenda.hasRegulatoryImpact ? 'text-amber-900 font-black' : 'text-slate-600'}>
+                          Impacto Regulatório Direto
+                        </span>
+                      </label>
+
+                      {/* Presentation Link for Pauta */}
+                      <div className="flex-1 max-w-md flex items-center gap-2">
+                        <div className="flex-1 flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1.5 rounded-xl">
+                          <ExternalLink size={12} className="text-indigo-600 shrink-0" />
+                          <input
+                            type="url"
+                            value={agenda.presentationLink || agenda.presentationUrl || ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              handleUpdatePautaField(agenda.id, 'presentationLink', val);
+                              handleUpdatePautaField(agenda.id, 'presentationUrl', val);
+                            }}
+                            placeholder="Link de apresentação desta pauta..."
+                            className="w-full bg-transparent text-[11px] font-medium text-slate-800 placeholder-slate-400 outline-none"
+                          />
+                        </div>
+
+                        {(agenda.presentationLink || agenda.presentationUrl) && (
+                          <a
+                            href={agenda.presentationLink || agenda.presentationUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-[11px] flex items-center gap-1 transition shrink-0"
+                            title="Abrir apresentação da pauta"
+                          >
+                            <ExternalLink size={12} />
+                            <span>Abrir</span>
+                          </a>
+                        )}
+                      </div>
+
+                    </div>
 
                     {/* TWO COLUMNS INSIDE PAUTA: DISCUSSÕES (LEFT) vs DECISÃO FINAL & ENCAMINHAMENTOS (RIGHT) */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-1">
@@ -1757,6 +2032,18 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
             </div>
 
             <div className="flex items-center gap-3">
+              {(meetingState.presentationLink || meetingState.presentationUrl) && (
+                <a
+                  href={meetingState.presentationLink || meetingState.presentationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 shadow-md shadow-indigo-900/40"
+                  title="Abrir apresentação da reunião (Google Slides / Canva / PDF)"
+                >
+                  <ExternalLink size={14} />
+                  <span>Abrir Apresentação (Slides)</span>
+                </a>
+              )}
               <span className="text-xs font-bold text-slate-400">
                 Pauta {projectionIndex + 1} de {meetingState.agendaItems.length}
               </span>
@@ -1780,9 +2067,23 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
                     
                     {/* Header Badge & Title */}
                     <div className="space-y-2">
-                      <span className="px-3 py-1 bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded-full text-xs font-black uppercase">
-                        Pauta N.º {projectionIndex + 1}
-                      </span>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="px-3 py-1 bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded-full text-xs font-black uppercase">
+                          Pauta N.º {projectionIndex + 1}
+                        </span>
+
+                        {(projAg.presentationLink || projAg.presentationUrl) && (
+                          <a
+                            href={projAg.presentationLink || projAg.presentationUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1 bg-indigo-600/90 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1"
+                          >
+                            <ExternalLink size={12} />
+                            <span>Apresentação desta Pauta</span>
+                          </a>
+                        )}
+                      </div>
                       <h3 className="text-2xl md:text-3xl font-black tracking-tight text-white">
                         {projAg.title}
                       </h3>

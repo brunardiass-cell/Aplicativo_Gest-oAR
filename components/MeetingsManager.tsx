@@ -441,10 +441,60 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-3">
-                              <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl text-xs font-semibold">
-                                {mtg.status}
-                              </span>
+                            <div className="flex items-center gap-2.5">
+                              {/* Presentation Link Quick Access if available */}
+                              {(mtg.presentationLink || mtg.presentationUrl) && (
+                                <a
+                                  href={mtg.presentationLink || mtg.presentationUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                                  title="Abrir Link da Apresentação"
+                                >
+                                  <ExternalLink size={13} />
+                                  <span className="hidden sm:inline">Apresentação</span>
+                                </a>
+                              )}
+
+                              {/* Action Button: Iniciar Reunião if Agendada */}
+                              {mtg.status === 'Agendada' ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const startedMeeting: Meeting = {
+                                      ...mtg,
+                                      status: 'Em Andamento',
+                                      updatedAt: new Date().toISOString()
+                                    };
+                                    handleSaveMeeting(startedMeeting);
+                                    setActiveFullMeeting(startedMeeting);
+                                  }}
+                                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition hover:shadow cursor-pointer"
+                                  title="Iniciar esta reunião agora"
+                                >
+                                  <Play size={13} className="fill-current text-white" />
+                                  <span>Iniciar Reunião</span>
+                                </button>
+                              ) : mtg.status === 'Em Andamento' ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveFullMeeting(mtg);
+                                  }}
+                                  className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition hover:shadow cursor-pointer animate-pulse"
+                                  title="Continuar reunião em andamento"
+                                >
+                                  <Play size={13} className="fill-current text-white" />
+                                  <span>Continuar Reunião</span>
+                                </button>
+                              ) : (
+                                <span className="px-3 py-1 bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold">
+                                  {mtg.status}
+                                </span>
+                              )}
 
                               <div className="relative">
                                 <button

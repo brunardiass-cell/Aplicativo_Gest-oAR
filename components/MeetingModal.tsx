@@ -52,6 +52,7 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
   );
   const [newParticipant, setNewParticipant] = useState('');
   const [generalConclusions, setGeneralConclusions] = useState(meeting?.generalConclusions || '');
+  const [presentationLink, setPresentationLink] = useState(meeting?.presentationLink || meeting?.presentationUrl || '');
   const [agendaItems, setAgendaItems] = useState<MeetingAgendaItem[]>(meeting?.agendaItems || []);
   const [activeTab, setActiveTab] = useState<'info' | 'pautas' | 'encaminhamentos' | 'conclusoes'>('info');
 
@@ -355,6 +356,8 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
       participants: participants,
       presentParticipants: presentParticipants,
       absentParticipants: absentParticipants,
+      presentationLink: presentationLink.trim(),
+      presentationUrl: presentationLink.trim(),
       agendaItems: agendaItems,
       generalConclusions: generalConclusions,
       minutesTemplate: meeting?.minutesTemplate,
@@ -411,6 +414,8 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
       participants: participants,
       presentParticipants: presentParticipants,
       absentParticipants: absentParticipants,
+      presentationLink: presentationLink.trim(),
+      presentationUrl: presentationLink.trim(),
       agendaItems: agendaItems,
       generalConclusions: generalConclusions,
       minutesTemplate: meeting?.minutesTemplate,
@@ -614,6 +619,34 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                       <option key={tm.id} value={tm.name}>{tm.name} ({tm.role})</option>
                     ))}
                   </select>
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <LinkIcon size={12} className="text-indigo-600" />
+                    <span>Link da Apresentação (Google Slides / Canva / PDF / SharePoint)</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="url"
+                      value={presentationLink}
+                      onChange={e => setPresentationLink(e.target.value)}
+                      placeholder="Ex: https://docs.google.com/presentation/d/... ou link do Canva/PDF"
+                      className="flex-1 p-3 bg-white border border-slate-300 rounded-2xl font-bold text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                    />
+                    {presentationLink && (
+                      <a
+                        href={presentationLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-2xl font-bold text-xs flex items-center gap-1 transition shrink-0"
+                        title="Abrir apresentação"
+                      >
+                        <LinkIcon size={13} />
+                        <span>Abrir</span>
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -936,6 +969,36 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                             <p className="text-[11px] text-teal-700/70 italic">Nenhum arquivo anexado a esta pauta ainda. Você pode anexar agora para ficar disponível no dia da reunião.</p>
                           )}
                         </div>
+                      </div>
+
+                      {/* Link de Apresentação da Pauta */}
+                      <div className="p-3 bg-indigo-50/60 border border-indigo-200/80 rounded-2xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
+                            <LinkIcon size={12} className="text-indigo-600" /> Link de Apresentação desta Pauta (Google Slides / Canva / PDF)
+                          </label>
+                          {(agenda.presentationLink || agenda.presentationUrl) && (
+                            <a
+                              href={agenda.presentationLink || agenda.presentationUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2 py-0.5 bg-indigo-600 text-white rounded-lg text-[10px] font-bold flex items-center gap-1"
+                            >
+                              <LinkIcon size={10} />
+                              <span>Abrir Link</span>
+                            </a>
+                          )}
+                        </div>
+                        <input
+                          type="url"
+                          value={agenda.presentationLink || agenda.presentationUrl || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            handleUpdateAgendaItem(agenda.id, { presentationLink: val, presentationUrl: val });
+                          }}
+                          placeholder="Cole o link da apresentação desta pauta..."
+                          className="w-full p-2.5 bg-white border border-indigo-200 rounded-xl text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                        />
                       </div>
 
                       {/* Discussions & Decisions Textareas (Only shown when editing/running an existing meeting) */}
