@@ -8,7 +8,9 @@ import {
   ActivityType, 
   TaskGroup, 
   Project, 
-  TeamMember 
+  TeamMember,
+  Meeting,
+  ViewMode
 } from '../types';
 import { DEFAULT_TASK_GROUPS } from '../constants';
 import { TaskNotesModal } from './TaskNotesModal';
@@ -50,6 +52,7 @@ import * as XLSX from 'xlsx';
 interface TaskBoardProps {
   tasks: Task[];
   projects?: Project[];
+  teamMembers?: TeamMember[];
   currentUser: string | 'Todos';
   selectedProfile?: TeamMember | null;
   onEdit: (task: Task) => void;
@@ -57,6 +60,8 @@ interface TaskBoardProps {
   onDelete: (task: Task) => void;
   onSaveTask: (task: Task) => void;
   onBatchImportTasks?: (tasks: Task[]) => void;
+  onAddMeeting?: (meeting: Meeting) => void;
+  onNavigateTab?: (tab: ViewMode) => void;
   hasFullAccess?: boolean;
   isLeader?: boolean;
   // Props mantidas para retrocompatibilidade
@@ -91,6 +96,7 @@ interface TaskBoardProps {
 export const TaskBoard: React.FC<TaskBoardProps> = ({
   tasks,
   projects = [],
+  teamMembers = [],
   currentUser,
   selectedProfile,
   onEdit,
@@ -98,6 +104,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   onDelete,
   onSaveTask,
   onBatchImportTasks,
+  onAddMeeting,
+  onNavigateTab,
   hasFullAccess = true,
   isLeader = true
 }) => {
@@ -254,6 +262,11 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   const [quickType, setQuickType] = useState<ActivityType>('general');
   const [isSavingQuick, setIsSavingQuick] = useState(false);
 
+  // Campos específicos para Reunião e Relatório no salvamento rápido
+  const [quickIsMeetingOrganizer, setQuickIsMeetingOrganizer] = useState(true);
+  const [quickReportReviewer, setQuickReportReviewer] = useState('');
+  const [quickReportInReview, setQuickReportInReview] = useState(true);
+
   // Identificar grupo ativo atual
   const activeGroup = useMemo(() => {
     if (selectedGroupId === 'all') return null;
@@ -267,9 +280,14 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     setIsSavingQuick(true);
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
+    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const targetGroup = activeGroup || groups[0] || { id: 'group_geral', name: 'Geral' };
     const projectAssociated = targetGroup.projectName || 'Geral';
+
+    const isNote = quickType === 'note';
+    const isMeeting = quickType === 'meeting';
+    const isReport = quickType === 'report';
 
     const newTask: Task = {
       id: `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -279,22 +297,73 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       group: targetGroup.name,
       groupId: targetGroup.id,
       activityType: quickType,
-      isReport: quickType === 'report',
+      isReport: isReport,
+      reportReviewer: isReport ? (quickReportReviewer.trim() || undefined) : undefined,
+      currentReviewer: isReport ? (quickReportReviewer.trim() || undefined) : undefined,
+      reportStage: isReport ? (quickReportInReview ? 'Revisão Colaboradores' : 'Em Elaboração') : undefined,
+      isMeetingOrganizer: isMeeting ? quickIsMeetingOrganizer : undefined,
       priority: 'Sem prioridade',
-      status: quickType === 'note' ? 'Concluída' : 'Em Andamento',
+      status: isNote ? 'Concluída' : 'Em Andamento',
       requestDate: todayStr,
       plannedStartDate: todayStr,
-      completionDate: '', // Sem prazo por padrão
-      progress: quickType === 'note' ? 100 : 0,
+      completionDate: isMeeting ? todayStr : '', // Sem prazo por padrão para tarefas gerais
+      completedAt: isNote ? now.toISOString() : undefined,
+      // NOTA ou REUNIÃO: ficam salvas por 7 dias em Atividades, e permanentemente no Visão Geral
+      showInActivitiesUntil: (isNote || isMeeting) ? sevenDaysFromNow : undefined,
+      completionDisplayChoice: isNote ? 'keep_7_days' : undefined,
+      progress: isNote ? 100 : 0,
       nextStep: '',
-      projectLead: currentUser || 'Usuário',
+      projectLead: currentUser !== 'Todos' ? currentUser : (teamMembers[0]?.name || 'Usuário'),
       collaborators: [],
       updates: [],
       isRegulatoryContribution: false // Sem contribuição regulatória por padrão
     };
 
     onSaveTask(newTask);
+
+    // Se for reunião e o usuário for o organizador:
+    // Inserir a reunião em "Reuniões Previstas (por Projeto)" e encaminhar para a aba reuniões!
+    if (isMeeting && quickIsMeetingOrganizer) {
+      const targetProject = projects.find(p => p.name === projectAssociated) || projects[0];
+      const newMeeting: Meeting = {
+        id: `meeting_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        title: quickText.trim(),
+        projectId: targetProject?.id || 'geral',
+        projectName: targetProject?.name || projectAssociated,
+        date: todayStr,
+        time: '14:00',
+        type: 'Alinhamento',
+        status: 'Agendada', // Inserida em Reuniões Previstas (por Projeto)
+        moderator: currentUser !== 'Todos' ? currentUser : 'Usuário',
+        participants: [currentUser !== 'Todos' ? currentUser : 'Usuário'],
+        presentParticipants: [],
+        absentParticipants: [],
+        agendaItems: [
+          {
+            id: `agenda_${Date.now()}_1`,
+            title: quickText.trim(),
+            description: `Pauta inicial registrada via Bloco de Notas Rápidas.`,
+            discussions: '',
+            decisions: '',
+            actionItems: []
+          }
+        ],
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString()
+      };
+
+      if (onAddMeeting) {
+        onAddMeeting(newMeeting);
+      }
+
+      // Encaminhar imediatamente para a aba de reuniões
+      if (onNavigateTab) {
+        onNavigateTab('meetings');
+      }
+    }
+
     setQuickText('');
+    setQuickReportReviewer('');
     setIsSavingQuick(false);
   };
 
@@ -305,18 +374,20 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   const [typeFilter, setTypeFilter] = useState<'all' | ActivityType>('all');
   const [priorityFilter, setPriorityFilter] = useState<'all' | Priority>('all');
 
-  // Atividades em aberto (e concluídas mantidas por até 7 dias)
+  // Atividades em aberto (e notas/reuniões/concluídas mantidas por até 7 dias)
   const openTasks = useMemo(() => {
     const nowMs = Date.now();
     return tasks.filter(t => {
       if (t.deleted) return false;
 
-      // Se a tarefa estiver concluída:
-      if (t.status === 'Concluída') {
-        // Só exibe se showInActivitiesUntil estiver no futuro (até 7 dias após conclusão)
-        if (!t.showInActivitiesUntil) return false;
+      // Regra de exibição:
+      // Se tiver showInActivitiesUntil definido (notas, reuniões ou tarefas mantidas por 7 dias):
+      if (t.showInActivitiesUntil) {
         const untilMs = new Date(t.showInActivitiesUntil).getTime();
-        if (isNaN(untilMs) || untilMs <= nowMs) return false;
+        if (!isNaN(untilMs) && untilMs <= nowMs) return false;
+      } else if (t.status === 'Concluída') {
+        // Tarefas concluídas normais sem regra de 7 dias não aparecem em Atividades
+        return false;
       }
 
       // Filtro de Grupo
@@ -1383,6 +1454,79 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                 className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-teal-500 resize-none transition"
               />
 
+              {/* Opções contextuais para Relatório */}
+              {quickType === 'report' && (
+                <div className="p-3 bg-purple-50/70 rounded-2xl border border-purple-200/80 flex flex-wrap items-center gap-3 text-xs animate-in fade-in">
+                  <div className="flex items-center gap-1.5 text-purple-900 font-bold">
+                    <UserCheck size={14} className="text-purple-600 shrink-0" />
+                    <span>Com quem está o relatório?</span>
+                  </div>
+
+                  <div className="flex-1 min-w-[200px] flex items-center gap-2">
+                    <select
+                      value={quickReportReviewer}
+                      onChange={e => setQuickReportReviewer(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-purple-200 rounded-xl font-bold text-purple-950 outline-none text-xs"
+                    >
+                      <option value="">Selecione quem está com o relatório...</option>
+                      {teamMembers.map(m => (
+                        <option key={m.id || m.name} value={m.name}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <label className="flex items-center gap-1.5 font-bold text-purple-900 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={quickReportInReview}
+                      onChange={e => setQuickReportInReview(e.target.checked)}
+                      className="rounded text-purple-600 focus:ring-purple-500"
+                    />
+                    <span>Está em revisão por alguém</span>
+                  </label>
+                </div>
+              )}
+
+              {/* Opções contextuais para Reunião */}
+              {quickType === 'meeting' && (
+                <div className="p-3 bg-blue-50/70 rounded-2xl border border-blue-200/80 flex flex-wrap items-center justify-between gap-3 text-xs animate-in fade-in">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-1.5 text-blue-950 font-black">
+                      <Users size={14} className="text-blue-600 shrink-0" />
+                      <span>Sou organizador da reunião?</span>
+                    </div>
+
+                    <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-blue-200">
+                      <button
+                        type="button"
+                        onClick={() => setQuickIsMeetingOrganizer(true)}
+                        className={`px-3 py-1 rounded-lg text-xs font-black transition ${
+                          quickIsMeetingOrganizer ? 'bg-blue-600 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Sim (Organizador)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQuickIsMeetingOrganizer(false)}
+                        className={`px-3 py-1 rounded-lg text-xs font-black transition ${
+                          !quickIsMeetingOrganizer ? 'bg-slate-700 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Não (Participante)
+                      </button>
+                    </div>
+                  </div>
+
+                  {quickIsMeetingOrganizer && (
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-800">
+                      <Sparkles size={12} className="text-blue-600 shrink-0" />
+                      <span>Será agendada em <strong>Reuniões Previstas</strong> e você será direcionado para definir a pauta.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Barra de Seleção de Tipo + Botão Salvar */}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold">
@@ -1540,6 +1684,26 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                         <span className="text-[10px] font-bold text-slate-400 truncate">
                           {task.group || 'Geral'} {task.project && task.project !== 'Geral' ? `• ${task.project}` : ''}
                         </span>
+
+                        {/* Tag de Relatório - Com quem está / Em revisão por */}
+                        {(task.activityType === 'report' || task.isReport) && (
+                          <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-1">
+                            <UserCheck size={10} className="text-purple-600" />
+                            {task.reportReviewer || task.currentReviewer ? (
+                              <>Em revisão por: <strong className="text-purple-900">{task.reportReviewer || task.currentReviewer}</strong></>
+                            ) : (
+                              <>Com: <strong className="text-purple-900">{task.projectLead || 'A definir'}</strong> (Em elaboração)</>
+                            )}
+                          </span>
+                        )}
+
+                        {/* Tag de Reunião - Papel na reunião */}
+                        {task.activityType === 'meeting' && (
+                          <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                            <Users size={10} className="text-blue-600" />
+                            {task.isMeetingOrganizer ? 'Organizador(a)' : 'Participante'}
+                          </span>
+                        )}
                       </div>
 
                       {/* Título com Edição Rápida */}

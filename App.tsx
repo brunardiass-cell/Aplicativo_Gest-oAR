@@ -2138,6 +2138,7 @@ const App: React.FC = () => {
               <TaskBoard 
                 tasks={tasksForBoard} 
                 projects={activeProjects}
+                teamMembers={teamMembers}
                 currentUser={selectedProfile?.name || 'Todos'} 
                 selectedProfile={selectedProfile}
                 onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} 
@@ -2170,6 +2171,13 @@ const App: React.FC = () => {
                 onBatchImportTasks={(newTasks) => {
                   setTasks(prev => [...newTasks, ...prev]);
                   setDataDirty();
+                }}
+                onAddMeeting={(newMeeting) => {
+                  setMeetings(prev => [newMeeting, ...prev]);
+                  setDataDirty();
+                }}
+                onNavigateTab={(tab) => {
+                  setView(tab);
                 }}
                 onDownloadExcel={() => handleDownloadContextualExcel('profile')}
                 onSyncSharePoint={() => handleSyncContextualExcel('profile')}

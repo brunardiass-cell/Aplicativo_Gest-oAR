@@ -190,6 +190,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
     const isNote = activeType === 'note';
     const isReport = activeType === 'report';
+    const isMeeting = activeType === 'meeting';
+    const now = new Date();
+    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const taskToSave: Task = {
       ...(formData as Task),
@@ -198,9 +201,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       project: formData.project || 'Geral',
       activityType: activeType,
       isReport: isReport,
+      reportReviewer: isReport ? (formData.reportReviewer || formData.currentReviewer) : undefined,
+      currentReviewer: isReport ? (formData.currentReviewer || formData.reportReviewer) : undefined,
       status: isNote ? 'Concluída' : (formData.status || 'Planejada'),
       progress: isNote ? 100 : (formData.progress || 0),
       priority: formData.priority || 'Sem prioridade',
+      completedAt: isNote ? (formData.completedAt || now.toISOString()) : formData.completedAt,
+      showInActivitiesUntil: (isNote || isMeeting) ? (formData.showInActivitiesUntil || sevenDaysFromNow) : formData.showInActivitiesUntil,
+      completionDisplayChoice: isNote ? 'keep_7_days' : formData.completionDisplayChoice,
       updates: formData.updates || []
     };
 
@@ -839,17 +847,17 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     </select>
                   </div>
 
-                  {/* Revisor */}
+                  {/* Revisor / Responsável Atual */}
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-purple-900 uppercase tracking-tight">
-                      Revisor Designado
+                      Com quem está / Revisor Designado
                     </label>
                     <select
-                      value={formData.currentReviewer || ''}
-                      onChange={e => setFormData({ ...formData, currentReviewer: e.target.value })}
+                      value={formData.reportReviewer || formData.currentReviewer || ''}
+                      onChange={e => setFormData({ ...formData, currentReviewer: e.target.value, reportReviewer: e.target.value })}
                       className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl text-xs font-bold text-slate-800 outline-none"
                     >
-                      <option value="">Selecione o revisor...</option>
+                      <option value="">Selecione quem está com o relatório...</option>
                       {teamMembers.map(m => (
                         <option key={m.id} value={m.name}>{m.name}</option>
                       ))}

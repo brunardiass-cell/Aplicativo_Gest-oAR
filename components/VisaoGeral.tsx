@@ -26,7 +26,8 @@ import {
   PieChart as PieIcon,
   ChevronDown,
   Plus,
-  Star
+  Star,
+  UserCheck
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -916,11 +917,20 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                         </td>
 
                         <td className="py-3 px-2">
-                          <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase bg-slate-100 text-slate-700">
-                            {task.activityType === 'meeting' ? 'Reunião' :
-                             task.activityType === 'report' || task.isReport ? 'Relatório' :
-                             task.activityType === 'note' ? 'Nota' : 'Geral'}
-                          </span>
+                          <div className="space-y-1">
+                            <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase bg-slate-100 text-slate-700">
+                              {task.activityType === 'meeting' ? 'Reunião' :
+                               task.activityType === 'report' || task.isReport ? 'Relatório' :
+                               task.activityType === 'note' ? 'Nota' : 'Geral'}
+                            </span>
+                            {(task.activityType === 'report' || task.isReport) && (
+                              <span className="block text-[10px] font-bold text-purple-700 whitespace-nowrap">
+                                {task.reportReviewer || task.currentReviewer 
+                                  ? `Rev: ${task.reportReviewer || task.currentReviewer}` 
+                                  : `Com: ${task.projectLead || 'A definir'}`}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         <td className="py-3 px-2">
@@ -1250,6 +1260,41 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                     <div>
                       <span className="text-[10px] font-black uppercase text-slate-400 block">Grupo</span>
                       <span className="font-bold text-teal-800">{drawerTask.group}</span>
+                    </div>
+                  )}
+
+                  {/* Detalhes de Relatório - Com quem está e Revisão */}
+                  {(drawerTask.activityType === 'report' || drawerTask.isReport) && (
+                    <div className="p-4 rounded-2xl border border-purple-200 bg-purple-50/60 space-y-2">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-purple-900 block flex items-center gap-1.5">
+                        <UserCheck size={14} className="text-purple-600" /> Acompanhamento do Relatório
+                      </span>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-[9px] font-black uppercase text-purple-600 block">Com quem está</span>
+                          <span className="font-bold text-purple-950">
+                            {drawerTask.reportReviewer || drawerTask.currentReviewer || drawerTask.projectLead || 'A definir'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-black uppercase text-purple-600 block">Situação de Revisão</span>
+                          <span className="font-bold text-purple-950">
+                            {drawerTask.reportReviewer || drawerTask.currentReviewer ? 'Em revisão' : 'Em elaboração'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Detalhes de Reunião */}
+                  {drawerTask.activityType === 'meeting' && (
+                    <div className="p-4 rounded-2xl border border-blue-200 bg-blue-50/60 space-y-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-blue-900 block flex items-center gap-1.5">
+                        <Users size={14} className="text-blue-600" /> Detalhes da Reunião
+                      </span>
+                      <span className="text-xs font-bold text-blue-950 block">
+                        {drawerTask.isMeetingOrganizer ? 'Usuário é o organizador desta reunião' : 'Participante da reunião'}
+                      </span>
                     </div>
                   )}
 

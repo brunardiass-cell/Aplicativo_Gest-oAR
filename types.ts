@@ -138,6 +138,10 @@ export interface Task {
   completedAt?: string;
   showInActivitiesUntil?: string;
   completionDisplayChoice?: 'keep_7_days' | 'hide_immediately';
+
+  // Detalhes de Relatório e Reunião
+  reportReviewer?: string;
+  isMeetingOrganizer?: boolean;
 }
 
 export type RegulatoryAssessmentStatus = 'pending' | 'approved' | 'rejected';
