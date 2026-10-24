@@ -1402,6 +1402,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           onOpenRegulatoryModal={onOpenRegulatoryModal}
           onPrint={handlePrint}
           onSwitchTab={(tab) => setProjectPhaseTab(tab)}
+          meetings={meetings}
+          tasks={tasks}
         />
       </div>
     );
