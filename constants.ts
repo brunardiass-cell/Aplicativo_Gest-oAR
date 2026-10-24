@@ -26,6 +26,14 @@ export const DEFAULT_APP_USERS: AppUser[] = [
     joinedAt: new Date().toISOString()
   },
   {
+    id: 'user_admin_bruna_gmail',
+    username: 'Bruna Dias',
+    email: 'brunardiass@gmail.com',
+    role: 'admin',
+    status: 'active',
+    joinedAt: new Date().toISOString()
+  },
+  {
     id: 'user_admin_graziella',
     username: 'Graziella Rivelli',
     email: 'graziellarivelli@ctvacinas.org',
@@ -130,7 +138,7 @@ export const getAccountEmails = (account: any): string[] => {
 
 export const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
   { id: 'tm_1', name: 'Graziella', role: 'Líder', isLeader: true, password: 'admin' },
-  { id: 'tm_2', name: 'Bruna Dias', role: 'Equipe', isLeader: false },
+  { id: 'tm_2', name: 'Bruna Dias', role: 'Líder', isLeader: true, password: 'admin' },
   { id: 'tm_3', name: 'Ester', role: 'Equipe', isLeader: false },
   { id: 'tm_4', name: 'Marjorie', role: 'Equipe', isLeader: false },
   { id: 'tm_5', name: 'Ana Luiza', role: 'Equipe', isLeader: false },
@@ -199,61 +207,357 @@ export const isNameMatch = (targetName?: string, currentUserName?: string): bool
 };
 
 export const ADMIN_WHITELIST = [
+  'brunadias@ctvacinas.org',
+  'brunardias@outlook.com',
+  'brunardiass@gmail.com',
+  'graziellarivelli@ctvacinas.org',
   'priscilapassos@ctvacinas.org'
 ];
 
-const defaultPhases = [
-  'Fase 1: Prova de Conceito',
-  'Fase 2: Fase Não Clínica',
-  'Fase 3: Fase Clínica I',
-  'Fase 4: Fase Clínica II',
-  'Fase 5: Fase Clínica III',
+export const VACCINE_PLATFORM_PHASES = [
+  'FASE 1 — Descoberta / Prova de Conceito',
+  'FASE 2 — Desenvolvimento Não Clínico',
+  'FASE 3 — Documentação Regulatória',
+  'FASE 4 — Submissão / Aprovação',
+  'FASE 5 — Estudos Clínicos Fase I',
+  'FASE 6 — Estudos Clínicos Fase II',
+  'FASE 7 — Estudos Clínicos Fase III'
 ];
 
 export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
   {
-    id: 'plan_protein',
-    name: 'Proteína Recombinante',
-    phases: defaultPhases,
+    id: 'plan_recombinant_protein',
+    name: 'Plano-Base: Proteína Recombinante',
+    platform: 'Proteína Recombinante',
+    description: 'Plano de desenvolvimento regulatório de referência para candidatos baseados em proteínas recombinantes.',
+    phases: VACCINE_PLATFORM_PHASES,
     macroActivities: [
-      { name: 'Desenvolvimento de Dossiê de Insumo (DIFA)', phase: defaultPhases[0] },
-      { name: 'Coordenação de Estudo de Estabilidade', phase: defaultPhases[0] },
-      { name: 'Validação de Processo Produtivo', phase: defaultPhases[0] },
-      { name: 'Elaboração de Relatório Clínico Fase III', phase: defaultPhases[0] },
-      { name: 'Submissão Regulatória Final', phase: defaultPhases[0] }
+      // FASE 1
+      {
+        name: 'Revisão da literatura',
+        phase: VACCINE_PLATFORM_PHASES[0],
+        microActivities: ['Mapeamento de alvos antigênicos', 'Levantamento de patentes e anterioridades', 'Análise de imunodominância de epítopos'],
+        keyDecisions: ['A literatura suporta imunogenicidade cruzada?', 'Existe liberdade de operação (FTO) para a sequência?'],
+        regulatoryPoints: ['Documentação de estado da arte para contextualização na Brochura do Investigador.'],
+        technicalJustifications: ['Racional biológico e imunológico da escolha da proteína.'],
+        referenceGuides: [
+          { title: 'WHO TRS 924 – Guidelines on Biological Standardization', link: 'https://www.who.int' }
+        ]
+      },
+      {
+        name: 'Ideia e definição do candidato',
+        phase: VACCINE_PLATFORM_PHASES[0],
+        microActivities: ['Modelagem tridimensional in silico', 'Desenho de mutações estabilizadoras', 'Seleção do sistema de expressão heterólogo'],
+        keyDecisions: ['Qual o sistema de expressão preferencial (E. coli, Pichia pastoris ou células de mamífero)?', 'Foi incluída tag de purificação clivável?'],
+        regulatoryPoints: ['Rastreabilidade da linhagem celular e histórico do vetor de clonagem.'],
+        technicalJustifications: ['Justificativa da integridade conformacional do candidato.'],
+        referenceGuides: [
+          { title: 'ICH Q5D – Derivation and Characterisation of Cell Substrates', link: 'https://www.ich.org' }
+        ]
+      },
+      {
+        name: 'Validação do candidato',
+        phase: VACCINE_PLATFORM_PHASES[0],
+        microActivities: ['Expressão piloto em bancada', 'Purificação por cromatografia de afinidade', 'Ensaio preliminar de reconhecimento imune (ELISA/Western Blot)'],
+        keyDecisions: ['O rendimento de expressão viabiliza escalonamento?', 'O antígeno é reconhecido por soros convalescentes?'],
+        regulatoryPoints: ['Especificações preliminares de identidade e integridade proteica.'],
+        technicalJustifications: ['Critérios de go/no-go para avanço à fase não clínica.'],
+        referenceGuides: [
+          { title: 'ICH Q6B – Specifications for Biotechnological Products', link: 'https://www.ich.org' }
+        ]
+      },
+      // FASE 2
+      {
+        name: 'Banco de células, quando aplicável',
+        phase: VACCINE_PLATFORM_PHASES[1],
+        microActivities: ['Construção do Banco Celular Mestre (MCB)', 'Construção do Banco Celular de Trabalho (WCB)', 'Qualificação e teste de agentes adventícios'],
+        keyDecisions: ['O banco celular foi testado para vírus e micoplasma?', 'A estabilidade genética durante as passagens foi demonstrada?'],
+        regulatoryPoints: ['Conformidade estrita com ICH Q5A (segurança viral) e ICH Q5D.'],
+        technicalJustifications: ['Histórico do isolamento e certificados de ausência de derivados de ruminantes (TSE/BSE).'],
+        referenceGuides: [
+          { title: 'ICH Q5A – Viral Safety Evaluation', link: 'https://www.ich.org' },
+          { title: 'ICH Q5D – Quality of Biotechnological Products', link: 'https://www.ich.org' }
+        ]
+      },
+      {
+        name: 'Produção de lote BPL do IFA',
+        phase: VACCINE_PLATFORM_PHASES[1],
+        microActivities: ['Fermentação/cultivo em biorreator', 'Purificação downstream multietapas', 'Filtração estéril e alíquotas'],
+        keyDecisions: ['O processo downstream elimina contaminantes de processo (HCP, DNA residual)?', 'O volume gerado supre todos os estudos toxicológicos?'],
+        regulatoryPoints: ['Certificado de análise emitido com parâmetros mínimos de liberação.'],
+        technicalJustifications: ['Racional de equivalência entre lote de pesquisa e lote pré-clínico.'],
+        referenceGuides: [
+          { title: 'WHO TRS 1004 – Annex 2: Manufacturing of Biologicals', link: 'https://www.who.int' }
+        ]
+      },
+      {
+        name: 'Caracterização e impurezas',
+        phase: VACCINE_PLATFORM_PHASES[1],
+        microActivities: ['Determinação de pureza por SEC-HPLC e RP-HPLC', 'Espectrometria de massas (MALDI-TOF / LC-MS/MS)', 'Quantificação de endotoxinas (LAL) e DNA residual da célula hospedeira'],
+        keyDecisions: ['O nível de endotoxina está abaixo do limite para uso animal e clínico (< 5 EU/dose)?', 'O perfil de agregados proteicos foi caracterizado?'],
+        regulatoryPoints: ['Atendimento aos critérios de aceitação da Farmacopeia Brasileira e ICH Q6B.'],
+        technicalJustifications: ['Justificativa dos limites de impurezas relacionadas ao produto e ao processo.'],
+        referenceGuides: [
+          { title: 'ICH Q6B – Test Procedures and Acceptance Criteria', link: 'https://www.ich.org' }
+        ]
+      },
+      {
+        name: 'Desenvolvimento da formulação e controle de qualidade',
+        phase: VACCINE_PLATFORM_PHASES[1],
+        microActivities: ['Seleção de adjuvantes imunológicos', 'Testes de adsorção antígeno-adjuvante', 'Otimização de pH, osmolalidade e tensoativos'],
+        keyDecisions: ['Por que foi escolhido determinado adjuvante?', 'A formulação será líquida estável ou liofilizada?'],
+        regulatoryPoints: ['Adequação da via parenteral estéril e ausência de toxicidade de excipientes.'],
+        technicalJustifications: ['Racional de sinergismo antígeno-adjuvante e conforto de injeção.'],
+        referenceGuides: [
+          { title: 'EMA Guideline on Adjuvants in Vaccines for Human Use', link: 'https://www.ema.europa.eu' },
+          { title: 'ICH Q8(R2) – Pharmaceutical Development', link: 'https://www.ich.org' }
+        ]
+      },
+      {
+        name: 'Estabilidade e interação entre componentes',
+        phase: VACCINE_PLATFORM_PHASES[1],
+        microActivities: ['Estudo de estabilidade acelerada (25°C e 40°C)', 'Estudo de estabilidade sob refrigeração (2-8°C)', 'Avaliação de estresse de congelamento e descongelamento'],
+        keyDecisions: ['Qual o prazo de validade provisório para os ensaios clínicos?', 'O antígeno permanece adsorvido ao longo do tempo?'],
+        regulatoryPoints: ['Conformidade com RDC Anvisa 318/2019 e ICH Q5C.'],
+        technicalJustifications: ['Cinética de perda de potência e identificação de rotas de degradação.'],
+        referenceGuides: [
+          { title: 'ICH Q5C – Stability Testing of Biotechnological Products', link: 'https://www.ich.org' },
+          { title: 'RDC Anvisa nº 318/2019 – Estudos de Estabilidade', link: 'https://www.gov.br/anvisa' }
+        ]
+      },
+      {
+        name: 'Estudos in vivo',
+        phase: VACCINE_PLATFORM_PHASES[1],
+        microActivities: ['Curva de dose-resposta em camundongos', 'Ensaios de imunogenicidade humoral (títulos de anticorpos neutralizantes)', 'Ensaios de imunidade celular (ELISpot / Citometria de fluxo)'],
+        keyDecisions: [
+          'Qual a justificativa para a seleção do modelo animal?',
+          'Quais estudos são necessários para esta plataforma?',
+          'Qual a justificativa para seleção da dose?',
+          'Por que foi escolhido determinado adjuvante?',
+          'Qual a justificativa para a via de administração e o esquema de doses?',
+          'Quais normas e guias fundamentam o delineamento?'
+        ],
+        regulatoryPoints: [
+          'Condução sob diretrizes da CEUA e padrões internacionais BPL.',
+          'Validação dos métodos analíticos imunoenzimáticos utilizados.'
+        ],
+        technicalJustifications: [
+          'Racional biológico do modelo animal e correlação com a patogênese humana.',
+          'Modelagem translacional da dose segura inicial (HED).'
+        ],
+        referenceGuides: [
+          { title: 'WHO TRS 927 – Guidelines on Nonclinical Evaluation of Vaccines', link: 'https://www.who.int' },
+          { title: 'Guia Anvisa nº 23/2019 – Avaliação Não Clínica de Vacinas', link: 'https://www.gov.br/anvisa' }
+        ]
+      },
+      {
+        name: 'Produção BPF',
+        phase: VACCINE_PLATFORM_PHASES[1],
+        microActivities: ['Transferência de tecnologia para planta BPF', 'Produção de lote piloto clínico sob Boas Práticas', 'Envase e rotulagem estéril em sala limpa'],
+        keyDecisions: ['A planta contratada possui Certificação de Boas Práticas de Fabricação (CBPF) válida pela Anvisa?', 'Os testes de esterilidade e pirógenos foram concluídos?'],
+        regulatoryPoints: ['Atendimento integral à RDC Anvisa nº 658/2019 (Diretrizes Gerais de BPF).'],
+        technicalJustifications: ['Validação de processo de filtração esterilizante e simulação de envase (media fill).'],
+        referenceGuides: [
+          { title: 'RDC Anvisa nº 658/2019 – Boas Práticas de Fabricação', link: 'https://www.gov.br/anvisa' }
+        ]
+      },
+      {
+        name: 'Estudos de segurança',
+        phase: VACCINE_PLATFORM_PHASES[1],
+        microActivities: ['Ensaio de toxicidade de dose repetida BPL', 'Tolerância local e histopatologia no sítio de injeção', 'Monitoramento laboratorial e pesquisa de reações imunopatológicas'],
+        keyDecisions: ['O NOAEL foi determinado formalmente?', 'Houve relato de reactogenicidade ou fenômeno ADE?'],
+        regulatoryPoints: ['Relatório toxicológico assinado por diretor de estudo em centro BPL credenciado.'],
+        technicalJustifications: ['Margem de segurança para proteção dos participantes do estudo clínico Fase 1.'],
+        referenceGuides: [
+          { title: 'ICH M3(R2) – Nonclinical Safety Studies for Human Clinical Trials', link: 'https://www.ich.org' },
+          { title: 'ICH S6(R1) – Preclinical Safety Evaluation of Biotechnology Products', link: 'https://www.ich.org' }
+        ]
+      },
+      // FASE 3
+      {
+        name: 'Brochura do Investigador',
+        phase: VACCINE_PLATFORM_PHASES[2],
+        microActivities: ['Compilação dos dados pré-clínicos', 'Resumo de segurança e farmacologia', 'Instruções operacionais para os centros clínicos'],
+        keyDecisions: ['Todas as reações adversas observadas em animais foram relatadas com clareza?', 'As orientações de manejo clínico estão atualizadas?'],
+        regulatoryPoints: ['Elaboração estritamente alinhada com ICH E6(R2) e RDC Anvisa 9/2015.'],
+        technicalJustifications: ['Balanço risco-benefício favorável à administração em voluntários humanos.'],
+        referenceGuides: [
+          { title: 'ICH E6(R2) – Good Clinical Practice', link: 'https://www.ich.org' }
+        ]
+      },
+      {
+        name: 'Dossiê do IFA',
+        phase: VACCINE_PLATFORM_PHASES[2],
+        microActivities: ['Documentação de estrutura e caracterização', 'Descrição do processo de fabricação e controles', 'Estabilidade e validação de métodos analíticos'],
+        keyDecisions: ['Os controles em processo (IPC) cobrem todos os parâmetros críticos (CPP)?', 'O perfil de impurezas foi justificado?'],
+        regulatoryPoints: ['Módulo 3 do CTD (Common Technical Document) - Seção 3.2.S.'],
+        technicalJustifications: ['Rastreabilidade das matérias-primas e substâncias de partida.'],
+        referenceGuides: [
+          { title: 'ICH M4Q – Common Technical Document: Quality', link: 'https://www.ich.org' }
+        ]
+      },
+      {
+        name: 'Dossiê da Vacina',
+        phase: VACCINE_PLATFORM_PHASES[2],
+        microActivities: ['Composição da formulação final e adjuvante', 'Controle de qualidade do produto terminado', 'Especificações de liberação clínica'],
+        keyDecisions: ['O sistema de embalagem primária atende aos testes de integridade e estanqueidade?'],
+        regulatoryPoints: ['Módulo 3 do CTD - Seção 3.2.P.'],
+        technicalJustifications: ['Compatibilidade com dispositivos de aplicação parenteral.'],
+        referenceGuides: [
+          { title: 'ICH M4Q – The CTD: Quality Module', link: 'https://www.ich.org' }
+        ]
+      },
+      {
+        name: 'DEEC',
+        phase: VACCINE_PLATFORM_PHASES[2],
+        microActivities: ['Elaboração do Dossiê Específico de Ensaio Clínico', 'Protocolo clínico detalhado e formulários de relato de caso (CRF)', 'Termo de Consentimento Livre e Esclarecido (TCLE)'],
+        keyDecisions: ['O protocolo prevê plano claro de monitoramento de segurança e comitê independente (DSMB)?'],
+        regulatoryPoints: ['Atendimento aos requisitos específicos da RDC Anvisa nº 9/2015.'],
+        technicalJustifications: ['Delineamento estatístico e cálculo do tamanho amostral.'],
+        referenceGuides: [
+          { title: 'RDC Anvisa nº 9/2015 – Regulamento para Ensaios Clínicos', link: 'https://www.gov.br/anvisa' }
+        ]
+      },
+      {
+        name: 'Documentos complementares',
+        phase: VACCINE_PLATFORM_PHASES[2],
+        microActivities: ['Parecer consubstanciado da CONEP / CEP institucional', 'Seguro para participantes da pesquisa', 'Certificados de liberação de lote clínico'],
+        keyDecisions: ['Todos os documentos éticos e operacionais estão vigentes?'],
+        regulatoryPoints: ['Resolução CNS 466/2012 e regulamentações éticas nacionais.'],
+        technicalJustifications: ['Garantia de conformidade com os direitos e segurança dos participantes.'],
+        referenceGuides: [
+          { title: 'Resolução CNS nº 466/2012 – Ética em Pesquisa', link: 'https://conselho.saude.gov.br' }
+        ]
+      },
+      // FASE 4
+      {
+        name: 'Submissão regulatória',
+        phase: VACCINE_PLATFORM_PHASES[3],
+        microActivities: ['Protocolo eletrônico do DDCM junto à Anvisa', 'Organização de pastas e metadados no sistema Solicita', 'Confirmação de recebimento'],
+        keyDecisions: ['Todos os módulos foram devidamente assinados digitalmente por responsáveis técnicos?'],
+        regulatoryPoints: ['Protocolo formal de Dossiê de Desenvolvimento Clínico de Medicamento (DDCM).'],
+        technicalJustifications: ['Cumprimento dos prazos de resposta administrativa.'],
+        referenceGuides: [
+          { title: 'Anvisa – Manual do Usuário do Sistema Solicita', link: 'https://www.gov.br/anvisa' }
+        ]
+      },
+      {
+        name: 'Respostas a exigências',
+        phase: VACCINE_PLATFORM_PHASES[3],
+        microActivities: ['Análise das exigências técnicas emitidas pela Anvisa', 'Condução de ensaios complementares solicitados', 'Submissão da petição secundária de resposta'],
+        keyDecisions: ['As respostas atendem integralmente ao parecer da Gerência de Medicamentos Biológicos (GGMED)?'],
+        regulatoryPoints: ['Prazo improrrogável de atendimento a exigências conforme legislação sanitária.'],
+        technicalJustifications: ['Fundamentação técnica e científica robusta para cada questionamento da autoridade.'],
+        referenceGuides: [
+          { title: 'RDC Anvisa nº 9/2015 – Seção de Notificação e Exigências', link: 'https://www.gov.br/anvisa' }
+        ]
+      },
+      {
+        name: 'Aprovação/autorização regulatória',
+        phase: VACCINE_PLATFORM_PHASES[3],
+        microActivities: ['Publicação do Comunicado Especial (CE) no Diário Oficial', 'Liberação para importação de insumos clínicos', 'Reunião de início de ensaio'],
+        keyDecisions: ['Todas as condicionantes técnicas foram cumpridas para início da administração humana?'],
+        regulatoryPoints: ['Documento oficial de aprovação e autorização de ensaio clínico emitido pela Anvisa.'],
+        technicalJustifications: ['Arquivamento do processo regulatório no TMF (Trial Master File).'],
+        referenceGuides: [
+          { title: 'Anvisa – Consulta Pública de Ensaios Clínicos Autorizados', link: 'https://www.gov.br/anvisa' }
+        ]
+      },
+      // FASES CLÍNICAS (FASES 5, 6 e 7)
+      {
+        name: 'Estudos Clínicos Fase I: Definição de CRO e centros de pesquisa',
+        phase: VACCINE_PLATFORM_PHASES[4],
+        microActivities: ['Qualificação e seleção da CRO executora', 'Visitas de pré-seleção dos centros de pesquisa clínica', 'Formalização de contratos e orçamentos'],
+        keyDecisions: ['O centro de pesquisa possui UTI e suporte para eventos adversos imediatos?'],
+        regulatoryPoints: ['Qualificação de prestadores de serviço e delegação de tarefas (ICH E6).'],
+        technicalJustifications: ['Capacidade operacional comprovada para ensaios FIH (First-in-Human).'],
+        referenceGuides: [{ title: 'ICH E6(R2) – Section 5: Sponsor Oversight', link: 'https://www.ich.org' }]
+      },
+      {
+        name: 'Estudos Clínicos Fase I: Recrutamento e Execução',
+        phase: VACCINE_PLATFORM_PHASES[4],
+        microActivities: ['Registro no ReBEC / ClinicalTrials.gov', 'Triagem e inclusão de voluntários sadios', 'Escalonamento de doses e monitoramento intensivo de segurança'],
+        keyDecisions: ['Os critérios de parada e segurança do protocolo foram acionados?', 'Qual a dose recomendada para avanço à Fase 2 (RP2D)?'],
+        regulatoryPoints: ['Notificação imediata de eventos adversos graves inesperados (SUSAR) à Anvisa em até 7 dias.'],
+        technicalJustifications: ['Relatório preliminar de segurança e determinação da dose máxima tolerada.'],
+        referenceGuides: [{ title: 'RDC Anvisa nº 9/2015 – Farmacovigilância em Ensaios Clínicos', link: 'https://www.gov.br/anvisa' }]
+      },
+      {
+        name: 'Estudos Clínicos Fase II: Execução e Imunogenicidade',
+        phase: VACCINE_PLATFORM_PHASES[5],
+        microActivities: ['Inclusão de coortes ampliadas (voluntários e população-alvo)', 'Avaliação comparativa com placebo/controle ativo', 'Coleta seriada para resposta imune humoral e celular'],
+        keyDecisions: ['A taxa de soroconversão e os títulos de anticorpos confirmam eficácia preliminar?'],
+        regulatoryPoints: ['Monitoramento contínuo por Comitê Independente de Monitoramento de Dados (IDMC).'],
+        technicalJustifications: ['Poder estatístico de discriminação de resposta imunogênica entre esquemas vacinais.'],
+        referenceGuides: [{ title: 'WHO Guidelines on Clinical Evaluation of Vaccines', link: 'https://www.who.int' }]
+      },
+      {
+        name: 'Estudos Clínicos Fase III: Ensaio Multicêntrico de Eficácia',
+        phase: VACCINE_PLATFORM_PHASES[6],
+        microActivities: ['Ensaio randomizado duplo-cego multicêntrico de larga escala', 'Vigilância ativa de casos sintomáticos da doença', 'Análise interina e relatório final de eficácia e segurança'],
+        keyDecisions: ['O desfecho primário de eficácia clínica atingiu o limiar pré-especificado (ex: > 50%)?', 'O perfil de segurança a longo prazo é sustentável?'],
+        regulatoryPoints: ['Dossiê final de eficácia clínica para o pedido de Registro de Produto Biológico junto à Anvisa.'],
+        technicalJustifications: ['Cálculo de taxa de ataque e eficácia vacinal ajustada.'],
+        referenceGuides: [
+          { title: 'RDC Anvisa nº 55/2010 – Registro de Vacinas e Produtos Biológicos', link: 'https://www.gov.br/anvisa' },
+          { title: 'ICH E9 – Statistical Principles for Clinical Trials', link: 'https://www.ich.org' }
+        ]
+      }
     ]
   },
   {
-    id: 'plan_virus',
-    name: 'Vírus Recombinante',
-    phases: defaultPhases,
+    id: 'plan_dna_vaccine',
+    name: 'Plano-Base: Vacina de DNA',
+    platform: 'DNA',
+    description: 'Plano de desenvolvimento regulatório e tecnológico para vacinas baseadas em plasmídeos de DNA.',
+    phases: VACCINE_PLATFORM_PHASES,
     macroActivities: [
-      { name: 'Caracterização do Banco Viral Mestre/Trabalho', phase: defaultPhases[0] },
-      { name: 'Gerenciamento de Testes de Adventícios', phase: defaultPhases[0] },
-      { name: 'Desenvolvimento do Processo de Inativação Viral', phase: defaultPhases[0] },
-      { name: 'Compilação e Submissão de Dossiê', phase: defaultPhases[0] }
+      {
+        name: 'Ideia e definição do candidato',
+        phase: VACCINE_PLATFORM_PHASES[0],
+        microActivities: ['Seleção do vetor plasmidial de expressão', 'Otimização de códons para mamíferos', 'Clonagem molecular e checagem de sequenciamento'],
+        keyDecisions: ['O promotor e sequência líder maximizam a expressão?', 'O vetor possui marcador de seleção livre de antibióticos beta-lactâmicos?'],
+        regulatoryPoints: ['Normas da CTNBio sobre Organismos Geneticamente Modificados (OGM).'],
+        technicalJustifications: ['Racional de expressão e minimização de riscos de integração genômica.'],
+        referenceGuides: [{ title: 'WHO Guidelines for Assuring Quality of DNA Vaccines', link: 'https://www.who.int' }]
+      },
+      {
+        name: 'Estudos in vivo',
+        phase: VACCINE_PLATFORM_PHASES[1],
+        microActivities: ['Ensaios de imunogenicidade com eletroporação / injetores sem agulha', 'Curva dose-resposta e avaliação de adjuvantes moleculares', 'Pesquisa de anticorpos anti-DNA e tolerância sistêmica'],
+        keyDecisions: [
+          'Qual a justificativa para a seleção do modelo animal?',
+          'Quais estudos são necessários para esta plataforma?',
+          'Qual a justificativa para seleção da dose?',
+          'Por que foi escolhido determinado adjuvante?',
+          'Qual a justificativa para a via de administração e o esquema de doses?',
+          'Quais normas e guias fundamentam o delineamento?'
+        ],
+        regulatoryPoints: ['Investigação mandatória de ausência de integração genômica e persistência plasmidial.'],
+        technicalJustifications: ['Demonstração de biossegurança de vetor de DNA.'],
+        referenceGuides: [
+          { title: 'WHO TRS 941 – Guidelines for DNA Vaccines', link: 'https://www.who.int' },
+          { title: 'FDA Guidance on Considerations for Plasmid DNA Vaccines', link: 'https://www.fda.gov' }
+        ]
+      }
     ]
   },
   {
-    id: 'plan_rna',
-    name: 'RNA (Terapia Gênica)',
-    phases: defaultPhases,
+    id: 'plan_attenuated_virus',
+    name: 'Plano-Base: Vírus Atenuado',
+    platform: 'Vírus Atenuado',
+    description: 'Plano de desenvolvimento regulatório de candidatos a vacinas com vírus atenuados ou quiméricos.',
+    phases: VACCINE_PLATFORM_PHASES,
     macroActivities: [
-      { name: 'Qualificação do Plasmídeo Molde', phase: defaultPhases[0] },
-      { name: 'Validação da Transcrição in vitro (TIV)', phase: defaultPhases[0] },
-      { name: 'Análise de Pureza e Integridade do RNA', phase: defaultPhases[0] },
-      { name: 'Elaboração de Relatório de Segurança Pré-clínica', phase: defaultPhases[0] },
-    ]
-  },
-  {
-    id: 'plan_dna',
-    name: 'DNA (Vacina de DNA)',
-    phases: defaultPhases,
-    macroActivities: [
-      { name: 'Construção e Qualificação do Vetor Plasmidial', phase: defaultPhases[0] },
-      { name: 'Desenvolvimento da Produção em Larga Escala', phase: defaultPhases[0] },
-      { name: 'Desenvolvimento de Teste de Potência', phase: defaultPhases[0] },
-      { name: 'Preparação para Submissão de Estudos Clínicos', phase: defaultPhases[0] },
+      {
+        name: 'Caracterização do Banco Viral Mestre/Trabalho',
+        phase: VACCINE_PLATFORM_PHASES[1],
+        microActivities: ['Criopreservação de sementes virais', 'Sequenciamento genômico completo de alta profundidade', 'Testes de agentes adventícios e neurovirulência'],
+        keyDecisions: ['A estabilidade genética de atenuação se mantém após 10 passagens sucessivas?'],
+        regulatoryPoints: ['Conformidade com Farmacopeia e ensaios de segurança viral OMS.'],
+        technicalJustifications: ['Rastreabilidade da linhagem viral e histórico de passagens.'],
+        referenceGuides: [{ title: 'WHO TRS 962 – Annex 2: Virus seed lots and cell substrates', link: 'https://www.who.int' }]
+      }
     ]
   }
 ];

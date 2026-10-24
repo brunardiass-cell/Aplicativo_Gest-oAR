@@ -21,7 +21,12 @@ import {
   Presentation,
   Paperclip,
   CheckCircle,
-  HelpCircle
+  HelpCircle,
+  AlertTriangle,
+  Link as LinkIcon,
+  Plus,
+  BookOpen,
+  Trash2
 } from 'lucide-react';
 import { 
   Project, 
@@ -30,7 +35,10 @@ import {
   TeamMember, 
   RegulatoryStandard,
   Meeting,
-  Task
+  Task,
+  PlanDecisionItem,
+  PlanReferenceGuide,
+  MacroActivity
 } from '../types';
 import { CompleteActivityModal } from './CompleteActivityModal';
 
@@ -489,7 +497,29 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
   const [editingMicroData, setEditingMicroData] = useState<Partial<MicroActivity>>({});
 
-  // Presentation link temporary state in modal
+  // Decision management states
+  const [editingDecision, setEditingDecision] = useState<PlanDecisionItem | null>(null);
+  const [isDecisionModalOpen, setIsDecisionModalOpen] = useState(false);
+  const [isNewDecisionModalOpen, setIsNewDecisionModalOpen] = useState(false);
+  const [newDecisionQuestion, setNewDecisionQuestion] = useState('');
+  
+  const [decisionFormStatus, setDecisionFormStatus] = useState<'Pendente' | 'Em avaliação' | 'Decidido'>('Pendente');
+  const [decisionFormAnswer, setDecisionFormAnswer] = useState('');
+  const [decisionFormJustification, setDecisionFormJustification] = useState('');
+  const [decisionFormResponsible, setDecisionFormResponsible] = useState('');
+  const [decisionFormDate, setDecisionFormDate] = useState('');
+  const [decisionFormLink, setDecisionFormLink] = useState('');
+
+  // Guide and point additions
+  const [isAddGuideModalOpen, setIsAddGuideModalOpen] = useState(false);
+  const [newGuideTitle, setNewGuideTitle] = useState('');
+  const [newGuideLink, setNewGuideLink] = useState('');
+  const [isAddPointModalOpen, setIsAddPointModalOpen] = useState(false);
+  const [newPointText, setNewPointText] = useState('');
+  const [isAddJustificationModalOpen, setIsAddJustificationModalOpen] = useState(false);
+  const [newJustificationText, setNewJustificationText] = useState('');
+
+  // Presentation link and discussion comment states
   const [presentationLinkInput, setPresentationLinkInput] = useState('');
   const [newDiscussionComment, setNewDiscussionComment] = useState('');
 
@@ -560,22 +590,95 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const currentPhaseGroups = useMemo(() => {
     const normTarget = normalizePhaseName(selectedPhase).toLowerCase();
     const existingMacrosInPhase = (project.macroActivities || []).filter(
-      m => normalizePhaseName(m.phase || '').toLowerCase() === normTarget
+      m => normalizePhaseName(m.phase || '').toLowerCase() === normTarget ||
+           (m.phase || '').trim().toLowerCase() === selectedPhase.trim().toLowerCase()
     );
 
-    // Build the 14 standard groups, populating with existing macroactivities if name matches or attaching existing ones
-    return CANONICAL_GROUPS.map((cGroup, idx) => {
-      const matchedMacro = existingMacrosInPhase.find(m => 
-        m.name.toLowerCase().includes(cGroup.name.toLowerCase()) || 
-        cGroup.name.toLowerCase().includes(m.name.toLowerCase())
-      );
+    // If project has explicit macroactivities in this phase (e.g. from 7-phase platform plan)
+    if (existingMacrosInPhase.length > 0) {
+      return existingMacrosInPhase.map((macro, idx) => {
+        const matchedCanonical = CANONICAL_GROUPS.find(c => 
+          c.name.toLowerCase().includes(macro.name.toLowerCase()) || 
+          macro.name.toLowerCase().includes(c.name.toLowerCase())
+        );
 
-      // Microactivities list: either from the existing project macroactivity or default activities
+        const illustrationList: ('vials' | 'chromatography' | 'animal' | 'syringe' | 'antibodies' | 'shield' | 'formulation' | 'stability')[] = [
+          'vials', 'chromatography', 'animal', 'syringe', 'antibodies', 'shield', 'formulation', 'stability'
+        ];
+        const illustrationType = matchedCanonical?.illustrationType || illustrationList[idx % illustrationList.length];
+
+        const microActivities = macro.microActivities || [];
+        const completedCount = microActivities.filter(m => m.status === 'Concluído e aprovado' || m.status === 'Concluído com restrições').length;
+        let calculatedProgress = 0;
+        if (microActivities.length > 0) {
+          const sumProg = microActivities.reduce((acc, m) => {
+            const isDone = m.status === 'Concluído e aprovado' || m.status === 'Concluído com restrições';
+            return acc + (m.progress ?? (isDone ? 100 : 0));
+          }, 0);
+          calculatedProgress = Math.round(sumProg / microActivities.length);
+        } else if (matchedCanonical) {
+          calculatedProgress = matchedCanonical.defaultProgress;
+        }
+
+        const bullets = microActivities.length > 0 
+          ? microActivities.slice(0, 3).map(m => m.name)
+          : (matchedCanonical?.defaultBullets || ['Planejamento', 'Execução técnica', 'Documentação regulatória']);
+
+        // Initialize decisions list
+        let decisionsList: PlanDecisionItem[] = macro.decisionsList ? [...macro.decisionsList] : [];
+        if (decisionsList.length === 0 && macro.keyDecisions && macro.keyDecisions.length > 0) {
+          decisionsList = macro.keyDecisions.map((q, qIdx) => ({
+            id: `dec_${macro.id}_${qIdx}`,
+            question: q,
+            status: 'Pendente' as const
+          }));
+        }
+        if (decisionsList.length === 0 && matchedCanonical) {
+          const regData = GROUP_REGULATORY_MAP[matchedCanonical.name];
+          if (regData?.keyQuestions && regData.keyQuestions.length > 0) {
+            decisionsList = regData.keyQuestions.map((q, qIdx) => ({
+              id: `dec_${macro.id}_reg_${qIdx}`,
+              question: q,
+              status: 'Pendente' as const
+            }));
+          }
+        }
+
+        const regData = matchedCanonical ? GROUP_REGULATORY_MAP[matchedCanonical.name] : undefined;
+        const regulatoryPoints = (macro.regulatoryPoints && macro.regulatoryPoints.length > 0) 
+          ? macro.regulatoryPoints 
+          : (regData?.keyPoints || []);
+        const technicalJustifications = macro.technicalJustifications || [];
+        const referenceGuides: PlanReferenceGuide[] = (macro.referenceGuides && macro.referenceGuides.length > 0)
+          ? macro.referenceGuides
+          : (regData?.guides.map(g => ({ title: g.name, link: g.url })) || []);
+
+        return {
+          number: idx + 1,
+          name: macro.name,
+          defaultBullets: bullets,
+          description: macro.expectedResults || matchedCanonical?.description || 'Macroatividade estratégica do candidato vacinal.',
+          defaultProgress: calculatedProgress,
+          illustrationType,
+          matchedMacro: macro,
+          macroId: macro.id,
+          microActivities,
+          progress: calculatedProgress,
+          completedCount,
+          totalCount: microActivities.length,
+          keyDecisions: macro.keyDecisions || [],
+          decisionsList,
+          regulatoryPoints,
+          technicalJustifications,
+          referenceGuides
+        };
+      });
+    }
+
+    // Fallback to CANONICAL_GROUPS if phase has no registered macros
+    return CANONICAL_GROUPS.map((cGroup, idx) => {
       let microActivities: MicroActivity[] = [];
-      if (matchedMacro && matchedMacro.microActivities && matchedMacro.microActivities.length > 0) {
-        microActivities = matchedMacro.microActivities;
-      } else if (idx === 0) {
-        // Group 1: Produção de material (faithful to screenshot)
+      if (idx === 0) {
         microActivities = [
           {
             id: `mic_1_1_${project.id}`,
@@ -639,7 +742,6 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           }
         ];
       } else if (idx === 1) {
-        // Group 2: Caracterização do candidato
         microActivities = [
           {
             id: `mic_2_1_${project.id}`,
@@ -663,7 +765,6 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           }
         ];
       } else if (idx === 2) {
-        // Group 3: Estudos não clínicos
         microActivities = [
           {
             id: `mic_3_1_${project.id}`,
@@ -678,24 +779,31 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         ];
       }
 
-      // Calculate progress of this group
-      let calculatedProgress = cGroup.defaultProgress;
-      if (microActivities.length > 0) {
-        const sumProg = microActivities.reduce((acc, m) => {
-          const isDone = m.status === 'Concluído e aprovado' || m.status === 'Concluído com restrições';
-          return acc + (m.progress ?? (isDone ? 100 : 0));
-        }, 0);
-        calculatedProgress = Math.round(sumProg / microActivities.length);
-      }
+      const regData = GROUP_REGULATORY_MAP[cGroup.name] || DEFAULT_REGULATORY_DATA;
+      const initialDecisions: PlanDecisionItem[] = (regData.keyQuestions || regData.decisions).map((q, qIdx) => ({
+        id: `dec_canonical_${idx}_${qIdx}`,
+        question: q,
+        status: qIdx === 0 ? 'Decidido' as const : 'Pendente' as const,
+        decision: qIdx === 0 ? 'Protocolo aprovado e em conformidade.' : undefined,
+        justification: qIdx === 0 ? 'Definido com base no delineamento do estudo pré-clínico.' : undefined,
+        responsible: 'Bruna Dias',
+        date: '2025-08-15',
+        sharepointDocUrl: 'https://ctvacinas.sharepoint.com/sites/regulatorio/Documentos'
+      }));
 
       return {
         ...cGroup,
-        matchedMacro,
-        macroId: matchedMacro?.id || `macro_${idx}_${project.id}`,
+        matchedMacro: undefined,
+        macroId: `macro_${idx}_${project.id}`,
         microActivities,
-        progress: calculatedProgress,
+        progress: cGroup.defaultProgress,
         completedCount: microActivities.filter(m => m.status === 'Concluído e aprovado' || m.status === 'Concluído com restrições').length,
-        totalCount: microActivities.length
+        totalCount: microActivities.length,
+        keyDecisions: regData.keyQuestions || [],
+        decisionsList: initialDecisions,
+        regulatoryPoints: regData.keyPoints,
+        technicalJustifications: ['Racional técnico documentado para conformidade com a Anvisa.'],
+        referenceGuides: regData.guides.map(g => ({ title: g.name, link: g.url }))
       };
     });
   }, [selectedPhase, project.macroActivities, project.id]);
@@ -705,6 +813,143 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
 
   // Regulatory data for active group
   const activeRegulatory = GROUP_REGULATORY_MAP[activeGroup.name] || DEFAULT_REGULATORY_DATA;
+
+  // Helper to ensure macro exists and update its fields
+  const updateActiveMacro = (updater: (macro: MacroActivity) => MacroActivity) => {
+    let macroFound = false;
+    let updatedMacros = (project.macroActivities || []).map(m => {
+      if (m.id === activeGroup.macroId || m.name.toLowerCase().trim() === activeGroup.name.toLowerCase().trim()) {
+        macroFound = true;
+        return updater(m);
+      }
+      return m;
+    });
+
+    if (!macroFound) {
+      const newMacro: MacroActivity = updater({
+        id: activeGroup.macroId,
+        name: activeGroup.name,
+        phase: selectedPhase,
+        expectedResults: activeGroup.description,
+        microActivities: activeGroup.microActivities,
+        keyDecisions: activeGroup.keyDecisions,
+        decisionsList: activeGroup.decisionsList,
+        regulatoryPoints: activeGroup.regulatoryPoints,
+        technicalJustifications: activeGroup.technicalJustifications,
+        referenceGuides: activeGroup.referenceGuides
+      });
+      updatedMacros.push(newMacro);
+    }
+
+    onUpdateProject({ ...project, macroActivities: updatedMacros });
+  };
+
+  const handleOpenEditDecision = (decision: PlanDecisionItem) => {
+    setEditingDecision(decision);
+    const statusVal = decision.status === 'Aprovado' ? 'Decidido' : (decision.status === 'Avaliado' ? 'Em avaliação' : (decision.status || 'Pendente'));
+    setDecisionFormStatus(statusVal);
+    setDecisionFormAnswer(decision.decision || '');
+    setDecisionFormJustification(decision.justification || '');
+    setDecisionFormResponsible(decision.responsible || teamMembers[0]?.name || 'Bruna Dias');
+    setDecisionFormDate(decision.date || new Date().toISOString().split('T')[0]);
+    setDecisionFormLink(decision.evidenceLink || decision.sharepointDocUrl || '');
+    setIsDecisionModalOpen(true);
+  };
+
+  const handleSaveDecisionForm = () => {
+    if (!editingDecision) return;
+    const updated: PlanDecisionItem = {
+      ...editingDecision,
+      status: decisionFormStatus,
+      decision: decisionFormAnswer.trim() || undefined,
+      justification: decisionFormJustification.trim() || undefined,
+      responsible: decisionFormResponsible.trim() || undefined,
+      date: decisionFormDate || undefined,
+      evidenceLink: decisionFormLink.trim() || undefined,
+      sharepointDocUrl: decisionFormLink.trim() || undefined
+    };
+
+    updateActiveMacro(macro => {
+      const currentList = macro.decisionsList && macro.decisionsList.length > 0 
+        ? [...macro.decisionsList] 
+        : [...activeGroup.decisionsList];
+      const index = currentList.findIndex(d => d.id === updated.id);
+      if (index >= 0) {
+        currentList[index] = updated;
+      } else {
+        currentList.push(updated);
+      }
+      return { ...macro, decisionsList: currentList };
+    });
+
+    setIsDecisionModalOpen(false);
+    setEditingDecision(null);
+  };
+
+  const handleDeleteDecision = (decisionId: string) => {
+    updateActiveMacro(macro => {
+      const currentList = (macro.decisionsList || activeGroup.decisionsList).filter(d => d.id !== decisionId);
+      return { ...macro, decisionsList: currentList };
+    });
+  };
+
+  const handleAddNewDecision = () => {
+    if (!newDecisionQuestion.trim()) return;
+    const newItem: PlanDecisionItem = {
+      id: `dec_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      question: newDecisionQuestion.trim(),
+      status: 'Pendente'
+    };
+    updateActiveMacro(macro => {
+      const currentList = macro.decisionsList && macro.decisionsList.length > 0 
+        ? [...macro.decisionsList, newItem] 
+        : [...activeGroup.decisionsList, newItem];
+      return { ...macro, decisionsList: currentList };
+    });
+    setIsNewDecisionModalOpen(false);
+    setNewDecisionQuestion('');
+  };
+
+  const handleSaveNewGuide = () => {
+    if (!newGuideTitle.trim()) return;
+    const newGuide: PlanReferenceGuide = {
+      title: newGuideTitle.trim(),
+      link: newGuideLink.trim() || undefined
+    };
+    updateActiveMacro(macro => {
+      const currentGuides = macro.referenceGuides && macro.referenceGuides.length > 0
+        ? [...macro.referenceGuides, newGuide]
+        : [...activeGroup.referenceGuides, newGuide];
+      return { ...macro, referenceGuides: currentGuides };
+    });
+    setIsAddGuideModalOpen(false);
+    setNewGuideTitle('');
+    setNewGuideLink('');
+  };
+
+  const handleSaveNewPoint = () => {
+    if (!newPointText.trim()) return;
+    updateActiveMacro(macro => {
+      const currentPoints = macro.regulatoryPoints && macro.regulatoryPoints.length > 0
+        ? [...macro.regulatoryPoints, newPointText.trim()]
+        : [...activeGroup.regulatoryPoints, newPointText.trim()];
+      return { ...macro, regulatoryPoints: currentPoints };
+    });
+    setIsAddPointModalOpen(false);
+    setNewPointText('');
+  };
+
+  const handleSaveNewJustification = () => {
+    if (!newJustificationText.trim()) return;
+    updateActiveMacro(macro => {
+      const currentJust = macro.technicalJustifications && macro.technicalJustifications.length > 0
+        ? [...macro.technicalJustifications, newJustificationText.trim()]
+        : [...activeGroup.technicalJustifications, newJustificationText.trim()];
+      return { ...macro, technicalJustifications: currentJust };
+    });
+    setIsAddJustificationModalOpen(false);
+    setNewJustificationText('');
+  };
 
   // Linked meetings to this project
   const linkedMeetings = useMemo(() => {
@@ -1796,23 +2041,115 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
 
                 {/* Sub-Tab 2: ORIENTAÇÕES E GUIAS */}
                 {groupSubTab === 'orientacoes' && (
-                  <div className="space-y-4">
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      Guias técnicos e diretrizes aplicáveis ao grupo <strong>{activeGroup.name}</strong> para garantir conformidade regulatória:
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {activeRegulatory.guides.map(guide => (
-                        <a
-                          key={guide.name}
-                          href={guide.url || '#'}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-blue-50/40 hover:border-blue-300 transition flex items-center justify-between text-xs font-bold text-slate-800"
+                  <div className="space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-blue-50/40 p-4 rounded-2xl border border-blue-100">
+                      <div>
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                          Orientações Regulatórias e Normas Aplicáveis
+                        </h4>
+                        <p className="text-xs text-slate-600 mt-0.5">
+                          Diretrizes, pontos críticos e normas definidas pelo Líder no plano-base para <strong>{activeGroup.name}</strong>:
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsAddPointModalOpen(true)}
+                          className="px-3 py-1.5 bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
                         >
-                          <span className="truncate">{guide.name}</span>
-                          <ExternalLink size={14} className="text-blue-600 shrink-0" />
-                        </a>
-                      ))}
+                          <Plus size={13} /> Ponto de atenção
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsAddGuideModalOpen(true)}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                        >
+                          <Plus size={13} /> Adicionar norma/guia
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Section 1: Pontos de Atenção Regulatória */}
+                    <div className="space-y-2.5">
+                      <div className="flex items-center gap-2 text-amber-600">
+                        <AlertTriangle size={15} />
+                        <h5 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                          Pontos de Atenção Regulatória ({activeGroup.regulatoryPoints?.length || 0})
+                        </h5>
+                      </div>
+                      <div className="space-y-2">
+                        {(activeGroup.regulatoryPoints || []).map((pt, pIdx) => (
+                          <div key={pIdx} className="p-3.5 rounded-2xl border border-amber-200/80 bg-amber-50/40 flex items-start gap-3">
+                            <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0 mt-1.5" />
+                            <p className="text-xs font-medium text-slate-800 leading-relaxed">
+                              {pt}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Section 2: Justificativas Técnicas Necessárias */}
+                    {(activeGroup.technicalJustifications?.length || 0) > 0 && (
+                      <div className="space-y-2.5">
+                        <div className="flex items-center gap-2 text-blue-600">
+                          <Bookmark size={15} />
+                          <h5 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                            Justificativas Técnicas a Documentar ({activeGroup.technicalJustifications?.length || 0})
+                          </h5>
+                        </div>
+                        <div className="space-y-2">
+                          {(activeGroup.technicalJustifications || []).map((just, jIdx) => (
+                            <div key={jIdx} className="p-3.5 rounded-2xl border border-blue-150 bg-blue-50/30 flex items-start gap-3">
+                              <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0 mt-1.5" />
+                              <p className="text-xs font-medium text-slate-800 leading-relaxed">
+                                {just}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Section 3: Normas, Guias e Artigos de Referência */}
+                    <div className="space-y-2.5">
+                      <div className="flex items-center gap-2 text-emerald-600">
+                        <BookOpen size={15} />
+                        <h5 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                          Normas, Guias e Artigos de Referência ({activeGroup.referenceGuides?.length || 0})
+                        </h5>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {(activeGroup.referenceGuides || []).map((guide, gIdx) => (
+                          <div
+                            key={gIdx}
+                            className="p-3.5 rounded-2xl border border-slate-200 bg-white hover:border-blue-300 transition flex items-center justify-between gap-3 shadow-2xs group"
+                          >
+                            <div className="min-w-0">
+                              <span className="text-xs font-black text-slate-900 block truncate group-hover:text-blue-700">
+                                {guide.title}
+                              </span>
+                              {guide.link && (
+                                <span className="text-[11px] text-slate-400 block truncate mt-0.5">
+                                  {guide.link.includes('sharepoint.com') ? 'Documento no SharePoint' : guide.link}
+                                </span>
+                              )}
+                            </div>
+                            {guide.link && (
+                              <a
+                                href={guide.link}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-2 rounded-xl bg-slate-50 hover:bg-blue-50 text-blue-600 transition shrink-0"
+                                title="Abrir referência"
+                              >
+                                <ExternalLink size={14} />
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1878,22 +2215,170 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
 
                 {/* Sub-Tab 4: DECISÕES */}
                 {groupSubTab === 'decisoes' && (
-                  <div className="space-y-4">
-                    <p className="text-xs text-slate-600">
-                      Decisões estratégicas registradas nesta etapa do projeto:
-                    </p>
-                    <div className="space-y-2.5">
-                      {activeRegulatory.decisions.map((dec, dIdx) => (
-                        <div key={dIdx} className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 flex items-start gap-3">
-                          <ShieldCheck size={18} className="text-emerald-600 shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-xs font-black text-slate-900">{dec}</p>
-                            <p className="text-[11px] text-slate-500 mt-0.5">
-                              Validado em conformidade com as diretrizes da Anvisa e comitê técnico do CTVacinas.
-                            </p>
-                          </div>
+                  <div className="space-y-5">
+                    {/* Summary Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                      <div>
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                          Decisões e Justificativas Regulatórias do Grupo
+                        </h4>
+                        <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
+                          <span>{activeGroup.decisionsList?.length || 0} questões cadastradas</span>
+                          <span>•</span>
+                          <span className="text-emerald-700 font-bold">
+                            {(activeGroup.decisionsList || []).filter(d => d.status === 'Decidido').length} decididas
+                          </span>
+                          <span>•</span>
+                          <span className="text-amber-700 font-bold">
+                            {(activeGroup.decisionsList || []).filter(d => d.status === 'Pendente' || !d.status).length} a avaliar
+                          </span>
                         </div>
-                      ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsNewDecisionModalOpen(true)}
+                        className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer self-start sm:self-auto"
+                      >
+                        <Plus size={14} /> Nova pergunta / decisão
+                      </button>
+                    </div>
+
+                    {/* Decisions and Questions List */}
+                    <div className="space-y-3">
+                      {(activeGroup.decisionsList || []).map((decItem, dIdx) => {
+                        const isDecided = decItem.status === 'Decidido';
+                        const isUnderReview = decItem.status === 'Em avaliação';
+
+                        return (
+                          <div 
+                            key={decItem.id || dIdx}
+                            className={`p-4 rounded-2xl border transition-all space-y-3 ${
+                              isDecided 
+                                ? 'bg-white border-emerald-200 shadow-2xs' 
+                                : isUnderReview 
+                                  ? 'bg-blue-50/20 border-blue-200' 
+                                  : 'bg-amber-50/20 border-amber-200/80'
+                            }`}
+                          >
+                            {/* Card Top: Question & Status */}
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center shrink-0 ${
+                                    isDecided ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'
+                                  }`}>
+                                    {dIdx + 1}
+                                  </span>
+                                  <h5 className="text-xs font-black text-slate-900 leading-snug">
+                                    {decItem.question}
+                                  </h5>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${
+                                  isDecided 
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300' 
+                                    : isUnderReview 
+                                      ? 'bg-blue-50 text-blue-700 border-blue-300' 
+                                      : 'bg-amber-50 text-amber-700 border-amber-300'
+                                }`}>
+                                  {isDecided ? 'Decidido e documentado' : isUnderReview ? 'Em avaliação' : 'Pendente (A avaliar)'}
+                                </span>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditDecision(decItem)}
+                                  className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-blue-600 transition cursor-pointer"
+                                >
+                                  {isDecided ? 'Editar' : 'Registrar decisão'}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteDecision(decItem.id)}
+                                  className="p-1 text-slate-300 hover:text-red-500 transition cursor-pointer"
+                                  title="Excluir decisão"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Card Body: Decision, Justification, Evidence */}
+                            {isDecided || decItem.decision || decItem.justification ? (
+                              <div className="p-3 bg-slate-50/80 rounded-xl space-y-2 text-xs border border-slate-150">
+                                {decItem.decision && (
+                                  <div>
+                                    <span className="font-bold text-slate-700 block text-[11px] uppercase tracking-wide">
+                                      Decisão Tomada:
+                                    </span>
+                                    <p className="text-slate-900 font-semibold mt-0.5 leading-relaxed">
+                                      {decItem.decision}
+                                    </p>
+                                  </div>
+                                )}
+
+                                {decItem.justification && (
+                                  <div>
+                                    <span className="font-bold text-slate-700 block text-[11px] uppercase tracking-wide">
+                                      Justificativa Técnica:
+                                    </span>
+                                    <p className="text-slate-600 mt-0.5 leading-relaxed">
+                                      {decItem.justification}
+                                    </p>
+                                  </div>
+                                )}
+
+                                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-200/60 text-[11px]">
+                                  <div className="flex items-center gap-4 text-slate-500">
+                                    {decItem.responsible && (
+                                      <span>Responsável: <strong className="text-slate-800">{decItem.responsible}</strong></span>
+                                    )}
+                                    {decItem.date && (
+                                      <span>Data: <strong className="text-slate-800">{decItem.date.split('-').reverse().join('/')}</strong></span>
+                                    )}
+                                  </div>
+
+                                  {(decItem.evidenceLink || decItem.sharepointDocUrl) && (
+                                    <a
+                                      href={decItem.evidenceLink || decItem.sharepointDocUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 hover:underline"
+                                    >
+                                      <LinkIcon size={12} /> Evidência / SharePoint &rarr;
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="p-3 bg-amber-50/40 rounded-xl border border-amber-100 flex items-center justify-between gap-3 text-xs">
+                                <p className="text-amber-800 leading-snug">
+                                  Orientação do plano-base pendente de resposta. O gestor pode registrar a decisão técnica e vincular referências científicas ou do SharePoint.
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditDecision(decItem)}
+                                  className="px-3 py-1 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition shrink-0 cursor-pointer shadow-2xs"
+                                >
+                                  Responder
+                                </button>
+                              </div>
+                            )}
+
+                          </div>
+                        );
+                      })}
+
+                      {(activeGroup.decisionsList || []).length === 0 && (
+                        <div className="p-8 text-center border border-dashed border-slate-200 rounded-2xl">
+                          <p className="text-xs text-slate-400">
+                            Nenhuma decisão ou pergunta estratégica cadastrada para este grupo. Clique em "+ Nova pergunta / decisão" para registrar.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -2317,6 +2802,316 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             setIsCompleteModalOpen(false);
           }}
         />
+      )}
+
+      {/* DECISION EDIT MODAL */}
+      {isDecisionModalOpen && editingDecision && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-xl w-full max-h-[92vh] overflow-y-auto p-6 shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[11px] font-black text-blue-600 uppercase tracking-wider">
+                  Decisão e Justificativa Regulatória
+                </span>
+                <h3 className="text-base font-black text-slate-900 leading-tight">
+                  {editingDecision.question}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setIsDecisionModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              {/* Status */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Status da Decisão</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['Pendente', 'Em avaliação', 'Decidido'] as const).map(st => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setDecisionFormStatus(st)}
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                        decisionFormStatus === st
+                          ? st === 'Decidido'
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                            : st === 'Em avaliação'
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                              : 'bg-amber-500 text-white border-amber-500 shadow-2xs'
+                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Decisão Tomada */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Decisão Tomada / Resposta</label>
+                <textarea
+                  value={decisionFormAnswer}
+                  onChange={e => setDecisionFormAnswer(e.target.value)}
+                  rows={3}
+                  placeholder="Descreva a decisão formal ou escolha técnica validada para o candidato vacinal..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              {/* Justificativa Técnica */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  Justificativa Técnica Regulatória
+                </label>
+                <textarea
+                  value={decisionFormJustification}
+                  onChange={e => setDecisionFormJustification(e.target.value)}
+                  rows={3}
+                  placeholder="Fundamentação técnica e científica que constará no dossiê de desenvolvimento..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              {/* Responsável & Data */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Responsável</label>
+                  <select
+                    value={decisionFormResponsible}
+                    onChange={e => setDecisionFormResponsible(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white font-semibold"
+                  >
+                    {teamMembers.map(m => (
+                      <option key={m.id} value={m.name}>{m.name}</option>
+                    ))}
+                    {!teamMembers.some(m => m.name === decisionFormResponsible) && decisionFormResponsible && (
+                      <option value={decisionFormResponsible}>{decisionFormResponsible}</option>
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Data da Decisão</label>
+                  <input
+                    type="date"
+                    value={decisionFormDate}
+                    onChange={e => setDecisionFormDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white font-semibold"
+                  />
+                </div>
+              </div>
+
+              {/* Link de Evidência / SharePoint */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
+                  <LinkIcon size={14} className="text-blue-600" />
+                  Link de Evidência / Documento no SharePoint
+                </label>
+                <input
+                  type="url"
+                  value={decisionFormLink}
+                  onChange={e => setDecisionFormLink(e.target.value)}
+                  placeholder="https://ctvacinas.sharepoint.com/... ou link de artigo PubMed"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+                <span className="text-[11px] text-slate-400 mt-1 block">
+                  Permite rastreabilidade direta dos relatórios e artigos que fundamentam a decisão.
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsDecisionModalOpen(false)}
+                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveDecisionForm}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Check size={14} /> Salvar Decisão
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW DECISION MODAL */}
+      {isNewDecisionModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[11px] font-black text-blue-600 uppercase tracking-wider">
+                  Nova Pergunta / Decisão Estratégica
+                </span>
+                <h3 className="text-base font-black text-slate-900">
+                  {activeGroup.name}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setIsNewDecisionModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <label className="font-bold text-slate-700 block">
+                Pergunta ou decisão que precisa ser avaliada:
+              </label>
+              <textarea
+                value={newDecisionQuestion}
+                onChange={e => setNewDecisionQuestion(e.target.value)}
+                rows={3}
+                placeholder="Ex: Qual a justificativa para a via de administração e o esquema de doses?"
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+                autoFocus
+              />
+              <p className="text-[11px] text-slate-400">
+                A pergunta será inserida inicialmente como "Pendente (A avaliar)" para que o gestor possa registrar a fundamentação gradualmente.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsNewDecisionModalOpen(false)}
+                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleAddNewDecision}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition shadow-xs cursor-pointer"
+              >
+                Adicionar Questão
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD GUIDE MODAL */}
+      {isAddGuideModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-black text-slate-900">
+                Adicionar Norma, Guia ou Artigo
+              </h3>
+              <button 
+                onClick={() => setIsAddGuideModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Título ou Referência</label>
+                <input
+                  type="text"
+                  value={newGuideTitle}
+                  onChange={e => setNewGuideTitle(e.target.value)}
+                  placeholder="Ex: RDC Anvisa nº 55/2010 ou Artigo Nature 2024"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Link (Oficial ou SharePoint)</label>
+                <input
+                  type="url"
+                  value={newGuideLink}
+                  onChange={e => setNewGuideLink(e.target.value)}
+                  placeholder="https://www.gov.br/anvisa ou https://ctvacinas.sharepoint.com/..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsAddGuideModalOpen(false)}
+                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveNewGuide}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition shadow-xs cursor-pointer"
+              >
+                Salvar Referência
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD POINT MODAL */}
+      {isAddPointModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-black text-slate-900">
+                Adicionar Ponto de Atenção Regulatória
+              </h3>
+              <button 
+                onClick={() => setIsAddPointModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <label className="font-bold text-slate-700 block">
+                Descrição do ponto de atenção:
+              </label>
+              <textarea
+                value={newPointText}
+                onChange={e => setNewPointText(e.target.value)}
+                rows={3}
+                placeholder="Ex: Validação rigorosa dos métodos analíticos de quantificação de endotoxinas..."
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsAddPointModalOpen(false)}
+                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveNewPoint}
+                className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition shadow-xs cursor-pointer"
+              >
+                Salvar Ponto
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

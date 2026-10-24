@@ -325,14 +325,31 @@ const App: React.FC = () => {
       return plan;
     });
 
+    const rawAppUsers = (cloudData.appUsers && cloudData.appUsers.length > 0) ? cloudData.appUsers : DEFAULT_APP_USERS;
+    const sanitizedAppUsers = rawAppUsers.map((u: any) => {
+      const emailLower = (u.email || '').toLowerCase().trim();
+      if (emailLower === 'brunadias@ctvacinas.org' || emailLower === 'brunardias@outlook.com' || emailLower === 'brunardiass@gmail.com') {
+        return { ...u, role: 'admin', status: 'active' };
+      }
+      return u;
+    });
+
+    const rawTeamMembers = (cloudData.teamMembers && cloudData.teamMembers.length > 0) ? cloudData.teamMembers : DEFAULT_TEAM_MEMBERS;
+    const sanitizedTeamMembers = rawTeamMembers.map((m: any) => {
+      if (m.id === 'tm_2' || (m.name && m.name.toLowerCase().includes('bruna dias'))) {
+        return { ...m, role: 'Líder', isLeader: true };
+      }
+      return m;
+    });
+
     const fullData = {
       tasks: cloudData.tasks || [],
       projects: cloudData.projects || [],
-      teamMembers: (cloudData.teamMembers && cloudData.teamMembers.length > 0) ? cloudData.teamMembers : DEFAULT_TEAM_MEMBERS,
+      teamMembers: sanitizedTeamMembers,
       activityPlans: migratedPlans,
       notifications: cloudData.notifications || [],
       logs: cloudData.logs || [],
-      appUsers: (cloudData.appUsers && cloudData.appUsers.length > 0) ? cloudData.appUsers : DEFAULT_APP_USERS,
+      appUsers: sanitizedAppUsers,
       managerEmail: cloudData.managerEmail || 'brunadias@ctvacinas.org',
       regulatoryStandards: (cloudData.regulatoryStandards && cloudData.regulatoryStandards.length > 0) ? cloudData.regulatoryStandards : DEFAULT_REGULATORY_STANDARDS,
       regulatorySubjects: (cloudData.regulatorySubjects && cloudData.regulatorySubjects.length > 0) ? cloudData.regulatorySubjects : DEFAULT_REGULATORY_SUBJECTS,
@@ -556,7 +573,7 @@ const App: React.FC = () => {
     );
 
     const isWhitelisted = !isBlocked && userEmails.some(email => 
-      ['brunardias@outlook.com', 'brunadias@ctvacinas.org', 'graziellarivelli@ctvacinas.org', 'priscilapassos@ctvacinas.org', 'marjoriecoimbra@gmail.com', 'tecaester@gmail.com', 'ester@ctvacinas.org', 'analuiza@ctvacinas.org', 'anaterzian@ctvacinas.org'].includes(email)
+      ['brunardias@outlook.com', 'brunadias@ctvacinas.org', 'brunardiass@gmail.com', 'graziellarivelli@ctvacinas.org', 'priscilapassos@ctvacinas.org', 'marjoriecoimbra@gmail.com', 'tecaester@gmail.com', 'ester@ctvacinas.org', 'analuiza@ctvacinas.org', 'anaterzian@ctvacinas.org'].includes(email)
     );
 
     const hasAppAccess = !isBlocked && (!!authorizedUser || isWhitelisted);
@@ -1011,30 +1028,38 @@ const App: React.FC = () => {
   }, [isMsalAuthenticated, isAuthorized, tasks, projects, teamMembers, regulatoryStandards, vaccineCandidates]);
 
   const currentUserRole = useMemo(() => {
-    if (!account || !appUsers.length) return null;
-    const userEmails = getAccountEmails(account);
-    const authorizedUser = appUsers.find(
-      (user) => user.status === 'active' && userEmails.some(
-        email => email === user.email.toLowerCase().trim() ||
-                 email.split('@')[0] === user.email.toLowerCase().trim().split('@')[0] ||
-                 isNameMatch(user.username, account.name)
-      )
-    );
-    if (authorizedUser) return authorizedUser.role;
-    
-    // Whitelist fallbacks
-    const isKnownAdmin = userEmails.some(email => 
-      ['brunardias@outlook.com', 'brunadias@ctvacinas.org', 'graziellarivelli@ctvacinas.org', 'priscilapassos@ctvacinas.org'].includes(email)
-    );
-    if (isKnownAdmin) return 'admin';
+    // If authenticated via Microsoft Account
+    if (account) {
+      const userEmails = getAccountEmails(account);
+      const isKnownAdmin = userEmails.some(email => 
+        ['brunardias@outlook.com', 'brunadias@ctvacinas.org', 'brunardiass@gmail.com', 'graziellarivelli@ctvacinas.org', 'priscilapassos@ctvacinas.org'].includes(email.toLowerCase().trim())
+      );
+      if (isKnownAdmin) return 'admin';
 
-    if (userEmails.some(email => email.includes('marjorie'))) return 'user_team_3';
-    if (userEmails.some(email => email.includes('ester') || email.includes('tecaester'))) return 'user_team_2';
-    if (userEmails.some(email => email.includes('analuiza'))) return 'user_team_4';
-    if (userEmails.some(email => email.includes('anaterzian'))) return 'user_team_5';
+      const authorizedUser = appUsers.find(
+        (user) => user.status === 'active' && userEmails.some(
+          email => email === user.email.toLowerCase().trim() ||
+                   email.split('@')[0] === user.email.toLowerCase().trim().split('@')[0] ||
+                   isNameMatch(user.username, account.name)
+        )
+      );
+      if (authorizedUser) return authorizedUser.role;
+
+      if (userEmails.some(email => email.includes('marjorie'))) return 'user_team_3';
+      if (userEmails.some(email => email.includes('ester') || email.includes('tecaester'))) return 'user_team_2';
+      if (userEmails.some(email => email.includes('analuiza'))) return 'user_team_4';
+      if (userEmails.some(email => email.includes('anaterzian'))) return 'user_team_5';
+    }
+
+    // Profile selection / impersonation mode
+    if (selectedProfile) {
+      if (selectedProfile.id === 'tm_2' || selectedProfile.name?.toLowerCase().includes('bruna dias') || selectedProfile.isLeader) {
+        return 'admin';
+      }
+    }
 
     return null;
-  }, [account, appUsers]);
+  }, [account, appUsers, selectedProfile]);
 
   const hasFullAccess = useMemo(() => currentUserRole === 'admin', [currentUserRole]);
   const canCreate = useMemo(() => {

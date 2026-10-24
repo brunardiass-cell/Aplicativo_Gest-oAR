@@ -426,6 +426,27 @@ export interface ActivityLog {
   refType?: 'task' | 'project';
 }
 
+export interface PlanReferenceGuide {
+  id?: string;
+  title: string;
+  link?: string;
+  type?: 'norma' | 'guia' | 'artigo' | 'outro';
+}
+
+export interface PlanDecisionItem {
+  id: string;
+  question: string;
+  decision?: string;
+  justification?: string;
+  responsible?: string;
+  date?: string;
+  status?: 'Pendente' | 'Avaliado' | 'Aprovado' | 'Em avaliação' | 'Decidido';
+  references?: PlanReferenceGuide[];
+  sharepointLink?: string;
+  evidenceLink?: string;
+  sharepointDocUrl?: string;
+}
+
 export interface MacroActivityTemplate {
   name: string;
   phase: string;
@@ -438,6 +459,11 @@ export interface MacroActivityTemplate {
   unlocksPhases?: string[];
   templateType?: string;
   isContracted?: boolean;
+  keyDecisions?: string[];
+  decisionsList?: PlanDecisionItem[];
+  regulatoryPoints?: string[];
+  technicalJustifications?: string[];
+  referenceGuides?: PlanReferenceGuide[];
 }
 
 export interface RegulatoryChecklistItem {
@@ -458,6 +484,8 @@ export interface TransversalActivity {
 export interface ActivityPlanTemplate {
   id: string;
   name: string;
+  platform?: string;
+  description?: string;
   phases: string[];
   macroActivities: MacroActivityTemplate[];
   regulatoryChecklist?: RegulatoryChecklistItem[];
@@ -524,6 +552,11 @@ export interface MacroActivity {
   unlocksPhases?: string[];
   templateType?: string;
   isContracted?: boolean;
+  keyDecisions?: string[];
+  decisionsList?: PlanDecisionItem[];
+  regulatoryPoints?: string[];
+  technicalJustifications?: string[];
+  referenceGuides?: PlanReferenceGuide[];
 }
 
 export interface Project {

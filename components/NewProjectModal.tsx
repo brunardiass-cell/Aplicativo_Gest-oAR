@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Project, ActivityPlanTemplate, MacroActivity, TeamMember } from '../types';
+import { Project, ActivityPlanTemplate, MacroActivity, TeamMember, PlanDecisionItem } from '../types';
 import { X, FolderPlus, Plus, Trash2, Layers } from 'lucide-react';
 
 interface NewProjectModalProps {
@@ -88,23 +88,46 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
       templateId: selectedPlanId,
       team: customTeam,
       phases: projectPhases,
-      macroActivities: selectedPlan.macroActivities.map((macroTemplate): MacroActivity => ({
-        id: 'macro_' + Math.random().toString(36).substr(2, 9),
-        name: macroTemplate.name,
-        phase: projectPhases.includes(macroTemplate.phase) ? macroTemplate.phase : projectPhases[0],
-        expectedResults: macroTemplate.expectedResults,
-        resultLinks: macroTemplate.resultLinks ? [...macroTemplate.resultLinks] : [],
-        microActivities: (macroTemplate.microActivities || []).map(microName => ({
-          id: 'micro_' + Math.random().toString(36).substr(2, 9),
-          name: microName,
-          assignee: '',
-          startDate: '',
-          dueDate: '',
-          status: 'Planejado',
-          observations: '',
-          progress: 0,
-        })),
-      })),
+      macroActivities: selectedPlan.macroActivities.map((macroTemplate): MacroActivity => {
+        const initialDecisions = (macroTemplate.decisionsList || (macroTemplate.keyDecisions || []).map(q => ({
+          id: 'dec_' + Math.random().toString(36).substr(2, 9),
+          question: q,
+          status: 'Pendente' as const
+        }))).map((d: PlanDecisionItem) => ({
+          id: d.id || 'dec_' + Math.random().toString(36).substr(2, 9),
+          question: d.question,
+          status: d.status || 'Pendente',
+          decision: d.decision,
+          justification: d.justification,
+          date: d.date,
+          responsible: d.responsible,
+          evidenceLink: d.evidenceLink,
+          sharepointDocUrl: d.sharepointDocUrl
+        }));
+
+        return {
+          id: 'macro_' + Math.random().toString(36).substr(2, 9),
+          name: macroTemplate.name,
+          phase: projectPhases.includes(macroTemplate.phase) ? macroTemplate.phase : projectPhases[0],
+          expectedResults: macroTemplate.expectedResults,
+          resultLinks: macroTemplate.resultLinks ? [...macroTemplate.resultLinks] : [],
+          keyDecisions: macroTemplate.keyDecisions ? [...macroTemplate.keyDecisions] : [],
+          decisionsList: initialDecisions,
+          regulatoryPoints: macroTemplate.regulatoryPoints ? [...macroTemplate.regulatoryPoints] : [],
+          technicalJustifications: macroTemplate.technicalJustifications ? [...macroTemplate.technicalJustifications] : [],
+          referenceGuides: macroTemplate.referenceGuides ? JSON.parse(JSON.stringify(macroTemplate.referenceGuides)) : [],
+          microActivities: (macroTemplate.microActivities || []).map(microName => ({
+            id: 'micro_' + Math.random().toString(36).substr(2, 9),
+            name: microName,
+            assignee: '',
+            startDate: '',
+            dueDate: '',
+            status: 'Planejado',
+            observations: '',
+            progress: 0,
+          })),
+        };
+      }),
       regulatoryChecklist: selectedPlan.regulatoryChecklist ? JSON.parse(JSON.stringify(selectedPlan.regulatoryChecklist)) : []
     };
 
