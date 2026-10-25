@@ -740,22 +740,12 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
           <div className="flex items-center gap-2.5 self-start md:self-auto">
             {canCreatePlan && (
-              <>
-                <button 
-                  onClick={() => setIsPlanModalOpen(true)}
-                  className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 rounded-2xl text-xs font-bold uppercase tracking-wider transition shadow-2xs flex items-center gap-2 active:scale-95"
-                >
-                  <Plus size={16} className="text-slate-500" /> Criar Novo Plano
-                </button>
-
-                <button 
-                  onClick={() => setIsNewModelModalOpen(true)}
-                  className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-2xl text-xs font-bold uppercase tracking-wider transition shadow-2xs flex items-center gap-2 active:scale-95 cursor-pointer"
-                  title="Criar um novo modelo de dossiê regulatório (Exclusivo para Líderes e Administradores)"
-                >
-                  <FilePlus size={16} className="text-indigo-600" /> Criar Modelo de Dossiê
-                </button>
-              </>
+              <button 
+                onClick={() => setIsPlanModalOpen(true)}
+                className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 rounded-2xl text-xs font-bold uppercase tracking-wider transition shadow-2xs flex items-center gap-2 active:scale-95 cursor-pointer"
+              >
+                <Plus size={16} className="text-slate-500" /> Criar Novo Plano
+              </button>
             )}
 
             <button 

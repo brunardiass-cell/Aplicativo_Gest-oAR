@@ -1,6 +1,28 @@
 
 import { ActivityPlanTemplate, TeamMember, AppUser, RegulatoryStandard, Meeting, TaskGroup } from './types';
-import { FlaskConical, ShieldCheck, Dna, Sparkles, Syringe, Atom, Microscope } from 'lucide-react';
+import { 
+  FlaskConical, 
+  ShieldCheck, 
+  Dna, 
+  Sparkles, 
+  Syringe, 
+  Atom, 
+  Microscope,
+  TestTube,
+  Layers,
+  Building,
+  Package,
+  Users,
+  Rat,
+  FileText,
+  BookOpen,
+  Award,
+  CheckCircle2,
+  ClipboardCheck,
+  Clock,
+  Scale,
+  Activity
+} from 'lucide-react';
 
 export const AVAILABLE_PROJECT_ICONS = [
   { key: 'FlaskConical', label: 'Frasco', icon: FlaskConical },
@@ -11,6 +33,61 @@ export const AVAILABLE_PROJECT_ICONS = [
   { key: 'Atom', label: 'Molecular', icon: Atom },
   { key: 'Microscope', label: 'Pesquisa', icon: Microscope },
 ];
+
+export interface MacroIconOption {
+  key: string;
+  label: string;
+  category: 'Laboratório' | 'Produção' | 'Estudos Clínicos' | 'Estudos In Vivo' | 'Documentação' | 'Qualidade' | 'Estabilidade' | 'Segurança' | 'Vacina';
+  icon: any;
+  isInVivoOnly?: boolean;
+}
+
+export const AVAILABLE_MACRO_ICONS: MacroIconOption[] = [
+  // Laboratório
+  { key: 'FlaskConical', label: 'Bancada / Ensaio', category: 'Laboratório', icon: FlaskConical },
+  { key: 'TestTube', label: 'Tubo de Ensaio', category: 'Laboratório', icon: TestTube },
+  { key: 'Microscope', label: 'Microscópio', category: 'Laboratório', icon: Microscope },
+  { key: 'Atom', label: 'Biofísica / Molecular', category: 'Laboratório', icon: Atom },
+  { key: 'Dna', label: 'DNA / Genética', category: 'Laboratório', icon: Dna },
+
+  // Produção & Escalonamento
+  { key: 'Layers', label: 'Bancos / Processo Upstream', category: 'Produção', icon: Layers },
+  { key: 'Building', label: 'Planta Piloto / BPF', category: 'Produção', icon: Building },
+  { key: 'Package', label: 'Lote / Envase Primário', category: 'Produção', icon: Package },
+
+  // Estudos Clínicos
+  { key: 'Users', label: 'Ensaios Clínicos (Voluntários)', category: 'Estudos Clínicos', icon: Users },
+
+  // Estudos In Vivo (Animal model only)
+  { key: 'Rat', label: 'Modelo Animal / In Vivo', category: 'Estudos In Vivo', icon: Rat, isInVivoOnly: true },
+
+  // Documentação & Dossiê
+  { key: 'FileText', label: 'Dossiê / Relatório Técnico', category: 'Documentação', icon: FileText },
+  { key: 'BookOpen', label: 'Normas / Literatura Científica', category: 'Documentação', icon: BookOpen },
+
+  // Qualidade & Validação
+  { key: 'Award', label: 'Certificação / Validação', category: 'Qualidade', icon: Award },
+  { key: 'CheckCircle2', label: 'Controle de Qualidade', category: 'Qualidade', icon: CheckCircle2 },
+  { key: 'ClipboardCheck', label: 'Auditoria / Conformidade', category: 'Qualidade', icon: ClipboardCheck },
+
+  // Estabilidade
+  { key: 'Clock', label: 'Estabilidade / Validade', category: 'Estabilidade', icon: Clock },
+
+  // Segurança & Regulatório
+  { key: 'ShieldCheck', label: 'Segurança / Imunologia', category: 'Segurança', icon: ShieldCheck },
+  { key: 'Scale', label: 'Marco Regulatório / Anvisa', category: 'Segurança', icon: Scale },
+
+  // Vacina & Formulação
+  { key: 'Syringe', label: 'Formulação Vacinal', category: 'Vacina', icon: Syringe },
+  { key: 'Sparkles', label: 'Candidato / Inovação', category: 'Vacina', icon: Sparkles },
+  { key: 'Activity', label: 'Imunogenicidade / Potência', category: 'Vacina', icon: Activity },
+];
+
+export const getMacroIconComponent = (key?: string) => {
+  if (!key) return FlaskConical;
+  const found = AVAILABLE_MACRO_ICONS.find(i => i.key === key);
+  return found ? found.icon : FlaskConical;
+};
 
 export const DEFAULT_TASK_GROUPS: TaskGroup[] = [
   { id: 'group_spin_utg', name: 'SpiN-UTG', projectName: 'SpiN-UTG', color: '#0d9488', createdAt: new Date().toISOString(), createdBy: 'Sistema' },

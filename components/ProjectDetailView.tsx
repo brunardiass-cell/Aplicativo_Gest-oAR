@@ -50,7 +50,8 @@ import {
   FileSpreadsheet,
   Layers3,
   Edit3,
-  Sliders
+  Sliders,
+  Pencil
 } from 'lucide-react';
 import { 
   Project, 
@@ -67,7 +68,14 @@ import {
   ProjectContributionItem,
   ProjectHistoryEvent
 } from '../types';
-import { STANDARD_REGULATORY_GROUPS, VACCINE_PLATFORM_PHASES, AVAILABLE_PROJECT_ICONS } from '../constants';
+import { 
+  STANDARD_REGULATORY_GROUPS, 
+  VACCINE_PLATFORM_PHASES, 
+  AVAILABLE_PROJECT_ICONS,
+  AVAILABLE_MACRO_ICONS,
+  getMacroIconComponent,
+  DEFAULT_REGULATORY_STANDARDS
+} from '../constants';
 import { CompleteActivityModal } from './CompleteActivityModal';
 
 interface ProjectDetailViewProps {
@@ -577,14 +585,42 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const [newGuideTitle, setNewGuideTitle] = useState('');
   const [newGuideLink, setNewGuideLink] = useState('');
   const [newGuideStandardId, setNewGuideStandardId] = useState('');
+  const [guideModalMode, setGuideModalMode] = useState<'catalog' | 'manual'>('catalog');
+  const [guideSearchQuery, setGuideSearchQuery] = useState('');
   const [isAddPointModalOpen, setIsAddPointModalOpen] = useState(false);
   const [newPointText, setNewPointText] = useState('');
   const [isAddJustificationModalOpen, setIsAddJustificationModalOpen] = useState(false);
   const [newJustificationText, setNewJustificationText] = useState('');
 
+  // Macro icon customization on project level (manager can change per project without altering base plan)
+  const [selectedMacroForIconEdit, setSelectedMacroForIconEdit] = useState<MacroActivity | null>(null);
+  const [isMacroIconModalOpen, setIsMacroIconModalOpen] = useState(false);
+  const [projectIconCategoryFilter, setProjectIconCategoryFilter] = useState('Todos');
+
   // Presentation link and discussion comment states
   const [presentationLinkInput, setPresentationLinkInput] = useState('');
   const [newDiscussionComment, setNewDiscussionComment] = useState('');
+
+  // Standards catalog with fallback
+  const allAvailableStandards = useMemo(() => {
+    if (regulatoryStandards && regulatoryStandards.length > 0) {
+      return regulatoryStandards;
+    }
+    return DEFAULT_REGULATORY_STANDARDS;
+  }, [regulatoryStandards]);
+
+  const filteredProjectStandards = useMemo(() => {
+    const q = guideSearchQuery.toLowerCase().trim();
+    if (!q) return allAvailableStandards;
+    return allAvailableStandards.filter(s => 
+      (s.name && s.name.toLowerCase().includes(q)) ||
+      (s.code && s.code.toLowerCase().includes(q)) ||
+      (s.theme && s.theme.toLowerCase().includes(q)) ||
+      (s.type && s.type.toLowerCase().includes(q)) ||
+      (s.summary && s.summary.toLowerCase().includes(q)) ||
+      (s.keywords && s.keywords.some(k => k.toLowerCase().includes(q)))
+    );
+  }, [allAvailableStandards, guideSearchQuery]);
 
   // Horizontal journey carousel scroll ref
   const journeyScrollRef = useRef<HTMLDivElement>(null);
@@ -1131,7 +1167,8 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     const newGuide: PlanReferenceGuide = {
       title: newGuideTitle.trim(),
       link: newGuideLink.trim() || undefined,
-      standardId: newGuideStandardId || undefined
+      standardId: newGuideStandardId || undefined,
+      type: 'norma'
     };
     updateActiveMacro(macro => {
       const currentGuides = macro.referenceGuides && macro.referenceGuides.length > 0
@@ -1143,6 +1180,44 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     setNewGuideTitle('');
     setNewGuideLink('');
     setNewGuideStandardId('');
+    setGuideSearchQuery('');
+  };
+
+  const handleLinkExistingStandardToMacro = (std: RegulatoryStandard) => {
+    const newGuide: PlanReferenceGuide = {
+      id: std.id,
+      title: std.name || `${std.code || ''} ${std.title || ''}`.trim(),
+      link: std.documentLink || std.link || std.pdfUrl || undefined,
+      standardId: std.id,
+      type: 'norma'
+    };
+    updateActiveMacro(macro => {
+      const currentGuides = macro.referenceGuides && macro.referenceGuides.length > 0
+        ? [...macro.referenceGuides, newGuide]
+        : [...activeGroup.referenceGuides, newGuide];
+      return { ...macro, referenceGuides: currentGuides };
+    });
+    setIsAddGuideModalOpen(false);
+    setNewGuideTitle('');
+    setNewGuideLink('');
+    setNewGuideStandardId('');
+    setGuideSearchQuery('');
+  };
+
+  const handleUpdateMacroIcon = (newIconKey: string) => {
+    if (!selectedMacroForIconEdit) return;
+    const updatedMacros = (project.macroActivities || []).map(m => {
+      if (m.id === selectedMacroForIconEdit.id) {
+        return { ...m, icon: newIconKey };
+      }
+      return m;
+    });
+    onUpdateProject({
+      ...project,
+      macroActivities: updatedMacros
+    });
+    setIsMacroIconModalOpen(false);
+    setSelectedMacroForIconEdit(null);
   };
 
   const handleSaveNewPoint = () => {
@@ -2492,11 +2567,32 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       }`}
                     >
                       <div className="space-y-2">
-                        {/* Number badge */}
-                        <div className={`w-5 h-5 rounded-full font-black text-[11px] flex items-center justify-center ${
-                          isSelected ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white'
-                        }`}>
-                          {group.number}
+                        {/* Number badge and Macro Icon */}
+                        <div className="flex items-center justify-between">
+                          <div className={`w-5 h-5 rounded-full font-black text-[11px] flex items-center justify-center ${
+                            isSelected ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white'
+                          }`}>
+                            {group.number}
+                          </div>
+                          {(() => {
+                            const IconComp = getMacroIconComponent(group.matchedMacro?.icon);
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (group.matchedMacro) {
+                                    setSelectedMacroForIconEdit(group.matchedMacro);
+                                    setIsMacroIconModalOpen(true);
+                                  }
+                                }}
+                                className="w-6 h-6 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 flex items-center justify-center transition cursor-pointer"
+                                title="Alterar ícone da macroatividade neste projeto"
+                              >
+                                <IconComp size={13} />
+                              </button>
+                            );
+                          })()}
                         </div>
 
                         {/* Group Title */}
@@ -2574,8 +2670,29 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 {/* Active Group Header */}
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-100 pb-5">
                   <div className="flex items-start gap-3.5">
-                    <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-black text-lg flex items-center justify-center shrink-0 shadow-xs">
-                      {activeGroup.number}
+                    <div className="relative group/icon flex items-center justify-center shrink-0">
+                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center shadow-md">
+                        {(() => {
+                          const IconComp = getMacroIconComponent(activeGroup.matchedMacro?.icon);
+                          return <IconComp size={22} className="text-white" />;
+                        })()}
+                      </div>
+                      <div className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] font-black flex items-center justify-center border-2 border-white shadow-xs">
+                        {activeGroup.number}
+                      </div>
+                      {activeGroup.matchedMacro && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedMacroForIconEdit(activeGroup.matchedMacro || null);
+                            setIsMacroIconModalOpen(true);
+                          }}
+                          className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white hover:bg-blue-50 text-blue-700 border border-slate-200 flex items-center justify-center shadow-xs cursor-pointer opacity-90 hover:opacity-100 transition"
+                          title="Alterar ícone da macroatividade neste projeto"
+                        >
+                          <Pencil size={10} />
+                        </button>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -3791,9 +3908,10 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   <span>Normas e Guias Regulatórios Vinculados</span>
                   <span className="text-[10px] text-slate-400 font-normal">Reutiliza registros do módulo sem duplicação</span>
                 </label>
-                <div className="max-h-28 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                  {regulatoryStandards.map(std => {
+                <div className="max-h-36 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                  {allAvailableStandards.map(std => {
                     const isChecked = decisionFormLinkedStandards.includes(std.id);
+                    const displayName = std.name || `${std.code || ''} ${std.title || ''}`.trim();
                     return (
                       <label key={std.id} className="flex items-center gap-2 p-1.5 hover:bg-white rounded-lg cursor-pointer text-xs">
                         <input
@@ -3808,8 +3926,8 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                           }}
                           className="rounded text-blue-600 focus:ring-blue-500"
                         />
-                        <span className="font-bold text-slate-800">{std.code}</span>
-                        <span className="text-slate-500 truncate">{std.title}</span>
+                        {std.code && <span className="font-bold text-slate-800 shrink-0">{std.code}</span>}
+                        <span className="text-slate-600 truncate">{displayName}</span>
                       </label>
                     );
                   })}
@@ -3938,13 +4056,19 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               <textarea
                 value={newDecisionQuestion}
                 onChange={e => setNewDecisionQuestion(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+                    e.preventDefault();
+                    handleAddNewDecision();
+                  }
+                }}
                 rows={3}
-                placeholder="Ex: Qual a justificativa para a via de administração e o esquema de doses?"
+                placeholder="Ex: Qual a justificativa para a via de administração e o esquema de doses? (Enter para salvar, Ctrl+Enter para quebra de linha)"
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
                 autoFocus
               />
               <p className="text-[11px] text-slate-400">
-                A pergunta será inserida inicialmente como "Pendente (A avaliar)" para que o gestor possa registrar a fundamentação gradualmente e mapear o campo na Base Regulatória.
+                Pressione Enter para salvar imediatamente ou Ctrl + Enter para inserir uma quebra de linha.
               </p>
             </div>
 
@@ -3968,92 +4092,208 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       )}
 
-      {/* ADD GUIDE MODAL (Item 2: Inserir manualmente ou selecionar norma já cadastrada) */}
+      {/* ADD GUIDE MODAL (Item 5: Selecionar norma existente vs Cadastrar referência manualmente) */}
       {isAddGuideModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-black text-slate-900">
-                Adicionar Norma, Guia ou Artigo
-              </h3>
+              <div>
+                <span className="text-[11px] font-black text-blue-600 uppercase tracking-wider">
+                  Macroatividade: {activeGroup.name}
+                </span>
+                <h3 className="text-base font-black text-slate-900">
+                  Adicionar Norma, Guia ou Referência Regulatória
+                </h3>
+              </div>
               <button 
-                onClick={() => setIsAddGuideModalOpen(false)}
+                onClick={() => {
+                  setIsAddGuideModalOpen(false);
+                  setGuideSearchQuery('');
+                  setNewGuideTitle('');
+                  setNewGuideLink('');
+                }}
                 className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 cursor-pointer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="space-y-4 text-xs">
-              {/* Option 1: Select from existing regulatory standards */}
-              <div className="p-3 bg-blue-50/50 rounded-2xl border border-blue-200/60 space-y-2">
-                <label className="font-bold text-blue-950 block">
-                  Reutilizar Norma cadastrada no Módulo Regulatório:
-                </label>
-                <select
-                  value={newGuideStandardId}
-                  onChange={e => {
-                    const stdId = e.target.value;
-                    setNewGuideStandardId(stdId);
-                    const found = regulatoryStandards.find(s => s.id === stdId);
-                    if (found) {
-                      setNewGuideTitle(`${found.code} – ${found.title}`);
-                      setNewGuideLink(found.link || found.pdfUrl || '');
-                    }
-                  }}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white font-semibold"
-                >
-                  <option value="">-- Selecione uma norma existente ou insira abaixo manualmente --</option>
-                  {regulatoryStandards.map(std => (
-                    <option key={std.id} value={std.id}>
-                      {std.code} – {std.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Título ou Referência</label>
-                <input
-                  type="text"
-                  value={newGuideTitle}
-                  onChange={e => setNewGuideTitle(e.target.value)}
-                  placeholder="Ex: RDC Anvisa nº 55/2010 ou Artigo Nature 2024"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Link de Acesso (Não exige anexo)</label>
-                <input
-                  type="url"
-                  value={newGuideLink}
-                  onChange={e => setNewGuideLink(e.target.value)}
-                  placeholder="https://www.gov.br/anvisa ou https://ctvacinas.sharepoint.com/..."
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
-                />
-                <span className="text-[11px] text-slate-400 mt-1 block">
-                  Preserva o sigilo de documentos armazenados em ambientes restritos registrando apenas o link de acesso.
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+            {/* Mode Tabs */}
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl">
               <button
                 type="button"
-                onClick={() => setIsAddGuideModalOpen(false)}
-                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                onClick={() => setGuideModalMode('catalog')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                  guideModalMode === 'catalog'
+                    ? 'bg-white text-blue-900 shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
               >
-                Cancelar
+                <BookOpen size={14} className={guideModalMode === 'catalog' ? 'text-blue-600' : 'text-slate-400'} />
+                Selecionar norma existente ({allAvailableStandards.length})
               </button>
               <button
                 type="button"
-                onClick={handleSaveNewGuide}
-                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition shadow-xs cursor-pointer"
+                onClick={() => setGuideModalMode('manual')}
+                className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                  guideModalMode === 'manual'
+                    ? 'bg-white text-blue-900 shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
               >
-                Salvar Referência
+                <LinkIcon size={14} className={guideModalMode === 'manual' ? 'text-blue-600' : 'text-slate-400'} />
+                Cadastrar referência manualmente
               </button>
             </div>
+
+            {guideModalMode === 'catalog' ? (
+              <div className="space-y-3">
+                {/* Search input */}
+                <div className="relative">
+                  <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={guideSearchQuery}
+                    onChange={e => setGuideSearchQuery(e.target.value)}
+                    placeholder="Pesquisar norma por código, tema, órgão (Anvisa, OMS...) ou título..."
+                    className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+                    autoFocus
+                  />
+                </div>
+
+                {/* Standards list */}
+                <div className="max-h-72 overflow-y-auto space-y-2 pr-1 divide-y divide-slate-100">
+                  {filteredProjectStandards.length === 0 ? (
+                    <div className="p-6 text-center text-slate-400 text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      Nenhuma norma encontrada para "{guideSearchQuery}".
+                    </div>
+                  ) : (
+                    filteredProjectStandards.map(std => {
+                      const displayName = std.name || `${std.code || ''} ${std.title || ''}`.trim();
+                      const linkUrl = std.documentLink || std.link || std.pdfUrl;
+
+                      return (
+                        <div
+                          key={std.id}
+                          className="pt-2 first:pt-0 p-2.5 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/40 transition flex items-start justify-between gap-3 group"
+                        >
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {std.code && (
+                                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-md font-black text-[10px]">
+                                  {std.code}
+                                </span>
+                              )}
+                              {std.type && (
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md font-bold text-[10px]">
+                                  {std.type}
+                                </span>
+                              )}
+                              {std.theme && (
+                                <span className="text-[10px] text-slate-400">
+                                  • {std.theme}
+                                </span>
+                              )}
+                            </div>
+                            <h4 className="text-xs font-bold text-slate-900 group-hover:text-blue-900 leading-snug">
+                              {displayName}
+                            </h4>
+                            {std.summary && (
+                              <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                                {std.summary}
+                              </p>
+                            )}
+                            {linkUrl && (
+                              <a
+                                href={linkUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={e => e.stopPropagation()}
+                                className="text-[11px] text-blue-600 hover:underline inline-flex items-center gap-1 mt-0.5"
+                              >
+                                <ExternalLink size={10} /> Link oficial da norma
+                              </a>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleLinkExistingStandardToMacro(std)}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-2xs shrink-0 flex items-center gap-1 cursor-pointer"
+                          >
+                            <Check size={12} /> Vincular
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Nome / Título da Referência <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newGuideTitle}
+                    onChange={e => setNewGuideTitle(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSaveNewGuide();
+                      }
+                    }}
+                    placeholder="Ex: RDC Anvisa nº 55/2010 ou Artigo Nature 2024 (Pressione Enter para salvar)"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-blue-500/20"
+                    autoFocus
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Pressione Enter para salvar imediatamente.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Link de Acesso (Não exige anexo)
+                  </label>
+                  <input
+                    type="url"
+                    value={newGuideLink}
+                    onChange={e => setNewGuideLink(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSaveNewGuide();
+                      }
+                    }}
+                    placeholder="https://www.gov.br/anvisa ou https://ctvacinas.sharepoint.com/..."
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                  <span className="text-[11px] text-slate-400 mt-1 block">
+                    Preserva o sigilo de documentos armazenados em ambientes restritos registrando apenas o link de acesso.
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddGuideModalOpen(false)}
+                    className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveNewGuide}
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition shadow-xs cursor-pointer"
+                  >
+                    Salvar Referência
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -4081,11 +4321,20 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               <textarea
                 value={newPointText}
                 onChange={e => setNewPointText(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSaveNewPoint();
+                  }
+                }}
                 rows={3}
-                placeholder="Ex: Validação rigorosa dos métodos analíticos de quantificação de endotoxinas..."
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                placeholder="Ex: Validação rigorosa dos métodos analíticos de quantificação de endotoxinas... (Enter para salvar)"
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-amber-500/20"
                 autoFocus
               />
+              <p className="text-[10px] text-slate-400">
+                Pressione Enter para salvar imediatamente ou Ctrl + Enter para inserir quebra de linha.
+              </p>
             </div>
 
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
@@ -4506,6 +4755,121 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition shadow-xs cursor-pointer"
               >
                 Salvar no Histórico
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PROJECT-LEVEL MACRO ICON PICKER MODAL (Item 4: Permitir que o gestor altere o ícone no projeto específico, sem modificar o plano-base) */}
+      {isMacroIconModalOpen && selectedMacroForIconEdit && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[11px] font-black text-blue-600 uppercase tracking-wider">
+                  Personalização Visual da Jornada
+                </span>
+                <h3 className="text-base font-black text-slate-900">
+                  Selecionar Ícone da Macroatividade
+                </h3>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  Macroatividade: <strong className="text-slate-800">{selectedMacroForIconEdit.name}</strong>
+                </p>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsMacroIconModalOpen(false);
+                  setSelectedMacroForIconEdit(null);
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-3 bg-blue-50/60 rounded-2xl border border-blue-200/50 text-xs text-blue-900 flex items-center gap-2">
+              <span className="font-bold shrink-0">Nota:</span>
+              <span>
+                Esta alteração será aplicada exclusivamente a este projeto, sem modificar o modelo do plano-base original.
+              </span>
+            </div>
+
+            {/* Category Filter */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {['Todos', 'Laboratório', 'Produção', 'Clínico', 'Documentação', 'Qualidade', 'Estabilidade', 'Segurança'].map(cat => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setProjectIconCategoryFilter(cat)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    projectIconCategoryFilter === cat
+                      ? 'bg-blue-600 text-white shadow-2xs font-black'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Icons Grid */}
+            <div className="max-h-72 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 p-1">
+              {AVAILABLE_MACRO_ICONS.filter(opt => {
+                const isMacroInVivo = selectedMacroForIconEdit.name.toLowerCase().includes('in vivo') || 
+                                     selectedMacroForIconEdit.name.toLowerCase().includes('animal') || 
+                                     selectedMacroForIconEdit.name.toLowerCase().includes('roedores');
+                if (opt.isInVivoOnly && !isMacroInVivo) return false;
+                if (projectIconCategoryFilter !== 'Todos' && opt.category !== projectIconCategoryFilter) return false;
+                return true;
+              }).map(opt => {
+                const IconComponent = opt.icon;
+                const isCurrent = selectedMacroForIconEdit.icon === opt.key;
+
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => handleUpdateMacroIcon(opt.key)}
+                    className={`p-3 rounded-2xl border text-left transition flex flex-col items-center gap-2 text-center cursor-pointer ${
+                      isCurrent
+                        ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-500/20 shadow-xs'
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                      isCurrent ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
+                    }`}>
+                      <IconComponent size={20} />
+                    </div>
+                    <div className="w-full">
+                      <span className="text-xs font-black text-slate-900 block truncate">
+                        {opt.label}
+                      </span>
+                      <span className="text-[10px] text-slate-400 block truncate">
+                        {opt.category}
+                      </span>
+                    </div>
+                    {isCurrent && (
+                      <span className="text-[10px] font-black text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                        Ativo
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMacroIconModalOpen(false);
+                  setSelectedMacroForIconEdit(null);
+                }}
+                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Fechar
               </button>
             </div>
           </div>

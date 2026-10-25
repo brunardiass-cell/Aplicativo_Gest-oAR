@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { 
   ArrowLeft, 
   Settings, 
@@ -29,7 +29,11 @@ import {
   Syringe,
   Atom,
   Layers,
-  Building
+  Building,
+  Search,
+  Edit3,
+  Filter,
+  Rat
 } from 'lucide-react';
 import { ActivityPlanTemplate, MacroActivityTemplate, PlanReferenceGuide, PlanDecisionItem, RegulatoryStandard } from '../types';
 import { 
@@ -39,7 +43,15 @@ import {
   DEFAULT_MICRO_TEMPLATES 
 } from '../utils/microTemplates';
 import { ManageTemplatesDrawer } from './ManageTemplatesDrawer';
-import { DEFAULT_ACTIVITY_PLANS, VACCINE_PLATFORM_PHASES, STANDARD_REGULATORY_GROUPS } from '../constants';
+import { 
+  DEFAULT_ACTIVITY_PLANS, 
+  VACCINE_PLATFORM_PHASES, 
+  STANDARD_REGULATORY_GROUPS,
+  AVAILABLE_MACRO_ICONS,
+  MacroIconOption,
+  getMacroIconComponent,
+  DEFAULT_REGULATORY_STANDARDS
+} from '../constants';
 
 export type PlanTypeKey = 'recombinant_protein' | 'attenuated_virus' | 'dna_vaccine' | 'rna_vaccine' | 'custom';
 
@@ -152,8 +164,10 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
   const [isTemplateDrawerOpen, setIsTemplateDrawerOpen] = useState(false);
   const [templateToEdit, setTemplateToEdit] = useState<MicroOperationalTemplate | null>(null);
 
-  // Active dropdown for "Aplicar template"
-  const [openTemplateDropdownMicroId, setOpenTemplateDropdownMicroId] = useState<string | null>(null);
+  // Macro icon selection
+  const [newMacroIcon, setNewMacroIcon] = useState<string>('FlaskConical');
+  const [iconPickerTarget, setIconPickerTarget] = useState<{ phaseId?: string; macroId?: string; isNew?: boolean; currentIcon?: string } | null>(null);
+  const [iconCategoryFilter, setIconCategoryFilter] = useState<string>('Todos');
 
   // Inline additions
   const [newPhaseName, setNewPhaseName] = useState('');
@@ -167,6 +181,34 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
   const [activeInputType, setActiveInputType] = useState<{ macroId: string; type: 'question' | 'regulatory' | 'justification' | 'guide' } | null>(null);
   const [tempTextValue, setTempTextValue] = useState('');
   const [tempGuideLink, setTempGuideLink] = useState('');
+  const [guideInputMode, setGuideInputMode] = useState<'catalog' | 'manual'>('catalog');
+  const [standardSearchQuery, setStandardSearchQuery] = useState('');
+
+  // Refs for fast-save focus and preventing duplicate submissions
+  const isSubmittingRef = useRef<boolean>(false);
+  const microInputRef = useRef<HTMLInputElement>(null);
+  const quickInputRef = useRef<HTMLInputElement>(null);
+
+  // Regulatory standards list with fallback to defaults so it is never empty
+  const allAvailableStandards = useMemo(() => {
+    if (regulatoryStandards && regulatoryStandards.length > 0) {
+      return regulatoryStandards;
+    }
+    return DEFAULT_REGULATORY_STANDARDS;
+  }, [regulatoryStandards]);
+
+  const filteredStandards = useMemo(() => {
+    const q = standardSearchQuery.toLowerCase().trim();
+    if (!q) return allAvailableStandards;
+    return allAvailableStandards.filter(s => 
+      (s.name && s.name.toLowerCase().includes(q)) ||
+      (s.code && s.code.toLowerCase().includes(q)) ||
+      (s.theme && s.theme.toLowerCase().includes(q)) ||
+      (s.type && s.type.toLowerCase().includes(q)) ||
+      (s.summary && s.summary.toLowerCase().includes(q)) ||
+      (s.keywords && s.keywords.some(k => k.toLowerCase().includes(q)))
+    );
+  }, [allAvailableStandards, standardSearchQuery]);
 
   // Switch plan type
   const handleSelectPlanType = (typeKey: PlanTypeKey) => {
@@ -310,10 +352,40 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
   };
 
   const handleAddMacro = (phaseId: string) => {
-    if (!newMacroName.trim()) return;
+    const trimmed = newMacroName.trim();
+    if (!trimmed) return;
+
+    // Intelligent icon choice: if user customized, use it. Otherwise smart default (NEVER animal unless explicit)
+    let assignedIcon = newMacroIcon || 'FlaskConical';
+    const isAnimal = trimmed.toLowerCase().includes('in vivo') || 
+                     trimmed.toLowerCase().includes('animal') || 
+                     trimmed.toLowerCase().includes('roedores');
+    if (!newMacroIcon || newMacroIcon === 'FlaskConical') {
+      if (isAnimal) {
+        assignedIcon = 'Rat';
+      } else if (trimmed.toLowerCase().includes('banco') || trimmed.toLowerCase().includes('upstream')) {
+        assignedIcon = 'Layers';
+      } else if (trimmed.toLowerCase().includes('lote') || trimmed.toLowerCase().includes('bpl') || trimmed.toLowerCase().includes('produção')) {
+        assignedIcon = 'TestTube';
+      } else if (trimmed.toLowerCase().includes('impureza') || trimmed.toLowerCase().includes('caracterização')) {
+        assignedIcon = 'Microscope';
+      } else if (trimmed.toLowerCase().includes('estabilidade')) {
+        assignedIcon = 'Clock';
+      } else if (trimmed.toLowerCase().includes('formulação') || trimmed.toLowerCase().includes('adjuvante')) {
+        assignedIcon = 'Syringe';
+      } else if (trimmed.toLowerCase().includes('clínico') || trimmed.toLowerCase().includes('voluntário')) {
+        assignedIcon = 'Users';
+      } else if (trimmed.toLowerCase().includes('dossiê') || trimmed.toLowerCase().includes('documentação') || trimmed.toLowerCase().includes('ddcm')) {
+        assignedIcon = 'FileText';
+      } else {
+        assignedIcon = 'FlaskConical';
+      }
+    }
+
     const newMac: PlanMacroItem = {
       id: `mac_${Date.now()}`,
-      name: newMacroName.trim(),
+      name: trimmed,
+      icon: assignedIcon,
       description: 'Macroatividade estratégica',
       expanded: true,
       activeTab: 'micros',
@@ -325,7 +397,19 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
     };
     setPhases(phases.map(p => p.id === phaseId ? { ...p, macros: [...p.macros, newMac] } : p));
     setNewMacroName('');
+    setNewMacroIcon('FlaskConical');
     setNewMacroPhaseId(null);
+  };
+
+  const handleChangeMacroIcon = (phaseId: string, macroId: string, iconKey: string) => {
+    setPhases(phases.map(p => {
+      if (p.id !== phaseId) return p;
+      return {
+        ...p,
+        macros: p.macros.map(m => m.id === macroId ? { ...m, icon: iconKey } : m)
+      };
+    }));
+    setIconPickerTarget(null);
   };
 
   const handleDeleteMacro = (phaseId: string, macroId: string) => {
@@ -338,26 +422,38 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
     }));
   };
 
-  // Micro operations
-  const handleAddMicro = (phaseId: string, macroId: string) => {
-    if (!newMicroName.trim()) return;
-    const newMic: PlanMicroItem = {
-      id: `mic_${Date.now()}`,
-      name: newMicroName.trim(),
-      description: 'Microatividade operacional'
-    };
+  // Micro operations (Fast save with Enter, no duplicate items, focus retained)
+  const handleAddMicro = (phaseId: string, macroId: string, keepOpen: boolean = false) => {
+    const trimmed = newMicroName.trim();
+    if (!trimmed) return;
+
     setPhases(phases.map(p => {
       if (p.id !== phaseId) return p;
       return {
         ...p,
         macros: p.macros.map(m => {
           if (m.id !== macroId) return m;
+          // Prevent exact duplicate microactivities from repeated keystrokes
+          const alreadyExists = m.micros.some(mi => mi.name.toLowerCase() === trimmed.toLowerCase());
+          if (alreadyExists) return m;
+          const newMic: PlanMicroItem = {
+            id: `mic_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+            name: trimmed,
+            description: 'Microatividade operacional'
+          };
           return { ...m, micros: [...m.micros, newMic] };
         })
       };
     }));
+
     setNewMicroName('');
-    setNewMicroMacroId(null);
+    if (!keepOpen) {
+      setNewMicroMacroId(null);
+    } else {
+      setTimeout(() => {
+        microInputRef.current?.focus();
+      }, 50);
+    }
   };
 
   const handleDeleteMicro = (phaseId: string, macroId: string, microId: string) => {
@@ -373,9 +469,11 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
     }));
   };
 
-  // Regulatory item handlers for Leader
-  const handleAddRegulatoryItem = (phaseId: string, macroId: string) => {
-    if (!activeInputType || !tempTextValue.trim()) return;
+  // Regulatory item handlers for Leader (Fast save with Enter, no duplicate items, focus retained)
+  const handleAddRegulatoryItem = (phaseId: string, macroId: string, keepOpen: boolean = false) => {
+    if (!activeInputType) return;
+    const trimmed = tempTextValue.trim();
+    if (!trimmed) return;
     const { type } = activeInputType;
 
     setPhases(phases.map(p => {
@@ -385,15 +483,25 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
         macros: p.macros.map(m => {
           if (m.id !== macroId) return m;
           if (type === 'question') {
-            return { ...m, keyDecisions: [...(m.keyDecisions || []), tempTextValue.trim()] };
+            const alreadyExists = (m.keyDecisions || []).some(q => q.toLowerCase() === trimmed.toLowerCase());
+            if (alreadyExists) return m;
+            return { ...m, keyDecisions: [...(m.keyDecisions || []), trimmed] };
           } else if (type === 'regulatory') {
-            return { ...m, regulatoryPoints: [...(m.regulatoryPoints || []), tempTextValue.trim()] };
+            const alreadyExists = (m.regulatoryPoints || []).some(pt => pt.toLowerCase() === trimmed.toLowerCase());
+            if (alreadyExists) return m;
+            return { ...m, regulatoryPoints: [...(m.regulatoryPoints || []), trimmed] };
           } else if (type === 'justification') {
-            return { ...m, technicalJustifications: [...(m.technicalJustifications || []), tempTextValue.trim()] };
+            const alreadyExists = (m.technicalJustifications || []).some(j => j.toLowerCase() === trimmed.toLowerCase());
+            if (alreadyExists) return m;
+            return { ...m, technicalJustifications: [...(m.technicalJustifications || []), trimmed] };
           } else if (type === 'guide') {
+            const alreadyExists = (m.referenceGuides || []).some(g => g.title.toLowerCase() === trimmed.toLowerCase());
+            if (alreadyExists) return m;
             const newGuide: PlanReferenceGuide = {
-              title: tempTextValue.trim(),
-              link: tempGuideLink.trim() || undefined
+              id: `guide_${Date.now()}`,
+              title: trimmed,
+              link: tempGuideLink.trim() || undefined,
+              type: 'norma'
             };
             return { ...m, referenceGuides: [...(m.referenceGuides || []), newGuide] };
           }
@@ -404,7 +512,41 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
 
     setTempTextValue('');
     setTempGuideLink('');
-    setActiveInputType(null);
+    if (!keepOpen) {
+      setActiveInputType(null);
+    } else {
+      setTimeout(() => {
+        quickInputRef.current?.focus();
+      }, 50);
+    }
+  };
+
+  // Link existing regulatory standard directly from registered catalog (reuses ID, title, and link)
+  const handleLinkExistingStandard = (phaseId: string, macroId: string, standard: RegulatoryStandard) => {
+    setPhases(phases.map(p => {
+      if (p.id !== phaseId) return p;
+      return {
+        ...p,
+        macros: p.macros.map(m => {
+          if (m.id !== macroId) return m;
+          const alreadyExists = (m.referenceGuides || []).some(
+            g => g.standardId === standard.id || g.title.toLowerCase() === standard.name.toLowerCase()
+          );
+          if (alreadyExists) return m;
+          const newGuide: PlanReferenceGuide = {
+            id: standard.id,
+            standardId: standard.id,
+            title: standard.name,
+            link: standard.documentLink || standard.link || undefined,
+            type: 'norma'
+          };
+          return {
+            ...m,
+            referenceGuides: [...(m.referenceGuides || []), newGuide]
+          };
+        })
+      };
+    }));
   };
 
   const handleRemoveRegulatoryItem = (phaseId: string, macroId: string, type: 'question' | 'regulatory' | 'justification' | 'guide', index: number) => {
@@ -429,53 +571,7 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
     }));
   };
 
-  // Apply template to microactivity
-  const handleApplyTemplate = (phaseId: string, macroId: string, microId: string, tmpl: MicroOperationalTemplate) => {
-    setPhases(phases.map(p => {
-      if (p.id !== phaseId) return p;
-      return {
-        ...p,
-        macros: p.macros.map(m => {
-          if (m.id !== macroId) return m;
-          return {
-            ...m,
-            micros: m.micros.map(mi => {
-              if (mi.id !== microId) return mi;
-              return {
-                ...mi,
-                appliedTemplateId: tmpl.id,
-                appliedTemplateName: tmpl.name,
-                checklist: tmpl.checklist.map(c => ({ id: c.id, item: c.item, completed: false })),
-                internalDependencies: tmpl.internalDependencies ? [...tmpl.internalDependencies] : []
-              };
-            })
-          };
-        })
-      };
-    }));
-    setOpenTemplateDropdownMicroId(null);
-  };
 
-  // Remove template from microactivity
-  const handleRemoveTemplate = (phaseId: string, macroId: string, microId: string) => {
-    setPhases(phases.map(p => {
-      if (p.id !== phaseId) return p;
-      return {
-        ...p,
-        macros: p.macros.map(m => {
-          if (m.id !== macroId) return m;
-          return {
-            ...m,
-            micros: m.micros.map(mi => {
-              if (mi.id !== microId) return mi;
-              const { appliedTemplateId, appliedTemplateName, ...rest } = mi;
-              return rest;
-            })
-          };
-        })
-      };
-    }));
-  };
 
   // Save Plan
   const handleSavePlan = () => {
@@ -811,29 +907,47 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                   <div className="p-4 space-y-3 bg-white">
                     {/* Inline add macro in this phase */}
                     {newMacroPhaseId === phase.id && (
-                      <div className="p-3 bg-blue-50/50 border border-blue-200 rounded-xl flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={newMacroName}
-                          onChange={e => setNewMacroName(e.target.value)}
-                          placeholder="Nome da macroatividade (Ex: Estudos in vivo)..."
-                          className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none focus:border-blue-500"
-                          autoFocus
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleAddMacro(phase.id)}
-                          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold cursor-pointer"
-                        >
-                          Salvar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setNewMacroPhaseId(null)}
-                          className="px-2 py-1.5 text-slate-400 text-xs font-bold cursor-pointer"
-                        >
-                          Cancelar
-                        </button>
+                      <div className="p-3 bg-blue-50/50 border border-blue-200 rounded-xl space-y-2">
+                        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setIconPickerTarget({ phaseId: phase.id, isNew: true, currentIcon: newMacroIcon })}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 shadow-2xs shrink-0 cursor-pointer"
+                            title="Escolher ícone da macroatividade"
+                          >
+                            {React.createElement(getMacroIconComponent(newMacroIcon), { size: 15, className: "text-blue-600" })}
+                            <span>Ícone</span>
+                          </button>
+
+                          <input
+                            type="text"
+                            value={newMacroName}
+                            onChange={e => setNewMacroName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
+                                e.preventDefault();
+                                handleAddMacro(phase.id);
+                              }
+                            }}
+                            placeholder="Nome da macroatividade (Ex: Produção de material, Estudos in vivo)..."
+                            className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold outline-none focus:border-blue-500"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAddMacro(phase.id)}
+                            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold cursor-pointer shadow-2xs"
+                          >
+                            Salvar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNewMacroPhaseId(null)}
+                            className="px-2 py-1.5 text-slate-400 text-xs font-bold cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
                       </div>
                     )}
 
@@ -843,6 +957,7 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                       const decisionsCount = (macro.keyDecisions || []).length;
                       const guidesCount = (macro.referenceGuides || []).length;
                       const regCount = (macro.regulatoryPoints || []).length;
+                      const MacroIconComp = getMacroIconComponent(macro.icon);
 
                       return (
                         <div 
@@ -860,6 +975,17 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                               >
                                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                               </button>
+
+                              {/* Macro Icon with preview and edit action */}
+                              <button
+                                type="button"
+                                onClick={() => setIconPickerTarget({ phaseId: phase.id, macroId: macro.id, currentIcon: macro.icon || 'FlaskConical' })}
+                                className="w-7 h-7 rounded-lg border border-slate-200/90 bg-white hover:bg-blue-50 hover:border-blue-300 flex items-center justify-center text-blue-600 transition shadow-2xs shrink-0 cursor-pointer"
+                                title="Clique para alterar o ícone desta macroatividade"
+                              >
+                                <MacroIconComp size={15} />
+                              </button>
+
                               <div className="min-w-0">
                                 <span className="text-xs font-black text-slate-800 block truncate">
                                   {macro.name}
@@ -915,112 +1041,90 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                                 </button>
                               </div>
 
-                              {/* TAB 1: Microatividades */}
+                              {/* TAB 1: Microatividades (Templates removed, fast save with Enter active) */}
                               {activeTab === 'micros' && (
                                 <div className="space-y-2">
-                                  {macro.micros.map((micro) => {
-                                    const hasTemplate = !!micro.appliedTemplateName;
-                                    const isDropdownOpen = openTemplateDropdownMicroId === micro.id;
-
-                                    return (
-                                      <div 
-                                        key={micro.id}
-                                        className="p-2.5 bg-white hover:bg-slate-50 rounded-xl border border-slate-200/80 flex items-center justify-between gap-3 transition group relative"
-                                      >
-                                        <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                                          <FileText size={15} className="text-slate-400 shrink-0" />
-                                          <div className="min-w-0">
-                                            <span className="text-xs font-bold text-slate-800 block truncate">
-                                              {micro.name}
-                                            </span>
-                                          </div>
-                                        </div>
-
-                                        <div className="flex items-center gap-2 relative">
-                                          {hasTemplate ? (
-                                            <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-[11px] font-bold shadow-2xs">
-                                              <FileText size={12} className="text-blue-600" />
-                                              <span>{micro.appliedTemplateName}</span>
-                                              <button
-                                                type="button"
-                                                onClick={() => handleRemoveTemplate(phase.id, macro.id, micro.id)}
-                                                className="text-blue-400 hover:text-red-500 transition ml-1 cursor-pointer"
-                                                title="Remover template"
-                                              >
-                                                <X size={11} />
-                                              </button>
-                                            </div>
-                                          ) : (
-                                            <div className="relative">
-                                              <button
-                                                type="button"
-                                                onClick={() => setOpenTemplateDropdownMicroId(isDropdownOpen ? null : micro.id)}
-                                                className="px-3 py-1 bg-white hover:bg-slate-50 text-blue-600 border border-blue-200 rounded-xl text-[11px] font-bold transition flex items-center gap-1 shadow-2xs cursor-pointer"
-                                              >
-                                                Aplicar template <ChevronDown size={12} />
-                                              </button>
-
-                                              {isDropdownOpen && (
-                                                <div className="absolute right-0 top-full mt-1 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-30 animate-in fade-in zoom-in-95 duration-150">
-                                                  <div className="px-2 py-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                    Templates operacionais:
-                                                  </div>
-                                                  <div className="max-h-48 overflow-y-auto space-y-1">
-                                                    {availableTemplates.map(tmpl => (
-                                                      <button
-                                                        key={tmpl.id}
-                                                        type="button"
-                                                        onClick={() => handleApplyTemplate(phase.id, macro.id, micro.id, tmpl)}
-                                                        className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-blue-50 text-xs font-bold text-slate-800 hover:text-blue-700 transition flex items-center justify-between cursor-pointer"
-                                                      >
-                                                        <span>{tmpl.name}</span>
-                                                        <span className="text-[10px] text-slate-400 font-normal">{tmpl.checklist.length} itens</span>
-                                                      </button>
-                                                    ))}
-                                                  </div>
-                                                </div>
-                                              )}
-                                            </div>
-                                          )}
-
-                                          <button
-                                            type="button"
-                                            onClick={() => handleDeleteMicro(phase.id, macro.id, micro.id)}
-                                            className="p-1 text-slate-300 hover:text-red-500 rounded transition cursor-pointer"
-                                            title="Excluir microatividade"
-                                          >
-                                            <Trash2 size={12} />
-                                          </button>
+                                  {macro.micros.map((micro) => (
+                                    <div 
+                                      key={micro.id}
+                                      className="p-2.5 bg-white hover:bg-slate-50 rounded-xl border border-slate-200/80 flex items-center justify-between gap-3 transition group relative shadow-2xs"
+                                    >
+                                      <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                        <FileText size={15} className="text-slate-400 shrink-0" />
+                                        <div className="min-w-0">
+                                          <span className="text-xs font-bold text-slate-800 block truncate">
+                                            {micro.name}
+                                          </span>
                                         </div>
                                       </div>
-                                    );
-                                  })}
 
-                                  {/* Add Micro inline form */}
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteMicro(phase.id, macro.id, micro.id)}
+                                          className="p-1 text-slate-300 hover:text-red-500 rounded transition cursor-pointer"
+                                          title="Excluir microatividade"
+                                        >
+                                          <Trash2 size={12} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+
+                                  {/* Add Micro inline form with Enter fast-save */}
                                   {newMicroMacroId === macro.id ? (
-                                    <div className="flex items-center gap-2 pt-1">
-                                      <input
-                                        type="text"
-                                        value={newMicroName}
-                                        onChange={e => setNewMicroName(e.target.value)}
-                                        placeholder="Nome da microatividade..."
-                                        className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500"
-                                        autoFocus
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => handleAddMicro(phase.id, macro.id)}
-                                        className="px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold cursor-pointer"
-                                      >
-                                        Salvar
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => setNewMicroMacroId(null)}
-                                        className="px-2 py-1.5 text-slate-400 text-xs font-bold cursor-pointer"
-                                      >
-                                        Cancelar
-                                      </button>
+                                    <div className="flex flex-col gap-1.5 pt-1 bg-blue-50/50 p-2.5 rounded-xl border border-blue-200">
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          ref={microInputRef}
+                                          type="text"
+                                          value={newMicroName}
+                                          onChange={e => setNewMicroName(e.target.value)}
+                                          onKeyDown={e => {
+                                            if (e.key === 'Enter') {
+                                              if (e.ctrlKey || e.metaKey) {
+                                                return; // Ctrl+Enter inserts line break / does not save
+                                              }
+                                              e.preventDefault();
+                                              if (!newMicroName.trim() || isSubmittingRef.current) return;
+                                              isSubmittingRef.current = true;
+                                              handleAddMicro(phase.id, macro.id, true);
+                                              setTimeout(() => {
+                                                isSubmittingRef.current = false;
+                                                microInputRef.current?.focus();
+                                              }, 50);
+                                            }
+                                          }}
+                                          placeholder="Nome da microatividade (Enter para salvar e avançar)..."
+                                          className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 shadow-2xs"
+                                          autoFocus
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            if (!newMicroName.trim() || isSubmittingRef.current) return;
+                                            isSubmittingRef.current = true;
+                                            handleAddMicro(phase.id, macro.id, true);
+                                            setTimeout(() => {
+                                              isSubmittingRef.current = false;
+                                              microInputRef.current?.focus();
+                                            }, 50);
+                                          }}
+                                          className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-2xs cursor-pointer"
+                                        >
+                                          Salvar
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setNewMicroMacroId(null)}
+                                          className="px-2 py-1.5 text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
+                                        >
+                                          Concluir
+                                        </button>
+                                      </div>
+                                      <span className="text-[10px] text-slate-400 pl-1">
+                                        Pressione <strong>Enter</strong> para salvar e continuar digitando; <strong>Ctrl+Enter</strong> para quebra de linha.
+                                      </span>
                                     </div>
                                   ) : (
                                     <button
@@ -1060,31 +1164,58 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                                       </button>
                                     </div>
 
-                                    {/* Inline input */}
+                                    {/* Inline input with Enter fast-save */}
                                     {activeInputType?.macroId === macro.id && activeInputType.type === 'question' && (
-                                      <div className="flex items-center gap-2 p-2 bg-blue-50/60 rounded-xl">
-                                        <input
-                                          type="text"
-                                          value={tempTextValue}
-                                          onChange={e => setTempTextValue(e.target.value)}
-                                          placeholder="Ex: Qual a justificativa para a seleção do modelo animal?"
-                                          className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                                          autoFocus
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() => handleAddRegulatoryItem(phase.id, macro.id)}
-                                          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold cursor-pointer"
-                                        >
-                                          Adicionar
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => setActiveInputType(null)}
-                                          className="px-2 text-slate-400 text-xs cursor-pointer"
-                                        >
-                                          X
-                                        </button>
+                                      <div className="space-y-1.5 p-2 bg-blue-50/60 rounded-xl border border-blue-200">
+                                        <div className="flex items-center gap-2">
+                                          <input
+                                            ref={quickInputRef}
+                                            type="text"
+                                            value={tempTextValue}
+                                            onChange={e => setTempTextValue(e.target.value)}
+                                            onKeyDown={e => {
+                                              if (e.key === 'Enter') {
+                                                if (e.ctrlKey || e.metaKey) return;
+                                                e.preventDefault();
+                                                if (!tempTextValue.trim() || isSubmittingRef.current) return;
+                                                isSubmittingRef.current = true;
+                                                handleAddRegulatoryItem(phase.id, macro.id, true);
+                                                setTimeout(() => {
+                                                  isSubmittingRef.current = false;
+                                                  quickInputRef.current?.focus();
+                                                }, 50);
+                                              }
+                                            }}
+                                            placeholder="Ex: Qual a justificativa para a seleção do modelo animal? (Enter para salvar)"
+                                            className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                                            autoFocus
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              if (!tempTextValue.trim() || isSubmittingRef.current) return;
+                                              isSubmittingRef.current = true;
+                                              handleAddRegulatoryItem(phase.id, macro.id, true);
+                                              setTimeout(() => {
+                                                isSubmittingRef.current = false;
+                                                quickInputRef.current?.focus();
+                                              }, 50);
+                                            }}
+                                            className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold cursor-pointer"
+                                          >
+                                            Salvar
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setActiveInputType(null)}
+                                            className="px-2 text-slate-400 text-xs cursor-pointer hover:text-slate-600 font-bold"
+                                          >
+                                            Concluir
+                                          </button>
+                                        </div>
+                                        <span className="text-[10px] text-slate-400 pl-1">
+                                          Pressione <strong>Enter</strong> para salvar e continuar digitando; <strong>Ctrl+Enter</strong> para quebra de linha.
+                                        </span>
                                       </div>
                                     )}
 
@@ -1127,29 +1258,56 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                                     </div>
 
                                     {activeInputType?.macroId === macro.id && activeInputType.type === 'regulatory' && (
-                                      <div className="flex items-center gap-2 p-2 bg-amber-50/60 rounded-xl">
-                                        <input
-                                          type="text"
-                                          value={tempTextValue}
-                                          onChange={e => setTempTextValue(e.target.value)}
-                                          placeholder="Ex: Conformidade com Boas Práticas de Laboratório (BPL)..."
-                                          className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                                          autoFocus
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() => handleAddRegulatoryItem(phase.id, macro.id)}
-                                          className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-bold cursor-pointer"
-                                        >
-                                          Adicionar
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => setActiveInputType(null)}
-                                          className="px-2 text-slate-400 text-xs cursor-pointer"
-                                        >
-                                          X
-                                        </button>
+                                      <div className="space-y-1.5 p-2 bg-amber-50/60 rounded-xl border border-amber-200">
+                                        <div className="flex items-center gap-2">
+                                          <input
+                                            ref={quickInputRef}
+                                            type="text"
+                                            value={tempTextValue}
+                                            onChange={e => setTempTextValue(e.target.value)}
+                                            onKeyDown={e => {
+                                              if (e.key === 'Enter') {
+                                                if (e.ctrlKey || e.metaKey) return;
+                                                e.preventDefault();
+                                                if (!tempTextValue.trim() || isSubmittingRef.current) return;
+                                                isSubmittingRef.current = true;
+                                                handleAddRegulatoryItem(phase.id, macro.id, true);
+                                                setTimeout(() => {
+                                                  isSubmittingRef.current = false;
+                                                  quickInputRef.current?.focus();
+                                                }, 50);
+                                              }
+                                            }}
+                                            placeholder="Ex: Conformidade com Boas Práticas de Laboratório (BPL)... (Enter para salvar)"
+                                            className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                                            autoFocus
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              if (!tempTextValue.trim() || isSubmittingRef.current) return;
+                                              isSubmittingRef.current = true;
+                                              handleAddRegulatoryItem(phase.id, macro.id, true);
+                                              setTimeout(() => {
+                                                isSubmittingRef.current = false;
+                                                quickInputRef.current?.focus();
+                                              }, 50);
+                                            }}
+                                            className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-bold cursor-pointer"
+                                          >
+                                            Salvar
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setActiveInputType(null)}
+                                            className="px-2 text-slate-400 text-xs cursor-pointer hover:text-slate-600 font-bold"
+                                          >
+                                            Concluir
+                                          </button>
+                                        </div>
+                                        <span className="text-[10px] text-slate-400 pl-1">
+                                          Pressione <strong>Enter</strong> para salvar e continuar digitando; <strong>Ctrl+Enter</strong> para quebra de linha.
+                                        </span>
                                       </div>
                                     )}
 
@@ -1169,7 +1327,7 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                                     </div>
                                   </div>
 
-                                  {/* 3. Normas, Guias e Artigos de Referência */}
+                                  {/* 3. Normas, Guias e Artigos de Referência (PRIORITY 5: Dual Selector - Searchable Catalog vs Manual) */}
                                   <div className="space-y-2 pt-2 border-t border-slate-100">
                                     <div className="flex items-center justify-between">
                                       <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
@@ -1182,46 +1340,196 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                                           setActiveInputType({ macroId: macro.id, type: 'guide' });
                                           setTempTextValue('');
                                           setTempGuideLink('');
+                                          setGuideInputMode('catalog');
+                                          setStandardSearchQuery('');
                                         }}
                                         className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 cursor-pointer"
                                       >
-                                        <Plus size={12} /> Adicionar guia
+                                        <Plus size={12} /> Adicionar norma/guia
                                       </button>
                                     </div>
 
+                                    {/* Dual Selection Container */}
                                     {activeInputType?.macroId === macro.id && activeInputType.type === 'guide' && (
-                                      <div className="space-y-2 p-2.5 bg-emerald-50/60 rounded-xl">
-                                        <input
-                                          type="text"
-                                          value={tempTextValue}
-                                          onChange={e => setTempTextValue(e.target.value)}
-                                          placeholder="Título da norma (Ex: WHO TRS 927)..."
-                                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                                          autoFocus
-                                        />
-                                        <div className="flex items-center gap-2">
-                                          <input
-                                            type="url"
-                                            value={tempGuideLink}
-                                            onChange={e => setTempGuideLink(e.target.value)}
-                                            placeholder="Link oficial ou do SharePoint..."
-                                            className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                                          />
+                                      <div className="space-y-3 p-3 bg-emerald-50/70 rounded-2xl border border-emerald-200">
+                                        {/* Dual Tab Buttons */}
+                                        <div className="flex items-center gap-2 border-b border-emerald-200/80 pb-2">
                                           <button
                                             type="button"
-                                            onClick={() => handleAddRegulatoryItem(phase.id, macro.id)}
-                                            className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold cursor-pointer"
+                                            onClick={() => setGuideInputMode('catalog')}
+                                            className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                                              guideInputMode === 'catalog' 
+                                                ? 'bg-emerald-600 text-white shadow-2xs' 
+                                                : 'bg-white/90 text-emerald-900 hover:bg-white'
+                                            }`}
                                           >
-                                            Salvar
+                                            <BookOpen size={13} /> Selecionar norma existente
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setGuideInputMode('manual')}
+                                            className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                                              guideInputMode === 'manual' 
+                                                ? 'bg-emerald-600 text-white shadow-2xs' 
+                                                : 'bg-white/90 text-emerald-900 hover:bg-white'
+                                            }`}
+                                          >
+                                            <Plus size={13} /> Cadastrar referência manualmente
                                           </button>
                                           <button
                                             type="button"
                                             onClick={() => setActiveInputType(null)}
-                                            className="px-2 text-slate-400 text-xs cursor-pointer"
+                                            className="ml-auto text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
                                           >
-                                            X
+                                            Fechar
                                           </button>
                                         </div>
+
+                                        {/* Option A: Searchable Registered Standards Catalog */}
+                                        {guideInputMode === 'catalog' ? (
+                                          <div className="space-y-2">
+                                            <div className="relative">
+                                              <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+                                              <input
+                                                type="text"
+                                                value={standardSearchQuery}
+                                                onChange={e => setStandardSearchQuery(e.target.value)}
+                                                placeholder="Pesquisar norma por código, tema ou título (Ex: RDC 658, BPF, Farmacopeia)..."
+                                                className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-emerald-500 shadow-2xs"
+                                                autoFocus
+                                              />
+                                            </div>
+
+                                            <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                                              {filteredStandards.map(std => {
+                                                const isAlreadyLinked = (macro.referenceGuides || []).some(
+                                                  g => g.standardId === std.id || g.title.toLowerCase() === std.name.toLowerCase()
+                                                );
+
+                                                return (
+                                                  <div 
+                                                    key={std.id}
+                                                    className={`p-2.5 rounded-xl border transition flex items-start justify-between gap-2 ${
+                                                      isAlreadyLinked 
+                                                        ? 'bg-emerald-100/60 border-emerald-300' 
+                                                        : 'bg-white hover:bg-emerald-50/50 border-slate-200'
+                                                    }`}
+                                                  >
+                                                    <div className="min-w-0 flex-1">
+                                                      <div className="flex items-center gap-2">
+                                                        <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded uppercase">
+                                                          {std.type || 'Norma'}
+                                                        </span>
+                                                        <span className="text-xs font-bold text-slate-900 truncate">
+                                                          {std.name}
+                                                        </span>
+                                                        {std.status && (
+                                                          <span className="text-[10px] text-slate-400">({std.status})</span>
+                                                        )}
+                                                      </div>
+                                                      {std.theme && (
+                                                        <p className="text-[11px] text-slate-500 truncate mt-0.5">{std.theme}</p>
+                                                      )}
+                                                      {std.summary && (
+                                                        <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">{std.summary}</p>
+                                                      )}
+                                                    </div>
+                                                    <button
+                                                      type="button"
+                                                      disabled={isAlreadyLinked}
+                                                      onClick={() => handleLinkExistingStandard(phase.id, macro.id, std)}
+                                                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition shrink-0 cursor-pointer ${
+                                                        isAlreadyLinked 
+                                                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                                          : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs'
+                                                      }`}
+                                                    >
+                                                      {isAlreadyLinked ? 'Vinculada' : 'Selecionar'}
+                                                    </button>
+                                                  </div>
+                                                );
+                                              })}
+                                              {filteredStandards.length === 0 && (
+                                                <p className="text-xs text-slate-400 italic text-center py-3">
+                                                  Nenhuma norma encontrada para "{standardSearchQuery}".
+                                                </p>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          /* Option B: Manual Input with Enter fast-save */
+                                          <div className="space-y-2">
+                                            <input
+                                              ref={quickInputRef}
+                                              type="text"
+                                              value={tempTextValue}
+                                              onChange={e => setTempTextValue(e.target.value)}
+                                              onKeyDown={e => {
+                                                if (e.key === 'Enter') {
+                                                  if (e.ctrlKey || e.metaKey) return;
+                                                  e.preventDefault();
+                                                  if (!tempTextValue.trim() || isSubmittingRef.current) return;
+                                                  isSubmittingRef.current = true;
+                                                  handleAddRegulatoryItem(phase.id, macro.id, true);
+                                                  setTimeout(() => {
+                                                    isSubmittingRef.current = false;
+                                                    quickInputRef.current?.focus();
+                                                  }, 50);
+                                                }
+                                              }}
+                                              placeholder="Título da norma ou guia (Ex: WHO TRS 927)... (Enter para salvar)"
+                                              className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                                              autoFocus
+                                            />
+                                            <div className="flex items-center gap-2">
+                                              <input
+                                                type="url"
+                                                value={tempGuideLink}
+                                                onChange={e => setTempGuideLink(e.target.value)}
+                                                onKeyDown={e => {
+                                                  if (e.key === 'Enter') {
+                                                    if (e.ctrlKey || e.metaKey) return;
+                                                    e.preventDefault();
+                                                    if (!tempTextValue.trim() || isSubmittingRef.current) return;
+                                                    isSubmittingRef.current = true;
+                                                    handleAddRegulatoryItem(phase.id, macro.id, true);
+                                                    setTimeout(() => {
+                                                      isSubmittingRef.current = false;
+                                                      quickInputRef.current?.focus();
+                                                    }, 50);
+                                                  }
+                                                }}
+                                                placeholder="Link oficial ou SharePoint (opcional)..."
+                                                className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                                              />
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  if (!tempTextValue.trim() || isSubmittingRef.current) return;
+                                                  isSubmittingRef.current = true;
+                                                  handleAddRegulatoryItem(phase.id, macro.id, true);
+                                                  setTimeout(() => {
+                                                    isSubmittingRef.current = false;
+                                                    quickInputRef.current?.focus();
+                                                  }, 50);
+                                                }}
+                                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer shadow-2xs"
+                                              >
+                                                Salvar
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => setActiveInputType(null)}
+                                                className="px-2 text-slate-400 text-xs cursor-pointer hover:text-slate-600 font-bold"
+                                              >
+                                                Concluir
+                                              </button>
+                                            </div>
+                                            <span className="text-[10px] text-slate-400 pl-1">
+                                              Pressione <strong>Enter</strong> para salvar e continuar digitando referências.
+                                            </span>
+                                          </div>
+                                        )}
                                       </div>
                                     )}
 
@@ -1231,7 +1539,16 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
                                           <div className="flex items-center gap-1.5 min-w-0">
                                             <LinkIcon size={12} className="text-emerald-600 shrink-0" />
                                             <span className="font-bold text-slate-800 truncate">{gd.title}</span>
-                                            {gd.link && <span className="text-[10px] text-slate-400 truncate">({gd.link})</span>}
+                                            {gd.link && (
+                                              <a 
+                                                href={gd.link} 
+                                                target="_blank" 
+                                                rel="noreferrer"
+                                                className="text-[10px] text-emerald-700 hover:underline truncate max-w-[200px]"
+                                              >
+                                                ({gd.link})
+                                              </a>
+                                            )}
                                           </div>
                                           <button
                                             type="button"
@@ -1278,6 +1595,117 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
           setAvailableTemplates(loadMicroTemplates());
         }}
       />
+
+      {/* Macro Icon Picker Modal */}
+      {iconPickerTarget && (
+        <div className="fixed inset-0 z-[80] bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200/80 shadow-2xs">
+                  {React.createElement(getMacroIconComponent(iconPickerTarget.currentIcon), { size: 20 })}
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Selecionar Ícone da Macroatividade</h3>
+                  <p className="text-[11px] text-slate-500">Escolha um ícone para representação visual no plano e na jornada</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIconPickerTarget(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Category Filter Pills */}
+            <div className="flex flex-wrap gap-1 shrink-0">
+              {['Todos', 'Laboratório', 'Produção', 'Estudos Clínicos', 'Estudos In Vivo', 'Documentação', 'Qualidade', 'Estabilidade', 'Segurança', 'Vacina'].map(cat => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setIconCategoryFilter(cat)}
+                  className={`px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    iconCategoryFilter === cat 
+                      ? 'bg-blue-600 text-white shadow-2xs' 
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* In Vivo animal guideline note */}
+            <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200/80 text-[11px] text-amber-800 leading-relaxed shrink-0 flex items-center gap-2">
+              <Rat size={16} className="text-amber-600 shrink-0" />
+              <span>
+                <strong>Regra de conformidade:</strong> O ícone de animal é reservado estritamente para estudos <em>in vivo</em> pré-clínicos.
+              </span>
+            </div>
+
+            {/* Icon Grid */}
+            <div className="flex-1 overflow-y-auto pr-1 grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              {AVAILABLE_MACRO_ICONS.filter(ico => iconCategoryFilter === 'Todos' || ico.category === iconCategoryFilter).map(item => {
+                const isSelected = iconPickerTarget.currentIcon === item.key;
+                const IconComp = item.icon;
+
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => {
+                      if (iconPickerTarget.isNew) {
+                        setNewMacroIcon(item.key);
+                        setIconPickerTarget(null);
+                      } else if (iconPickerTarget.phaseId && iconPickerTarget.macroId) {
+                        handleChangeMacroIcon(iconPickerTarget.phaseId, iconPickerTarget.macroId, item.key);
+                      }
+                    }}
+                    className={`p-3 rounded-2xl border text-left transition flex items-start gap-2.5 cursor-pointer ${
+                      isSelected 
+                        ? 'border-blue-600 bg-blue-50/70 ring-2 ring-blue-500/20 shadow-2xs' 
+                        : 'border-slate-200/80 bg-white hover:bg-slate-50 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                      isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
+                    }`}>
+                      <IconComp size={18} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-xs font-black text-slate-900 block truncate">{item.label}</span>
+                      <span className="text-[10px] text-slate-400 block truncate">{item.category}</span>
+                      {item.isInVivoOnly && (
+                        <span className="inline-block mt-0.5 px-1 py-0.2 bg-amber-100 text-amber-800 rounded text-[9px] font-black uppercase">
+                          In Vivo
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
+              <span className="text-[11px] text-slate-400">
+                Ícone atual: <strong>{iconPickerTarget.currentIcon || 'FlaskConical'}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => setIconPickerTarget(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
