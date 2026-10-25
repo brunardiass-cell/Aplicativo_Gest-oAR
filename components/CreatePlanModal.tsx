@@ -17,9 +17,21 @@ import {
   AlertTriangle,
   BookOpen,
   Link as LinkIcon,
-  X
+  X,
+  FlaskConical,
+  TestTube,
+  Microscope,
+  Beaker,
+  Clock,
+  Send,
+  CheckCircle2,
+  Award,
+  Syringe,
+  Atom,
+  Layers,
+  Building
 } from 'lucide-react';
-import { ActivityPlanTemplate, MacroActivityTemplate, PlanReferenceGuide } from '../types';
+import { ActivityPlanTemplate, MacroActivityTemplate, PlanReferenceGuide, PlanDecisionItem, RegulatoryStandard } from '../types';
 import { 
   MicroOperationalTemplate, 
   loadMicroTemplates, 
@@ -27,7 +39,7 @@ import {
   DEFAULT_MICRO_TEMPLATES 
 } from '../utils/microTemplates';
 import { ManageTemplatesDrawer } from './ManageTemplatesDrawer';
-import { DEFAULT_ACTIVITY_PLANS, VACCINE_PLATFORM_PHASES } from '../constants';
+import { DEFAULT_ACTIVITY_PLANS, VACCINE_PLATFORM_PHASES, STANDARD_REGULATORY_GROUPS } from '../constants';
 
 export type PlanTypeKey = 'recombinant_protein' | 'attenuated_virus' | 'dna_vaccine' | 'rna_vaccine' | 'custom';
 
@@ -49,11 +61,13 @@ export interface PlanPhaseItem {
 export interface PlanMacroItem {
   id: string;
   name: string;
+  icon?: string;
   description: string;
   expanded: boolean;
   activeTab?: 'micros' | 'regulatory';
   micros: PlanMicroItem[];
   keyDecisions?: string[];
+  decisionsList?: PlanDecisionItem[];
   regulatoryPoints?: string[];
   technicalJustifications?: string[];
   referenceGuides?: PlanReferenceGuide[];
@@ -75,6 +89,7 @@ interface CreatePlanModalProps {
   onSave: (newPlan: ActivityPlanTemplate, saveAsDefaultTemplates?: boolean) => void;
   existingPlans?: ActivityPlanTemplate[];
   onDeletePlan?: (planId: string) => void;
+  regulatoryStandards?: RegulatoryStandard[];
 }
 
 // Convert ActivityPlanTemplate to editable PlanPhaseItem[]
@@ -90,10 +105,19 @@ const convertTemplateToPhases = (template: ActivityPlanTemplate): PlanPhaseItem[
       macros: matchingMacros.map((mac, mIdx) => ({
         id: `mac_${pIdx}_${mIdx}_${Date.now()}`,
         name: mac.name,
+        icon: mac.icon,
         description: mac.expectedResults || '',
         expanded: false,
         activeTab: 'micros',
         keyDecisions: mac.keyDecisions ? [...mac.keyDecisions] : [],
+        decisionsList: mac.decisionsList ? JSON.parse(JSON.stringify(mac.decisionsList)) : (mac.keyDecisions || []).map((q, qIdx) => ({
+          id: `dec_${pIdx}_${mIdx}_${qIdx}`,
+          question: q,
+          status: 'Pendente' as const,
+          hasRegulatoryImpact: true,
+          isMandatory: true,
+          responseType: 'ambos' as const
+        })),
         regulatoryPoints: mac.regulatoryPoints ? [...mac.regulatoryPoints] : [],
         technicalJustifications: mac.technicalJustifications ? [...mac.technicalJustifications] : [],
         referenceGuides: mac.referenceGuides ? JSON.parse(JSON.stringify(mac.referenceGuides)) : [],
@@ -112,7 +136,8 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
   onClose,
   onSave,
   existingPlans = [],
-  onDeletePlan
+  onDeletePlan,
+  regulatoryStandards = []
 }) => {
   const [selectedPlanType, setSelectedPlanType] = useState<PlanTypeKey>('recombinant_protein');
   const [selectedExistingPlanId, setSelectedExistingPlanId] = useState<string | null>(null);
@@ -461,9 +486,11 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
         macroTemplates.push({
           name: macro.name,
           phase: phase.name,
+          icon: macro.icon,
           expectedResults: macro.description,
           microActivities: macro.micros.map(mi => mi.name),
           keyDecisions: macro.keyDecisions || [],
+          decisionsList: macro.decisionsList || [],
           regulatoryPoints: macro.regulatoryPoints || [],
           technicalJustifications: macro.technicalJustifications || [],
           referenceGuides: macro.referenceGuides || []
@@ -547,17 +574,6 @@ export const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              setTemplateToEdit(null);
-              setIsTemplateDrawerOpen(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
-          >
-            <Settings size={14} /> Gerenciar templates de microatividades
-          </button>
-
           <button
             type="button"
             onClick={handleSavePlan}

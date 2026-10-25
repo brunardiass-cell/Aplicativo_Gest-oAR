@@ -316,6 +316,10 @@ export type RegulatoryStandardStatus = 'vigente' | 'vigente com alteração' | '
 export interface RegulatoryStandard {
   id: string;
   name: string;
+  code?: string;
+  title?: string;
+  link?: string;
+  pdfUrl?: string;
   type: string; // Ex: Manual, Guia, RDC, etc.
   theme: string;
   phase: string;
@@ -431,6 +435,7 @@ export interface PlanReferenceGuide {
   title: string;
   link?: string;
   type?: 'norma' | 'guia' | 'artigo' | 'outro';
+  standardId?: string; // ID da norma do catálogo quando selecionada
 }
 
 export interface PlanDecisionItem {
@@ -440,16 +445,25 @@ export interface PlanDecisionItem {
   justification?: string;
   responsible?: string;
   date?: string;
-  status?: 'Pendente' | 'Avaliado' | 'Aprovado' | 'Em avaliação' | 'Decidido';
+  status?: 'Pendente' | 'Avaliado' | 'Aprovado' | 'Em avaliação' | 'Decidido' | 'Validado';
   references?: PlanReferenceGuide[];
   sharepointLink?: string;
   evidenceLink?: string;
   sharepointDocUrl?: string;
+  hasRegulatoryImpact?: boolean; // Impacto regulatório direto (Sim/Não)
+  isMandatory?: boolean; // Obrigatório para validação da etapa
+  targetFieldKey?: string; // Campo de destino na tabela consolidada (ex: [NOME_DA_VACINA], [IFA], etc.)
+  targetFieldLabel?: string;
+  responseType?: 'texto' | 'link' | 'ambos'; // Tipo de resposta esperado
+  linkedStandardIds?: string[];
+  validatedAt?: string;
+  validatedBy?: string;
 }
 
 export interface MacroActivityTemplate {
   name: string;
   phase: string;
+  icon?: string; // Ícone personalizado
   microActivities?: string[];
   expectedResults?: string;
   resultLinks?: string[];
@@ -532,6 +546,7 @@ export interface MacroActivity {
   id: string;
   name: string;
   phase: string; // Adicionado
+  icon?: string; // Ícone personalizado
   code?: string;
   relationshipType?: 'sequential' | 'parallel' | 'dependent';
   parallelGroup?: string;
@@ -559,9 +574,103 @@ export interface MacroActivity {
   referenceGuides?: PlanReferenceGuide[];
 }
 
+export interface RegulatoryRecordHistoryItem {
+  id?: string;
+  version?: number;
+  timestamp?: string;
+  updatedAt?: string;
+  author?: string;
+  updatedBy?: string;
+  previousValue?: any;
+  newValue?: any;
+  changeNote?: string;
+  justification?: string;
+}
+
+export interface RegulatoryRecordItem {
+  id: string;
+  group?: string; // Ex: 'Dados Gerais do Candidato Vacinal', 'Racional e Plataforma Tecnológica', etc.
+  groupName?: string; // Alias para group
+  key?: string; // Ex: 'NOME_DA_VACINA', 'PLATAFORMA_TECNOLOGICA', etc.
+  fieldKey?: string; // Alias de compatibilidade para key
+  label?: string; // Ex: 'Nome da Vacina e Codinome'
+  fieldLabel?: string; // Alias para label
+  origin?: string;
+  originRefId?: string;
+  originRefName?: string;
+  phase: string; // Fase correspondente
+  macroActivityName?: string; // Macroatividade de origem
+  decisionQuestion?: string; // Decisão estratégica vinculada
+  decisionId?: string;
+  value?: string; // Conteúdo consolidado
+  valueText?: string; // Alias para value
+  valueLink?: string; // Link de evidência/acesso
+  responsible?: string; // Alias para updatedBy
+  references?: PlanReferenceGuide[];
+  status: 'Não iniciado' | 'Em andamento' | 'Aguardando validação' | 'Validado' | 'não preenchido' | 'em análise' | 'validado' | 'não aplicável';
+  isMandatory?: boolean;
+  version?: number;
+  lastUpdated?: string;
+  lastModifiedAt?: string;
+  updatedBy?: string;
+  lastModifiedBy?: string;
+  history?: RegulatoryRecordHistoryItem[];
+}
+
+export interface ProjectContributionItem {
+  id: string;
+  projectId?: string;
+  title: string;
+  origin?: 'Reunião' | 'Atividade' | 'Discussão' | 'Nota Técnica' | 'Manual' | string;
+  originDetails?: string;
+  source?: string;
+  content: string;
+  link?: string;
+  evidenceLink?: string;
+  date?: string;
+  createdAt?: string;
+  author: string;
+  linkedPhase?: string;
+  targetPhase?: string;
+  linkedMacroId?: string;
+  targetMacroActivityId?: string;
+  linkedMacroName?: string;
+  linkedDecisionId?: string;
+  targetDecisionId?: string;
+  targetFieldKey?: string;
+  targetRegulatoryFields?: string[];
+  justification?: string;
+  status: 'Pendente de Triagem' | 'Validado para a Base Regulatória' | 'Descartado' | 'pendente' | 'em_analise' | 'validada' | 'descartada';
+  discardReason?: string;
+  evaluatedBy?: string;
+  evaluatedAt?: string;
+  validatedAt?: string;
+  validatedBy?: string;
+}
+
+export interface ProjectHistoryEvent {
+  id: string;
+  type?: 'meeting' | 'task_change' | 'decision' | 'contribution' | 'regulatory_field' | 'base_regulatoria';
+  eventType?: string;
+  refType?: string;
+  refId?: string;
+  title?: string;
+  description?: string;
+  date?: string;
+  timestamp?: string;
+  author?: string;
+  previousValue?: any;
+  newValue?: any;
+  justification?: string;
+  metadata?: Record<string, any>;
+  link?: string;
+  meetingId?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
+  icon?: string; // Ícone do projeto
   responsible?: string;
   status: 'Em Planejamento' | 'Ativo' | 'Suspenso' | 'Concluído';
   templateId: string;
@@ -576,6 +685,9 @@ export interface Project {
   transversalActivities?: TransversalActivity[];
   description?: string;
   dossierChapters?: DDCMChapterDef[];
+  regulatoryDatabase?: RegulatoryRecordItem[];
+  contributions?: ProjectContributionItem[];
+  historyTimeline?: ProjectHistoryEvent[];
 }
 
 export interface TeamMember {

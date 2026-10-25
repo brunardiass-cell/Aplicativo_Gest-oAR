@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   ArrowLeft, 
   FlaskConical, 
@@ -26,7 +26,31 @@ import {
   Link as LinkIcon,
   Plus,
   BookOpen,
-  Trash2
+  Trash2,
+  Sparkles,
+  Layers,
+  TestTube,
+  Microscope,
+  Beaker,
+  Rat,
+  Building,
+  Send,
+  Award,
+  Activity,
+  CheckCircle2,
+  Filter,
+  Search,
+  Database,
+  Download,
+  History as HistoryIcon,
+  Inbox,
+  AlertCircle,
+  Eye,
+  Share2,
+  FileSpreadsheet,
+  Layers3,
+  Edit3,
+  Sliders
 } from 'lucide-react';
 import { 
   Project, 
@@ -38,8 +62,12 @@ import {
   Task,
   PlanDecisionItem,
   PlanReferenceGuide,
-  MacroActivity
+  MacroActivity,
+  RegulatoryRecordItem,
+  ProjectContributionItem,
+  ProjectHistoryEvent
 } from '../types';
+import { STANDARD_REGULATORY_GROUPS, VACCINE_PLATFORM_PHASES, AVAILABLE_PROJECT_ICONS } from '../constants';
 import { CompleteActivityModal } from './CompleteActivityModal';
 
 interface ProjectDetailViewProps {
@@ -55,15 +83,11 @@ interface ProjectDetailViewProps {
   tasks?: Task[];
 }
 
-// Canonical phase normalizer
+// Canonical phase normalizer: removes numeric prefixes ("FASE 1 —", "FASE 2:", etc.)
+// but strictly preserves the full phase name
 const normalizePhaseName = (name: string): string => {
   const trimmed = (name || '').trim();
-  const lower = trimmed.toLowerCase();
-  if (lower.includes('prova') || lower.includes('conceito')) return 'Prova de Conceito';
-  if (lower.includes('não clínica') || lower.includes('nao clinica') || lower.includes('não-clínica')) return 'Fase Não Clínica';
-  if (lower.includes('1/2') || lower.includes('1 e 2') || lower.includes('i/ii') || lower.includes('fase 1')) return 'Fase 1/2';
-  if (lower.includes('fase 3') || lower.includes('iii')) return 'Fase 3';
-  return trimmed || 'Fase 1/2';
+  return trimmed.replace(/^FASE\s+\d+\s*[-—–:]\s*/i, '').trim();
 };
 
 // Regulatory knowledge and details mapping for standard groups
@@ -452,35 +476,42 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   // Top view tab state
   const [activeTopTab, setActiveTopTab] = useState<'visao_geral' | 'estrutura' | 'proximas_acoes' | 'orientacao' | 'historico' | 'contribuicoes'>('visao_geral');
 
-  // Phases deduplicated list
+  // Phases deduplicated list respecting exact plan phases and ordering
   const phasesList = useMemo(() => {
-    const defaultPhases = ['Prova de Conceito', 'Fase Não Clínica', 'Fase 1/2', 'Fase 3'];
-    const canonicalMap = new Map<string, string>();
-    defaultPhases.forEach(p => canonicalMap.set(p.toLowerCase(), p));
+    if (project.phases && project.phases.length > 0) {
+      const cleanPhases = project.phases.map(normalizePhaseName).filter(Boolean);
+      return Array.from(new Set(cleanPhases));
+    }
 
-    (project.phases || []).forEach(p => {
-      const norm = normalizePhaseName(p);
-      if (norm && !canonicalMap.has(norm.toLowerCase())) {
-        canonicalMap.set(norm.toLowerCase(), norm);
-      }
-    });
-
+    const derived = new Set<string>();
     (project.macroActivities || []).forEach(m => {
       if (m.phase) {
         const norm = normalizePhaseName(m.phase);
-        if (norm && !canonicalMap.has(norm.toLowerCase())) {
-          canonicalMap.set(norm.toLowerCase(), norm);
-        }
+        if (norm) derived.add(norm);
       }
     });
 
-    return Array.from(canonicalMap.values());
+    if (derived.size > 0) {
+      return Array.from(derived);
+    }
+
+    return [...VACCINE_PLATFORM_PHASES];
   }, [project.phases, project.macroActivities]);
 
-  // Selected phase (defaults to Fase 1/2 as in the reference image)
+  // Selected phase (defaults to the first real phase of the project)
   const [selectedPhase, setSelectedPhase] = useState<string>(() => {
-    return phasesList.find(p => p.toLowerCase().includes('1/2')) || phasesList[2] || phasesList[0] || 'Fase 1/2';
+    if (project.phases && project.phases.length > 0) {
+      return normalizePhaseName(project.phases[0]);
+    }
+    return phasesList[0] || 'Descoberta / Prova de Conceito';
   });
+
+  // Keep selected phase synchronized with phasesList
+  useEffect(() => {
+    if (phasesList.length > 0 && !phasesList.includes(selectedPhase)) {
+      setSelectedPhase(phasesList[0]);
+    }
+  }, [phasesList, selectedPhase]);
 
   // Selected group number or ID
   const [selectedGroupIndex, setSelectedGroupIndex] = useState<number>(0);
@@ -497,23 +528,55 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
   const [editingMicroData, setEditingMicroData] = useState<Partial<MicroActivity>>({});
 
-  // Decision management states
+  // Decision management states (enriched with regulatory impact & table destination)
   const [editingDecision, setEditingDecision] = useState<PlanDecisionItem | null>(null);
   const [isDecisionModalOpen, setIsDecisionModalOpen] = useState(false);
   const [isNewDecisionModalOpen, setIsNewDecisionModalOpen] = useState(false);
   const [newDecisionQuestion, setNewDecisionQuestion] = useState('');
   
-  const [decisionFormStatus, setDecisionFormStatus] = useState<'Pendente' | 'Em avaliação' | 'Decidido'>('Pendente');
+  const [decisionFormStatus, setDecisionFormStatus] = useState<'Pendente' | 'Em avaliação' | 'Decidido' | 'Validado'>('Pendente');
+  const [decisionFormQuestion, setDecisionFormQuestion] = useState('');
   const [decisionFormAnswer, setDecisionFormAnswer] = useState('');
   const [decisionFormJustification, setDecisionFormJustification] = useState('');
   const [decisionFormResponsible, setDecisionFormResponsible] = useState('');
   const [decisionFormDate, setDecisionFormDate] = useState('');
   const [decisionFormLink, setDecisionFormLink] = useState('');
+  const [decisionFormRegulatoryImpact, setDecisionFormRegulatoryImpact] = useState(true);
+  const [decisionFormMandatory, setDecisionFormMandatory] = useState(true);
+  const [decisionFormTargetFieldKey, setDecisionFormTargetFieldKey] = useState('');
+  const [decisionFormTargetFieldLabel, setDecisionFormTargetFieldLabel] = useState('');
+  const [decisionFormResponseType, setDecisionFormResponseType] = useState<'texto' | 'link' | 'ambos'>('ambos');
+  const [decisionFormLinkedStandards, setDecisionFormLinkedStandards] = useState<string[]>([]);
+
+  // History timeline states
+  const [historyFilter, setHistoryFilter] = useState<'todos' | 'reuniao' | 'atividade' | 'decisao' | 'regulatorio' | 'contribuicao'>('todos');
+  const [selectedMeetingForModal, setSelectedMeetingForModal] = useState<Meeting | null>(null);
+  const [isAddHistoryModalOpen, setIsAddHistoryModalOpen] = useState(false);
+  const [newHistoryTitle, setNewHistoryTitle] = useState('');
+  const [newHistoryDesc, setNewHistoryDesc] = useState('');
+  const [newHistoryType, setNewHistoryType] = useState<ProjectHistoryEvent['eventType']>('marco');
+
+  // Contributions triage states
+  const [contributionFilter, setContributionFilter] = useState<'todas' | 'pendentes' | 'validadas' | 'descartadas'>('todas');
+  const [isAddContributionModalOpen, setIsAddContributionModalOpen] = useState(false);
+  const [newContribTitle, setNewContribTitle] = useState('');
+  const [newContribContent, setNewContribContent] = useState('');
+  const [newContribSource, setNewContribSource] = useState<'reunião' | 'atividade' | 'discussão técnica' | 'observação'>('reunião');
+  const [newContribLink, setNewContribLink] = useState('');
+  const [selectedContribForTriage, setSelectedContribForTriage] = useState<ProjectContributionItem | null>(null);
+  const [isTriageModalOpen, setIsTriageModalOpen] = useState(false);
+  const [triagePhase, setTriagePhase] = useState('');
+  const [triageMacroId, setTriageMacroId] = useState('');
+  const [triageDecisionId, setTriageDecisionId] = useState('');
+  const [triageFieldKeys, setTriageFieldKeys] = useState<string[]>([]);
+  const [triageJustification, setTriageJustification] = useState('');
+  const [triageAction, setTriageAction] = useState<'validar' | 'revisao' | 'descartar'>('validar');
 
   // Guide and point additions
   const [isAddGuideModalOpen, setIsAddGuideModalOpen] = useState(false);
   const [newGuideTitle, setNewGuideTitle] = useState('');
   const [newGuideLink, setNewGuideLink] = useState('');
+  const [newGuideStandardId, setNewGuideStandardId] = useState('');
   const [isAddPointModalOpen, setIsAddPointModalOpen] = useState(false);
   const [newPointText, setNewPointText] = useState('');
   const [isAddJustificationModalOpen, setIsAddJustificationModalOpen] = useState(false);
@@ -527,12 +590,15 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const journeyScrollRef = useRef<HTMLDivElement>(null);
   const regulatoryPanelRef = useRef<HTMLDivElement>(null);
 
-  // Calculate stats for top KPI cards
+  // Dual Progress calculation (Progresso do Projeto vs Progresso Regulatório)
   const stats = useMemo(() => {
     const allMacros = project.macroActivities || [];
     let totalMicros = 0;
     let completedMicros = 0;
     let totalProgressSum = 0;
+
+    let totalMandatoryDecisions = 0;
+    let validatedMandatoryDecisions = 0;
 
     allMacros.forEach(macro => {
       (macro.microActivities || []).forEach(mic => {
@@ -541,46 +607,76 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         if (isDone) completedMicros++;
         totalProgressSum += (mic.progress ?? (isDone ? 100 : 0));
       });
+
+      (macro.decisionsList || []).forEach(dec => {
+        if (dec.hasRegulatoryImpact || dec.isMandatory) {
+          totalMandatoryDecisions++;
+          if (dec.status === 'Validado' || dec.status === 'Decidido') {
+            validatedMandatoryDecisions++;
+          }
+        }
+      });
     });
 
-    // Default progress to 22% matching reference screenshot if empty
-    const overallProgress = totalMicros > 0 ? Math.round(totalProgressSum / totalMicros) : 22;
+    const regDb = project.regulatoryDatabase || [];
+    let regDbMandatory = 0;
+    let regDbValidated = 0;
+    regDb.forEach(item => {
+      if (item.isMandatory !== false && item.status !== 'não aplicável') {
+        regDbMandatory++;
+        if (item.status === 'validado') {
+          regDbValidated++;
+        }
+      }
+    });
+
+    const projectProgress = totalMicros > 0 ? Math.round(totalProgressSum / totalMicros) : 0;
+    
+    const totalRegChecks = totalMandatoryDecisions + regDbMandatory;
+    const validatedRegChecks = validatedMandatoryDecisions + regDbValidated;
+    let regulatoryProgress = 0;
+    if (totalRegChecks > 0) {
+      regulatoryProgress = Math.round((validatedRegChecks / totalRegChecks) * 100);
+    } else if (totalMandatoryDecisions > 0) {
+      regulatoryProgress = Math.round((validatedMandatoryDecisions / totalMandatoryDecisions) * 100);
+    }
 
     return {
-      overallProgress: Math.min(100, Math.max(0, overallProgress)),
+      projectProgress: Math.min(100, Math.max(0, projectProgress)),
+      regulatoryProgress: Math.min(100, Math.max(0, regulatoryProgress)),
+      totalMicros,
+      completedMicros,
+      totalMandatoryDecisions: totalRegChecks,
+      validatedMandatoryDecisions: validatedRegChecks,
       daysRemaining: 198,
       forecastDate: '12/12/2025',
       nextMilestoneName: 'Imunogenicidade',
       daysToMilestone: 595
     };
-  }, [project.macroActivities]);
+  }, [project.macroActivities, project.regulatoryDatabase]);
 
-  // Phase progress mapping matching the screenshot (87%, 27%, 22%, 0%)
+  // Phase progress mapping (Calculates actual microactivity progress per phase)
   const phaseProgressMap = useMemo(() => {
     const map: Record<string, number> = {};
     phasesList.forEach(phase => {
       const normP = normalizePhaseName(phase).toLowerCase();
-      const macros = (project.macroActivities || []).filter(m => normalizePhaseName(m.phase || '').toLowerCase() === normP);
+      const macros = (project.macroActivities || []).filter(
+        m => normalizePhaseName(m.phase || '').toLowerCase() === normP
+      );
       let total = 0;
-      let completed = 0;
+      let sumProg = 0;
       macros.forEach(m => {
         (m.microActivities || []).forEach(mi => {
           total++;
-          if (mi.status === 'Concluído e aprovado' || mi.status === 'Concluído com restrições') {
-            completed++;
-          }
+          const isDone = mi.status === 'Concluído e aprovado' || mi.status === 'Concluído com restrições';
+          sumProg += (mi.progress ?? (isDone ? 100 : 0));
         });
       });
 
       if (total > 0) {
-        map[phase] = Math.round((completed / total) * 100);
+        map[phase] = Math.round(sumProg / total);
       } else {
-        // Fallback default numbers from screenshot if no data registered yet
-        if (phase.includes('Conceito')) map[phase] = 87;
-        else if (phase.includes('Não Clínica')) map[phase] = 27;
-        else if (phase.includes('1/2')) map[phase] = 22;
-        else if (phase.includes('3')) map[phase] = 0;
-        else map[phase] = 0;
+        map[phase] = 0;
       }
     });
     return map;
@@ -594,7 +690,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
            (m.phase || '').trim().toLowerCase() === selectedPhase.trim().toLowerCase()
     );
 
-    // If project has explicit macroactivities in this phase (e.g. from 7-phase platform plan)
+    // If project has explicit macroactivities in this phase
     if (existingMacrosInPhase.length > 0) {
       return existingMacrosInPhase.map((macro, idx) => {
         const matchedCanonical = CANONICAL_GROUPS.find(c => 
@@ -602,10 +698,20 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           macro.name.toLowerCase().includes(c.name.toLowerCase())
         );
 
-        const illustrationList: ('vials' | 'chromatography' | 'animal' | 'syringe' | 'antibodies' | 'shield' | 'formulation' | 'stability')[] = [
-          'vials', 'chromatography', 'animal', 'syringe', 'antibodies', 'shield', 'formulation', 'stability'
+        // Standard illustration types without animal in default rotation
+        const illustrationList: ('vials' | 'chromatography' | 'syringe' | 'antibodies' | 'shield' | 'formulation' | 'stability')[] = [
+          'vials', 'chromatography', 'syringe', 'antibodies', 'shield', 'formulation', 'stability'
         ];
-        const illustrationType = matchedCanonical?.illustrationType || illustrationList[idx % illustrationList.length];
+        
+        // Animal icon/illustration is ONLY used for in-vivo or explicitly animal-related activities
+        const isInVivo = macro.name.toLowerCase().includes('in vivo') || 
+                         macro.name.toLowerCase().includes('animal') || 
+                         macro.name.toLowerCase().includes('roedores') ||
+                         macro.name.toLowerCase().includes('primatas') ||
+                         macro.icon === 'Rat';
+        const illustrationType = isInVivo 
+          ? 'animal' 
+          : (matchedCanonical?.illustrationType || illustrationList[idx % illustrationList.length]);
 
         const microActivities = macro.microActivities || [];
         const completedCount = microActivities.filter(m => m.status === 'Concluído e aprovado' || m.status === 'Concluído com restrições').length;
@@ -848,38 +954,145 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     setEditingDecision(decision);
     const statusVal = decision.status === 'Aprovado' ? 'Decidido' : (decision.status === 'Avaliado' ? 'Em avaliação' : (decision.status || 'Pendente'));
     setDecisionFormStatus(statusVal);
+    setDecisionFormQuestion(decision.question || '');
     setDecisionFormAnswer(decision.decision || '');
     setDecisionFormJustification(decision.justification || '');
     setDecisionFormResponsible(decision.responsible || teamMembers[0]?.name || 'Bruna Dias');
     setDecisionFormDate(decision.date || new Date().toISOString().split('T')[0]);
     setDecisionFormLink(decision.evidenceLink || decision.sharepointDocUrl || '');
+    setDecisionFormRegulatoryImpact(decision.hasRegulatoryImpact !== false);
+    setDecisionFormMandatory(decision.isMandatory !== false);
+    setDecisionFormTargetFieldKey(decision.targetFieldKey || '');
+    setDecisionFormTargetFieldLabel(decision.targetFieldLabel || '');
+    setDecisionFormResponseType(decision.responseType || 'ambos');
+    setDecisionFormLinkedStandards(decision.linkedStandardIds || []);
     setIsDecisionModalOpen(true);
   };
 
   const handleSaveDecisionForm = () => {
     if (!editingDecision) return;
+    const nowIso = new Date().toISOString();
+    const todayStr = nowIso.split('T')[0];
+
     const updated: PlanDecisionItem = {
       ...editingDecision,
+      question: decisionFormQuestion.trim() || editingDecision.question,
       status: decisionFormStatus,
       decision: decisionFormAnswer.trim() || undefined,
       justification: decisionFormJustification.trim() || undefined,
       responsible: decisionFormResponsible.trim() || undefined,
-      date: decisionFormDate || undefined,
+      date: decisionFormDate || todayStr,
       evidenceLink: decisionFormLink.trim() || undefined,
-      sharepointDocUrl: decisionFormLink.trim() || undefined
+      sharepointDocUrl: decisionFormLink.trim() || undefined,
+      hasRegulatoryImpact: decisionFormRegulatoryImpact,
+      isMandatory: decisionFormMandatory,
+      targetFieldKey: decisionFormTargetFieldKey.trim() || undefined,
+      targetFieldLabel: decisionFormTargetFieldLabel.trim() || undefined,
+      responseType: decisionFormResponseType,
+      linkedStandardIds: decisionFormLinkedStandards,
+      validatedAt: (decisionFormStatus === 'Decidido' || decisionFormStatus === 'Validado') ? nowIso : undefined,
+      validatedBy: (decisionFormStatus === 'Decidido' || decisionFormStatus === 'Validado') ? decisionFormResponsible : undefined
     };
 
-    updateActiveMacro(macro => {
-      const currentList = macro.decisionsList && macro.decisionsList.length > 0 
-        ? [...macro.decisionsList] 
-        : [...activeGroup.decisionsList];
-      const index = currentList.findIndex(d => d.id === updated.id);
-      if (index >= 0) {
-        currentList[index] = updated;
-      } else {
-        currentList.push(updated);
+    // Update macroactivities
+    let updatedMacros = (project.macroActivities || []).map(m => {
+      if (m.id === activeGroup.macroId || m.name.toLowerCase().trim() === activeGroup.name.toLowerCase().trim()) {
+        const currentList = m.decisionsList && m.decisionsList.length > 0 
+          ? [...m.decisionsList] 
+          : [...activeGroup.decisionsList];
+        const idx = currentList.findIndex(d => d.id === updated.id);
+        if (idx >= 0) currentList[idx] = updated;
+        else currentList.push(updated);
+        return { ...m, decisionsList: currentList };
       }
-      return { ...macro, decisionsList: currentList };
+      return m;
+    });
+
+    // If decision feeds regulatory database (targetFieldKey set and resolved)
+    let updatedRegulatoryDb = [...(project.regulatoryDatabase || [])];
+    if (updated.targetFieldKey && (decisionFormStatus === 'Decidido' || decisionFormStatus === 'Validado' || decisionFormAnswer.trim())) {
+      const fieldKey = updated.targetFieldKey;
+      const targetLabel = updated.targetFieldLabel || updated.question;
+      const existingIdx = updatedRegulatoryDb.findIndex(r => r.fieldKey === fieldKey);
+
+      const isResolved = decisionFormStatus === 'Decidido' || decisionFormStatus === 'Validado';
+      const recordStatus = isResolved ? 'validado' : (decisionFormAnswer.trim() ? 'em análise' : 'não preenchido');
+
+      if (existingIdx >= 0) {
+        const oldRec = updatedRegulatoryDb[existingIdx];
+        const historyItem = {
+          id: `rh_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+          timestamp: nowIso,
+          author: decisionFormResponsible || 'Gestor',
+          previousValue: oldRec.valueText || oldRec.valueLink || '',
+          newValue: decisionFormAnswer || decisionFormLink,
+          justification: decisionFormJustification || 'Atualizado via Decisão Estratégica'
+        };
+
+        updatedRegulatoryDb[existingIdx] = {
+          ...oldRec,
+          valueText: decisionFormAnswer.trim() || oldRec.valueText,
+          valueLink: decisionFormLink.trim() || oldRec.valueLink,
+          status: recordStatus,
+          origin: 'decisão',
+          originRefId: updated.id,
+          originRefName: activeGroup.name,
+          responsible: decisionFormResponsible || oldRec.responsible,
+          lastModifiedAt: nowIso,
+          history: [historyItem, ...(oldRec.history || [])]
+        };
+      } else {
+        updatedRegulatoryDb.push({
+          id: `reg_${fieldKey.toLowerCase()}_${Date.now()}`,
+          fieldKey,
+          fieldLabel: targetLabel,
+          groupName: activeGroup.name,
+          phase: selectedPhase,
+          macroActivityName: activeGroup.name,
+          valueText: decisionFormAnswer.trim() || undefined,
+          valueLink: decisionFormLink.trim() || undefined,
+          status: recordStatus,
+          origin: 'decisão',
+          originRefId: updated.id,
+          originRefName: activeGroup.name,
+          responsible: decisionFormResponsible,
+          lastModifiedAt: nowIso,
+          isMandatory: updated.isMandatory !== false,
+          history: [{
+            id: `rh_${Date.now()}`,
+            timestamp: nowIso,
+            author: decisionFormResponsible || 'Gestor',
+            previousValue: '',
+            newValue: decisionFormAnswer || decisionFormLink,
+            justification: decisionFormJustification || 'Criado a partir de Decisão Estratégica'
+          }]
+        });
+      }
+    }
+
+    // Add History Event
+    const historyEvent: ProjectHistoryEvent = {
+      id: `hist_dec_${Date.now()}`,
+      date: todayStr,
+      timestamp: nowIso,
+      author: decisionFormResponsible || 'Gestor',
+      eventType: 'decisao',
+      title: `Decisão Estratégica: ${updated.question}`,
+      description: decisionFormAnswer ? `Decisão: ${decisionFormAnswer}` : `Status: ${decisionFormStatus}`,
+      previousValue: editingDecision.decision,
+      newValue: decisionFormAnswer,
+      justification: decisionFormJustification,
+      refType: 'decisao',
+      refId: updated.id
+    };
+
+    const updatedTimeline = [historyEvent, ...(project.historyTimeline || [])];
+
+    onUpdateProject({
+      ...project,
+      macroActivities: updatedMacros,
+      regulatoryDatabase: updatedRegulatoryDb,
+      historyTimeline: updatedTimeline
     });
 
     setIsDecisionModalOpen(false);
@@ -898,7 +1111,10 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     const newItem: PlanDecisionItem = {
       id: `dec_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       question: newDecisionQuestion.trim(),
-      status: 'Pendente'
+      status: 'Pendente',
+      hasRegulatoryImpact: true,
+      isMandatory: true,
+      responseType: 'ambos'
     };
     updateActiveMacro(macro => {
       const currentList = macro.decisionsList && macro.decisionsList.length > 0 
@@ -914,7 +1130,8 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     if (!newGuideTitle.trim()) return;
     const newGuide: PlanReferenceGuide = {
       title: newGuideTitle.trim(),
-      link: newGuideLink.trim() || undefined
+      link: newGuideLink.trim() || undefined,
+      standardId: newGuideStandardId || undefined
     };
     updateActiveMacro(macro => {
       const currentGuides = macro.referenceGuides && macro.referenceGuides.length > 0
@@ -925,6 +1142,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     setIsAddGuideModalOpen(false);
     setNewGuideTitle('');
     setNewGuideLink('');
+    setNewGuideStandardId('');
   };
 
   const handleSaveNewPoint = () => {
@@ -949,6 +1167,178 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     });
     setIsAddJustificationModalOpen(false);
     setNewJustificationText('');
+  };
+
+  // Add new contribution to the project
+  const handleSaveNewContribution = () => {
+    if (!newContribTitle.trim()) return;
+    const nowIso = new Date().toISOString();
+    const todayStr = nowIso.split('T')[0];
+
+    const newContrib: ProjectContributionItem = {
+      id: `contrib_${Date.now()}`,
+      title: newContribTitle.trim(),
+      content: newContribContent.trim(),
+      source: newContribSource,
+      evidenceLink: newContribLink.trim() || undefined,
+      status: 'pendente',
+      author: teamMembers[0]?.name || 'Usuário',
+      createdAt: nowIso
+    };
+
+    const historyEvent: ProjectHistoryEvent = {
+      id: `hist_contrib_${Date.now()}`,
+      date: todayStr,
+      timestamp: nowIso,
+      author: newContrib.author,
+      eventType: 'contribuicao',
+      title: `Nova Contribuição: ${newContrib.title}`,
+      description: `Origem: ${newContrib.source}`,
+      refType: 'contribuicao',
+      refId: newContrib.id
+    };
+
+    onUpdateProject({
+      ...project,
+      contributions: [newContrib, ...(project.contributions || [])],
+      historyTimeline: [historyEvent, ...(project.historyTimeline || [])]
+    });
+
+    setIsAddContributionModalOpen(false);
+    setNewContribTitle('');
+    setNewContribContent('');
+    setNewContribLink('');
+  };
+
+  // Triage a contribution: link to macro, decision, fields, validate or discard
+  const handleTriageContributionSubmit = () => {
+    if (!selectedContribForTriage) return;
+    const nowIso = new Date().toISOString();
+    const todayStr = nowIso.split('T')[0];
+
+    const isVal = triageAction === 'validar';
+    const isDesc = triageAction === 'descartar';
+    const newStatus = isVal ? 'validada' : (isDesc ? 'descartada' : 'em_analise');
+
+    const updatedContrib: ProjectContributionItem = {
+      ...selectedContribForTriage,
+      status: newStatus,
+      targetPhase: triagePhase || selectedContribForTriage.targetPhase,
+      targetMacroActivityId: triageMacroId || selectedContribForTriage.targetMacroActivityId,
+      targetDecisionId: triageDecisionId || selectedContribForTriage.targetDecisionId,
+      targetRegulatoryFields: triageFieldKeys.length > 0 ? triageFieldKeys : selectedContribForTriage.targetRegulatoryFields,
+      justification: triageJustification.trim() || selectedContribForTriage.justification,
+      validatedAt: isVal ? nowIso : undefined,
+      validatedBy: isVal ? (teamMembers[0]?.name || 'Gestor') : undefined
+    };
+
+    let updatedRegDb = [...(project.regulatoryDatabase || [])];
+
+    // If validated to regulatory fields, feed the regulatory database
+    if (isVal && triageFieldKeys.length > 0) {
+      triageFieldKeys.forEach(fKey => {
+        const existingIdx = updatedRegDb.findIndex(r => r.fieldKey === fKey);
+        if (existingIdx >= 0) {
+          const oldRec = updatedRegDb[existingIdx];
+          updatedRegDb[existingIdx] = {
+            ...oldRec,
+            valueText: selectedContribForTriage.content || oldRec.valueText,
+            valueLink: selectedContribForTriage.evidenceLink || oldRec.valueLink,
+            status: 'validado',
+            origin: 'contribuição',
+            originRefId: updatedContrib.id,
+            originRefName: updatedContrib.title,
+            lastModifiedAt: nowIso,
+            history: [{
+              id: `rh_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+              timestamp: nowIso,
+              author: teamMembers[0]?.name || 'Gestor',
+              previousValue: oldRec.valueText || '',
+              newValue: selectedContribForTriage.content,
+              justification: triageJustification || 'Triada e validada via Central de Contribuições'
+            }, ...(oldRec.history || [])]
+          };
+        } else {
+          updatedRegDb.push({
+            id: `reg_${fKey.toLowerCase()}_${Date.now()}`,
+            fieldKey: fKey,
+            fieldLabel: fKey,
+            groupName: 'Base Regulatória',
+            phase: triagePhase || selectedPhase,
+            valueText: selectedContribForTriage.content,
+            valueLink: selectedContribForTriage.evidenceLink,
+            status: 'validado',
+            origin: 'contribuição',
+            originRefId: updatedContrib.id,
+            originRefName: updatedContrib.title,
+            responsible: teamMembers[0]?.name || 'Gestor',
+            lastModifiedAt: nowIso,
+            history: [{
+              id: `rh_${Date.now()}`,
+              timestamp: nowIso,
+              author: teamMembers[0]?.name || 'Gestor',
+              previousValue: '',
+              newValue: selectedContribForTriage.content,
+              justification: triageJustification || 'Triada e validada via Central de Contribuições'
+            }]
+          });
+        }
+      });
+    }
+
+    const updatedContribList = (project.contributions || []).map(c => 
+      c.id === updatedContrib.id ? updatedContrib : c
+    );
+
+    const historyEvent: ProjectHistoryEvent = {
+      id: `hist_triage_${Date.now()}`,
+      date: todayStr,
+      timestamp: nowIso,
+      author: teamMembers[0]?.name || 'Gestor',
+      eventType: 'contribuicao',
+      title: `Triagem de Contribuição: ${updatedContrib.title} (${isVal ? 'Validada' : isDesc ? 'Descartada' : 'Em Análise'})`,
+      description: triageJustification || `Campos: ${triageFieldKeys.join(', ') || 'Nenhum'}`,
+      justification: triageJustification,
+      refType: 'contribuicao',
+      refId: updatedContrib.id
+    };
+
+    onUpdateProject({
+      ...project,
+      contributions: updatedContribList,
+      regulatoryDatabase: updatedRegDb,
+      historyTimeline: [historyEvent, ...(project.historyTimeline || [])]
+    });
+
+    setIsTriageModalOpen(false);
+    setSelectedContribForTriage(null);
+  };
+
+  // Add manual milestone/note to history timeline
+  const handleSaveManualHistoryEvent = () => {
+    if (!newHistoryTitle.trim()) return;
+    const nowIso = new Date().toISOString();
+    const todayStr = nowIso.split('T')[0];
+
+    const event: ProjectHistoryEvent = {
+      id: `hist_manual_${Date.now()}`,
+      date: todayStr,
+      timestamp: nowIso,
+      author: teamMembers[0]?.name || 'Gestor',
+      eventType: newHistoryType,
+      title: newHistoryTitle.trim(),
+      description: newHistoryDesc.trim(),
+      refType: 'outro'
+    };
+
+    onUpdateProject({
+      ...project,
+      historyTimeline: [event, ...(project.historyTimeline || [])]
+    });
+
+    setIsAddHistoryModalOpen(false);
+    setNewHistoryTitle('');
+    setNewHistoryDesc('');
   };
 
   // Linked meetings to this project
@@ -1379,31 +1769,66 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         ))}
       </div>
 
-      {/* 2. TOP 3 KPI STAT CARDS (Matching Image top cards) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Card 1: Progresso geral */}
+      {/* 2. TOP KPI STAT CARDS (Separated Project Progress and Regulatory Progress - Item 6) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* Card 1: Progresso do Projeto */}
         <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
             <FlaskConical size={24} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-slate-500">Progresso geral</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-slate-500">Progresso do projeto</p>
+              <span className="text-[10px] font-black px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full">
+                Atividades
+              </span>
+            </div>
             <p className="text-3xl font-black text-slate-900 tracking-tight">
-              {stats.overallProgress}%
+              {stats.projectProgress}%
             </p>
             <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1.5">
               <div 
                 className="h-full bg-blue-600 rounded-full transition-all duration-500" 
-                style={{ width: `${stats.overallProgress}%` }}
+                style={{ width: `${stats.projectProgress}%` }}
               />
             </div>
+            <p className="text-[11px] text-slate-400 font-semibold mt-1 truncate">
+              {stats.completedMicros} de {stats.totalMicros} microatividades
+            </p>
           </div>
         </div>
 
-        {/* Card 2: Tempo restante */}
+        {/* Card 2: Progresso Regulatório */}
+        <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <ShieldCheck size={24} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-slate-500">Progresso regulatório</p>
+              <span className="text-[10px] font-black px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full">
+                Decisões & Base
+              </span>
+            </div>
+            <p className="text-3xl font-black text-slate-900 tracking-tight">
+              {stats.regulatoryProgress}%
+            </p>
+            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1.5">
+              <div 
+                className="h-full bg-emerald-500 rounded-full transition-all duration-500" 
+                style={{ width: `${stats.regulatoryProgress}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-slate-400 font-semibold mt-1 truncate">
+              {stats.validatedMandatoryDecisions} de {stats.totalMandatoryDecisions} requisitos validados
+            </p>
+          </div>
+        </div>
+
+        {/* Card 3: Tempo restante */}
         <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
               <Calendar size={24} />
             </div>
             <div>
@@ -1421,9 +1846,9 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           </div>
         </div>
 
-        {/* Card 3: Próximo marco */}
+        {/* Card 4: Próximo marco */}
         <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
             <Flag size={24} />
           </div>
           <div className="flex-1 min-w-0">
@@ -1503,38 +1928,408 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       )}
 
+      {/* ABA HISTÓRICO - REGISTRO DO QUE ACONTECEU (Item 8) */}
       {activeTopTab === 'historico' && (
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-4">
-          <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-lg font-black text-slate-900">Histórico e Reuniões Vinculadas</h2>
-            <p className="text-xs text-slate-500">Registro de atualizações, deliberações e atas de reuniões do projeto</p>
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <HistoryIcon className="text-blue-600" size={20} />
+                <h2 className="text-lg font-black text-slate-900">Histórico Completo do Projeto</h2>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Linha do tempo cronológica com reuniões, deliberações, decisões e alterações na Base Regulatória
+              </p>
+            </div>
+            <button
+              onClick={() => setIsAddHistoryModalOpen(true)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-xs cursor-pointer"
+            >
+              <Plus size={14} /> Registrar Marco / Nota
+            </button>
           </div>
-          <div className="space-y-3">
-            {linkedMeetings.length > 0 ? (
-              linkedMeetings.map(meeting => (
-                <div key={meeting.id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50/40 flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-xs font-black text-slate-900">{meeting.title}</p>
-                    <p className="text-[11px] text-slate-500">Data: {meeting.date} | Moderador: {meeting.moderator}</p>
-                    {meeting.presentationLink && (
-                      <a 
-                        href={meeting.presentationLink} 
-                        target="_blank" 
-                        rel="noreferrer" 
-                        className="text-[11px] text-blue-600 font-bold inline-flex items-center gap-1 hover:underline"
-                      >
-                        <Presentation size={12} /> Link da apresentação &rarr;
-                      </a>
+
+          {/* Filter Pills */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-slate-400 font-bold mr-1 flex items-center gap-1">
+              <Filter size={12} /> Filtrar por:
+            </span>
+            {[
+              { id: 'todos', label: 'Todos os Eventos' },
+              { id: 'reuniao', label: 'Reuniões' },
+              { id: 'decisao', label: 'Decisões Estratégicas' },
+              { id: 'regulatorio', label: 'Base Regulatória' },
+              { id: 'contribuicao', label: 'Contribuições' },
+              { id: 'atividade', label: 'Atividades' }
+            ].map(f => (
+              <button
+                key={f.id}
+                onClick={() => setHistoryFilter(f.id as any)}
+                className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer ${
+                  historyFilter === f.id
+                    ? 'bg-blue-600 text-white shadow-2xs'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Chronological Timeline */}
+          <div className="space-y-4 pt-2">
+            {/* Meetings Section if filter matches */}
+            {(historyFilter === 'todos' || historyFilter === 'reuniao') && linkedMeetings.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                  <Presentation size={14} className="text-blue-600" /> Reuniões Realizadas ({linkedMeetings.length})
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {linkedMeetings.map(meeting => (
+                    <div 
+                      key={meeting.id} 
+                      className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-blue-50/20 transition space-y-2 cursor-pointer"
+                      onClick={() => setSelectedMeetingForModal(meeting)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-black text-slate-900">{meeting.title}</p>
+                          <p className="text-[11px] text-slate-500">
+                            Data: {meeting.date} | Moderador: {meeting.moderator}
+                          </p>
+                        </div>
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-[10px] font-black shrink-0">
+                          {meeting.agendaItems?.length || 0} pautas
+                        </span>
+                      </div>
+                      {meeting.generalConclusions && (
+                        <p className="text-xs text-slate-600 line-clamp-2 italic">
+                          "{meeting.generalConclusions}"
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between pt-1">
+                        {meeting.presentationLink ? (
+                          <a 
+                            href={meeting.presentationLink} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            onClick={e => e.stopPropagation()}
+                            className="text-[11px] text-blue-600 font-bold inline-flex items-center gap-1 hover:underline"
+                          >
+                            <ExternalLink size={12} /> Apresentação
+                          </a>
+                        ) : <span />}
+                        <button 
+                          onClick={() => setSelectedMeetingForModal(meeting)}
+                          className="text-[11px] font-bold text-blue-700 hover:text-blue-900 inline-flex items-center gap-1"
+                        >
+                          Ver pautas e ata completa &rarr;
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Timeline Feed */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                Linha do Tempo de Alterações e Marcos
+              </h3>
+              {(() => {
+                const events = (project.historyTimeline || []).filter(e => {
+                  if (historyFilter === 'todos') return true;
+                  return e.eventType === historyFilter;
+                });
+
+                if (events.length === 0) {
+                  return (
+                    <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200">
+                      <p className="text-xs text-slate-400 italic">
+                        Nenhum evento registrado nesta categoria até o momento. Conforme decisões forem tomadas e contribuições validadas, elas aparecerão automaticamente aqui.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="relative pl-6 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+                    {events.map((evt, idx) => (
+                      <div key={evt.id || idx} className="relative">
+                        {/* Node circle */}
+                        <div className={`absolute -left-6 top-1.5 w-4 h-4 rounded-full border-2 bg-white flex items-center justify-center ${
+                          evt.eventType === 'decisao' ? 'border-emerald-500' :
+                          evt.eventType === 'regulatorio' ? 'border-blue-500' :
+                          evt.eventType === 'contribuicao' ? 'border-purple-500' : 'border-amber-500'
+                        }`} />
+
+                        <div className="bg-slate-50/70 hover:bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-2 text-xs">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                evt.eventType === 'decisao' ? 'bg-emerald-100 text-emerald-800' :
+                                evt.eventType === 'regulatorio' ? 'bg-blue-100 text-blue-800' :
+                                evt.eventType === 'contribuicao' ? 'bg-purple-100 text-purple-800' : 'bg-amber-100 text-amber-800'
+                              }`}>
+                                {evt.eventType}
+                              </span>
+                              <span className="font-black text-slate-900">{evt.title}</span>
+                            </div>
+                            <span className="text-[11px] text-slate-400 font-semibold">
+                              {evt.date} • por <strong className="text-slate-700">{evt.author}</strong>
+                            </span>
+                          </div>
+
+                          {evt.description && (
+                            <p className="text-slate-600 leading-relaxed">{evt.description}</p>
+                          )}
+
+                          {/* Content change detail: previous value vs new value */}
+                          {(evt.previousValue || evt.newValue) && (
+                            <div className="p-3 bg-white rounded-xl border border-slate-200/80 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                              {evt.previousValue && (
+                                <div className="space-y-0.5">
+                                  <span className="font-bold text-slate-400 uppercase text-[9px]">Valor anterior:</span>
+                                  <p className="text-slate-500 line-through truncate">{evt.previousValue}</p>
+                                </div>
+                              )}
+                              {evt.newValue && (
+                                <div className="space-y-0.5">
+                                  <span className="font-bold text-emerald-600 uppercase text-[9px]">Novo valor:</span>
+                                  <p className="text-slate-800 font-semibold truncate">{evt.newValue}</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {evt.justification && (
+                            <p className="text-[11px] text-slate-500 italic bg-amber-50/60 p-2 rounded-xl border border-amber-200/50">
+                              <strong>Justificativa:</strong> {evt.justification}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ABA CONTRIBUIÇÕES - CENTRAL DE TRIAGEM REGULATÓRIA (Item 9) */}
+      {activeTopTab === 'contribuicoes' && (
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Inbox className="text-purple-600" size={20} />
+                <h2 className="text-lg font-black text-slate-900">Central de Triagem Regulatória</h2>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Centralize apontamentos de reuniões, discussões e observações para alimentar a Base Regulatória
+              </p>
+            </div>
+            <button
+              onClick={() => setIsAddContributionModalOpen(true)}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-xs cursor-pointer"
+            >
+              <Plus size={14} /> Nova Contribuição
+            </button>
+          </div>
+
+          {/* Stats Bar */}
+          {(() => {
+            const allContribs = project.contributions || [];
+            const pending = allContribs.filter(c => c.status === 'pendente' || c.status === 'em_analise').length;
+            const validated = allContribs.filter(c => c.status === 'validada').length;
+            const discarded = allContribs.filter(c => c.status === 'descartada').length;
+
+            return (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                  <span className="text-[11px] font-bold text-slate-500">Total</span>
+                  <p className="text-2xl font-black text-slate-900">{allContribs.length}</p>
+                </div>
+                <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-amber-700">Pendentes</span>
+                    {pending > 0 && (
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
                     )}
                   </div>
-                  <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-[11px] font-bold">
-                    {meeting.agendaItems?.length || 0} pautas
+                  <p className="text-2xl font-black text-amber-900">{pending}</p>
+                </div>
+                <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200">
+                  <span className="text-[11px] font-bold text-emerald-700">Validadas</span>
+                  <p className="text-2xl font-black text-emerald-900">{validated}</p>
+                </div>
+                <div className="p-3.5 bg-slate-100 rounded-2xl border border-slate-200">
+                  <span className="text-[11px] font-bold text-slate-500">Descartadas</span>
+                  <p className="text-2xl font-black text-slate-700">{discarded}</p>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-slate-400 font-bold mr-1 flex items-center gap-1">
+              <Filter size={12} /> Status:
+            </span>
+            {[
+              { id: 'todas', label: 'Todas' },
+              { id: 'pendentes', label: 'Pendentes de Triagem' },
+              { id: 'validadas', label: 'Validadas' },
+              { id: 'descartadas', label: 'Descartadas' }
+            ].map(f => (
+              <button
+                key={f.id}
+                onClick={() => setContributionFilter(f.id as any)}
+                className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer ${
+                  contributionFilter === f.id
+                    ? 'bg-purple-600 text-white shadow-2xs'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Contributions List */}
+          <div className="space-y-3">
+            {(() => {
+              const list = (project.contributions || []).filter(c => {
+                if (contributionFilter === 'todas') return true;
+                if (contributionFilter === 'pendentes') return c.status === 'pendente' || c.status === 'em_analise';
+                if (contributionFilter === 'validadas') return c.status === 'validada';
+                if (contributionFilter === 'descartadas') return c.status === 'descartada';
+                return true;
+              });
+
+              if (list.length === 0) {
+                return (
+                  <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200">
+                    <p className="text-xs text-slate-400 italic">
+                      Nenhuma contribuição encontrada nesta visualização. Use o botão acima para registrar contribuições durante reuniões ou discussões técnicas.
+                    </p>
+                  </div>
+                );
+              }
+
+              return list.map(c => (
+                <div 
+                  key={c.id} 
+                  className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-white transition space-y-3"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                          c.status === 'validada' ? 'bg-emerald-100 text-emerald-800' :
+                          c.status === 'descartada' ? 'bg-slate-200 text-slate-600' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {c.status}
+                        </span>
+                        <h4 className="text-xs font-black text-slate-900">{c.title}</h4>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        Origem: <strong>{c.source}</strong> • Criado por {c.author} em {c.createdAt ? c.createdAt.split('T')[0] : ''}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {c.evidenceLink && (
+                        <a
+                          href={c.evidenceLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2.5 py-1 bg-white border border-slate-200 rounded-xl text-[11px] font-bold text-blue-600 hover:bg-slate-50 flex items-center gap-1"
+                        >
+                          <ExternalLink size={12} /> Evidência
+                        </a>
+                      )}
+                      <button
+                        onClick={() => {
+                          setSelectedContribForTriage(c);
+                          setTriagePhase(c.targetPhase || selectedPhase);
+                          setTriageMacroId(c.targetMacroActivityId || '');
+                          setTriageDecisionId(c.targetDecisionId || '');
+                          setTriageFieldKeys(c.targetRegulatoryFields || []);
+                          setTriageJustification(c.justification || '');
+                          setTriageAction(c.status === 'validada' ? 'validar' : (c.status === 'descartada' ? 'descartar' : 'validar'));
+                          setIsTriageModalOpen(true);
+                        }}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                      >
+                        <Sliders size={13} /> Triar / Vincular
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-700 leading-relaxed bg-white p-3 rounded-xl border border-slate-150">
+                    {c.content}
+                  </p>
+
+                  {/* Linked fields badges */}
+                  {c.targetRegulatoryFields && c.targetRegulatoryFields.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                      <span className="font-bold text-slate-400">Campos regulatórios vinculados:</span>
+                      {c.targetRegulatoryFields.map(fKey => (
+                        <span key={fKey} className="px-2 py-0.5 bg-blue-50 text-blue-700 font-bold rounded-lg border border-blue-200/80">
+                          [{fKey}]
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {c.justification && (
+                    <p className="text-[11px] text-slate-500 italic">
+                      <strong>Parecer de triagem:</strong> {c.justification}
+                    </p>
+                  )}
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* ABA ORIENTAÇÃO REGULATÓRIA GERAL */}
+      {activeTopTab === 'orientacao' && (
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-6">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-lg font-black text-slate-900">Orientação Regulatória da Fase Selecionada</h2>
+            <p className="text-xs text-slate-500">Diretrizes da Anvisa e OMS aplicáveis à {selectedPhase}</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {currentPhaseGroups.map(grp => (
+              <div key={grp.name} className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-xs text-slate-900">{grp.number}. {grp.name}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full">
+                    {grp.decisionsList.length} decisões
                   </span>
                 </div>
-              ))
-            ) : (
-              <p className="text-xs text-slate-400 italic">Nenhuma reunião com pauta vinculada diretamente a este projeto até o momento.</p>
-            )}
+                <p className="text-xs text-slate-600 leading-relaxed">{grp.description}</p>
+                {grp.regulatoryPoints.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-black text-slate-500 uppercase">Pontos de Atenção:</span>
+                    <ul className="text-xs text-slate-600 space-y-1 pl-1">
+                      {grp.regulatoryPoints.slice(0, 2).map((pt, pIdx) => (
+                        <li key={pIdx} className="flex items-start gap-1.5">
+                          <span className="text-blue-500">•</span>
+                          <span>{pt}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -2804,14 +3599,14 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         />
       )}
 
-      {/* DECISION EDIT MODAL */}
+      {/* DECISION EDIT MODAL (Enriched for Item 2, 7) */}
       {isDecisionModalOpen && editingDecision && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-xl w-full max-h-[92vh] overflow-y-auto p-6 shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-6 shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <span className="text-[11px] font-black text-blue-600 uppercase tracking-wider">
-                  Decisão e Justificativa Regulatória
+                  Configuração e Resposta da Decisão Estratégica
                 </span>
                 <h3 className="text-base font-black text-slate-900 leading-tight">
                   {editingDecision.question}
@@ -2826,22 +3621,35 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             </div>
 
             <div className="space-y-4 text-xs">
+              {/* Question text (editable) */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Pergunta / Decisão a ser respondida</label>
+                <input
+                  type="text"
+                  value={decisionFormQuestion}
+                  onChange={e => setDecisionFormQuestion(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
               {/* Status */}
               <div>
                 <label className="font-bold text-slate-700 block mb-1">Status da Decisão</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['Pendente', 'Em avaliação', 'Decidido'] as const).map(st => (
+                <div className="grid grid-cols-4 gap-2">
+                  {(['Pendente', 'Em avaliação', 'Decidido', 'Validado'] as const).map(st => (
                     <button
                       key={st}
                       type="button"
                       onClick={() => setDecisionFormStatus(st)}
                       className={`py-2 px-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
                         decisionFormStatus === st
-                          ? st === 'Decidido'
-                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
-                            : st === 'Em avaliação'
-                              ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                              : 'bg-amber-500 text-white border-amber-500 shadow-2xs'
+                          ? st === 'Validado'
+                            ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
+                            : st === 'Decidido'
+                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                              : st === 'Em avaliação'
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                                : 'bg-amber-500 text-white border-amber-500 shadow-2xs'
                           : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                       }`}
                     >
@@ -2851,9 +3659,166 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 </div>
               </div>
 
-              {/* Decisão Tomada */}
+              {/* Regulatory Impact & Mandatory Toggles */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-slate-800">Possui impacto regulatório?</span>
+                    <p className="text-[10px] text-slate-400">Relevante para submissão à Anvisa</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDecisionFormRegulatoryImpact(!decisionFormRegulatoryImpact)}
+                    className={`px-3 py-1 rounded-xl text-xs font-black transition cursor-pointer ${
+                      decisionFormRegulatoryImpact
+                        ? 'bg-blue-600 text-white shadow-2xs'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {decisionFormRegulatoryImpact ? 'Sim' : 'Não'}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-slate-800">Decisão obrigatória?</span>
+                    <p className="text-[10px] text-slate-400">Exigida para marco regulatório</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDecisionFormMandatory(!decisionFormMandatory)}
+                    className={`px-3 py-1 rounded-xl text-xs font-black transition cursor-pointer ${
+                      decisionFormMandatory
+                        ? 'bg-emerald-600 text-white shadow-2xs'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {decisionFormMandatory ? 'Sim' : 'Opcional'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Target Regulatory Field mapping */}
+              <div className="p-3 bg-blue-50/50 rounded-2xl border border-blue-200/70 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-black text-blue-950 flex items-center gap-1.5">
+                    <Database size={13} className="text-blue-600" />
+                    Campo de Destino na Base Regulatória
+                  </label>
+                  <span className="text-[10px] text-blue-700 font-bold">
+                    Alimenta automaticamente a tabela
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-bold block mb-1">Selecionar entre os campos padrão:</span>
+                    <select
+                      value={decisionFormTargetFieldKey}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setDecisionFormTargetFieldKey(val);
+                        // Auto set label
+                        for (const grp of STANDARD_REGULATORY_GROUPS) {
+                          const f = grp.fields.find(field => field.key === val);
+                          if (f) {
+                            setDecisionFormTargetFieldLabel(f.label);
+                            break;
+                          }
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white font-semibold"
+                    >
+                      <option value="">-- Nenhum campo vinculado --</option>
+                      {STANDARD_REGULATORY_GROUPS.map(grp => (
+                        <optgroup key={grp.groupName} label={grp.groupName}>
+                          {grp.fields.map(f => (
+                            <option key={f.key} value={f.key}>
+                              [{f.key}] {f.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] text-slate-500 font-bold block mb-1">Ou criar/inserir identificador customizado:</span>
+                    <input
+                      type="text"
+                      value={decisionFormTargetFieldKey}
+                      onChange={e => {
+                        setDecisionFormTargetFieldKey(e.target.value);
+                        if (!decisionFormTargetFieldLabel) {
+                          setDecisionFormTargetFieldLabel(e.target.value);
+                        }
+                      }}
+                      placeholder="Ex: NOME_DA_VACINA"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono uppercase bg-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Response Type Selector */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Decisão Tomada / Resposta</label>
+                <label className="font-bold text-slate-700 block mb-1">Tipo de Resposta Esperada</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'texto', label: 'Texto explicativo' },
+                    { id: 'link', label: 'Link / Documento' },
+                    { id: 'ambos', label: 'Texto e Link' }
+                  ].map(rt => (
+                    <button
+                      key={rt.id}
+                      type="button"
+                      onClick={() => setDecisionFormResponseType(rt.id as any)}
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                        decisionFormResponseType === rt.id
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {rt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Linked Regulatory Standards (Item 2) */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1 flex items-center justify-between">
+                  <span>Normas e Guias Regulatórios Vinculados</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Reutiliza registros do módulo sem duplicação</span>
+                </label>
+                <div className="max-h-28 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                  {regulatoryStandards.map(std => {
+                    const isChecked = decisionFormLinkedStandards.includes(std.id);
+                    return (
+                      <label key={std.id} className="flex items-center gap-2 p-1.5 hover:bg-white rounded-lg cursor-pointer text-xs">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={e => {
+                            if (e.target.checked) {
+                              setDecisionFormLinkedStandards([...decisionFormLinkedStandards, std.id]);
+                            } else {
+                              setDecisionFormLinkedStandards(decisionFormLinkedStandards.filter(id => id !== std.id));
+                            }
+                          }}
+                          className="rounded text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="font-bold text-slate-800">{std.code}</span>
+                        <span className="text-slate-500 truncate">{std.title}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Decisão Tomada / Resposta */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Decisão Tomada / Resposta Validada</label>
                 <textarea
                   value={decisionFormAnswer}
                   onChange={e => setDecisionFormAnswer(e.target.value)}
@@ -2871,7 +3836,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 <textarea
                   value={decisionFormJustification}
                   onChange={e => setDecisionFormJustification(e.target.value)}
-                  rows={3}
+                  rows={2}
                   placeholder="Fundamentação técnica e científica que constará no dossiê de desenvolvimento..."
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
@@ -2910,7 +3875,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               <div>
                 <label className="font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
                   <LinkIcon size={14} className="text-blue-600" />
-                  Link de Evidência / Documento no SharePoint
+                  Link de Acesso / Evidência (Não exige upload de anexo)
                 </label>
                 <input
                   type="url"
@@ -2920,7 +3885,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
                 <span className="text-[11px] text-slate-400 mt-1 block">
-                  Permite rastreabilidade direta dos relatórios e artigos que fundamentam a decisão.
+                  Permite preservar o sigilo de documentos armazenados em ambientes restritos registrando apenas o link seguro.
                 </span>
               </div>
             </div>
@@ -2938,7 +3903,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 onClick={handleSaveDecisionForm}
                 className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
-                <Check size={14} /> Salvar Decisão
+                <Check size={14} /> Salvar e Alimentar Base Regulatória
               </button>
             </div>
           </div>
@@ -2979,7 +3944,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 autoFocus
               />
               <p className="text-[11px] text-slate-400">
-                A pergunta será inserida inicialmente como "Pendente (A avaliar)" para que o gestor possa registrar a fundamentação gradualmente.
+                A pergunta será inserida inicialmente como "Pendente (A avaliar)" para que o gestor possa registrar a fundamentação gradualmente e mapear o campo na Base Regulatória.
               </p>
             </div>
 
@@ -3003,10 +3968,10 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       )}
 
-      {/* ADD GUIDE MODAL */}
+      {/* ADD GUIDE MODAL (Item 2: Inserir manualmente ou selecionar norma já cadastrada) */}
       {isAddGuideModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-base font-black text-slate-900">
                 Adicionar Norma, Guia ou Artigo
@@ -3019,7 +3984,34 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
+            <div className="space-y-4 text-xs">
+              {/* Option 1: Select from existing regulatory standards */}
+              <div className="p-3 bg-blue-50/50 rounded-2xl border border-blue-200/60 space-y-2">
+                <label className="font-bold text-blue-950 block">
+                  Reutilizar Norma cadastrada no Módulo Regulatório:
+                </label>
+                <select
+                  value={newGuideStandardId}
+                  onChange={e => {
+                    const stdId = e.target.value;
+                    setNewGuideStandardId(stdId);
+                    const found = regulatoryStandards.find(s => s.id === stdId);
+                    if (found) {
+                      setNewGuideTitle(`${found.code} – ${found.title}`);
+                      setNewGuideLink(found.link || found.pdfUrl || '');
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white font-semibold"
+                >
+                  <option value="">-- Selecione uma norma existente ou insira abaixo manualmente --</option>
+                  {regulatoryStandards.map(std => (
+                    <option key={std.id} value={std.id}>
+                      {std.code} – {std.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="font-bold text-slate-700 block mb-1">Título ou Referência</label>
                 <input
@@ -3027,13 +4019,12 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   value={newGuideTitle}
                   onChange={e => setNewGuideTitle(e.target.value)}
                   placeholder="Ex: RDC Anvisa nº 55/2010 ou Artigo Nature 2024"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
-                  autoFocus
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold"
                 />
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Link (Oficial ou SharePoint)</label>
+                <label className="font-bold text-slate-700 block mb-1">Link de Acesso (Não exige anexo)</label>
                 <input
                   type="url"
                   value={newGuideLink}
@@ -3041,6 +4032,9 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   placeholder="https://www.gov.br/anvisa ou https://ctvacinas.sharepoint.com/..."
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
                 />
+                <span className="text-[11px] text-slate-400 mt-1 block">
+                  Preserva o sigilo de documentos armazenados em ambientes restritos registrando apenas o link de acesso.
+                </span>
               </div>
             </div>
 
@@ -3108,6 +4102,410 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition shadow-xs cursor-pointer"
               >
                 Salvar Ponto
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MEETING DETAILS MODAL (Item 8: "não basta informar que uma reunião ocorreu: abrir seus detalhes") */}
+      {selectedMeetingForModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-6 shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[11px] font-black text-blue-600 uppercase tracking-wider">
+                  Ata e Deliberações da Reunião
+                </span>
+                <h3 className="text-lg font-black text-slate-900 leading-snug">
+                  {selectedMeetingForModal.title}
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Data: {selectedMeetingForModal.date} às {selectedMeetingForModal.time || '10:00'} | Local: {selectedMeetingForModal.location || 'CTVacinas'}
+                </p>
+              </div>
+              <button 
+                onClick={() => setSelectedMeetingForModal(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              {/* Participants & Moderator */}
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                <p className="text-slate-700">
+                  <strong>Moderador:</strong> {selectedMeetingForModal.moderator}
+                </p>
+                <p className="text-slate-600">
+                  <strong>Participantes:</strong> {(selectedMeetingForModal.participants || []).join(', ') || 'Equipe CTVacinas'}
+                </p>
+                {selectedMeetingForModal.presentationLink && (
+                  <div className="pt-1">
+                    <a
+                      href={selectedMeetingForModal.presentationLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-600 font-bold inline-flex items-center gap-1.5 hover:underline"
+                    >
+                      <Presentation size={13} /> Acessar Link de Apresentação &rarr;
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* General Conclusions */}
+              {selectedMeetingForModal.generalConclusions && (
+                <div className="space-y-1">
+                  <h4 className="font-black text-slate-800 uppercase tracking-wider text-[11px]">Conclusões Gerais e Deliberações:</h4>
+                  <p className="text-slate-700 bg-blue-50/50 p-3 rounded-xl border border-blue-200/60 leading-relaxed italic">
+                    "{selectedMeetingForModal.generalConclusions}"
+                  </p>
+                </div>
+              )}
+
+              {/* Agenda items */}
+              <div className="space-y-2">
+                <h4 className="font-black text-slate-800 uppercase tracking-wider text-[11px]">
+                  Pautas e Itens Discutidos ({selectedMeetingForModal.agendaItems?.length || 0}):
+                </h4>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {(selectedMeetingForModal.agendaItems || []).map((pauta, pIdx) => (
+                    <div key={pauta.id || pIdx} className="p-3 bg-white rounded-xl border border-slate-200 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-slate-900">{pIdx + 1}. {pauta.title}</span>
+                        {pauta.hasRegulatoryImpact && (
+                          <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-[10px] font-bold">
+                            Impacto Regulatório
+                          </span>
+                        )}
+                      </div>
+                      {pauta.description && (
+                        <p className="text-slate-600 text-[11px]">{pauta.description}</p>
+                      )}
+                      {pauta.decisions && (
+                        <p className="text-emerald-800 font-medium text-[11px] bg-emerald-50/50 p-2 rounded-lg border border-emerald-200/50">
+                          <strong>Decisão tomada:</strong> {pauta.decisions}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setSelectedMeetingForModal(null)}
+                className="px-5 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition cursor-pointer"
+              >
+                Fechar Detalhes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD CONTRIBUTION MODAL (Item 9) */}
+      {isAddContributionModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[11px] font-black text-purple-600 uppercase tracking-wider">
+                  Central de Triagem
+                </span>
+                <h3 className="text-base font-black text-slate-900">
+                  Registrar Nova Contribuição
+                </h3>
+              </div>
+              <button 
+                onClick={() => setIsAddContributionModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Título / Assunto</label>
+                <input
+                  type="text"
+                  value={newContribTitle}
+                  onChange={e => setNewContribTitle(e.target.value)}
+                  placeholder="Ex: Resultados preliminares de endotoxina do Lote 003"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Origem da Informação</label>
+                <select
+                  value={newContribSource}
+                  onChange={e => setNewContribSource(e.target.value as any)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white font-semibold"
+                >
+                  <option value="reunião">Reunião técnica ou administrativa</option>
+                  <option value="discussão técnica">Discussão técnica / Bancada</option>
+                  <option value="atividade">Atividade / Microatividade</option>
+                  <option value="observação">Observação de campo / Outro</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Descrição / Conteúdo Técnico</label>
+                <textarea
+                  value={newContribContent}
+                  onChange={e => setNewContribContent(e.target.value)}
+                  rows={3}
+                  placeholder="Descreva a informação relevante, dados analíticos ou observação obtida..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Link de Acesso ou Evidência (Opcional)</label>
+                <input
+                  type="url"
+                  value={newContribLink}
+                  onChange={e => setNewContribLink(e.target.value)}
+                  placeholder="https://ctvacinas.sharepoint.com/... ou link de drive"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsAddContributionModalOpen(false)}
+                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveNewContribution}
+                className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black transition shadow-xs cursor-pointer"
+              >
+                Registrar Contribuição
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TRIAGE CONTRIBUTION MODAL (Item 9: Avaliar relevância, vincular a macro/decisão/base regulatória) */}
+      {isTriageModalOpen && selectedContribForTriage && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-xl w-full max-h-[92vh] overflow-y-auto p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[11px] font-black text-purple-600 uppercase tracking-wider">
+                  Triagem e Vinculação Regulatória
+                </span>
+                <h3 className="text-base font-black text-slate-900 leading-tight">
+                  {selectedContribForTriage.title}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setIsTriageModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-700 leading-relaxed">
+                {selectedContribForTriage.content}
+              </div>
+
+              {/* Triage Action */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Ação de Triagem</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'validar', label: 'Validar para a Base' },
+                    { id: 'revisao', label: 'Solicitar Revisão' },
+                    { id: 'descartar', label: 'Descartar' }
+                  ].map(act => (
+                    <button
+                      key={act.id}
+                      type="button"
+                      onClick={() => setTriageAction(act.id as any)}
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                        triageAction === act.id
+                          ? act.id === 'validar'
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                            : act.id === 'descartar'
+                              ? 'bg-red-600 text-white border-red-600 shadow-2xs'
+                              : 'bg-amber-500 text-white border-amber-500 shadow-2xs'
+                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      {act.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {triageAction !== 'descartar' && (
+                <>
+                  {/* Select Phase */}
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Vincular à Fase</label>
+                    <select
+                      value={triagePhase}
+                      onChange={e => setTriagePhase(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white font-semibold"
+                    >
+                      {phasesList.map(phase => (
+                        <option key={phase} value={phase}>{phase}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Select Target Regulatory Fields (can feed multiple fields!) */}
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Selecionar Campo(s) da Base Regulatória a alimentar:
+                    </label>
+                    <div className="max-h-36 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                      {STANDARD_REGULATORY_GROUPS.flatMap(g => g.fields).map(f => {
+                        const isChecked = triageFieldKeys.includes(f.key);
+                        return (
+                          <label key={f.key} className="flex items-center gap-2 p-1.5 hover:bg-white rounded-lg cursor-pointer text-xs">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={e => {
+                                if (e.target.checked) {
+                                  setTriageFieldKeys([...triageFieldKeys, f.key]);
+                                } else {
+                                  setTriageFieldKeys(triageFieldKeys.filter(k => k !== f.key));
+                                }
+                              }}
+                              className="rounded text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="font-mono text-[10px] text-blue-700 font-bold">[{f.key}]</span>
+                            <span className="text-slate-800 font-semibold truncate">{f.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Justification */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  Justificativa / Parecer Técnico do Gestor
+                </label>
+                <textarea
+                  value={triageJustification}
+                  onChange={e => setTriageJustification(e.target.value)}
+                  rows={2}
+                  placeholder={triageAction === 'descartar' ? 'Justifique por que esta contribuição não possui relevância regulatória...' : 'Justifique a validação e impacto técnico para a Base Regulatória...'}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsTriageModalOpen(false)}
+                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleTriageContributionSubmit}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition shadow-xs cursor-pointer"
+              >
+                Concluir Triagem
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD MANUAL HISTORY MILESTONE MODAL (Item 8) */}
+      {isAddHistoryModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-black text-slate-900">
+                Registrar Marco ou Nota no Histórico
+              </h3>
+              <button 
+                onClick={() => setIsAddHistoryModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Tipo de Evento</label>
+                <select
+                  value={newHistoryType}
+                  onChange={e => setNewHistoryType(e.target.value as any)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white font-semibold"
+                >
+                  <option value="marco">Marco do Projeto</option>
+                  <option value="regulatorio">Comunicação / Parecer Anvisa</option>
+                  <option value="decisao">Decisão Estratégica Externa</option>
+                  <option value="outro">Anotação Geral da Gestão</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Título do Evento</label>
+                <input
+                  type="text"
+                  value={newHistoryTitle}
+                  onChange={e => setNewHistoryTitle(e.target.value)}
+                  placeholder="Ex: Parecer favorável do Comitê de Ética CONEP"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Descrição / Detalhes</label>
+                <textarea
+                  value={newHistoryDesc}
+                  onChange={e => setNewHistoryDesc(e.target.value)}
+                  rows={3}
+                  placeholder="Detalhes adicionais sobre o marco alcançado..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsAddHistoryModalOpen(false)}
+                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveManualHistoryEvent}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition shadow-xs cursor-pointer"
+              >
+                Salvar no Histórico
               </button>
             </div>
           </div>

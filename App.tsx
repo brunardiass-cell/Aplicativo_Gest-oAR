@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
 import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity, RegulatoryEvidence, MacroActivityConfig, RegulatoryInfoItem, RepeatableRecord, RegulatoryNarrative, RegulatoryDocument, Meeting, DossierContribution } from './types';
-import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES, DEFAULT_MEETINGS, isNameMatch, getAccountEmails } from './constants';
+import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES, DEFAULT_MEETINGS, DEFAULT_ACTIVITY_PLANS, isNameMatch, getAccountEmails } from './constants';
 import { MeetingsManager } from './components/MeetingsManager';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
@@ -80,7 +80,7 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-  const [activityPlans, setActivityPlans] = useState<ActivityPlanTemplate[]>([]);
+  const [activityPlans, setActivityPlans] = useState<ActivityPlanTemplate[]>(DEFAULT_ACTIVITY_PLANS);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [appUsers, setAppUsers] = useState<AppUser[]>([]);
@@ -310,11 +310,14 @@ const App: React.FC = () => {
   const applyData = (cloudData: any, version: string | null) => {
     if (!cloudData || typeof cloudData !== 'object') return;
 
-    const loadedPlans = cloudData.activityPlans || [];
-    const migratedPlans = loadedPlans.map((plan: any) => {
+    const rawLoadedPlans: any[] = cloudData.activityPlans || [];
+    const plansMap = new Map<string, ActivityPlanTemplate>();
+    DEFAULT_ACTIVITY_PLANS.forEach((dp: ActivityPlanTemplate) => plansMap.set(dp.id, dp));
+    rawLoadedPlans.forEach((plan: any) => {
+      let migrated = plan;
       if (plan.macroActivities && plan.macroActivities.length > 0 && typeof plan.macroActivities[0] === 'string') {
         const defaultPhase = (plan.phases && plan.phases.length > 0) ? plan.phases[0] : 'Fase Padrão';
-        return {
+        migrated = {
           ...plan,
           macroActivities: (plan.macroActivities as string[]).map((macroName: string) => ({
             name: macroName,
@@ -322,8 +325,16 @@ const App: React.FC = () => {
           }))
         };
       }
-      return plan;
+      if (plansMap.has(migrated.id)) {
+        const isOldPhaseStructure = !migrated.phases || migrated.phases.length < 7 || (migrated.phases[0] && migrated.phases[0].includes('FASE 1'));
+        if (!isOldPhaseStructure) {
+          plansMap.set(migrated.id, migrated);
+        }
+      } else {
+        plansMap.set(migrated.id, migrated);
+      }
     });
+    const migratedPlans = Array.from(plansMap.values());
 
     const rawAppUsers = (cloudData.appUsers && cloudData.appUsers.length > 0) ? cloudData.appUsers : DEFAULT_APP_USERS;
     const sanitizedAppUsers = rawAppUsers.map((u: any) => {
@@ -2330,6 +2341,7 @@ const App: React.FC = () => {
             onUpdateRepeatableRecords={(rep) => { setRepeatableRecords(rep); setDataDirty(); }}
             onUpdateNarratives={(nar) => { setRegulatoryNarratives(nar); setDataDirty(); }}
             onUpdateDocs={(docs) => { setRegulatoryDocs(docs); setDataDirty(); }}
+            onUpdateProjects={(p) => { setProjects(p); setDataDirty(); }}
             currentUser={selectedProfile?.name || 'Usuário'}
             hasAdminAccess={hasFullAccess}
           />

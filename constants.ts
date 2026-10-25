@@ -1,5 +1,16 @@
 
 import { ActivityPlanTemplate, TeamMember, AppUser, RegulatoryStandard, Meeting, TaskGroup } from './types';
+import { FlaskConical, ShieldCheck, Dna, Sparkles, Syringe, Atom, Microscope } from 'lucide-react';
+
+export const AVAILABLE_PROJECT_ICONS = [
+  { key: 'FlaskConical', label: 'Frasco', icon: FlaskConical },
+  { key: 'ShieldCheck', label: 'Imunidade', icon: ShieldCheck },
+  { key: 'Dna', label: 'DNA/RNA', icon: Dna },
+  { key: 'Sparkles', label: 'Inovação', icon: Sparkles },
+  { key: 'Syringe', label: 'Vacina', icon: Syringe },
+  { key: 'Atom', label: 'Molecular', icon: Atom },
+  { key: 'Microscope', label: 'Pesquisa', icon: Microscope },
+];
 
 export const DEFAULT_TASK_GROUPS: TaskGroup[] = [
   { id: 'group_spin_utg', name: 'SpiN-UTG', projectName: 'SpiN-UTG', color: '#0d9488', createdAt: new Date().toISOString(), createdBy: 'Sistema' },
@@ -215,13 +226,13 @@ export const ADMIN_WHITELIST = [
 ];
 
 export const VACCINE_PLATFORM_PHASES = [
-  'FASE 1 — Descoberta / Prova de Conceito',
-  'FASE 2 — Desenvolvimento Não Clínico',
-  'FASE 3 — Documentação Regulatória',
-  'FASE 4 — Submissão / Aprovação',
-  'FASE 5 — Estudos Clínicos Fase I',
-  'FASE 6 — Estudos Clínicos Fase II',
-  'FASE 7 — Estudos Clínicos Fase III'
+  'Descoberta / Prova de Conceito',
+  'Desenvolvimento Não Clínico',
+  'Documentação Regulatória',
+  'Submissão / Aprovação',
+  'Ensaio Clínico Fase 1',
+  'Ensaio Clínico Fase 2',
+  'Ensaio Clínico Fase 3'
 ];
 
 export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
@@ -236,8 +247,31 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Revisão da literatura',
         phase: VACCINE_PLATFORM_PHASES[0],
+        icon: 'BookOpen',
         microActivities: ['Mapeamento de alvos antigênicos', 'Levantamento de patentes e anterioridades', 'Análise de imunodominância de epítopos'],
         keyDecisions: ['A literatura suporta imunogenicidade cruzada?', 'Existe liberdade de operação (FTO) para a sequência?'],
+        decisionsList: [
+          {
+            id: 'dec_rev_1',
+            question: 'A literatura suporta imunogenicidade cruzada entre variantes?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: false,
+            targetFieldKey: 'ALVO_ANTIGENICO',
+            targetFieldLabel: 'Alvo Antigênico e Imunogenicidade',
+            responseType: 'ambos'
+          },
+          {
+            id: 'dec_rev_2',
+            question: 'Existe liberdade de operação (FTO) para a sequência antigênica?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: false,
+            targetFieldKey: 'RACIONAL_PLATAFORMA',
+            targetFieldLabel: 'Racional e Anterioridades',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Documentação de estado da arte para contextualização na Brochura do Investigador.'],
         technicalJustifications: ['Racional biológico e imunológico da escolha da proteína.'],
         referenceGuides: [
@@ -247,8 +281,31 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Ideia e definição do candidato',
         phase: VACCINE_PLATFORM_PHASES[0],
+        icon: 'Sparkles',
         microActivities: ['Modelagem tridimensional in silico', 'Desenho de mutações estabilizadoras', 'Seleção do sistema de expressão heterólogo'],
         keyDecisions: ['Qual o sistema de expressão preferencial (E. coli, Pichia pastoris ou células de mamífero)?', 'Foi incluída tag de purificação clivável?'],
+        decisionsList: [
+          {
+            id: 'dec_idea_1',
+            question: 'Qual o sistema de expressão heterólogo preferencial selecionado e qual a justificativa?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'SISTEMA_EXPRESSAO',
+            targetFieldLabel: 'Sistema de Expressão Heterólogo',
+            responseType: 'ambos'
+          },
+          {
+            id: 'dec_idea_2',
+            question: 'Foi incluída tag de purificação clivável ou estratégia de expressão direta sem fusão estranha?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'ALVO_ANTIGENICO',
+            targetFieldLabel: 'Construção Antigênica e Tags',
+            responseType: 'texto'
+          }
+        ],
         regulatoryPoints: ['Rastreabilidade da linhagem celular e histórico do vetor de clonagem.'],
         technicalJustifications: ['Justificativa da integridade conformacional do candidato.'],
         referenceGuides: [
@@ -258,8 +315,31 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Validação do candidato',
         phase: VACCINE_PLATFORM_PHASES[0],
+        icon: 'FlaskConical',
         microActivities: ['Expressão piloto em bancada', 'Purificação por cromatografia de afinidade', 'Ensaio preliminar de reconhecimento imune (ELISA/Western Blot)'],
         keyDecisions: ['O rendimento de expressão viabiliza escalonamento?', 'O antígeno é reconhecido por soros convalescentes?'],
+        decisionsList: [
+          {
+            id: 'dec_val_1',
+            question: 'O rendimento de expressão obtido viabiliza escalonamento fabril preliminar?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'PROCESSO_UPSTREAM',
+            targetFieldLabel: 'Rendimento e Escalabilidade Inicial',
+            responseType: 'ambos'
+          },
+          {
+            id: 'dec_val_2',
+            question: 'O antígeno expresso preserva o reconhecimento imune por anticorpos funcionais de soros convalescentes?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'RESPOSTA_IMUNE',
+            targetFieldLabel: 'Validação de Ligação Antígeno-Anticorpo',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Especificações preliminares de identidade e integridade proteica.'],
         technicalJustifications: ['Critérios de go/no-go para avanço à fase não clínica.'],
         referenceGuides: [
@@ -270,8 +350,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Banco de células, quando aplicável',
         phase: VACCINE_PLATFORM_PHASES[1],
+        icon: 'Layers',
         microActivities: ['Construção do Banco Celular Mestre (MCB)', 'Construção do Banco Celular de Trabalho (WCB)', 'Qualificação e teste de agentes adventícios'],
         keyDecisions: ['O banco celular foi testado para vírus e micoplasma?', 'A estabilidade genética durante as passagens foi demonstrada?'],
+        decisionsList: [
+          {
+            id: 'dec_banco_1',
+            question: 'O banco celular (MCB/WCB) foi qualificado e testado para vírus adventícios e micoplasma conforme ICH Q5A/Q5D?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'BANCO_CELULAR',
+            targetFieldLabel: 'Qualificação do Banco Celular',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Conformidade estrita com ICH Q5A (segurança viral) e ICH Q5D.'],
         technicalJustifications: ['Histórico do isolamento e certificados de ausência de derivados de ruminantes (TSE/BSE).'],
         referenceGuides: [
@@ -282,8 +375,31 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Produção de lote BPL do IFA',
         phase: VACCINE_PLATFORM_PHASES[1],
+        icon: 'TestTube',
         microActivities: ['Fermentação/cultivo em biorreator', 'Purificação downstream multietapas', 'Filtração estéril e alíquotas'],
         keyDecisions: ['O processo downstream elimina contaminantes de processo (HCP, DNA residual)?', 'O volume gerado supre todos os estudos toxicológicos?'],
+        decisionsList: [
+          {
+            id: 'dec_ifa_1',
+            question: 'O processo downstream elimina satisfatoriamente contaminantes de processo (HCP e DNA residual da célula hospedeira)?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'PROCESSO_DOWNSTREAM',
+            targetFieldLabel: 'Purificação Downstream e Contaminantes',
+            responseType: 'ambos'
+          },
+          {
+            id: 'dec_ifa_2',
+            question: 'O volume do lote BPL gerado é suficiente para suprir todos os estudos toxicológicos e estabilidade?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'PROCESSO_UPSTREAM',
+            targetFieldLabel: 'Escala de Produção BPL',
+            responseType: 'texto'
+          }
+        ],
         regulatoryPoints: ['Certificado de análise emitido com parâmetros mínimos de liberação.'],
         technicalJustifications: ['Racional de equivalência entre lote de pesquisa e lote pré-clínico.'],
         referenceGuides: [
@@ -293,8 +409,31 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Caracterização e impurezas',
         phase: VACCINE_PLATFORM_PHASES[1],
+        icon: 'Microscope',
         microActivities: ['Determinação de pureza por SEC-HPLC e RP-HPLC', 'Espectrometria de massas (MALDI-TOF / LC-MS/MS)', 'Quantificação de endotoxinas (LAL) e DNA residual da célula hospedeira'],
         keyDecisions: ['O nível de endotoxina está abaixo do limite para uso animal e clínico (< 5 EU/dose)?', 'O perfil de agregados proteicos foi caracterizado?'],
+        decisionsList: [
+          {
+            id: 'dec_imp_1',
+            question: 'O nível de endotoxina bacteriana está rigorosamente abaixo do limite máximo (< 5 EU/dose)?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'IMPUREZAS_RESIDUAIS',
+            targetFieldLabel: 'Controle de Endotoxinas e Impurezas',
+            responseType: 'ambos'
+          },
+          {
+            id: 'dec_imp_2',
+            question: 'O perfil de monômeros versus agregados proteicos foi caracterizado por SEC-HPLC e atende à especificação (>95% monômero)?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'ESPECIFICACOES_LIBERACAO',
+            targetFieldLabel: 'Especificações Físico-Químicas do IFA',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Atendimento aos critérios de aceitação da Farmacopeia Brasileira e ICH Q6B.'],
         technicalJustifications: ['Justificativa dos limites de impurezas relacionadas ao produto e ao processo.'],
         referenceGuides: [
@@ -304,8 +443,31 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Desenvolvimento da formulação e controle de qualidade',
         phase: VACCINE_PLATFORM_PHASES[1],
+        icon: 'Beaker',
         microActivities: ['Seleção de adjuvantes imunológicos', 'Testes de adsorção antígeno-adjuvante', 'Otimização de pH, osmolalidade e tensoativos'],
         keyDecisions: ['Por que foi escolhido determinado adjuvante?', 'A formulação será líquida estável ou liofilizada?'],
+        decisionsList: [
+          {
+            id: 'dec_form_1',
+            question: 'Por que foi escolhido determinado adjuvante e qual o racional de sinergismo com o antígeno?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'JUSTIFICATIVA_ADJUVANTE',
+            targetFieldLabel: 'Justificativa do Adjuvante',
+            responseType: 'ambos'
+          },
+          {
+            id: 'dec_form_2',
+            question: 'Qual a composição quantitativa final (excipientes, tensoativos, pH e osmolalidade)?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'COMPOSICAO_FINAL',
+            targetFieldLabel: 'Composição da Formulação Final',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Adequação da via parenteral estéril e ausência de toxicidade de excipientes.'],
         technicalJustifications: ['Racional de sinergismo antígeno-adjuvante e conforto de injeção.'],
         referenceGuides: [
@@ -316,8 +478,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Estabilidade e interação entre componentes',
         phase: VACCINE_PLATFORM_PHASES[1],
+        icon: 'Clock',
         microActivities: ['Estudo de estabilidade acelerada (25°C e 40°C)', 'Estudo de estabilidade sob refrigeração (2-8°C)', 'Avaliação de estresse de congelamento e descongelamento'],
         keyDecisions: ['Qual o prazo de validade provisório para os ensaios clínicos?', 'O antígeno permanece adsorvido ao longo do tempo?'],
+        decisionsList: [
+          {
+            id: 'dec_estab_1',
+            question: 'Qual o prazo de validade provisório e temperatura de armazenamento (2-8°C ou congelado) sustentado pelos dados preliminares?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'ESTABILIDADE_PRELIMINAR',
+            targetFieldLabel: 'Estabilidade Provisória e Armazenamento',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Conformidade com RDC Anvisa 318/2019 e ICH Q5C.'],
         technicalJustifications: ['Cinética de perda de potência e identificação de rotas de degradação.'],
         referenceGuides: [
@@ -328,6 +503,7 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Estudos in vivo',
         phase: VACCINE_PLATFORM_PHASES[1],
+        icon: 'Rat', // animal icon ONLY for in-vivo studies!
         microActivities: ['Curva de dose-resposta em camundongos', 'Ensaios de imunogenicidade humoral (títulos de anticorpos neutralizantes)', 'Ensaios de imunidade celular (ELISpot / Citometria de fluxo)'],
         keyDecisions: [
           'Qual a justificativa para a seleção do modelo animal?',
@@ -336,6 +512,48 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
           'Por que foi escolhido determinado adjuvante?',
           'Qual a justificativa para a via de administração e o esquema de doses?',
           'Quais normas e guias fundamentam o delineamento?'
+        ],
+        decisionsList: [
+          {
+            id: 'dec_invivo_1',
+            question: 'Qual a justificativa técnica para a seleção do modelo animal?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'MODELO_ANIMAL',
+            targetFieldLabel: 'Seleção do Modelo Animal',
+            responseType: 'ambos'
+          },
+          {
+            id: 'dec_invivo_2',
+            question: 'Qual a justificativa para seleção da dose, via de administração e esquema vacinal?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'MODELO_ANIMAL',
+            targetFieldLabel: 'Racional de Dose e Via de Administração',
+            responseType: 'ambos'
+          },
+          {
+            id: 'dec_invivo_3',
+            question: 'Quais normas e guias fundamentam o delineamento dos estudos não clínicos?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'MODELO_ANIMAL',
+            targetFieldLabel: 'Guias Não Clínicos Aplicáveis',
+            responseType: 'ambos'
+          },
+          {
+            id: 'dec_invivo_4',
+            question: 'Os títulos de anticorpos neutralizantes e a resposta celular TH1/TH2 atingiram os critérios de sucesso pré-definidos?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'RESPOSTA_IMUNE',
+            targetFieldLabel: 'Resposta Imune e Eficácia Animal',
+            responseType: 'ambos'
+          }
         ],
         regulatoryPoints: [
           'Condução sob diretrizes da CEUA e padrões internacionais BPL.',
@@ -353,8 +571,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Produção BPF',
         phase: VACCINE_PLATFORM_PHASES[1],
+        icon: 'Building',
         microActivities: ['Transferência de tecnologia para planta BPF', 'Produção de lote piloto clínico sob Boas Práticas', 'Envase e rotulagem estéril em sala limpa'],
         keyDecisions: ['A planta contratada possui Certificação de Boas Práticas de Fabricação (CBPF) válida pela Anvisa?', 'Os testes de esterilidade e pirógenos foram concluídos?'],
+        decisionsList: [
+          {
+            id: 'dec_bpf_1',
+            question: 'A planta fabril contratada possui CBPF vigente para produtos biológicos estéreis emitida pela Anvisa?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'PROCESSO_UPSTREAM',
+            targetFieldLabel: 'Certificação BPF da Planta',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Atendimento integral à RDC Anvisa nº 658/2019 (Diretrizes Gerais de BPF).'],
         technicalJustifications: ['Validação de processo de filtração esterilizante e simulação de envase (media fill).'],
         referenceGuides: [
@@ -364,8 +595,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Estudos de segurança',
         phase: VACCINE_PLATFORM_PHASES[1],
+        icon: 'ShieldCheck',
         microActivities: ['Ensaio de toxicidade de dose repetida BPL', 'Tolerância local e histopatologia no sítio de injeção', 'Monitoramento laboratorial e pesquisa de reações imunopatológicas'],
         keyDecisions: ['O NOAEL foi determinado formalmente?', 'Houve relato de reactogenicidade ou fenômeno ADE?'],
+        decisionsList: [
+          {
+            id: 'dec_tox_1',
+            question: 'O NOAEL (No Observed Adverse Effect Level) foi formalmente determinado no estudo de toxicidade de dose repetida BPL?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'TOXICIDADE_SEGURANCA',
+            targetFieldLabel: 'Determinação do NOAEL e Toxicologia',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Relatório toxicológico assinado por diretor de estudo em centro BPL credenciado.'],
         technicalJustifications: ['Margem de segurança para proteção dos participantes do estudo clínico Fase 1.'],
         referenceGuides: [
@@ -377,8 +621,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Brochura do Investigador',
         phase: VACCINE_PLATFORM_PHASES[2],
+        icon: 'FileText',
         microActivities: ['Compilação dos dados pré-clínicos', 'Resumo de segurança e farmacologia', 'Instruções operacionais para os centros clínicos'],
         keyDecisions: ['Todas as reações adversas observadas em animais foram relatadas com clareza?', 'As orientações de manejo clínico estão atualizadas?'],
+        decisionsList: [
+          {
+            id: 'dec_broch_1',
+            question: 'Todas as reações observadas em estudos não clínicos e a margem de segurança clínica foram descritas com clareza na Brochura do Investigador?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'STATUS_SUBMISSAO',
+            targetFieldLabel: 'Brochura do Investigador e Dados de Segurança',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Elaboração estritamente alinhada com ICH E6(R2) e RDC Anvisa 9/2015.'],
         technicalJustifications: ['Balanço risco-benefício favorável à administração em voluntários humanos.'],
         referenceGuides: [
@@ -388,8 +645,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Dossiê do IFA',
         phase: VACCINE_PLATFORM_PHASES[2],
+        icon: 'FileText',
         microActivities: ['Documentação de estrutura e caracterização', 'Descrição do processo de fabricação e controles', 'Estabilidade e validação de métodos analíticos'],
         keyDecisions: ['Os controles em processo (IPC) cobrem todos os parâmetros críticos (CPP)?', 'O perfil de impurezas foi justificado?'],
+        decisionsList: [
+          {
+            id: 'dec_dos_ifa_1',
+            question: 'Os controles em processo (IPC) e parâmetros críticos (CPP) estão documentados no formato CTD 3.2.S?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'PROCESSO_DOWNSTREAM',
+            targetFieldLabel: 'Compilação do Dossiê do IFA',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Módulo 3 do CTD (Common Technical Document) - Seção 3.2.S.'],
         technicalJustifications: ['Rastreabilidade das matérias-primas e substâncias de partida.'],
         referenceGuides: [
@@ -399,8 +669,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Dossiê da Vacina',
         phase: VACCINE_PLATFORM_PHASES[2],
+        icon: 'FileText',
         microActivities: ['Composição da formulação final e adjuvante', 'Controle de qualidade do produto terminado', 'Especificações de liberação clínica'],
         keyDecisions: ['O sistema de embalagem primária atende aos testes de integridade e estanqueidade?'],
+        decisionsList: [
+          {
+            id: 'dec_dos_vac_1',
+            question: 'O sistema de embalagem primária e os testes de estanqueidade e esterilidade atendem aos requisitos do Módulo 3.2.P?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'COMPOSICAO_FINAL',
+            targetFieldLabel: 'Dossiê do Produto Terminado',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Módulo 3 do CTD - Seção 3.2.P.'],
         technicalJustifications: ['Compatibilidade com dispositivos de aplicação parenteral.'],
         referenceGuides: [
@@ -410,8 +693,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'DEEC',
         phase: VACCINE_PLATFORM_PHASES[2],
+        icon: 'FileText',
         microActivities: ['Elaboração do Dossiê Específico de Ensaio Clínico', 'Protocolo clínico detalhado e formulários de relato de caso (CRF)', 'Termo de Consentimento Livre e Esclarecido (TCLE)'],
         keyDecisions: ['O protocolo prevê plano claro de monitoramento de segurança e comitê independente (DSMB)?'],
+        decisionsList: [
+          {
+            id: 'dec_deec_1',
+            question: 'O protocolo clínico do DEEC prevê monitoramento independente de segurança (DSMB) e critérios claros de parada de dose?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'ENDPOINTS_CLINICOS',
+            targetFieldLabel: 'DEEC e Protocolo Clínico',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Atendimento aos requisitos específicos da RDC Anvisa nº 9/2015.'],
         technicalJustifications: ['Delineamento estatístico e cálculo do tamanho amostral.'],
         referenceGuides: [
@@ -421,8 +717,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Documentos complementares',
         phase: VACCINE_PLATFORM_PHASES[2],
+        icon: 'FileText',
         microActivities: ['Parecer consubstanciado da CONEP / CEP institucional', 'Seguro para participantes da pesquisa', 'Certificados de liberação de lote clínico'],
         keyDecisions: ['Todos os documentos éticos e operacionais estão vigentes?'],
+        decisionsList: [
+          {
+            id: 'dec_doc_comp_1',
+            question: 'Os pareceres consubstanciados do CEP institucional e CONEP estão vigentes e sem pendências éticas?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'APROVACOES_ETICAS',
+            targetFieldLabel: 'Aprovações Éticas CEP/CONEP',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Resolução CNS 466/2012 e regulamentações éticas nacionais.'],
         technicalJustifications: ['Garantia de conformidade com os direitos e segurança dos participantes.'],
         referenceGuides: [
@@ -433,8 +742,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Submissão regulatória',
         phase: VACCINE_PLATFORM_PHASES[3],
+        icon: 'Send',
         microActivities: ['Protocolo eletrônico do DDCM junto à Anvisa', 'Organização de pastas e metadados no sistema Solicita', 'Confirmação de recebimento'],
         keyDecisions: ['Todos os módulos foram devidamente assinados digitalmente por responsáveis técnicos?'],
+        decisionsList: [
+          {
+            id: 'dec_subm_1',
+            question: 'O DDCM foi integralmente protocolado no sistema Solicita da Anvisa e o comprovante foi anexado?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'STATUS_SUBMISSAO',
+            targetFieldLabel: 'Protocolo Eletrônico DDCM Anvisa',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Protocolo formal de Dossiê de Desenvolvimento Clínico de Medicamento (DDCM).'],
         technicalJustifications: ['Cumprimento dos prazos de resposta administrativa.'],
         referenceGuides: [
@@ -444,8 +766,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Respostas a exigências',
         phase: VACCINE_PLATFORM_PHASES[3],
+        icon: 'CheckCircle2',
         microActivities: ['Análise das exigências técnicas emitidas pela Anvisa', 'Condução de ensaios complementares solicitados', 'Submissão da petição secundária de resposta'],
         keyDecisions: ['As respostas atendem integralmente ao parecer da Gerência de Medicamentos Biológicos (GGMED)?'],
+        decisionsList: [
+          {
+            id: 'dec_exig_1',
+            question: 'Todas as exigências técnicas formuladas pela GGMED/Anvisa foram respondidas satisfatoriamente dentro do prazo legal?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'STATUS_SUBMISSAO',
+            targetFieldLabel: 'Cumprimento de Exigências Sanitárias',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Prazo improrrogável de atendimento a exigências conforme legislação sanitária.'],
         technicalJustifications: ['Fundamentação técnica e científica robusta para cada questionamento da autoridade.'],
         referenceGuides: [
@@ -455,8 +790,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Aprovação/autorização regulatória',
         phase: VACCINE_PLATFORM_PHASES[3],
+        icon: 'Award',
         microActivities: ['Publicação do Comunicado Especial (CE) no Diário Oficial', 'Liberação para importação de insumos clínicos', 'Reunião de início de ensaio'],
         keyDecisions: ['Todas as condicionantes técnicas foram cumpridas para início da administração humana?'],
+        decisionsList: [
+          {
+            id: 'dec_aprov_1',
+            question: 'O Comunicado Especial (CE) de autorização clínica emitido pela Anvisa foi publicado e arquivado?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'AUTORIZACAO_FINAL',
+            targetFieldLabel: 'Comunicado Especial de Autorização Anvisa',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Documento oficial de aprovação e autorização de ensaio clínico emitido pela Anvisa.'],
         technicalJustifications: ['Arquivamento do processo regulatório no TMF (Trial Master File).'],
         referenceGuides: [
@@ -467,8 +815,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Estudos Clínicos Fase I: Definição de CRO e centros de pesquisa',
         phase: VACCINE_PLATFORM_PHASES[4],
+        icon: 'Building',
         microActivities: ['Qualificação e seleção da CRO executora', 'Visitas de pré-seleção dos centros de pesquisa clínica', 'Formalização de contratos e orçamentos'],
         keyDecisions: ['O centro de pesquisa possui UTI e suporte para eventos adversos imediatos?'],
+        decisionsList: [
+          {
+            id: 'dec_cro_1',
+            question: 'O centro de pesquisa e a CRO foram devidamente qualificados e possuem suporte para emergências e eventos adversos imediatos?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'CENTROS_PESQUISA',
+            targetFieldLabel: 'Qualificação de Centros e CRO',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Qualificação de prestadores de serviço e delegação de tarefas (ICH E6).'],
         technicalJustifications: ['Capacidade operacional comprovada para ensaios FIH (First-in-Human).'],
         referenceGuides: [{ title: 'ICH E6(R2) – Section 5: Sponsor Oversight', link: 'https://www.ich.org' }]
@@ -476,8 +837,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Estudos Clínicos Fase I: Recrutamento e Execução',
         phase: VACCINE_PLATFORM_PHASES[4],
+        icon: 'Activity',
         microActivities: ['Registro no ReBEC / ClinicalTrials.gov', 'Triagem e inclusão de voluntários sadios', 'Escalonamento de doses e monitoramento intensivo de segurança'],
         keyDecisions: ['Os critérios de parada e segurança do protocolo foram acionados?', 'Qual a dose recomendada para avanço à Fase 2 (RP2D)?'],
+        decisionsList: [
+          {
+            id: 'dec_fase1_1',
+            question: 'Qual a dose recomendada para Fase 2 (RP2D) estabelecida com base nos dados de segurança e farmacodinâmica de Fase 1?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'FASE_CLINICA_INICIAL',
+            targetFieldLabel: 'Dose Recomendada para Fase 2',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Notificação imediata de eventos adversos graves inesperados (SUSAR) à Anvisa em até 7 dias.'],
         technicalJustifications: ['Relatório preliminar de segurança e determinação da dose máxima tolerada.'],
         referenceGuides: [{ title: 'RDC Anvisa nº 9/2015 – Farmacovigilância em Ensaios Clínicos', link: 'https://www.gov.br/anvisa' }]
@@ -485,8 +859,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Estudos Clínicos Fase II: Execução e Imunogenicidade',
         phase: VACCINE_PLATFORM_PHASES[5],
+        icon: 'Activity',
         microActivities: ['Inclusão de coortes ampliadas (voluntários e população-alvo)', 'Avaliação comparativa com placebo/controle ativo', 'Coleta seriada para resposta imune humoral e celular'],
         keyDecisions: ['A taxa de soroconversão e os títulos de anticorpos confirmam eficácia preliminar?'],
+        decisionsList: [
+          {
+            id: 'dec_fase2_1',
+            question: 'A taxa de soroconversão e os títulos de anticorpos neutralizantes em humanos confirmam eficácia preliminar e resposta TH1?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'ENDPOINTS_CLINICOS',
+            targetFieldLabel: 'Imunogenicidade em Fase 2',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Monitoramento contínuo por Comitê Independente de Monitoramento de Dados (IDMC).'],
         technicalJustifications: ['Poder estatístico de discriminação de resposta imunogênica entre esquemas vacinais.'],
         referenceGuides: [{ title: 'WHO Guidelines on Clinical Evaluation of Vaccines', link: 'https://www.who.int' }]
@@ -494,8 +881,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Estudos Clínicos Fase III: Ensaio Multicêntrico de Eficácia',
         phase: VACCINE_PLATFORM_PHASES[6],
+        icon: 'Activity',
         microActivities: ['Ensaio randomizado duplo-cego multicêntrico de larga escala', 'Vigilância ativa de casos sintomáticos da doença', 'Análise interina e relatório final de eficácia e segurança'],
         keyDecisions: ['O desfecho primário de eficácia clínica atingiu o limiar pré-especificado (ex: > 50%)?', 'O perfil de segurança a longo prazo é sustentável?'],
+        decisionsList: [
+          {
+            id: 'dec_fase3_1',
+            question: 'O desfecho primário de eficácia clínica protetora atingiu o limiar regulatório pré-especificado (ex: > 50% de redução de casos sintomáticos)?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'ENDPOINTS_CLINICOS',
+            targetFieldLabel: 'Eficácia Clínica Fase 3',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Dossiê final de eficácia clínica para o pedido de Registro de Produto Biológico junto à Anvisa.'],
         technicalJustifications: ['Cálculo de taxa de ataque e eficácia vacinal ajustada.'],
         referenceGuides: [
@@ -515,8 +915,21 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Ideia e definição do candidato',
         phase: VACCINE_PLATFORM_PHASES[0],
+        icon: 'Sparkles',
         microActivities: ['Seleção do vetor plasmidial de expressão', 'Otimização de códons para mamíferos', 'Clonagem molecular e checagem de sequenciamento'],
         keyDecisions: ['O promotor e sequência líder maximizam a expressão?', 'O vetor possui marcador de seleção livre de antibióticos beta-lactâmicos?'],
+        decisionsList: [
+          {
+            id: 'dec_dna_1',
+            question: 'O promotor e sequência líder maximizam a expressão sem riscos de homologia genômica indesejada?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'RACIONAL_PLATAFORMA',
+            targetFieldLabel: 'Vetor Plasmidial de Expressão',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Normas da CTNBio sobre Organismos Geneticamente Modificados (OGM).'],
         technicalJustifications: ['Racional de expressão e minimização de riscos de integração genômica.'],
         referenceGuides: [{ title: 'WHO Guidelines for Assuring Quality of DNA Vaccines', link: 'https://www.who.int' }]
@@ -524,6 +937,7 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Estudos in vivo',
         phase: VACCINE_PLATFORM_PHASES[1],
+        icon: 'Rat', // animal icon ONLY for in-vivo studies!
         microActivities: ['Ensaios de imunogenicidade com eletroporação / injetores sem agulha', 'Curva dose-resposta e avaliação de adjuvantes moleculares', 'Pesquisa de anticorpos anti-DNA e tolerância sistêmica'],
         keyDecisions: [
           'Qual a justificativa para a seleção do modelo animal?',
@@ -532,6 +946,18 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
           'Por que foi escolhido determinado adjuvante?',
           'Qual a justificativa para a via de administração e o esquema de doses?',
           'Quais normas e guias fundamentam o delineamento?'
+        ],
+        decisionsList: [
+          {
+            id: 'dec_dna_invivo_1',
+            question: 'Qual a justificativa técnica para a seleção do modelo animal e método de entrega (eletroporação/pressão)?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'MODELO_ANIMAL',
+            targetFieldLabel: 'Modelo Animal e Entrega de DNA',
+            responseType: 'ambos'
+          }
         ],
         regulatoryPoints: ['Investigação mandatória de ausência de integração genômica e persistência plasmidial.'],
         technicalJustifications: ['Demonstração de biossegurança de vetor de DNA.'],
@@ -552,12 +978,113 @@ export const DEFAULT_ACTIVITY_PLANS: ActivityPlanTemplate[] = [
       {
         name: 'Caracterização do Banco Viral Mestre/Trabalho',
         phase: VACCINE_PLATFORM_PHASES[1],
+        icon: 'Layers',
         microActivities: ['Criopreservação de sementes virais', 'Sequenciamento genômico completo de alta profundidade', 'Testes de agentes adventícios e neurovirulência'],
         keyDecisions: ['A estabilidade genética de atenuação se mantém após 10 passagens sucessivas?'],
+        decisionsList: [
+          {
+            id: 'dec_vir_1',
+            question: 'A estabilidade genética do perfil de atenuação se mantém após passagens sucessivas?',
+            status: 'Pendente',
+            hasRegulatoryImpact: true,
+            isMandatory: true,
+            targetFieldKey: 'BANCO_CELULAR',
+            targetFieldLabel: 'Estabilidade Genética de Atenuação Viral',
+            responseType: 'ambos'
+          }
+        ],
         regulatoryPoints: ['Conformidade com Farmacopeia e ensaios de segurança viral OMS.'],
         technicalJustifications: ['Rastreabilidade da linhagem viral e histórico de passagens.'],
         referenceGuides: [{ title: 'WHO TRS 962 – Annex 2: Virus seed lots and cell substrates', link: 'https://www.who.int' }]
       }
+    ]
+  }
+];
+
+export interface RegulatoryGroupDefinition {
+  groupName: string;
+  description: string;
+  fields: {
+    key: string;
+    label: string;
+    phase: string;
+    isMandatory: boolean;
+    defaultValue?: string;
+    defaultOriginMacro?: string;
+  }[];
+}
+
+export const STANDARD_REGULATORY_GROUPS: RegulatoryGroupDefinition[] = [
+  {
+    groupName: 'Dados Gerais do Candidato Vacinal',
+    description: 'Identificação, codinome, indicação terapêutica e características gerais do produto.',
+    fields: [
+      { key: 'NOME_DA_VACINA', label: 'Nome da Vacina e Codinome', phase: 'Descoberta / Prova de Conceito', isMandatory: true, defaultOriginMacro: 'Ideia e definição do candidato' },
+      { key: 'INDICACAO_TERAPEUTICA', label: 'Indicação Terapêutica e População Alvo', phase: 'Descoberta / Prova de Conceito', isMandatory: true, defaultOriginMacro: 'Revisão da literatura' },
+      { key: 'FORMA_FARMACEUTICA', label: 'Forma Farmacêutica e Via de Administração', phase: 'Desenvolvimento Não Clínico', isMandatory: true, defaultOriginMacro: 'Desenvolvimento da formulação e controle de qualidade' }
+    ]
+  },
+  {
+    groupName: 'Racional e Plataforma Tecnológica',
+    description: 'Fundamentação científica, biologia molecular e seleção da plataforma.',
+    fields: [
+      { key: 'RACIONAL_PLATAFORMA', label: 'Racional da Plataforma Tecnológica', phase: 'Descoberta / Prova de Conceito', isMandatory: true, defaultOriginMacro: 'Revisão da literatura' },
+      { key: 'ALVO_ANTIGENICO', label: 'Alvo Antigênico e Epítopos Críticos', phase: 'Descoberta / Prova de Conceito', isMandatory: true, defaultOriginMacro: 'Ideia e definição do candidato' },
+      { key: 'SISTEMA_EXPRESSAO', label: 'Sistema de Expressão Heterólogo', phase: 'Descoberta / Prova de Conceito', isMandatory: true, defaultOriginMacro: 'Ideia e definição do candidato' }
+    ]
+  },
+  {
+    groupName: 'Desenvolvimento do IFA (Substância Ativa)',
+    description: 'Bancos celulares/virais, processos upstream e downstream de produção do IFA.',
+    fields: [
+      { key: 'BANCO_CELULAR', label: 'Banco Celular Mestre e de Trabalho (MCB/WCB)', phase: 'Desenvolvimento Não Clínico', isMandatory: true, defaultOriginMacro: 'Banco de células, quando aplicável' },
+      { key: 'PROCESSO_UPSTREAM', label: 'Condições de Cultivo e Escalonamento Upstream', phase: 'Desenvolvimento Não Clínico', isMandatory: true, defaultOriginMacro: 'Produção de lote BPL do IFA' },
+      { key: 'PROCESSO_DOWNSTREAM', label: 'Purificação e Eliminação de Contaminantes Downstream', phase: 'Desenvolvimento Não Clínico', isMandatory: true, defaultOriginMacro: 'Produção de lote BPL do IFA' }
+    ]
+  },
+  {
+    groupName: 'Formulação e Adjuvantes',
+    description: 'Adjuvantes imunológicos, excipientes, estabilidade e compatibilidade.',
+    fields: [
+      { key: 'JUSTIFICATIVA_ADJUVANTE', label: 'Justificativa da Escolha do Adjuvante', phase: 'Desenvolvimento Não Clínico', isMandatory: true, defaultOriginMacro: 'Desenvolvimento da formulação e controle de qualidade' },
+      { key: 'COMPOSICAO_FINAL', label: 'Composição Quantitativa e Excipientes', phase: 'Desenvolvimento Não Clínico', isMandatory: true, defaultOriginMacro: 'Desenvolvimento da formulação e controle de qualidade' },
+      { key: 'ESTABILIDADE_PRELIMINAR', label: 'Estabilidade Provisória e Condições de Armazenamento', phase: 'Desenvolvimento Não Clínico', isMandatory: true, defaultOriginMacro: 'Estabilidade e interação entre componentes' }
+    ]
+  },
+  {
+    groupName: 'Controle de Qualidade e Métodos Analíticos',
+    description: 'Ensaios de liberação, métodos analíticos validados e limites de impurezas.',
+    fields: [
+      { key: 'ESPECIFICACOES_LIBERACAO', label: 'Especificações e Critérios de Liberação de Lote', phase: 'Desenvolvimento Não Clínico', isMandatory: true, defaultOriginMacro: 'Caracterização e impurezas' },
+      { key: 'IMPUREZAS_RESIDUAIS', label: 'Controle de Impurezas e Agentes Adventícios', phase: 'Desenvolvimento Não Clínico', isMandatory: true, defaultOriginMacro: 'Caracterização e impurezas' },
+      { key: 'METODOS_ANALITICOS', label: 'Validação dos Métodos Analíticos Críticos', phase: 'Desenvolvimento Não Clínico', isMandatory: true, defaultOriginMacro: 'Caracterização e impurezas' }
+    ]
+  },
+  {
+    groupName: 'Estudos Não Clínicos (Segurança, Imunogenicidade e Eficácia)',
+    description: 'Modelos animais, resposta imune celular/humoral e toxicologia BPL.',
+    fields: [
+      { key: 'MODELO_ANIMAL', label: 'Justificativa do Modelo Animal e Esquema de Doses', phase: 'Desenvolvimento Não Clínico', isMandatory: true, defaultOriginMacro: 'Estudos in vivo' },
+      { key: 'RESPOSTA_IMUNE', label: 'Imunogenicidade Humoral e Celular em Animais', phase: 'Desenvolvimento Não Clínico', isMandatory: true, defaultOriginMacro: 'Estudos in vivo' },
+      { key: 'TOXICIDADE_SEGURANCA', label: 'Estudos de Toxicidade de Dose Repetida e NOAEL', phase: 'Desenvolvimento Não Clínico', isMandatory: true, defaultOriginMacro: 'Estudos de segurança' }
+    ]
+  },
+  {
+    groupName: 'Delineamento Clínico',
+    description: 'Dose First-in-Human, centros de pesquisa, protocolo clínico e comitês.',
+    fields: [
+      { key: 'FASE_CLINICA_INICIAL', label: 'Racional da Dose Inicial e Escalonamento Clínico', phase: 'Ensaio Clínico Fase 1', isMandatory: true, defaultOriginMacro: 'Estudos Clínicos Fase I: Recrutamento e Execução' },
+      { key: 'CENTROS_PESQUISA', label: 'Centros de Pesquisa e Qualificação de CRO', phase: 'Ensaio Clínico Fase 1', isMandatory: true, defaultOriginMacro: 'Estudos Clínicos Fase I: Definição de CRO e centros de pesquisa' },
+      { key: 'ENDPOINTS_CLINICOS', label: 'Desfechos Primários e Secundários do Ensaio', phase: 'Ensaio Clínico Fase 2', isMandatory: true, defaultOriginMacro: 'Estudos Clínicos Fase II: Execução e Imunogenicidade' }
+    ]
+  },
+  {
+    groupName: 'Aspectos Regulatórios e Submissão',
+    description: 'Submissão formal do DDCM, aprovações éticas, exigências e autorizações.',
+    fields: [
+      { key: 'STATUS_SUBMISSAO', label: 'Protocolo Eletrônico do DDCM na Anvisa', phase: 'Submissão / Aprovação', isMandatory: true, defaultOriginMacro: 'Submissão regulatória' },
+      { key: 'APROVACOES_ETICAS', label: 'Parecer Consubstanciado CEP/CONEP', phase: 'Documentação Regulatória', isMandatory: true, defaultOriginMacro: 'Documentos complementares' },
+      { key: 'AUTORIZACAO_FINAL', label: 'Comunicado Especial (CE) e Início de Ensaio', phase: 'Submissão / Aprovação', isMandatory: true, defaultOriginMacro: 'Aprovação/autorização regulatória' }
     ]
   }
 ];

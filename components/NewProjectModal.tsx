@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { Project, ActivityPlanTemplate, MacroActivity, TeamMember, PlanDecisionItem } from '../types';
-import { X, FolderPlus, Plus, Trash2, Layers } from 'lucide-react';
+import { Project, ActivityPlanTemplate, MacroActivity, TeamMember, PlanDecisionItem, RegulatoryRecordItem } from '../types';
+import { X, FolderPlus, Plus, Layers, FlaskConical, ShieldCheck, Dna, Sparkles, Syringe, Atom, Microscope } from 'lucide-react';
+import { STANDARD_REGULATORY_GROUPS } from '../constants';
 
 interface NewProjectModalProps {
   isOpen: boolean;
@@ -13,6 +14,16 @@ interface NewProjectModalProps {
   isLeader?: boolean;
 }
 
+const AVAILABLE_PROJECT_ICONS = [
+  { key: 'FlaskConical', label: 'Frasco', icon: FlaskConical },
+  { key: 'ShieldCheck', label: 'Imunidade', icon: ShieldCheck },
+  { key: 'Dna', label: 'DNA/RNA', icon: Dna },
+  { key: 'Sparkles', label: 'Inovação', icon: Sparkles },
+  { key: 'Syringe', label: 'Vacina', icon: Syringe },
+  { key: 'Atom', label: 'Molecular', icon: Atom },
+  { key: 'Microscope', label: 'Pesquisa', icon: Microscope },
+];
+
 const NewProjectModal: React.FC<NewProjectModalProps> = ({ 
   isOpen, 
   onClose, 
@@ -23,7 +34,8 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
   isLeader = false
 }) => {
   const [projectName, setProjectName] = useState('');
-  const [selectedPlanId, setSelectedPlanId] = useState<string>(plans[0]?.id || '');
+  const [selectedPlanId, setSelectedPlanId] = useState<string>(() => plans[0]?.id || '');
+  const [projectIcon, setProjectIcon] = useState<string>('FlaskConical');
   const [responsibleMember, setResponsibleMember] = useState<string>(() => {
     return currentUser?.name || teamMembers[0]?.name || '';
   });
@@ -33,18 +45,23 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
       setResponsibleMember(currentUser.name);
     }
   }, [currentUser]);
+
   const [customTeam, setCustomTeam] = useState<string[]>([]);
   const [newMemberName, setNewMemberName] = useState('');
   const [projectPhases, setProjectPhases] = useState<string[]>([]);
   const [newPhaseName, setNewPhaseName] = useState('');
   const [error, setError] = useState('');
 
+  // Sincroniza as fases completas ao abrir ou alterar plano selecionado
   useEffect(() => {
-    if (selectedPlanId) {
-      const selectedPlan = plans.find(p => p.id === selectedPlanId);
-      setProjectPhases(selectedPlan?.phases || []);
+    if (isOpen && plans.length > 0) {
+      const currentPlan = plans.find(p => p.id === selectedPlanId) || plans[0];
+      if (currentPlan) {
+        if (!selectedPlanId) setSelectedPlanId(currentPlan.id);
+        setProjectPhases([...(currentPlan.phases || [])]);
+      }
     }
-  }, [selectedPlanId, plans]);
+  }, [isOpen, selectedPlanId, plans]);
 
   const handleAddMember = () => {
     if (newMemberName.trim() && !customTeam.includes(newMemberName.trim())) {
@@ -80,55 +97,127 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
       return;
     }
 
+    const projectId = 'proj_' + Math.random().toString(36).substr(2, 9);
+    const nowIso = new Date().toISOString();
+
+    // Cria as macroatividades com base na estrutura integral do plano selecionado
+    const createdMacros: MacroActivity[] = selectedPlan.macroActivities.map((macroTemplate, mIdx): MacroActivity => {
+      const initialDecisions: PlanDecisionItem[] = (
+        macroTemplate.decisionsList && macroTemplate.decisionsList.length > 0
+          ? macroTemplate.decisionsList
+          : (macroTemplate.keyDecisions || []).map((q, qIdx) => ({
+              id: `dec_${Math.random().toString(36).substr(2, 9)}_${qIdx}`,
+              question: q,
+              status: 'Pendente' as const,
+              hasRegulatoryImpact: true,
+              isMandatory: true,
+              responseType: 'ambos' as const
+            }))
+      ).map((d: PlanDecisionItem) => ({
+        id: d.id || `dec_${Math.random().toString(36).substr(2, 9)}`,
+        question: d.question,
+        status: d.status || 'Pendente',
+        decision: d.decision || '',
+        justification: d.justification || '',
+        date: d.date || '',
+        responsible: d.responsible || '',
+        evidenceLink: d.evidenceLink || '',
+        sharepointDocUrl: d.sharepointDocUrl || '',
+        hasRegulatoryImpact: d.hasRegulatoryImpact !== undefined ? d.hasRegulatoryImpact : true,
+        isMandatory: d.isMandatory !== undefined ? d.isMandatory : true,
+        targetFieldKey: d.targetFieldKey || '',
+        targetFieldLabel: d.targetFieldLabel || '',
+        responseType: d.responseType || 'ambos',
+        linkedStandardIds: d.linkedStandardIds || []
+      }));
+
+      return {
+        id: 'macro_' + Math.random().toString(36).substr(2, 9) + '_' + mIdx,
+        name: macroTemplate.name,
+        phase: projectPhases.includes(macroTemplate.phase) ? macroTemplate.phase : projectPhases[0],
+        icon: macroTemplate.icon,
+        expectedResults: macroTemplate.expectedResults,
+        resultLinks: macroTemplate.resultLinks ? [...macroTemplate.resultLinks] : [],
+        keyDecisions: macroTemplate.keyDecisions ? [...macroTemplate.keyDecisions] : [],
+        decisionsList: initialDecisions,
+        regulatoryPoints: macroTemplate.regulatoryPoints ? [...macroTemplate.regulatoryPoints] : [],
+        technicalJustifications: macroTemplate.technicalJustifications ? [...macroTemplate.technicalJustifications] : [],
+        referenceGuides: macroTemplate.referenceGuides ? JSON.parse(JSON.stringify(macroTemplate.referenceGuides)) : [],
+        microActivities: (macroTemplate.microActivities || []).map((microName, micIdx) => ({
+          id: 'micro_' + Math.random().toString(36).substr(2, 9) + '_' + micIdx,
+          name: microName,
+          assignee: '',
+          startDate: '',
+          dueDate: '',
+          status: 'Planejado',
+          observations: '',
+          progress: 0,
+          generatesRegulatoryContent: true
+        })),
+      };
+    });
+
+    // Inicializa a Base de Informações Regulatórias do Projeto a partir dos grupos padrão
+    const initialRegulatoryDatabase: RegulatoryRecordItem[] = [];
+    STANDARD_REGULATORY_GROUPS.forEach(grp => {
+      grp.fields.forEach(f => {
+        // Busca se existe decisão vinculada a esta chave no plano
+        let linkedDec: PlanDecisionItem | undefined;
+        let originMacroName = f.defaultOriginMacro;
+
+        for (const m of createdMacros) {
+          const found = (m.decisionsList || []).find(d => d.targetFieldKey === f.key);
+          if (found) {
+            linkedDec = found;
+            originMacroName = m.name;
+            break;
+          }
+        }
+
+        initialRegulatoryDatabase.push({
+          id: 'reg_rec_' + Math.random().toString(36).substr(2, 9),
+          group: grp.groupName,
+          key: f.key,
+          label: f.label,
+          phase: f.phase,
+          macroActivityName: originMacroName,
+          decisionQuestion: linkedDec?.question,
+          decisionId: linkedDec?.id,
+          value: f.defaultValue || '',
+          references: [],
+          status: 'Não iniciado',
+          isMandatory: f.isMandatory,
+          version: 1,
+          lastUpdated: nowIso,
+          updatedBy: responsibleMember,
+          history: []
+        });
+      });
+    });
+
     const newProject: Project = {
-      id: 'proj_' + Math.random().toString(36).substr(2, 9),
+      id: projectId,
       name: projectName.trim(),
+      icon: projectIcon,
       status: 'Em Planejamento',
       responsible: responsibleMember,
       templateId: selectedPlanId,
       team: customTeam,
-      phases: projectPhases,
-      macroActivities: selectedPlan.macroActivities.map((macroTemplate): MacroActivity => {
-        const initialDecisions = (macroTemplate.decisionsList || (macroTemplate.keyDecisions || []).map(q => ({
-          id: 'dec_' + Math.random().toString(36).substr(2, 9),
-          question: q,
-          status: 'Pendente' as const
-        }))).map((d: PlanDecisionItem) => ({
-          id: d.id || 'dec_' + Math.random().toString(36).substr(2, 9),
-          question: d.question,
-          status: d.status || 'Pendente',
-          decision: d.decision,
-          justification: d.justification,
-          date: d.date,
-          responsible: d.responsible,
-          evidenceLink: d.evidenceLink,
-          sharepointDocUrl: d.sharepointDocUrl
-        }));
-
-        return {
-          id: 'macro_' + Math.random().toString(36).substr(2, 9),
-          name: macroTemplate.name,
-          phase: projectPhases.includes(macroTemplate.phase) ? macroTemplate.phase : projectPhases[0],
-          expectedResults: macroTemplate.expectedResults,
-          resultLinks: macroTemplate.resultLinks ? [...macroTemplate.resultLinks] : [],
-          keyDecisions: macroTemplate.keyDecisions ? [...macroTemplate.keyDecisions] : [],
-          decisionsList: initialDecisions,
-          regulatoryPoints: macroTemplate.regulatoryPoints ? [...macroTemplate.regulatoryPoints] : [],
-          technicalJustifications: macroTemplate.technicalJustifications ? [...macroTemplate.technicalJustifications] : [],
-          referenceGuides: macroTemplate.referenceGuides ? JSON.parse(JSON.stringify(macroTemplate.referenceGuides)) : [],
-          microActivities: (macroTemplate.microActivities || []).map(microName => ({
-            id: 'micro_' + Math.random().toString(36).substr(2, 9),
-            name: microName,
-            assignee: '',
-            startDate: '',
-            dueDate: '',
-            status: 'Planejado',
-            observations: '',
-            progress: 0,
-          })),
-        };
-      }),
-      regulatoryChecklist: selectedPlan.regulatoryChecklist ? JSON.parse(JSON.stringify(selectedPlan.regulatoryChecklist)) : []
+      phases: [...projectPhases],
+      macroActivities: createdMacros,
+      regulatoryChecklist: selectedPlan.regulatoryChecklist ? JSON.parse(JSON.stringify(selectedPlan.regulatoryChecklist)) : [],
+      regulatoryDatabase: initialRegulatoryDatabase,
+      contributions: [],
+      historyTimeline: [
+        {
+          id: 'hist_' + Math.random().toString(36).substr(2, 9),
+          type: 'regulatory_field',
+          title: 'Projeto Criado a partir do Plano-Base',
+          description: `Projeto "${projectName.trim()}" iniciado com o modelo "${selectedPlan.name}" contendo ${projectPhases.length} fases e ${createdMacros.length} macroatividades.`,
+          date: nowIso,
+          author: responsibleMember
+        }
+      ]
     };
 
     onAddProject(newProject);
@@ -154,6 +243,32 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Nome do Projeto</label>
             <input type="text" value={projectName} onChange={e => { setProjectName(e.target.value); setError(''); }} placeholder="Ex: Vacina COVID-19" className="mt-1 w-full px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-black outline-none focus:ring-2 focus:ring-brand-primary"/>
           </div>
+
+          <div>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 block mb-2">Ícone do Projeto</label>
+            <div className="flex flex-wrap gap-2">
+              {AVAILABLE_PROJECT_ICONS.map(item => {
+                const IconComponent = item.icon;
+                const isSelected = projectIcon === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setProjectIcon(item.key)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition border cursor-pointer ${
+                      isSelected 
+                        ? 'bg-teal-50 border-teal-500 text-teal-800 ring-2 ring-teal-400/20' 
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <IconComponent size={16} className={isSelected ? 'text-teal-600' : 'text-slate-400'} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Responsável / Líder do Projeto</label>

@@ -19,8 +19,11 @@ import {
   KnowledgeCategory,
   RegulatoryKnowledgeRecord,
   RegulatoryStructuredTable,
-  RegulatoryMarkerMapping
+  RegulatoryMarkerMapping,
+  RegulatoryRecordItem,
+  RegulatoryRecordHistoryItem
 } from '../types';
+import { STANDARD_REGULATORY_GROUPS, VACCINE_PLATFORM_PHASES } from '../constants';
 import { 
   FileText, 
   BookOpen, 
@@ -94,6 +97,7 @@ interface RegulatoryDocManagementProps {
   onUpdateRepeatableRecords: (records: RepeatableRecord[]) => void;
   onUpdateNarratives: (narratives: RegulatoryNarrative[]) => void;
   onUpdateDocs: (docs: RegulatoryDocument[]) => void;
+  onUpdateProjects?: (projects: Project[]) => void;
   currentUser?: string;
   hasAdminAccess?: boolean;
   selectedProjectId?: string;
@@ -114,14 +118,15 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
   onUpdateRepeatableRecords,
   onUpdateNarratives,
   onUpdateDocs,
+  onUpdateProjects,
   currentUser = 'Usuário',
   hasAdminAccess = true,
   selectedProjectId: initialSelectedProjectId
 }) => {
-  // Navigation Tabs
+  // Navigation Tabs - Default is 'regulatory_database' (Base de Informações Regulatórias do Projeto)
   const [activeTab, setActiveTab] = useState<
-    'dossier_viewer' | 'pending_contributions' | 'template_manager' | 'tables_and_attachments' | 'export_and_traceability'
-  >('dossier_viewer');
+    'regulatory_database' | 'pending_contributions' | 'export_and_traceability' | 'dossier_viewer' | 'template_manager' | 'tables_and_attachments'
+  >('regulatory_database');
 
   // Selected Project Filter
   const [selectedProjectId, setSelectedProjectId] = useState<string>(
@@ -205,6 +210,39 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
   const [templateGroup, setTemplateGroup] = useState('Dossiê da Vacina com Adjuvante');
   const [templateDescription, setTemplateDescription] = useState('');
   const [templateText, setTemplateText] = useState('');
+
+  // --- BASE DE INFORMAÇÕES REGULATÓRIAS (Item 10 & 11) ---
+  const [regSearch, setRegSearch] = useState('');
+  const [regGroupFilter, setRegGroupFilter] = useState('all');
+  const [regPhaseFilter, setRegPhaseFilter] = useState('all');
+  const [regStatusFilter, setRegStatusFilter] = useState('all');
+  const [regOnlyMandatoryPending, setRegOnlyMandatoryPending] = useState(false);
+  const [collapsedRegGroups, setCollapsedRegGroups] = useState<Record<string, boolean>>({});
+
+  // Direct editing modal
+  const [editingRegField, setEditingRegField] = useState<RegulatoryRecordItem | null>(null);
+  const [editRegValue, setEditRegValue] = useState('');
+  const [editRegLink, setEditRegLink] = useState('');
+  const [editRegStatus, setEditRegStatus] = useState<'Não iniciado' | 'Em andamento' | 'Aguardando validação' | 'Validado'>('Validado');
+  const [editRegResponsible, setEditRegResponsible] = useState(currentUser);
+  const [editRegJustification, setEditRegJustification] = useState('');
+
+  // Version history modal
+  const [viewingHistoryField, setViewingHistoryField] = useState<RegulatoryRecordItem | null>(null);
+
+  // New field modal
+  const [showAddFieldModal, setShowAddFieldModal] = useState(false);
+  const [newFieldKey, setNewFieldKey] = useState('');
+  const [newFieldLabel, setNewFieldLabel] = useState('');
+  const [newFieldGroupName, setNewFieldGroupName] = useState(STANDARD_REGULATORY_GROUPS[0].groupName);
+  const [newFieldPhase, setNewFieldPhase] = useState(VACCINE_PLATFORM_PHASES[0]);
+  const [newFieldMandatory, setNewFieldMandatory] = useState(true);
+
+  // Custom groups
+  const [customGroups, setCustomGroups] = useState<string[]>([]);
+  const [showAddGroupModal, setShowAddGroupModal] = useState(false);
+  const [newCustomGroupName, setNewCustomGroupName] = useState('');
+  const [newCustomGroupDesc, setNewCustomGroupDesc] = useState('');
 
   // Independent Structured Tables State
   const [structuredTables, setStructuredTables] = useState<RegulatoryStructuredTable[]>([
@@ -723,6 +761,244 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
 
     return Array.from(map.values());
   }, [effectiveDocs]);
+
+  // Active Project Regulatory Database (Item 10 & 11)
+  const currentProjectRegDb = useMemo<RegulatoryRecordItem[]>(() => {
+    if (!activeProject) return [];
+    
+    if (activeProject.regulatoryDatabase && activeProject.regulatoryDatabase.length > 0) {
+      return activeProject.regulatoryDatabase;
+    }
+
+    // Otherwise, synthesize default database from STANDARD_REGULATORY_GROUPS
+    const defaultList: RegulatoryRecordItem[] = [];
+    STANDARD_REGULATORY_GROUPS.forEach(g => {
+      g.fields.forEach(f => {
+        defaultList.push({
+          id: `reg_${f.key.toLowerCase()}_${activeProject.id}`,
+          group: g.groupName,
+          key: f.key,
+          label: f.label,
+          phase: f.phase,
+          macroActivityName: f.defaultOriginMacro,
+          value: f.defaultValue || '',
+          status: f.defaultValue ? 'Validado' : 'Não iniciado',
+          isMandatory: f.isMandatory,
+          version: 1,
+          lastUpdated: new Date().toISOString(),
+          updatedBy: 'Sistema CTVacinas',
+          history: []
+        });
+      });
+    });
+
+    return defaultList;
+  }, [activeProject]);
+
+  const filteredRegRecords = useMemo(() => {
+    return currentProjectRegDb.filter(rec => {
+      if (regGroupFilter !== 'all' && rec.group !== regGroupFilter) return false;
+      if (regPhaseFilter !== 'all' && rec.phase !== regPhaseFilter) return false;
+      if (regStatusFilter !== 'all' && rec.status !== regStatusFilter) return false;
+      if (regOnlyMandatoryPending) {
+        if (!rec.isMandatory || rec.status === 'Validado') return false;
+      }
+      if (regSearch.trim() !== '') {
+        const query = regSearch.toLowerCase();
+        const matchesKey = (rec.key || rec.fieldKey || '').toLowerCase().includes(query);
+        const matchesLabel = (rec.label || rec.fieldLabel || '').toLowerCase().includes(query);
+        const matchesValue = (rec.value || rec.valueText || '').toLowerCase().includes(query);
+        const matchesMacro = (rec.macroActivityName || '').toLowerCase().includes(query);
+        if (!matchesKey && !matchesLabel && !matchesValue && !matchesMacro) return false;
+      }
+      return true;
+    });
+  }, [currentProjectRegDb, regGroupFilter, regPhaseFilter, regStatusFilter, regOnlyMandatoryPending, regSearch]);
+
+  const allGroupNames = useMemo(() => {
+    const names = STANDARD_REGULATORY_GROUPS.map(g => g.groupName);
+    customGroups.forEach(cg => {
+      if (!names.includes(cg)) names.push(cg);
+    });
+    currentProjectRegDb.forEach(r => {
+      if (r.group && !names.includes(r.group)) names.push(r.group);
+    });
+    return names;
+  }, [customGroups, currentProjectRegDb]);
+
+  const regRecordsByGroup = useMemo(() => {
+    const map: Record<string, RegulatoryRecordItem[]> = {};
+    allGroupNames.forEach(name => {
+      map[name] = [];
+    });
+    filteredRegRecords.forEach(rec => {
+      const gName = rec.group || 'Outros Campos';
+      if (!map[gName]) map[gName] = [];
+      map[gName].push(rec);
+    });
+    return map;
+  }, [allGroupNames, filteredRegRecords]);
+
+  const regDbStats = useMemo(() => {
+    const total = currentProjectRegDb.length;
+    const validated = currentProjectRegDb.filter(r => r.status === 'Validado').length;
+    const inAnalysis = currentProjectRegDb.filter(r => r.status === 'Aguardando validação' || r.status === 'Em andamento').length;
+    const notStarted = currentProjectRegDb.filter(r => r.status === 'Não iniciado').length;
+    const mandatoryTotal = currentProjectRegDb.filter(r => r.isMandatory).length;
+    const mandatoryDone = currentProjectRegDb.filter(r => r.isMandatory && r.status === 'Validado').length;
+    const mandatoryPending = mandatoryTotal - mandatoryDone;
+    const compliancePercent = mandatoryTotal > 0 ? Math.round((mandatoryDone / mandatoryTotal) * 100) : 0;
+
+    return { total, validated, inAnalysis, notStarted, mandatoryTotal, mandatoryDone, mandatoryPending, compliancePercent };
+  }, [currentProjectRegDb]);
+
+  const handleOpenEditField = (field: RegulatoryRecordItem) => {
+    setEditingRegField(field);
+    const lines = (field.value || '').split('\n');
+    const linkLine = lines.find(l => l.toLowerCase().startsWith('link:') || l.startsWith('http://') || l.startsWith('https://'));
+    let cleanVal = field.value || '';
+    let extractedLink = '';
+    if (linkLine) {
+      extractedLink = linkLine.replace(/^link:\s*/i, '').trim();
+      cleanVal = lines.filter(l => l !== linkLine).join('\n').trim();
+    }
+    setEditRegValue(cleanVal);
+    setEditRegLink(extractedLink);
+    const s = field.status || 'Validado';
+    const normStatus = (s === 'validado' ? 'Validado' : s === 'não preenchido' ? 'Não iniciado' : s === 'em análise' ? 'Aguardando validação' : s) as any;
+    setEditRegStatus(normStatus);
+    setEditRegResponsible(currentUser || field.updatedBy || 'Responsável');
+    setEditRegJustification('');
+  };
+
+  const handleSaveDirectFieldEdit = () => {
+    if (!editingRegField || !activeProject) return;
+
+    const previousVal = editingRegField.value || '';
+    let combinedVal = editRegValue.trim();
+    if (editRegLink.trim()) {
+      combinedVal = combinedVal ? `${combinedVal}\nLink: ${editRegLink.trim()}` : editRegLink.trim();
+    }
+
+    const updatedField: RegulatoryRecordItem = {
+      ...editingRegField,
+      value: combinedVal,
+      status: editRegStatus,
+      updatedBy: editRegResponsible || currentUser,
+      lastUpdated: new Date().toISOString(),
+      version: (editingRegField.version || 1) + 1,
+      history: [
+        ...(editingRegField.history || []),
+        {
+          version: editingRegField.version || 1,
+          updatedAt: editingRegField.lastUpdated || new Date().toISOString(),
+          updatedBy: editingRegField.updatedBy || currentUser,
+          previousValue: previousVal,
+          changeNote: editRegJustification.trim() || 'Edição direta na Base de Informações Regulatórias'
+        }
+      ]
+    };
+
+    const newDb = currentProjectRegDb.map(f => 
+      (f.id === editingRegField.id || f.key === editingRegField.key) ? updatedField : f
+    );
+
+    const newHistoryEvent = {
+      id: `hist_reg_${Date.now()}`,
+      date: new Date().toISOString(),
+      author: currentUser,
+      type: 'base_regulatoria' as const,
+      title: `Atualização no campo regulatório: ${editingRegField.label}`,
+      description: `Campo [${editingRegField.key}] atualizado diretamente. Status: ${editRegStatus}.`,
+      previousValue: previousVal,
+      newValue: combinedVal,
+      justification: editRegJustification.trim() || 'Edição direta na aba Docs.'
+    };
+
+    const updatedProject: Project = {
+      ...activeProject,
+      regulatoryDatabase: newDb,
+      historyTimeline: [newHistoryEvent, ...(activeProject.historyTimeline || [])]
+    };
+
+    if (onUpdateProjects) {
+      onUpdateProjects(projects.map(p => p.id === activeProject.id ? updatedProject : p));
+    }
+
+    setEditingRegField(null);
+  };
+
+  const handleAddNewRegField = () => {
+    if (!newFieldKey.trim() || !newFieldLabel.trim() || !activeProject) return;
+
+    const formattedKey = newFieldKey.trim().toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+    const newRecord: RegulatoryRecordItem = {
+      id: `reg_custom_${Date.now()}`,
+      group: newFieldGroupName,
+      key: formattedKey,
+      label: newFieldLabel.trim(),
+      phase: newFieldPhase,
+      macroActivityName: 'Personalizado',
+      value: '',
+      status: 'Não iniciado',
+      isMandatory: newFieldMandatory,
+      version: 1,
+      lastUpdated: new Date().toISOString(),
+      updatedBy: currentUser,
+      history: []
+    };
+
+    const newDb = [...currentProjectRegDb, newRecord];
+    const updatedProject: Project = {
+      ...activeProject,
+      regulatoryDatabase: newDb,
+      historyTimeline: [
+        {
+          id: `hist_add_field_${Date.now()}`,
+          date: new Date().toISOString(),
+          author: currentUser,
+          type: 'base_regulatoria',
+          title: `Novo campo regulatório adicionado: ${newRecord.label}`,
+          description: `Campo [${newRecord.key}] criado no grupo "${newRecord.group}".`,
+          newValue: newRecord.key,
+          justification: 'Inclusão manual de campo na Base Regulatória.'
+        },
+        ...(activeProject.historyTimeline || [])
+      ]
+    };
+
+    if (onUpdateProjects) {
+      onUpdateProjects(projects.map(p => p.id === activeProject.id ? updatedProject : p));
+    }
+
+    setShowAddFieldModal(false);
+    setNewFieldKey('');
+    setNewFieldLabel('');
+  };
+
+  const handleExportRegulatoryDatabase = () => {
+    if (!activeProject) return;
+
+    const rows = filteredRegRecords.map(item => ({
+      'Grupo Regulatório': item.group,
+      'Identificador (Chave)': `[${item.key}]`,
+      'Nome do Campo': item.label,
+      'Fase do Projeto': item.phase,
+      'Macroatividade de Origem': item.macroActivityName || 'Preenchimento Direto',
+      'Decisão Estratégica Vinculada': item.decisionQuestion || '-',
+      'Valor Registrado': item.value || '(Não preenchido)',
+      'Status Regulatório': item.status,
+      'Obrigatório': item.isMandatory ? 'Sim' : 'Não',
+      'Versão': `v${item.version || 1}`,
+      'Responsável': item.updatedBy || item.responsible || 'Sistema',
+      'Última Atualização': new Date(item.lastUpdated || item.lastModifiedAt || Date.now()).toLocaleDateString('pt-BR')
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Base Regulatória');
+    XLSX.writeFile(workbook, `Base_Regulatoria_${activeProject.name.replace(/\s+/g, '_')}.xlsx`);
+  };
 
   // Save Item Fill
   const handleSaveFillItem = (overrideValue?: string, targetDocs?: string[]) => {
@@ -1456,18 +1732,18 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
 
   return (
     <div className="space-y-4">
-      {/* Sleek Compact Header Bar (Replacing the giant card) */}
+      {/* Sleek Compact Header Bar */}
       <div className="bg-slate-900 rounded-2xl p-4 sm:p-5 text-white shadow-md border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-indigo-600/30 text-indigo-400 rounded-xl border border-indigo-500/30">
-            <FileText size={22} />
+          <div className="p-2.5 bg-blue-600/30 text-blue-400 rounded-xl border border-blue-500/30">
+            <Database size={22} />
           </div>
           <div>
             <h1 className="text-lg font-black uppercase tracking-tight text-white flex items-center gap-2">
-              Modelos e Dossiês Regulatórios
+              Base de Informações Regulatórias & Docs
             </h1>
             <p className="text-xs text-slate-400 font-medium">
-              Acompanhamento de modelos por grupos, capítulos e marcadores regulatórios.
+              Consolidação central dos dados regulatórios, decisões validadas e rastreabilidade para submissão.
             </p>
           </div>
         </div>
@@ -1489,26 +1765,27 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
           </div>
 
           <button
-            onClick={handleExportExcelDatabase}
+            onClick={handleExportRegulatoryDatabase}
             className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black text-xs uppercase tracking-wider transition shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
+            title="Exportar tabela de informações regulatórias para Excel"
           >
-            <FileSpreadsheet size={15} /> Exportar Banco
+            <FileSpreadsheet size={15} /> Exportar Tabela
           </button>
         </div>
       </div>
 
-      {/* Primary Navigation Tabs */}
+      {/* Primary Navigation Tabs - Base de Informações Regulatórias as Primary Default */}
       <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap gap-2">
         <button
-          onClick={() => setActiveTab('dossier_viewer')}
+          onClick={() => setActiveTab('regulatory_database')}
           className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 cursor-pointer ${
-            activeTab === 'dossier_viewer'
-              ? 'bg-slate-900 text-white shadow-sm'
+            activeTab === 'regulatory_database'
+              ? 'bg-blue-600 text-white shadow-sm'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <FolderTree size={16} />
-          <span>Visualizador do Dossiê</span>
+          <Database size={16} />
+          <span>Base de Informações Regulatórias</span>
         </button>
 
         <button
@@ -1520,7 +1797,7 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
           }`}
         >
           <Layers size={16} />
-          <span>Contribuições Pendentes</span>
+          <span>Central de Triagem / Contribuições</span>
           {projectPendingContributions.length > 0 && (
             <span className="px-2 py-0.5 bg-amber-400 text-slate-950 rounded-full text-[10px] font-black">
               {projectPendingContributions.length}
@@ -1529,15 +1806,15 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
         </button>
 
         <button
-          onClick={() => setActiveTab('template_manager')}
+          onClick={() => setActiveTab('export_and_traceability')}
           className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 cursor-pointer ${
-            activeTab === 'template_manager'
-              ? 'bg-slate-800 text-white shadow-sm'
+            activeTab === 'export_and_traceability'
+              ? 'bg-amber-600 text-white shadow-sm'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <FileCode size={16} />
-          <span>Modelos por Grupos</span>
+          <Download size={16} />
+          <span>Exportação & Rastreabilidade</span>
         </button>
 
         <button
@@ -1553,20 +1830,669 @@ export const RegulatoryDocManagement: React.FC<RegulatoryDocManagementProps> = (
         </button>
 
         <button
-          onClick={() => setActiveTab('export_and_traceability')}
+          onClick={() => setActiveTab('dossier_viewer')}
           className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 cursor-pointer ${
-            activeTab === 'export_and_traceability'
-              ? 'bg-amber-600 text-white shadow-sm'
+            activeTab === 'dossier_viewer'
+              ? 'bg-slate-900 text-white shadow-sm'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Download size={16} />
-          <span>Exportação</span>
+          <FolderTree size={16} />
+          <span>Modelos de Dossiê Arquivados</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('template_manager')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-2 cursor-pointer ${
+            activeTab === 'template_manager'
+              ? 'bg-slate-800 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <FileCode size={16} />
+          <span>Modelos por Grupos (Arquivo)</span>
         </button>
       </div>
 
       {/* =================================================================== */}
-      {/* TAB 1: VISUALIZADOR DO DOSSIÊ (ORGANIZED BY GROUPS) */}
+      {/* TAB 0: BASE DE INFORMAÇÕES REGULATÓRIAS (Item 10 & 11) */}
+      {/* =================================================================== */}
+      {activeTab === 'regulatory_database' && (
+        <div className="space-y-6">
+          {/* Summary KPI Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Total de Campos</p>
+                <p className="text-2xl font-black text-slate-900 mt-1">{regDbStats.total}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">Campos mapeados</p>
+              </div>
+              <div className="p-3 bg-slate-100 text-slate-700 rounded-xl">
+                <Database size={20} />
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Validados</p>
+                <p className="text-2xl font-black text-emerald-700 mt-1">{regDbStats.validated}</p>
+                <p className="text-[10px] font-bold text-emerald-600 mt-0.5">{regDbStats.compliancePercent}% de conformidade</p>
+              </div>
+              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                <CheckCircle2 size={20} />
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-blue-600">Em Análise / Andamento</p>
+                <p className="text-2xl font-black text-blue-700 mt-1">{regDbStats.inAnalysis}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">Em consolidação</p>
+              </div>
+              <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                <Clock size={20} />
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-rose-600">Obrigatórios Pendentes</p>
+                <p className={`text-2xl font-black mt-1 ${regDbStats.mandatoryPending > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                  {regDbStats.mandatoryPending}
+                </p>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  {regDbStats.mandatoryPending > 0 ? 'Exigem decisão/preenchimento' : 'Todos validados'}
+                </p>
+              </div>
+              <div className={`p-3 rounded-xl ${regDbStats.mandatoryPending > 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                <AlertCircle size={20} />
+              </div>
+            </div>
+          </div>
+
+          {/* Filter & Control Bar */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+              <div className="flex-1 relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Pesquisar por nome do campo, identificador [KEY], macroatividade ou conteúdo..."
+                  value={regSearch}
+                  onChange={(e) => setRegSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:border-blue-500 focus:bg-white transition"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={regGroupFilter}
+                  onChange={(e) => setRegGroupFilter(e.target.value)}
+                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                >
+                  <option value="all">Todos os Grupos ({allGroupNames.length})</option>
+                  {allGroupNames.map(g => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={regPhaseFilter}
+                  onChange={(e) => setRegPhaseFilter(e.target.value)}
+                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                >
+                  <option value="all">Todas as Fases</option>
+                  {VACCINE_PLATFORM_PHASES.map(phase => (
+                    <option key={phase} value={phase}>{phase}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={regStatusFilter}
+                  onChange={(e) => setRegStatusFilter(e.target.value)}
+                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                >
+                  <option value="all">Todos os Status</option>
+                  <option value="Não iniciado">Não iniciado</option>
+                  <option value="Em andamento">Em andamento</option>
+                  <option value="Aguardando validação">Aguardando validação</option>
+                  <option value="Validado">Validado</option>
+                </select>
+
+                <button
+                  onClick={() => setShowAddFieldModal(true)}
+                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition shadow-xs cursor-pointer active:scale-95"
+                >
+                  <Plus size={15} /> Novo Campo
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-xs">
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 select-none">
+                <input
+                  type="checkbox"
+                  checked={regOnlyMandatoryPending}
+                  onChange={(e) => setRegOnlyMandatoryPending(e.target.checked)}
+                  className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4 cursor-pointer"
+                />
+                <span>Exibir apenas campos obrigatórios pendentes de validação</span>
+              </label>
+
+              <span className="text-[11px] font-bold text-slate-500">
+                Mostrando {filteredRegRecords.length} de {currentProjectRegDb.length} campos
+              </span>
+            </div>
+          </div>
+
+          {/* Groups & Tables View */}
+          {filteredRegRecords.length === 0 ? (
+            <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 space-y-3">
+              <Database size={40} className="mx-auto text-slate-300" />
+              <h3 className="text-sm font-black uppercase text-slate-700">Nenhum campo encontrado</h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Nenhum registro corresponde aos filtros selecionados. Tente limpar os filtros de busca ou grupo.
+              </p>
+              <button
+                onClick={() => {
+                  setRegSearch('');
+                  setRegGroupFilter('all');
+                  setRegPhaseFilter('all');
+                  setRegStatusFilter('all');
+                  setRegOnlyMandatoryPending(false);
+                }}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black uppercase rounded-xl transition cursor-pointer"
+              >
+                Limpar Filtros
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {allGroupNames.map(groupName => {
+                const groupRecords = regRecordsByGroup[groupName] || [];
+                if (groupRecords.length === 0 && (regSearch || regGroupFilter !== 'all' || regPhaseFilter !== 'all' || regStatusFilter !== 'all' || regOnlyMandatoryPending)) {
+                  return null;
+                }
+
+                const isCollapsed = collapsedRegGroups[groupName];
+                const groupValidated = groupRecords.filter(r => r.status === 'Validado').length;
+                const groupTotal = groupRecords.length;
+                const groupDef = STANDARD_REGULATORY_GROUPS.find(g => g.groupName === groupName);
+
+                return (
+                  <div key={groupName} className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                    {/* Group Header */}
+                    <div className="p-4 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setCollapsedRegGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }))}
+                          className="p-1 hover:bg-slate-200 rounded-lg text-slate-600 transition cursor-pointer"
+                        >
+                          {isCollapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
+                        </button>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">{groupName}</h3>
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-[10px] font-black">
+                              {groupValidated}/{groupTotal} validados
+                            </span>
+                          </div>
+                          {groupDef?.description && (
+                            <p className="text-xs text-slate-500 font-medium mt-0.5">{groupDef.description}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setNewFieldGroupName(groupName);
+                          setShowAddFieldModal(true);
+                        }}
+                        className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-black uppercase tracking-wider flex items-center gap-1 transition shadow-2xs cursor-pointer"
+                      >
+                        <Plus size={13} /> Campo
+                      </button>
+                    </div>
+
+                    {/* Group Records Table */}
+                    {!isCollapsed && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-100/50 text-[10px] font-black uppercase tracking-wider text-slate-600 border-b border-slate-200">
+                              <th className="py-2.5 px-4">Campo & Identificador</th>
+                              <th className="py-2.5 px-4">Fase & Origem</th>
+                              <th className="py-2.5 px-4 min-w-[280px]">Conteúdo / Link Registrado</th>
+                              <th className="py-2.5 px-4">Status</th>
+                              <th className="py-2.5 px-4">Responsável & Atualização</th>
+                              <th className="py-2.5 px-4 text-right">Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 text-xs">
+                            {groupRecords.map(item => {
+                              const isVal = item.status === 'Validado';
+                              const isInProg = item.status === 'Em andamento' || item.status === 'Aguardando validação';
+                              const hasLink = item.value?.includes('http://') || item.value?.includes('https://') || item.value?.toLowerCase().includes('link:');
+
+                              return (
+                                <tr key={item.id || item.key} className="hover:bg-slate-50/70 transition">
+                                  {/* Field & Identifier */}
+                                  <td className="py-3 px-4 align-top">
+                                    <div className="space-y-1">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="font-extrabold text-slate-900">{item.label}</span>
+                                        {item.isMandatory ? (
+                                          <span className="px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded text-[9px] font-black uppercase">
+                                            Obrigatório
+                                          </span>
+                                        ) : (
+                                          <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-black uppercase">
+                                            Opcional
+                                          </span>
+                                        )}
+                                      </div>
+                                      <code className="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200/60 inline-block">
+                                        [{item.key}]
+                                      </code>
+                                    </div>
+                                  </td>
+
+                                  {/* Phase & Origin */}
+                                  <td className="py-3 px-4 align-top">
+                                    <div className="space-y-1">
+                                      <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-[10px] font-bold block max-w-fit">
+                                        {item.phase}
+                                      </span>
+                                      <p className="text-[11px] text-slate-600 font-medium">
+                                        Origem: <span className="font-bold text-slate-800">{item.macroActivityName || 'Preenchimento direto'}</span>
+                                      </p>
+                                      {item.decisionQuestion && (
+                                        <p className="text-[10px] text-slate-400 italic line-clamp-1" title={item.decisionQuestion}>
+                                          Decisão: {item.decisionQuestion}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </td>
+
+                                  {/* Registered Value */}
+                                  <td className="py-3 px-4 align-top">
+                                    {item.value && item.value.trim() !== '' ? (
+                                      <div className="space-y-1">
+                                        <p className="text-slate-800 whitespace-pre-wrap leading-relaxed line-clamp-3">
+                                          {item.value}
+                                        </p>
+                                        {hasLink && (
+                                          <div className="pt-1">
+                                            <span className="text-[10px] font-black uppercase text-blue-600 flex items-center gap-1">
+                                              <LinkIcon size={11} /> Link / Documento associado
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-400 italic text-[11px]">Não preenchido</span>
+                                    )}
+                                  </td>
+
+                                  {/* Status */}
+                                  <td className="py-3 px-4 align-top">
+                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1 ${
+                                      isVal
+                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                        : isInProg
+                                        ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                        : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                    }`}>
+                                      {isVal ? <CheckCircle2 size={12} /> : isInProg ? <Clock size={12} /> : <AlertCircle size={12} />}
+                                      {item.status}
+                                    </span>
+                                  </td>
+
+                                  {/* Responsible & Updated */}
+                                  <td className="py-3 px-4 align-top">
+                                    <p className="font-bold text-slate-800 text-xs">{item.updatedBy || 'Sistema'}</p>
+                                    <p className="text-[10px] text-slate-400 mt-0.5">
+                                      {item.lastUpdated ? new Date(item.lastUpdated).toLocaleDateString('pt-BR') : '-'}
+                                    </p>
+                                    {item.version && item.version > 1 && (
+                                      <span className="text-[9px] font-mono text-slate-500 bg-slate-100 px-1 rounded mt-0.5 inline-block">
+                                        v{item.version}
+                                      </span>
+                                    )}
+                                  </td>
+
+                                  {/* Actions */}
+                                  <td className="py-3 px-4 align-top text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <button
+                                        onClick={() => handleOpenEditField(item)}
+                                        className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-lg transition cursor-pointer"
+                                        title="Editar este campo diretamente"
+                                      >
+                                        <Edit3 size={15} />
+                                      </button>
+                                      <button
+                                        onClick={() => setViewingHistoryField(item)}
+                                        className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-slate-700 rounded-lg transition cursor-pointer relative"
+                                        title="Visualizar histórico de versões e alterações"
+                                      >
+                                        <History size={15} />
+                                        {item.history && item.history.length > 0 && (
+                                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-blue-600 text-white rounded-full text-[8px] font-black flex items-center justify-center">
+                                            {item.history.length}
+                                          </span>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Modal: Editar Campo Diretamente */}
+          {editingRegField && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 border border-slate-200 animate-in fade-in zoom-in duration-150 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-blue-600 tracking-wider">
+                      Base Regulatória • {editingRegField.group}
+                    </span>
+                    <h3 className="text-base font-black text-slate-900 mt-0.5">
+                      Editar Campo: {editingRegField.label}
+                    </h3>
+                    <code className="text-xs font-mono font-bold text-slate-600">[{editingRegField.key}]</code>
+                  </div>
+                  <button
+                    onClick={() => setEditingRegField(null)}
+                    className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="space-y-3.5 text-xs">
+                  <div>
+                    <label className="block font-black text-slate-700 mb-1">
+                      Conteúdo / Resposta Regulatória:
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={editRegValue}
+                      onChange={(e) => setEditRegValue(e.target.value)}
+                      placeholder="Descreva as informações técnicas, dados analíticos, justificativa ou texto aprovado..."
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:bg-white transition text-xs font-medium text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-black text-slate-700 mb-1 flex items-center gap-1.5">
+                      <LinkIcon size={13} className="text-blue-600" /> Link de Acesso / Relatório / SharePoint:
+                    </label>
+                    <input
+                      type="text"
+                      value={editRegLink}
+                      onChange={(e) => setEditRegLink(e.target.value)}
+                      placeholder="https://sharepoint.ctvacinas.org/laudos/laudo_final.pdf"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:bg-white transition text-xs font-medium text-slate-800"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-black text-slate-700 mb-1">Status do Registro:</label>
+                      <select
+                        value={editRegStatus}
+                        onChange={(e) => setEditRegStatus(e.target.value as any)}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-xs font-bold text-slate-800 cursor-pointer"
+                      >
+                        <option value="Validado">Validado (Aprovado)</option>
+                        <option value="Aguardando validação">Aguardando validação</option>
+                        <option value="Em andamento">Em andamento</option>
+                        <option value="Não iniciado">Não iniciado</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-black text-slate-700 mb-1">Responsável pela Alteração:</label>
+                      <input
+                        type="text"
+                        value={editRegResponsible}
+                        onChange={(e) => setEditRegResponsible(e.target.value)}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-xs font-bold text-slate-800"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-black text-slate-700 mb-1">
+                      Justificativa da Modificação (Rastreabilidade):
+                    </label>
+                    <input
+                      type="text"
+                      value={editRegJustification}
+                      onChange={(e) => setEditRegJustification(e.target.value)}
+                      placeholder="Ex: Atualização conforme relatório final do lote piloto #03 e revisão com a liderança."
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:bg-white transition text-xs font-medium text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                  <button
+                    onClick={() => setEditingRegField(null)}
+                    className="px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleSaveDirectFieldEdit}
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-sm cursor-pointer"
+                  >
+                    Salvar Alteração
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal: Histórico de Versões */}
+          {viewingHistoryField && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 border border-slate-200 animate-in fade-in zoom-in duration-150 max-h-[85vh] overflow-y-auto">
+                <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-blue-600 tracking-wider">
+                      Histórico e Rastreabilidade
+                    </span>
+                    <h3 className="text-base font-black text-slate-900 mt-0.5">
+                      {viewingHistoryField.label}
+                    </h3>
+                    <code className="text-xs font-mono font-bold text-slate-600">[{viewingHistoryField.key}]</code>
+                  </div>
+                  <button
+                    onClick={() => setViewingHistoryField(null)}
+                    className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="space-y-4 text-xs">
+                  {/* Current Active Value */}
+                  <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase text-blue-800">Versão Atual (v{viewingHistoryField.version || 1})</span>
+                      <span className="text-[10px] text-blue-600 font-bold">
+                        {viewingHistoryField.lastUpdated ? new Date(viewingHistoryField.lastUpdated).toLocaleDateString('pt-BR') : '-'}
+                      </span>
+                    </div>
+                    <p className="font-extrabold text-slate-900 whitespace-pre-wrap">{viewingHistoryField.value || '(Vazio)'}</p>
+                    <p className="text-[10px] text-slate-500">Autor: <span className="font-bold">{viewingHistoryField.updatedBy || 'Sistema'}</span></p>
+                  </div>
+
+                  {/* Previous Versions Timeline */}
+                  <div>
+                    <h4 className="text-[11px] font-black uppercase text-slate-700 tracking-wider mb-2">
+                      Alterações Anteriores ({viewingHistoryField.history?.length || 0})
+                    </h4>
+                    {(!viewingHistoryField.history || viewingHistoryField.history.length === 0) ? (
+                      <p className="text-slate-400 italic text-center py-4 bg-slate-50 rounded-xl">
+                        Nenhuma versão anterior registrada. Este campo mantém seu valor original.
+                      </p>
+                    ) : (
+                      <div className="space-y-2 border-l-2 border-blue-200 pl-3 ml-2">
+                        {viewingHistoryField.history.map((hist, idx) => (
+                          <div key={idx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="font-bold text-slate-700">Versão v{hist.version || 1} • {hist.updatedBy || hist.author || 'Sistema'}</span>
+                              <span className="text-slate-400">{new Date(hist.updatedAt || hist.timestamp || Date.now()).toLocaleDateString('pt-BR')}</span>
+                            </div>
+                            <p className="text-slate-600 text-[11px] line-through">
+                              {hist.previousValue || '(Vazio)'}
+                            </p>
+                            {hist.changeNote && (
+                              <p className="text-[10px] text-blue-700 font-bold bg-blue-50/50 p-1 rounded">
+                                Justificativa: {hist.changeNote}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-end border-t border-slate-100 pt-3">
+                  <button
+                    onClick={() => setViewingHistoryField(null)}
+                    className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal: Adicionar Novo Campo Regulatório */}
+          {showAddFieldModal && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200 animate-in fade-in zoom-in duration-150">
+                <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <span className="text-[10px] font-black uppercase text-blue-600 tracking-wider">
+                      Estrutura da Tabela Regulatória
+                    </span>
+                    <h3 className="text-base font-black text-slate-900 mt-0.5">
+                      Criar Novo Campo Regulatório
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setShowAddFieldModal(false)}
+                    className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="space-y-3.5 text-xs">
+                  <div>
+                    <label className="block font-black text-slate-700 mb-1">Grupo Regulatório de Destino:</label>
+                    <select
+                      value={newFieldGroupName}
+                      onChange={(e) => setNewFieldGroupName(e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-xs font-bold text-slate-800 cursor-pointer"
+                    >
+                      {allGroupNames.map(g => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-black text-slate-700 mb-1">Identificador / Chave Técnica (KEY):</label>
+                    <input
+                      type="text"
+                      value={newFieldKey}
+                      onChange={(e) => setNewFieldKey(e.target.value.toUpperCase().replace(/\s+/g, '_'))}
+                      placeholder="EXEMPLO: METODO_ESTERILIZACAO"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 font-mono text-xs font-bold text-blue-700"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-0.5">Identificador único sem espaços ou caracteres especiais.</p>
+                  </div>
+
+                  <div>
+                    <label className="block font-black text-slate-700 mb-1">Nome / Rótulo do Campo:</label>
+                    <input
+                      type="text"
+                      value={newFieldLabel}
+                      onChange={(e) => setNewFieldLabel(e.target.value)}
+                      placeholder="Ex: Método de Esterilização e Filtração Terminal"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-xs font-bold text-slate-800"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-black text-slate-700 mb-1">Fase Associada:</label>
+                      <select
+                        value={newFieldPhase}
+                        onChange={(e) => setNewFieldPhase(e.target.value)}
+                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-500 text-xs font-bold text-slate-800 cursor-pointer"
+                      >
+                        {VACCINE_PLATFORM_PHASES.map(p => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col justify-end">
+                      <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                        <input
+                          type="checkbox"
+                          checked={newFieldMandatory}
+                          onChange={(e) => setNewFieldMandatory(e.target.checked)}
+                          className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4 cursor-pointer"
+                        />
+                        <span className="text-xs">Obrigatório</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                  <button
+                    onClick={() => setShowAddFieldModal(false)}
+                    className="px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleAddNewRegField}
+                    disabled={!newFieldKey.trim() || !newFieldLabel.trim()}
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-sm cursor-pointer"
+                  >
+                    Adicionar Campo
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =================================================================== */}
+      {/* TAB 1: MODELOS DE DOSSIÊ ARQUIVADOS (PRESERVED) */}
       {/* =================================================================== */}
       {activeTab === 'dossier_viewer' && (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

@@ -1612,6 +1612,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           isOpen={isPlanModalOpen} 
           onClose={() => setIsPlanModalOpen(false)} 
           existingPlans={activityPlans}
+          regulatoryStandards={regulatoryStandards}
           onSave={(newPlan) => {
             const existingIdx = activityPlans.findIndex(p => p.id === newPlan.id);
             let updatedPlans: ActivityPlanTemplate[];
