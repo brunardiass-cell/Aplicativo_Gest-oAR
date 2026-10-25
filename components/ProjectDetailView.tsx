@@ -51,7 +51,10 @@ import {
   Layers3,
   Edit3,
   Sliders,
-  Pencil
+  Pencil,
+  Zap,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { 
   Project, 
@@ -481,8 +484,8 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   meetings = [],
   tasks = []
 }) => {
-  // Top view tab state
-  const [activeTopTab, setActiveTopTab] = useState<'visao_geral' | 'estrutura' | 'proximas_acoes' | 'orientacao' | 'historico' | 'contribuicoes'>('visao_geral');
+  // Top view tab state (Renumbered: 1. Visão Geral, 2. Próximas Ações, 3. Histórico, 4. Contribuições, 5. Docs)
+  const [activeTopTab, setActiveTopTab] = useState<'visao_geral' | 'proximas_acoes' | 'historico' | 'contribuicoes' | 'docs' | 'estrutura' | 'orientacao'>('visao_geral');
 
   // Phases deduplicated list respecting exact plan phases and ordering
   const phasesList = useMemo(() => {
@@ -600,6 +603,23 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   // Presentation link and discussion comment states
   const [presentationLinkInput, setPresentationLinkInput] = useState('');
   const [newDiscussionComment, setNewDiscussionComment] = useState('');
+
+  // Compact decision modal collapsible section
+  const [showAdditionalSettings, setShowAdditionalSettings] = useState(false);
+
+  // Direct 1-click inline editing for microactivities (Item 3)
+  const [inlineEditing, setInlineEditing] = useState<{ id: string; field: 'name' | 'observations' | 'dueDate' | 'assignee' | 'status' } | null>(null);
+
+  // Rapid registration in Atividades and Todos os Grupos (Item 1)
+  const [quickRegisterText, setQuickRegisterText] = useState('');
+  const [quickRegisterType, setQuickRegisterType] = useState<'nota' | 'tarefa' | 'observacao'>('nota');
+  const [quickRegisterMacroId, setQuickRegisterMacroId] = useState<string>('');
+  const quickRegisterInputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Pending contributions counter (Item 5)
+  const pendingContributionsCount = useMemo(() => {
+    return (project.contributions || []).filter(c => c.status === 'pendente' || c.status === 'em_analise').length;
+  }, [project.contributions]);
 
   // Standards catalog with fallback
   const allAvailableStandards = useMemo(() => {
@@ -950,8 +970,37 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     });
   }, [selectedPhase, project.macroActivities, project.id]);
 
-  // Active selected group
-  const activeGroup = currentPhaseGroups[selectedGroupIndex] || currentPhaseGroups[0];
+  // Active selected group (supports single group or "Todos os Grupos" when selectedGroupIndex === -1)
+  const isAllGroups = selectedGroupIndex === -1;
+  const activeGroup = useMemo(() => {
+    if (isAllGroups) {
+      const allMicros = currentPhaseGroups.flatMap(g => 
+        g.microActivities.map(m => ({ ...m, groupName: g.name, groupNumber: g.number, macroId: g.macroId }))
+      );
+      const completedCount = allMicros.filter(m => m.status === 'Concluído e aprovado' || m.status === 'Concluído com restrições').length;
+      const progress = allMicros.length > 0 ? Math.round(allMicros.reduce((acc, m) => acc + (m.progress ?? 0), 0) / allMicros.length) : 0;
+      return {
+        number: 0,
+        name: `Todos os Grupos (${selectedPhase})`,
+        defaultBullets: ['Visão consolidada', 'Todas as macroatividades', 'Execução integrada'],
+        description: `Visão consolidada de todas as macroatividades e tarefas da ${selectedPhase}.`,
+        defaultProgress: progress,
+        illustrationType: 'vials' as const,
+        matchedMacro: currentPhaseGroups[0]?.matchedMacro,
+        macroId: 'all_groups',
+        microActivities: allMicros,
+        progress,
+        completedCount,
+        totalCount: allMicros.length,
+        keyDecisions: currentPhaseGroups.flatMap(g => g.keyDecisions),
+        decisionsList: currentPhaseGroups.flatMap(g => g.decisionsList),
+        regulatoryPoints: Array.from(new Set(currentPhaseGroups.flatMap(g => g.regulatoryPoints))),
+        technicalJustifications: Array.from(new Set(currentPhaseGroups.flatMap(g => g.technicalJustifications))),
+        referenceGuides: currentPhaseGroups.flatMap(g => g.referenceGuides)
+      };
+    }
+    return currentPhaseGroups[selectedGroupIndex] || currentPhaseGroups[0];
+  }, [isAllGroups, currentPhaseGroups, selectedGroupIndex, selectedPhase]);
 
   // Regulatory data for active group
   const activeRegulatory = GROUP_REGULATORY_MAP[activeGroup.name] || DEFAULT_REGULATORY_DATA;
@@ -1206,18 +1255,270 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
 
   const handleUpdateMacroIcon = (newIconKey: string) => {
     if (!selectedMacroForIconEdit) return;
+    let found = false;
     const updatedMacros = (project.macroActivities || []).map(m => {
-      if (m.id === selectedMacroForIconEdit.id) {
+      if (m.id === selectedMacroForIconEdit.id || m.name.toLowerCase().trim() === selectedMacroForIconEdit.name.toLowerCase().trim()) {
+        found = true;
         return { ...m, icon: newIconKey };
       }
       return m;
     });
+    if (!found) {
+      updatedMacros.push({
+        ...selectedMacroForIconEdit,
+        icon: newIconKey
+      });
+    }
     onUpdateProject({
       ...project,
       macroActivities: updatedMacros
     });
     setIsMacroIconModalOpen(false);
     setSelectedMacroForIconEdit(null);
+  };
+
+  // Direct 1-click inline editing for microactivities (Item 3 & Item 5)
+  const handleUpdateMicroField = (microId: string, field: keyof MicroActivity, value: any) => {
+    const nowIso = new Date().toISOString();
+    const todayStr = nowIso.split('T')[0];
+    let changedMicroName = '';
+    let oldValue: any = '';
+    let matchedMicroObj: MicroActivity | null = null;
+    let matchedMacroObj: MacroActivity | null = null;
+
+    let updatedMacros = (project.macroActivities || []).map(macro => {
+      let hasChanged = false;
+      const updatedMicros = (macro.microActivities || []).map(mic => {
+        if (mic.id === microId) {
+          hasChanged = true;
+          changedMicroName = mic.name;
+          oldValue = mic[field];
+          const updated = { ...mic, [field]: value };
+          
+          if (field === 'status') {
+            if (value === 'Concluído e aprovado') {
+              updated.progress = 100;
+              updated.completionDate = updated.completionDate || todayStr;
+            } else if (value === 'Em andamento' && (updated.progress === 0 || updated.progress === 100)) {
+              updated.progress = 50;
+            } else if (value === 'Planejado') {
+              updated.progress = 0;
+            }
+          }
+
+          matchedMicroObj = updated;
+          matchedMacroObj = macro;
+          return updated;
+        }
+        return mic;
+      });
+      return hasChanged ? { ...macro, microActivities: updatedMicros } : macro;
+    });
+
+    // If micro was in activeGroup fallback
+    if (!matchedMicroObj && activeGroup) {
+      const foundInActive = activeGroup.microActivities.find(m => m.id === microId);
+      if (foundInActive) {
+        changedMicroName = foundInActive.name;
+        oldValue = foundInActive[field];
+        const updated = { ...foundInActive, [field]: value };
+        if (field === 'status') {
+          if (value === 'Concluído e aprovado') {
+            updated.progress = 100;
+            updated.completionDate = updated.completionDate || todayStr;
+          } else if (value === 'Em andamento') {
+            updated.progress = 50;
+          } else if (value === 'Planejado') {
+            updated.progress = 0;
+          }
+        }
+        matchedMicroObj = updated;
+
+        const currentMicros = activeGroup.microActivities.map(m => m.id === microId ? updated : m);
+        let macroFound = false;
+        updatedMacros = updatedMacros.map(m => {
+          if (m.name.toLowerCase().trim() === activeGroup.name.toLowerCase().trim()) {
+            macroFound = true;
+            return { ...m, microActivities: currentMicros };
+          }
+          return m;
+        });
+        if (!macroFound) {
+          updatedMacros.push({
+            id: activeGroup.macroId,
+            name: activeGroup.name,
+            phase: selectedPhase,
+            microActivities: currentMicros
+          });
+        }
+      }
+    }
+
+    // Item 5: When marked as having regulatory content and has content registered, forward to Contribuições
+    let updatedContributions = [...(project.contributions || [])];
+    if (matchedMicroObj) {
+      const micro = matchedMicroObj as MicroActivity;
+      const isReg = micro.generatesRegulatoryContent !== false;
+      const content = (micro.observations || micro.documentLink || micro.reportLink || '').trim();
+
+      if (isReg && content) {
+        const existingIdx = updatedContributions.findIndex(c => c.originDetails === micro.id || c.id === `contrib_mic_${micro.id}`);
+        if (existingIdx === -1) {
+          const newContrib: ProjectContributionItem = {
+            id: `contrib_mic_${micro.id}`,
+            title: `Atividade: ${micro.name}`,
+            content: content,
+            origin: 'Atividade',
+            originDetails: micro.id,
+            source: 'atividade',
+            evidenceLink: micro.documentLink || micro.reportLink,
+            status: 'pendente',
+            author: micro.assignee || teamMembers[0]?.name || 'Equipe Técnica',
+            createdAt: nowIso,
+            targetPhase: (matchedMacroObj as MacroActivity | null)?.phase || selectedPhase,
+            targetMacroActivityId: (matchedMacroObj as MacroActivity | null)?.id || activeGroup.macroId
+          };
+          updatedContributions = [newContrib, ...updatedContributions];
+        } else if (updatedContributions[existingIdx].status === 'pendente' || updatedContributions[existingIdx].status === 'em_analise') {
+          updatedContributions[existingIdx] = {
+            ...updatedContributions[existingIdx],
+            title: `Atividade: ${micro.name}`,
+            content: content,
+            evidenceLink: micro.documentLink || micro.reportLink || updatedContributions[existingIdx].evidenceLink
+          };
+        }
+      }
+    }
+
+    const historyEvent: ProjectHistoryEvent = {
+      id: `hist_micro_${Date.now()}`,
+      date: todayStr,
+      timestamp: nowIso,
+      author: teamMembers[0]?.name || 'Gestor',
+      eventType: 'atividade',
+      title: `Atualização: ${changedMicroName || 'Atividade'}`,
+      description: `Campo "${String(field)}" alterado para "${value ?? '—'}"`,
+      refType: 'atividade',
+      refId: microId
+    };
+
+    onUpdateProject({
+      ...project,
+      macroActivities: updatedMacros,
+      contributions: updatedContributions,
+      historyTimeline: [historyEvent, ...(project.historyTimeline || [])]
+    });
+  };
+
+  // Rapid registration in Atividades and Todos os Grupos (Item 1)
+  const handleQuickRegisterItem = (targetMacroId?: string) => {
+    const text = quickRegisterText.trim();
+    if (!text) return;
+
+    const nowIso = new Date().toISOString();
+    const todayStr = nowIso.split('T')[0];
+    const authorName = teamMembers[0]?.name || 'Gestor';
+    const effectiveMacroId = targetMacroId || quickRegisterMacroId || (activeGroup.macroId !== 'all_groups' ? activeGroup.macroId : currentPhaseGroups[0]?.macroId);
+
+    let targetMacroName = activeGroup.name;
+    const targetMacro = (project.macroActivities || []).find(m => m.id === effectiveMacroId);
+    if (targetMacro) targetMacroName = targetMacro.name;
+
+    if (quickRegisterType === 'tarefa') {
+      const newMicro: MicroActivity = {
+        id: `mic_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        name: text,
+        status: 'Planejado',
+        assignee: authorName,
+        dueDate: todayStr,
+        progress: 0,
+        observations: '',
+        generatesRegulatoryContent: false
+      };
+
+      let macroFound = false;
+      const updatedMacros = (project.macroActivities || []).map(m => {
+        if (m.id === effectiveMacroId || m.name.toLowerCase().trim() === targetMacroName.toLowerCase().trim()) {
+          macroFound = true;
+          return { ...m, microActivities: [...(m.microActivities || []), newMicro] };
+        }
+        return m;
+      });
+
+      if (!macroFound) {
+        updatedMacros.push({
+          id: effectiveMacroId,
+          name: targetMacroName,
+          phase: selectedPhase,
+          microActivities: [...(activeGroup.microActivities || []), newMicro]
+        });
+      }
+
+      const histEvent: ProjectHistoryEvent = {
+        id: `hist_task_${Date.now()}`,
+        date: todayStr,
+        timestamp: nowIso,
+        author: authorName,
+        eventType: 'atividade',
+        title: `Nova Tarefa Rápida: ${text}`,
+        description: `Cadastrada em ${targetMacroName}`,
+        refType: 'atividade',
+        refId: newMicro.id
+      };
+
+      onUpdateProject({
+        ...project,
+        macroActivities: updatedMacros,
+        historyTimeline: [histEvent, ...(project.historyTimeline || [])]
+      });
+    } else {
+      const histEvent: ProjectHistoryEvent = {
+        id: `hist_note_${Date.now()}`,
+        date: todayStr,
+        timestamp: nowIso,
+        author: authorName,
+        eventType: quickRegisterType === 'observacao' ? 'atividade' : 'outro',
+        title: `${quickRegisterType === 'observacao' ? 'Observação Técnica' : 'Nota Rápida'}: ${targetMacroName}`,
+        description: text,
+        refType: 'outro'
+      };
+
+      onUpdateProject({
+        ...project,
+        historyTimeline: [histEvent, ...(project.historyTimeline || [])]
+      });
+    }
+
+    setQuickRegisterText('');
+    setTimeout(() => {
+      quickRegisterInputRef.current?.focus();
+    }, 50);
+  };
+
+  const handleAddNewDiscussionComment = () => {
+    if (!newDiscussionComment.trim()) return;
+    const nowIso = new Date().toISOString();
+    const todayStr = nowIso.split('T')[0];
+    const authorName = teamMembers[0]?.name || 'Gestor';
+    const text = newDiscussionComment.trim();
+
+    const histEvent: ProjectHistoryEvent = {
+      id: `hist_disc_${Date.now()}`,
+      date: todayStr,
+      timestamp: nowIso,
+      author: authorName,
+      eventType: 'outro',
+      title: `Nota / Discussão: ${activeGroup.name}`,
+      description: text,
+      refType: 'outro'
+    };
+
+    onUpdateProject({
+      ...project,
+      historyTimeline: [histEvent, ...(project.historyTimeline || [])]
+    });
+
+    setNewDiscussionComment('');
   };
 
   const handleSaveNewPoint = () => {
@@ -1724,7 +2025,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
 
         {/* Top Right Buttons & Tab Pills */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Top View Navigation Tabs (Pills from screenshot) */}
+          {/* Top View Navigation Tabs (Item 2: Simplificada e Renumerada: 1. Visão Geral, 2. Próximas Ações, 3. Histórico, 4. Contribuições, 5. Docs) */}
           <div className="hidden xl:flex items-center gap-1 bg-slate-100/90 p-1 rounded-full border border-slate-200/80 mr-2">
             <button
               onClick={() => setActiveTopTab('visao_geral')}
@@ -1734,78 +2035,78 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[10px]">1</span>
+              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
+                activeTopTab === 'visao_geral' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+              }`}>1</span>
               Visão Geral
             </button>
-            <button
-              onClick={() => setActiveTopTab('estrutura')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTopTab === 'estrutura'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <span className="w-4 h-4 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-[10px]">2</span>
-              Estrutura
-            </button>
+
             <button
               onClick={() => setActiveTopTab('proximas_acoes')}
               className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeTopTab === 'proximas_acoes'
-                  ? 'bg-blue-600 text-white shadow-xs'
+                  ? 'bg-blue-600 text-white shadow-xs font-black'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <span className="w-4 h-4 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-[10px]">3</span>
+              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
+                activeTopTab === 'proximas_acoes' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+              }`}>2</span>
               Próximas Ações
             </button>
-            <button
-              onClick={() => setActiveTopTab('orientacao')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTopTab === 'orientacao'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <span className="w-4 h-4 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-[10px]">4</span>
-              Orientação Regulatória
-            </button>
+
             <button
               onClick={() => setActiveTopTab('historico')}
               className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeTopTab === 'historico'
-                  ? 'bg-blue-600 text-white shadow-xs'
+                  ? 'bg-blue-600 text-white shadow-xs font-black'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <span className="w-4 h-4 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-[10px]">5</span>
+              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
+                activeTopTab === 'historico' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+              }`}>3</span>
               Histórico
             </button>
+
             <button
               onClick={() => setActiveTopTab('contribuicoes')}
               className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeTopTab === 'contribuicoes'
-                  ? 'bg-blue-600 text-white shadow-xs'
+                  ? 'bg-blue-600 text-white shadow-xs font-black'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <span className="w-4 h-4 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-[10px]">6</span>
-              Contribuições
+              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
+                activeTopTab === 'contribuicoes' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+              }`}>4</span>
+              <span>Contribuições</span>
+              {pendingContributionsCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-white">
+                  {pendingContributionsCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => onSwitchTab ? onSwitchTab('regulatory_docs') : setActiveTopTab('docs')}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTopTab === 'docs'
+                  ? 'bg-blue-600 text-white shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
+                activeTopTab === 'docs' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+              }`}>5</span>
+              Docs
             </button>
           </div>
 
           {/* Quick Action buttons */}
           <button
-            onClick={() => onSwitchTab ? onSwitchTab('regulatory_docs') : setActiveTopTab('orientacao')}
-            className="px-3.5 py-2 bg-white border border-slate-200/90 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-bold transition shadow-2xs flex items-center gap-1.5"
-            title="Documentação Regulatória"
-          >
-            <FileText size={15} className="text-slate-500" /> Docs
-          </button>
-
-          <button
             onClick={() => onPrint ? onPrint() : window.print()}
-            className="p-2.5 bg-white border border-slate-200/90 text-slate-600 hover:bg-slate-50 rounded-xl transition shadow-2xs"
+            className="p-2.5 bg-white border border-slate-200/90 text-slate-600 hover:bg-slate-50 rounded-xl transition shadow-2xs cursor-pointer"
             title="Imprimir visão do projeto"
           >
             <Printer size={15} />
@@ -1813,7 +2114,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
 
           <button
             onClick={onBack}
-            className="px-4 py-2 bg-white border border-slate-200/90 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-2xs active:scale-95"
+            className="px-4 py-2 bg-white border border-slate-200/90 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer"
           >
             <ArrowLeft size={14} /> Voltar
           </button>
@@ -1824,22 +2125,32 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       <div className="flex xl:hidden overflow-x-auto pb-2 gap-1.5 no-scrollbar">
         {[
           { id: 'visao_geral', num: '1', label: 'Visão Geral' },
-          { id: 'estrutura', num: '2', label: 'Estrutura' },
-          { id: 'proximas_acoes', num: '3', label: 'Próximas Ações' },
-          { id: 'orientacao', num: '4', label: 'Orientação Regulatória' },
-          { id: 'historico', num: '5', label: 'Histórico' },
-          { id: 'contribuicoes', num: '6', label: 'Contribuições' }
+          { id: 'proximas_acoes', num: '2', label: 'Próximas Ações' },
+          { id: 'historico', num: '3', label: 'Histórico' },
+          { id: 'contribuicoes', num: '4', label: 'Contribuições', badge: pendingContributionsCount },
+          { id: 'docs', num: '5', label: 'Docs' }
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTopTab(tab.id as any)}
-            className={`whitespace-nowrap px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
+            onClick={() => {
+              if (tab.id === 'docs' && onSwitchTab) {
+                onSwitchTab('regulatory_docs');
+              } else {
+                setActiveTopTab(tab.id as any);
+              }
+            }}
+            className={`whitespace-nowrap px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTopTab === tab.id
-                ? 'bg-blue-600 text-white shadow-xs'
+                ? 'bg-blue-600 text-white shadow-xs font-black'
                 : 'bg-white border border-slate-200 text-slate-600'
             }`}
           >
             <span>{tab.num}.</span> {tab.label}
+            {tab.badge && tab.badge > 0 ? (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-white ml-0.5">
+                {tab.badge}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
@@ -2476,9 +2787,38 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
 
             {/* Card: GRUPOS DE ATIVIDADES DA FASE */}
             <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs space-y-3">
-              <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider">
-                GRUPOS DE ATIVIDADES DA {selectedPhase.toUpperCase()}
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                  GRUPOS DE ATIVIDADES DA {selectedPhase.toUpperCase()}
+                </h3>
+              </div>
+
+              {/* Botão Todos os Grupos (Item 1) */}
+              <div
+                onClick={() => setSelectedGroupIndex(-1)}
+                className={`p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2 select-none ${
+                  selectedGroupIndex === -1
+                    ? 'border-indigo-500 bg-indigo-50/90 font-black text-indigo-950 shadow-2xs'
+                    : 'border-slate-150 bg-slate-50/60 hover:bg-slate-100/80 text-slate-700'
+                }`}
+                title="Visualizar e registrar atividades e notas de todos os grupos consolidados"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`w-5 h-5 rounded-full font-black text-[11px] flex items-center justify-center shrink-0 ${
+                    selectedGroupIndex === -1 ? 'bg-indigo-600 text-white' : 'bg-slate-300 text-slate-700'
+                  }`}>
+                    *
+                  </div>
+                  <span className="text-xs truncate font-bold">
+                    Todos os Grupos ({selectedPhase})
+                  </span>
+                </div>
+                <span className={`text-[11px] font-black px-2 py-0.5 rounded-lg shrink-0 ${
+                  selectedGroupIndex === -1 ? 'text-indigo-700 bg-white border border-indigo-200' : 'text-slate-500 bg-white border border-slate-200'
+                }`}>
+                  {currentPhaseGroups.reduce((acc, g) => acc + g.microActivities.length, 0)} ativ.
+                </span>
+              </div>
 
               <div className="space-y-1.5 max-h-[580px] overflow-y-auto pr-1 no-scrollbar">
                 {currentPhaseGroups.map((group, idx) => {
@@ -2548,7 +2888,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 </div>
               </div>
 
-              {/* Stepper Cards Horizontal Carousel */}
+              {/* Stepper Cards Horizontal Carousel (Item 4: O ícone da macroatividade é o único elemento ilustrativo no espaço principal) */}
               <div 
                 ref={journeyScrollRef}
                 className="overflow-x-auto pb-4 pt-1 flex gap-3.5 no-scrollbar scroll-smooth snap-x"
@@ -2567,32 +2907,22 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       }`}
                     >
                       <div className="space-y-2">
-                        {/* Number badge and Macro Icon */}
+                        {/* Number badge and Progress badge */}
                         <div className="flex items-center justify-between">
                           <div className={`w-5 h-5 rounded-full font-black text-[11px] flex items-center justify-center ${
                             isSelected ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white'
                           }`}>
                             {group.number}
                           </div>
-                          {(() => {
-                            const IconComp = getMacroIconComponent(group.matchedMacro?.icon);
-                            return (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (group.matchedMacro) {
-                                    setSelectedMacroForIconEdit(group.matchedMacro);
-                                    setIsMacroIconModalOpen(true);
-                                  }
-                                }}
-                                className="w-6 h-6 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 flex items-center justify-center transition cursor-pointer"
-                                title="Alterar ícone da macroatividade neste projeto"
-                              >
-                                <IconComp size={13} />
-                              </button>
-                            );
-                          })()}
+                          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md ${
+                            group.progress === 100 
+                              ? 'bg-emerald-100 text-emerald-800' 
+                              : group.progress > 0 
+                                ? 'bg-blue-100 text-blue-800' 
+                                : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {group.progress}%
+                          </span>
                         </div>
 
                         {/* Group Title */}
@@ -2611,9 +2941,33 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                         </ul>
                       </div>
 
-                      {/* Graphic Illustration */}
+                      {/* Espaço Principal: Ícone Exclusivo da Macroatividade (Item 4: sem ilustrações genéricas) */}
                       <div className="pt-3">
-                        {renderGroupIllustration(group.illustrationType)}
+                        {(() => {
+                          const IconComp = getMacroIconComponent(group.matchedMacro?.icon);
+                          return (
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (group.matchedMacro) {
+                                  setSelectedMacroForIconEdit(group.matchedMacro);
+                                  setIsMacroIconModalOpen(true);
+                                }
+                              }}
+                              className={`h-20 rounded-xl border flex flex-col items-center justify-center relative group/iconcard cursor-pointer transition-all ${
+                                isSelected
+                                  ? 'bg-blue-100/60 border-blue-300 text-blue-700 shadow-inner'
+                                  : 'bg-slate-50/80 hover:bg-blue-50/60 border-slate-200/80 text-blue-600'
+                              }`}
+                              title="Clique para personalizar o ícone desta macroatividade neste projeto"
+                            >
+                              <IconComp size={32} className="stroke-[2.2] transition-transform group-hover/iconcard:scale-110" />
+                              <div className="mt-1 flex items-center gap-1 opacity-0 group-hover/iconcard:opacity-100 transition text-[9px] font-bold text-blue-700 bg-white/95 px-1.5 py-0.5 rounded shadow-2xs">
+                                <Pencil size={8} /> Personalizar
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   );
@@ -2785,15 +3139,123 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   </button>
                 </div>
 
-                {/* Sub-Tab 1: ATIVIDADES TABLE (Matching Image table) */}
+                {/* Sub-Tab 1: ATIVIDADES TABLE (Item 1: Registro Rápido & Item 3: Edição Direta) */}
                 {groupSubTab === 'atividades' && (
                   <div className="space-y-4">
+
+                    {/* BARRA DE REGISTRO RÁPIDO (Item 1: Enter salva, Ctrl+Enter pula linha) */}
+                    <div className="p-3.5 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-black uppercase text-slate-600 tracking-wider flex items-center gap-1">
+                            <Zap size={13} className="text-amber-500 fill-amber-500" /> Registro Rápido
+                          </span>
+                          <div className="flex items-center gap-1 bg-white p-0.5 rounded-xl border border-slate-200">
+                            {[
+                              { id: 'tarefa', label: 'Tarefa Rápida' },
+                              { id: 'nota', label: 'Nota' },
+                              { id: 'observacao', label: 'Observação Técnica' }
+                            ].map(t => (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => setQuickRegisterType(t.id as any)}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                                  quickRegisterType === t.id
+                                    ? 'bg-blue-600 text-white shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100'
+                                }`}
+                              >
+                                {t.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Se estiver em "Todos os Grupos", permite escolher a macroatividade de destino */}
+                        {isAllGroups && (
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <span className="text-[11px] font-bold text-slate-500">Destino:</span>
+                            <select
+                              value={quickRegisterMacroId || currentPhaseGroups[0]?.macroId}
+                              onChange={(e) => setQuickRegisterMacroId(e.target.value)}
+                              className="px-2.5 py-1 text-xs font-bold bg-white border border-slate-200 rounded-xl"
+                            >
+                              {currentPhaseGroups.map(g => (
+                                <option key={g.macroId} value={g.macroId}>
+                                  {g.number}. {g.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Text Input with Enter = Save, Ctrl+Enter = Newline */}
+                      <div className="flex items-start gap-2">
+                        <div className="flex-1 relative">
+                          <textarea
+                            ref={quickRegisterInputRef}
+                            value={quickRegisterText}
+                            onChange={(e) => setQuickRegisterText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                if (e.ctrlKey || e.metaKey) {
+                                  // Ctrl + Enter: Insert newline without saving
+                                  e.preventDefault();
+                                  const start = e.currentTarget.selectionStart;
+                                  const end = e.currentTarget.selectionEnd;
+                                  const newText = quickRegisterText.substring(0, start) + '\n' + quickRegisterText.substring(end);
+                                  setQuickRegisterText(newText);
+                                  setTimeout(() => {
+                                    if (quickRegisterInputRef.current) {
+                                      quickRegisterInputRef.current.selectionStart = quickRegisterInputRef.current.selectionEnd = start + 1;
+                                    }
+                                  }, 0);
+                                } else if (!e.shiftKey) {
+                                  // Enter alone: Save immediately
+                                  e.preventDefault();
+                                  handleQuickRegisterItem();
+                                }
+                              }
+                            }}
+                            rows={1}
+                            placeholder={
+                              quickRegisterType === 'tarefa'
+                                ? `Digite a nova microatividade/tarefa e pressione Enter para salvar...`
+                                : quickRegisterType === 'observacao'
+                                  ? `Digite a observação técnica e pressione Enter para salvar...`
+                                  : `Digite a nota rápida e pressione Enter para salvar...`
+                            }
+                            className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 resize-y min-h-[38px]"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleQuickRegisterItem()}
+                          disabled={!quickRegisterText.trim()}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-2xs shrink-0 flex items-center gap-1.5 h-[38px]"
+                        >
+                          <Plus size={14} /> Salvar
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 px-1">
+                        <span>
+                          Atalhos: <strong className="text-slate-700 font-bold">Enter</strong> salva imediatamente • <strong className="text-slate-700 font-bold">Ctrl + Enter</strong> insere nova linha
+                        </span>
+                        <span>
+                          Autor: <strong>{teamMembers[0]?.name || 'Bruna'}</strong>
+                        </span>
+                      </div>
+                    </div>
+
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="text-[11px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-150 pb-2">
                             <th className="py-2 px-3 w-12">#</th>
-                            <th className="py-2 px-3">ATIVIDADE</th>
+                            <th className="py-2 px-3">ATIVIDADE & OBSERVAÇÕES</th>
                             <th className="py-2 px-3">STATUS</th>
                             <th className="py-2 px-3">PRAZO</th>
                             <th className="py-2 px-3">RESPONSÁVEL</th>
@@ -2803,7 +3265,9 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-xs">
                           {activeGroup.microActivities.map((micro, mIdx) => {
-                            const code = `${activeGroup.number}.${mIdx + 1}`;
+                            const code = isAllGroups && (micro as any).groupNumber 
+                              ? `${(micro as any).groupNumber}.${mIdx + 1}` 
+                              : `${activeGroup.number}.${mIdx + 1}`;
                             const isReg = micro.generatesRegulatoryContent !== false;
 
                             return (
@@ -2811,39 +3275,172 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                                 key={micro.id} 
                                 className="hover:bg-slate-50/70 transition group"
                               >
-                                <td className="py-3 px-3 font-bold text-slate-500">
-                                  {code}
-                                </td>
-                                <td className="py-3 px-3">
-                                  <span className="font-bold text-slate-900 group-hover:text-blue-700 transition">
-                                    {micro.name}
-                                  </span>
-                                  {micro.observations && (
-                                    <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
-                                      {micro.observations}
-                                    </p>
+                                <td className="py-3 px-3 font-bold text-slate-500 whitespace-nowrap">
+                                  <span>{code}</span>
+                                  {isAllGroups && (micro as any).groupName && (
+                                    <span className="block text-[9px] text-indigo-600 font-extrabold truncate max-w-[70px]">
+                                      {(micro as any).groupName}
+                                    </span>
                                   )}
                                 </td>
+                                
+                                {/* ATIVIDADE & OBSERVAÇÕES (Item 3: Edição direta com 1 clique) */}
+                                <td className="py-3 px-3 min-w-[220px]">
+                                  {inlineEditing?.id === micro.id && inlineEditing?.field === 'name' ? (
+                                    <input
+                                      type="text"
+                                      defaultValue={micro.name}
+                                      autoFocus
+                                      onBlur={(e) => {
+                                        const val = e.target.value.trim();
+                                        if (val && val !== micro.name) {
+                                          handleUpdateMicroField(micro.id, 'name', val);
+                                        }
+                                        setInlineEditing(null);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.currentTarget.blur();
+                                        } else if (e.key === 'Escape') {
+                                          setInlineEditing(null);
+                                        }
+                                      }}
+                                      className="w-full px-2 py-1 text-xs font-bold border border-blue-400 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20"
+                                    />
+                                  ) : (
+                                    <div 
+                                      onClick={() => setInlineEditing({ id: micro.id, field: 'name' })}
+                                      className="cursor-pointer group/title flex items-center gap-1.5"
+                                      title="Clique para editar o título diretamente"
+                                    >
+                                      <span className="font-bold text-slate-900 group-hover/title:text-blue-700 transition">
+                                        {micro.name}
+                                      </span>
+                                      <Pencil size={11} className="text-slate-400 opacity-0 group-hover/title:opacity-100 transition shrink-0" />
+                                    </div>
+                                  )}
+
+                                  {/* Observações editáveis diretamente com 1 clique */}
+                                  {inlineEditing?.id === micro.id && inlineEditing?.field === 'observations' ? (
+                                    <div className="mt-1">
+                                      <textarea
+                                        defaultValue={micro.observations || ''}
+                                        autoFocus
+                                        rows={2}
+                                        onBlur={(e) => {
+                                          const val = e.target.value.trim();
+                                          if (val !== (micro.observations || '')) {
+                                            handleUpdateMicroField(micro.id, 'observations', val);
+                                          }
+                                          setInlineEditing(null);
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            if (e.ctrlKey) {
+                                              // allow newline
+                                            } else {
+                                              e.preventDefault();
+                                              e.currentTarget.blur();
+                                            }
+                                          } else if (e.key === 'Escape') {
+                                            setInlineEditing(null);
+                                          }
+                                        }}
+                                        placeholder="Digite as observações e pressione Enter para salvar..."
+                                        className="w-full px-2 py-1 text-[11px] border border-blue-400 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20"
+                                      />
+                                      <span className="text-[9px] text-slate-400 block mt-0.5">Enter salva • Ctrl+Enter insere nova linha</span>
+                                    </div>
+                                  ) : (
+                                    <div
+                                      onClick={() => setInlineEditing({ id: micro.id, field: 'observations' })}
+                                      className="cursor-pointer group/obs mt-0.5 flex items-center gap-1"
+                                      title="Clique para editar as observações diretamente"
+                                    >
+                                      <p className="text-[11px] text-slate-400 group-hover/obs:text-slate-700 transition line-clamp-1">
+                                        {micro.observations || <span className="italic text-slate-300 hover:text-blue-500">+ Adicionar observação...</span>}
+                                      </p>
+                                      <Pencil size={10} className="text-slate-300 opacity-0 group-hover/obs:opacity-100 transition shrink-0" />
+                                    </div>
+                                  )}
+                                </td>
+
+                                {/* STATUS (Item 3: Edição direta via dropdown inline) */}
                                 <td className="py-3 px-3 whitespace-nowrap">
-                                  {renderStatusBadge(micro.status)}
+                                  <select
+                                    value={micro.status}
+                                    onChange={(e) => handleUpdateMicroField(micro.id, 'status', e.target.value as MicroActivityStatus)}
+                                    className={`text-[11px] font-black rounded-xl px-2.5 py-1 border cursor-pointer outline-hidden transition ${
+                                      micro.status === 'Concluído e aprovado'
+                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                                        : micro.status === 'Em andamento'
+                                          ? 'bg-blue-50 text-blue-800 border-blue-300 hover:bg-blue-100'
+                                          : micro.status === 'Concluído com restrições'
+                                            ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                                    }`}
+                                    title="Clique para alterar status imediatamente"
+                                  >
+                                    <option value="Planejado">Planejado</option>
+                                    <option value="Em andamento">Em andamento</option>
+                                    <option value="Concluído e aprovado">Concluído e aprovado</option>
+                                    <option value="Concluído com restrições">Concluído c/ restrições</option>
+                                    <option value="Cancelado">Cancelado</option>
+                                  </select>
                                 </td>
-                                <td className="py-3 px-3 font-semibold text-slate-600 whitespace-nowrap">
-                                  {micro.dueDate ? micro.dueDate.split('-').reverse().join('/') : '—'}
-                                </td>
-                                <td className="py-3 px-3 font-bold text-slate-700 whitespace-nowrap">
-                                  {micro.assignee || 'Bruna'}
-                                </td>
+
+                                {/* PRAZO (Item 3: Edição direta com data picker inline) */}
                                 <td className="py-3 px-3 whitespace-nowrap">
-                                  <span className={`font-bold ${isReg ? 'text-emerald-600' : 'text-slate-400'}`}>
-                                    {isReg ? 'Sim' : 'Não'}
-                                  </span>
+                                  <input
+                                    type="date"
+                                    value={micro.dueDate || ''}
+                                    onChange={(e) => handleUpdateMicroField(micro.id, 'dueDate', e.target.value)}
+                                    className="text-xs font-semibold text-slate-700 bg-transparent hover:bg-slate-100 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-400 rounded-lg px-1.5 py-0.5 transition cursor-pointer"
+                                    title="Clique para alterar o prazo"
+                                  />
                                 </td>
+
+                                {/* RESPONSÁVEL (Item 3: Edição direta com select de membros inline) */}
+                                <td className="py-3 px-3 whitespace-nowrap">
+                                  <select
+                                    value={micro.assignee || 'Bruna'}
+                                    onChange={(e) => handleUpdateMicroField(micro.id, 'assignee', e.target.value)}
+                                    className="text-xs font-bold text-slate-800 bg-transparent hover:bg-slate-100 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-400 rounded-lg px-1.5 py-0.5 transition cursor-pointer"
+                                    title="Clique para atribuir responsável"
+                                  >
+                                    {teamMembers.map(m => (
+                                      <option key={m.id} value={m.name}>{m.name}</option>
+                                    ))}
+                                    {!teamMembers.some(m => m.name === micro.assignee) && micro.assignee && (
+                                      <option value={micro.assignee}>{micro.assignee}</option>
+                                    )}
+                                  </select>
+                                </td>
+
+                                {/* REGULATÓRIO (Item 5: Alternador com sincronização automática com Contribuições) */}
+                                <td className="py-3 px-3 whitespace-nowrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateMicroField(micro.id, 'generatesRegulatoryContent', !isReg)}
+                                    className={`px-2.5 py-1 rounded-full text-[11px] font-black transition cursor-pointer flex items-center gap-1 ${
+                                      isReg
+                                        ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                    }`}
+                                    title={isReg ? 'Gera contribuição regulatória (clique para desativar)' : 'Não gera contribuição (clique para ativar)'}
+                                  >
+                                    <span className={`w-1.5 h-1.5 rounded-full ${isReg ? 'bg-emerald-600' : 'bg-slate-400'}`} />
+                                    <span>{isReg ? 'Sim' : 'Não'}</span>
+                                  </button>
+                                </td>
+
+                                {/* AÇÕES */}
                                 <td className="py-3 px-3 text-right whitespace-nowrap">
                                   <div className="inline-flex items-center gap-1.5">
                                     <button
                                       onClick={() => handleOpenMicroDetails(micro)}
                                       className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition cursor-pointer"
-                                      title="Abrir detalhes"
+                                      title="Abrir detalhes completos"
                                     >
                                       <ExternalLink size={14} />
                                     </button>
@@ -3320,24 +3917,43 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Add note input */}
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={newDiscussionComment}
-                        onChange={e => setNewDiscussionComment(e.target.value)}
-                        placeholder="Adicionar nota ou comentário sobre o grupo..."
-                        className="flex-1 px-3.5 py-2 text-xs border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-blue-500/20"
-                      />
-                      <button
-                        onClick={() => {
-                          if (!newDiscussionComment.trim()) return;
-                          setNewDiscussionComment('');
-                        }}
-                        className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition cursor-pointer"
-                      >
-                        Comentar
-                      </button>
+                    {/* Add note input (Item 1: Enter salva imediatamente, Ctrl+Enter quebra linha) */}
+                    <div className="space-y-1.5">
+                      <div className="flex gap-2">
+                        <textarea
+                          value={newDiscussionComment}
+                          onChange={e => setNewDiscussionComment(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              if (e.ctrlKey || e.metaKey) {
+                                // Ctrl+Enter: Insert newline
+                                e.preventDefault();
+                                const start = e.currentTarget.selectionStart;
+                                const end = e.currentTarget.selectionEnd;
+                                const newText = newDiscussionComment.substring(0, start) + '\n' + newDiscussionComment.substring(end);
+                                setNewDiscussionComment(newText);
+                              } else if (!e.shiftKey) {
+                                // Enter alone: save immediately
+                                e.preventDefault();
+                                handleAddNewDiscussionComment();
+                              }
+                            }
+                          }}
+                          rows={1}
+                          placeholder="Adicionar nota ou comentário sobre o grupo... (Enter para salvar)"
+                          className="flex-1 px-3.5 py-2 text-xs border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 resize-y min-h-[38px]"
+                        />
+                        <button
+                          onClick={handleAddNewDiscussionComment}
+                          disabled={!newDiscussionComment.trim()}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-2xs shrink-0 flex items-center gap-1.5 h-[38px]"
+                        >
+                          <Send size={13} /> Comentar
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        Atalhos: <strong className="text-slate-600 font-bold">Enter</strong> salva • <strong className="text-slate-600 font-bold">Ctrl + Enter</strong> quebra linha
+                      </p>
                     </div>
                   </div>
                 )}
@@ -3716,40 +4332,30 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         />
       )}
 
-      {/* DECISION EDIT MODAL (Enriched for Item 2, 7) */}
+      {/* DECISION EDIT MODAL (Item 6: Interface Compacta com Configurações Adicionais Recolhidas) */}
       {isDecisionModalOpen && editingDecision && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-6 shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3 gap-3">
               <div>
-                <span className="text-[11px] font-black text-blue-600 uppercase tracking-wider">
-                  Configuração e Resposta da Decisão Estratégica
+                <span className="text-[11px] font-black text-blue-600 uppercase tracking-wider block">
+                  Decisão Estratégica • {activeGroup.name}
                 </span>
-                <h3 className="text-base font-black text-slate-900 leading-tight">
+                <h3 className="text-base font-black text-slate-900 leading-snug mt-0.5">
                   {editingDecision.question}
                 </h3>
               </div>
               <button 
                 onClick={() => setIsDecisionModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 cursor-pointer shrink-0"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="space-y-4 text-xs">
-              {/* Question text (editable) */}
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Pergunta / Decisão a ser respondida</label>
-                <input
-                  type="text"
-                  value={decisionFormQuestion}
-                  onChange={e => setDecisionFormQuestion(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500/20"
-                />
-              </div>
-
-              {/* Status */}
+            <div className="space-y-3.5 text-xs">
+              {/* 1. Status da Decisão (4 pills compactas) */}
               <div>
                 <label className="font-bold text-slate-700 block mb-1">Status da Decisão</label>
                 <div className="grid grid-cols-4 gap-2">
@@ -3758,15 +4364,15 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       key={st}
                       type="button"
                       onClick={() => setDecisionFormStatus(st)}
-                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                      className={`py-1.5 px-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
                         decisionFormStatus === st
                           ? st === 'Validado'
-                            ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
+                            ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs font-black'
                             : st === 'Decidido'
-                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs font-black'
                               : st === 'Em avaliação'
-                                ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                                : 'bg-amber-500 text-white border-amber-500 shadow-2xs'
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-2xs font-black'
+                                : 'bg-amber-500 text-white border-amber-500 shadow-2xs font-black'
                           : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                       }`}
                     >
@@ -3776,239 +4382,245 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 </div>
               </div>
 
-              {/* Regulatory Impact & Mandatory Toggles */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-slate-800">Possui impacto regulatório?</span>
-                    <p className="text-[10px] text-slate-400">Relevante para submissão à Anvisa</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setDecisionFormRegulatoryImpact(!decisionFormRegulatoryImpact)}
-                    className={`px-3 py-1 rounded-xl text-xs font-black transition cursor-pointer ${
-                      decisionFormRegulatoryImpact
-                        ? 'bg-blue-600 text-white shadow-2xs'
-                        : 'bg-slate-200 text-slate-600'
-                    }`}
-                  >
-                    {decisionFormRegulatoryImpact ? 'Sim' : 'Não'}
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-slate-800">Decisão obrigatória?</span>
-                    <p className="text-[10px] text-slate-400">Exigida para marco regulatório</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setDecisionFormMandatory(!decisionFormMandatory)}
-                    className={`px-3 py-1 rounded-xl text-xs font-black transition cursor-pointer ${
-                      decisionFormMandatory
-                        ? 'bg-emerald-600 text-white shadow-2xs'
-                        : 'bg-slate-200 text-slate-600'
-                    }`}
-                  >
-                    {decisionFormMandatory ? 'Sim' : 'Opcional'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Target Regulatory Field mapping */}
-              <div className="p-3 bg-blue-50/50 rounded-2xl border border-blue-200/70 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="font-black text-blue-950 flex items-center gap-1.5">
-                    <Database size={13} className="text-blue-600" />
-                    Campo de Destino na Base Regulatória
-                  </label>
-                  <span className="text-[10px] text-blue-700 font-bold">
-                    Alimenta automaticamente a tabela
-                  </span>
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div>
-                    <span className="text-[10px] text-slate-500 font-bold block mb-1">Selecionar entre os campos padrão:</span>
-                    <select
-                      value={decisionFormTargetFieldKey}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setDecisionFormTargetFieldKey(val);
-                        // Auto set label
-                        for (const grp of STANDARD_REGULATORY_GROUPS) {
-                          const f = grp.fields.find(field => field.key === val);
-                          if (f) {
-                            setDecisionFormTargetFieldLabel(f.label);
-                            break;
-                          }
-                        }
-                      }}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white font-semibold"
-                    >
-                      <option value="">-- Nenhum campo vinculado --</option>
-                      {STANDARD_REGULATORY_GROUPS.map(grp => (
-                        <optgroup key={grp.groupName} label={grp.groupName}>
-                          {grp.fields.map(f => (
-                            <option key={f.key} value={f.key}>
-                              [{f.key}] {f.label}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] text-slate-500 font-bold block mb-1">Ou criar/inserir identificador customizado:</span>
-                    <input
-                      type="text"
-                      value={decisionFormTargetFieldKey}
-                      onChange={e => {
-                        setDecisionFormTargetFieldKey(e.target.value);
-                        if (!decisionFormTargetFieldLabel) {
-                          setDecisionFormTargetFieldLabel(e.target.value);
-                        }
-                      }}
-                      placeholder="Ex: NOME_DA_VACINA"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono uppercase bg-white"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Response Type Selector */}
+              {/* 2. Resposta ou Decisão Tomada */}
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Tipo de Resposta Esperada</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { id: 'texto', label: 'Texto explicativo' },
-                    { id: 'link', label: 'Link / Documento' },
-                    { id: 'ambos', label: 'Texto e Link' }
-                  ].map(rt => (
-                    <button
-                      key={rt.id}
-                      type="button"
-                      onClick={() => setDecisionFormResponseType(rt.id as any)}
-                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
-                        decisionFormResponseType === rt.id
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                      }`}
-                    >
-                      {rt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Linked Regulatory Standards (Item 2) */}
-              <div>
-                <label className="font-bold text-slate-700 block mb-1 flex items-center justify-between">
-                  <span>Normas e Guias Regulatórios Vinculados</span>
-                  <span className="text-[10px] text-slate-400 font-normal">Reutiliza registros do módulo sem duplicação</span>
+                <label className="font-bold text-slate-700 block mb-1">
+                  Resposta ou Decisão Tomada <span className="text-red-500">*</span>
                 </label>
-                <div className="max-h-36 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                  {allAvailableStandards.map(std => {
-                    const isChecked = decisionFormLinkedStandards.includes(std.id);
-                    const displayName = std.name || `${std.code || ''} ${std.title || ''}`.trim();
-                    return (
-                      <label key={std.id} className="flex items-center gap-2 p-1.5 hover:bg-white rounded-lg cursor-pointer text-xs">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={e => {
-                            if (e.target.checked) {
-                              setDecisionFormLinkedStandards([...decisionFormLinkedStandards, std.id]);
-                            } else {
-                              setDecisionFormLinkedStandards(decisionFormLinkedStandards.filter(id => id !== std.id));
-                            }
-                          }}
-                          className="rounded text-blue-600 focus:ring-blue-500"
-                        />
-                        {std.code && <span className="font-bold text-slate-800 shrink-0">{std.code}</span>}
-                        <span className="text-slate-600 truncate">{displayName}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Decisão Tomada / Resposta */}
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Decisão Tomada / Resposta Validada</label>
                 <textarea
                   value={decisionFormAnswer}
                   onChange={e => setDecisionFormAnswer(e.target.value)}
+                  autoFocus
                   rows={3}
-                  placeholder="Descreva a decisão formal ou escolha técnica validada para o candidato vacinal..."
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+                  placeholder="Descreva de forma clara a decisão técnica validada ou resposta adotada para este marco..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                 />
               </div>
 
-              {/* Justificativa Técnica */}
+              {/* 3. Justificativa Técnica ou Científica */}
               <div>
                 <label className="font-bold text-slate-700 block mb-1">
-                  Justificativa Técnica Regulatória
+                  Justificativa Técnica ou Científica
                 </label>
                 <textarea
                   value={decisionFormJustification}
                   onChange={e => setDecisionFormJustification(e.target.value)}
                   rows={2}
-                  placeholder="Fundamentação técnica e científica que constará no dossiê de desenvolvimento..."
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+                  placeholder="Fundamentação técnico-científica, dados pré-clínicos ou referências da literatura que embasam esta escolha..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                 />
               </div>
 
-              {/* Responsável & Data */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Responsável</label>
-                  <select
-                    value={decisionFormResponsible}
-                    onChange={e => setDecisionFormResponsible(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white font-semibold"
-                  >
-                    {teamMembers.map(m => (
-                      <option key={m.id} value={m.name}>{m.name}</option>
-                    ))}
-                    {!teamMembers.some(m => m.name === decisionFormResponsible) && decisionFormResponsible && (
-                      <option value={decisionFormResponsible}>{decisionFormResponsible}</option>
-                    )}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Data da Decisão</label>
-                  <input
-                    type="date"
-                    value={decisionFormDate}
-                    onChange={e => setDecisionFormDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white font-semibold"
-                  />
-                </div>
-              </div>
-
-              {/* Link de Evidência / SharePoint */}
+              {/* 4. Link de Referência ou Evidência (Opcional) */}
               <div>
                 <label className="font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
-                  <LinkIcon size={14} className="text-blue-600" />
-                  Link de Acesso / Evidência (Não exige upload de anexo)
+                  <LinkIcon size={13} className="text-blue-600" />
+                  Link de Referência ou Evidência (Opcional)
                 </label>
                 <input
                   type="url"
                   value={decisionFormLink}
                   onChange={e => setDecisionFormLink(e.target.value)}
                   placeholder="https://ctvacinas.sharepoint.com/... ou link de artigo PubMed"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                 />
-                <span className="text-[11px] text-slate-400 mt-1 block">
-                  Permite preservar o sigilo de documentos armazenados em ambientes restritos registrando apenas o link seguro.
-                </span>
+              </div>
+
+              {/* 5. Configurações Adicionais (Recolhidas por padrão via Accordion) */}
+              <div className="pt-2 border-t border-slate-150">
+                <button
+                  type="button"
+                  onClick={() => setShowAdditionalSettings(!showAdditionalSettings)}
+                  className="w-full flex items-center justify-between p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-700 transition cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <Sliders size={13} className="text-blue-600" />
+                    <span>Configurações adicionais (herdados do plano-base)</span>
+                  </span>
+                  {showAdditionalSettings ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                </button>
+
+                {showAdditionalSettings && (
+                  <div className="mt-3 p-3.5 bg-slate-50/70 rounded-2xl border border-slate-200 space-y-3.5 animate-in fade-in duration-200">
+                    
+                    {/* Pergunta customizável */}
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Texto da Pergunta / Decisão</label>
+                      <input
+                        type="text"
+                        value={decisionFormQuestion}
+                        onChange={e => setDecisionFormQuestion(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </div>
+
+                    {/* Impacto Regulatório & Obrigatoriedade */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-2.5 bg-white rounded-xl border border-slate-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-slate-800 text-[11px]">Impacto regulatório:</span>
+                          <p className="text-[10px] text-slate-400">Relevante para a Anvisa</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setDecisionFormRegulatoryImpact(!decisionFormRegulatoryImpact)}
+                          className={`px-3 py-1 rounded-xl text-xs font-black transition cursor-pointer ${
+                            decisionFormRegulatoryImpact
+                              ? 'bg-blue-600 text-white shadow-2xs'
+                              : 'bg-slate-200 text-slate-600'
+                          }`}
+                        >
+                          {decisionFormRegulatoryImpact ? 'Sim' : 'Não'}
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-slate-800 text-[11px]">Decisão obrigatória:</span>
+                          <p className="text-[10px] text-slate-400">Exigida para marco</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setDecisionFormMandatory(!decisionFormMandatory)}
+                          className={`px-3 py-1 rounded-xl text-xs font-black transition cursor-pointer ${
+                            decisionFormMandatory
+                              ? 'bg-emerald-600 text-white shadow-2xs'
+                              : 'bg-slate-200 text-slate-600'
+                          }`}
+                        >
+                          {decisionFormMandatory ? 'Sim' : 'Opcional'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Campo de Destino na Base Regulatória */}
+                    <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-200/70 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="font-black text-blue-950 flex items-center gap-1.5 text-xs">
+                          <Database size={13} className="text-blue-600" />
+                          Campo de Destino na Base Regulatória
+                        </label>
+                        <span className="text-[10px] text-blue-700 font-bold">
+                          Alimenta automaticamente Docs
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-bold block mb-1">Selecionar entre campos padrão:</span>
+                          <select
+                            value={decisionFormTargetFieldKey}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setDecisionFormTargetFieldKey(val);
+                              for (const grp of STANDARD_REGULATORY_GROUPS) {
+                                const f = grp.fields.find(field => field.key === val);
+                                if (f) {
+                                  setDecisionFormTargetFieldLabel(f.label);
+                                  break;
+                                }
+                              }
+                            }}
+                            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold"
+                          >
+                            <option value="">-- Nenhum campo vinculado --</option>
+                            {STANDARD_REGULATORY_GROUPS.map(grp => (
+                              <optgroup key={grp.groupName} label={grp.groupName}>
+                                {grp.fields.map(f => (
+                                  <option key={f.key} value={f.key}>
+                                    [{f.key}] {f.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] text-slate-500 font-bold block mb-1">Ou chave customizada:</span>
+                          <input
+                            type="text"
+                            value={decisionFormTargetFieldKey}
+                            onChange={e => {
+                              setDecisionFormTargetFieldKey(e.target.value);
+                              if (!decisionFormTargetFieldLabel) {
+                                setDecisionFormTargetFieldLabel(e.target.value);
+                              }
+                            }}
+                            placeholder="Ex: NOME_DA_VACINA"
+                            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs font-mono uppercase bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Responsável & Data */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1 text-[11px]">Responsável</label>
+                        <select
+                          value={decisionFormResponsible}
+                          onChange={e => setDecisionFormResponsible(e.target.value)}
+                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold"
+                        >
+                          {teamMembers.map(m => (
+                            <option key={m.id} value={m.name}>{m.name}</option>
+                          ))}
+                          {!teamMembers.some(m => m.name === decisionFormResponsible) && decisionFormResponsible && (
+                            <option value={decisionFormResponsible}>{decisionFormResponsible}</option>
+                          )}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1 text-[11px]">Data da Decisão</label>
+                        <input
+                          type="date"
+                          value={decisionFormDate}
+                          onChange={e => setDecisionFormDate(e.target.value)}
+                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-white font-semibold"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Normas Vinculadas */}
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1 text-[11px]">
+                        Normas e Guias Vinculados
+                      </label>
+                      <div className="max-h-28 overflow-y-auto p-2 bg-white rounded-xl border border-slate-200 space-y-1">
+                        {allAvailableStandards.map(std => {
+                          const isChecked = decisionFormLinkedStandards.includes(std.id);
+                          const displayName = std.name || `${std.code || ''} ${std.title || ''}`.trim();
+                          return (
+                            <label key={std.id} className="flex items-center gap-2 p-1 hover:bg-slate-50 rounded-lg cursor-pointer text-xs">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={e => {
+                                  if (e.target.checked) {
+                                    setDecisionFormLinkedStandards([...decisionFormLinkedStandards, std.id]);
+                                  } else {
+                                    setDecisionFormLinkedStandards(decisionFormLinkedStandards.filter(id => id !== std.id));
+                                  }
+                                }}
+                                className="rounded text-blue-600 focus:ring-blue-500"
+                              />
+                              {std.code && <span className="font-bold text-slate-800 shrink-0">{std.code}</span>}
+                              <span className="text-slate-600 truncate">{displayName}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setIsDecisionModalOpen(false)}
@@ -4021,7 +4633,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 onClick={handleSaveDecisionForm}
                 className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
-                <Check size={14} /> Salvar e Alimentar Base Regulatória
+                <Check size={14} /> Salvar Decisão
               </button>
             </div>
           </div>
