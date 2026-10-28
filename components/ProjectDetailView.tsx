@@ -23,6 +23,7 @@ import {
   CheckCircle,
   HelpCircle,
   AlertTriangle,
+  Compass,
   Link as LinkIcon,
   Plus,
   BookOpen,
@@ -487,8 +488,15 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   meetings = [],
   tasks = []
 }) => {
-  // Top view tab state (Renumbered: 1. Visão Geral, 2. Próximas Ações, 3. Histórico, 4. Contribuições, 5. Docs)
-  const [activeTopTab, setActiveTopTab] = useState<'visao_geral' | 'proximas_acoes' | 'historico' | 'contribuicoes' | 'docs' | 'estrutura' | 'orientacao'>('visao_geral');
+  // Top view tab state (3 Main Project Sections: 1. Projeto, 2. Validação Regulatória, 3. Base Regulatória e Termos)
+  const [activeTopTab, setActiveTopTab] = useState<'projeto' | 'validacao' | 'base_termos' | 'visao_geral' | 'contribuicoes' | 'docs' | 'proximas_acoes' | 'historico'>('projeto');
+
+  // Sub-section inside "1. Projeto" (Jornada & Atividades | Próximas Ações | Histórico do Projeto)
+  const [projetoSubSection, setProjetoSubSection] = useState<'jornada' | 'proximas_acoes' | 'historico'>('jornada');
+
+  const isProjetoTab = activeTopTab === 'projeto' || activeTopTab === 'visao_geral' || activeTopTab === 'proximas_acoes' || activeTopTab === 'historico';
+  const isValidacaoTab = activeTopTab === 'validacao' || activeTopTab === 'contribuicoes';
+  const isBaseTermosTab = activeTopTab === 'base_termos' || activeTopTab === 'docs';
 
   // Phases deduplicated list respecting exact plan phases and ordering
   const phasesList = useMemo(() => {
@@ -673,6 +681,13 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const [inlineNewTermKey, setInlineNewTermKey] = useState('');
   const [inlineNewTermLabel, setInlineNewTermLabel] = useState('');
   const [inlineNewTermType, setInlineNewTermType] = useState<'texto' | 'link' | 'ambos'>('ambos');
+
+  // Check if a value already exists for the selected term in this project (Requirement 4)
+  const existingValForSelectedTerm = useMemo(() => {
+    if (!reviewTermKey) return '';
+    const item = (project.regulatoryDatabase || []).find(r => r.key === reviewTermKey || r.fieldKey === reviewTermKey);
+    return (item?.valueText || item?.value || '').trim();
+  }, [project.regulatoryDatabase, reviewTermKey]);
 
   // Unified Regulatory Validation Queue: dynamically pulls from microactivities, decisions, and contributions (Item 3)
   const unifiedValidationQueue = useMemo(() => {
@@ -1909,7 +1924,19 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       let previousVal = '';
       if (existingDbIdx >= 0) {
         const oldRec = updatedRegDb[existingDbIdx];
-        previousVal = oldRec.valueText || oldRec.value || '';
+        previousVal = (oldRec.valueText || oldRec.value || '').trim();
+        const newVal = (reviewTextValue || '').trim();
+
+        // Requirement 4: Confirmation before replacing existing term value
+        if (previousVal && newVal && previousVal !== newVal) {
+          const userConfirmed = window.confirm(
+            `Este termo já possui o valor "${previousVal}". Deseja substituí-lo pelo novo valor?`
+          );
+          if (!userConfirmed) {
+            return;
+          }
+        }
+
         const historyList = oldRec.history || [];
         
         updatedRegDb[existingDbIdx] = {
@@ -2161,6 +2188,39 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     setSelectedUnifiedItem(null);
   };
 
+  // Requirement 3: Navigate from validation queue to original activity, decision or meeting
+  const handleNavigateToOrigin = (item: typeof unifiedValidationQueue[0]) => {
+    setActiveTopTab('projeto');
+    setProjetoSubSection('jornada');
+    if (item.phase) {
+      setSelectedPhase(normalizePhaseName(item.phase));
+    }
+    if (item.macroName) {
+      const gIdx = currentPhaseGroups.findIndex(g => 
+        g.name.toLowerCase().includes(item.macroName.toLowerCase()) || 
+        item.macroName.toLowerCase().includes(g.name.toLowerCase())
+      );
+      if (gIdx >= 0) {
+        setSelectedGroupIndex(gIdx);
+      }
+    }
+    if (item.originType === 'decisao') {
+      setGroupSubTab('decisoes');
+    } else if (item.originType === 'atividade') {
+      setGroupSubTab('atividades');
+      if (item.microId) {
+        const foundMic = activeGroup.microActivities.find(m => m.id === item.microId);
+        if (foundMic) handleOpenMicroDetails(foundMic);
+      }
+    } else if (item.originType === 'contribuicao') {
+      const foundM = (linkedMeetings || []).find(m => 
+        m.title.toLowerCase().includes(item.title.toLowerCase()) ||
+        item.title.toLowerCase().includes(m.title.toLowerCase())
+      );
+      if (foundM) setSelectedMeetingForModal(foundM);
+    }
+  };
+
   // Item 4: Add / Edit Regulatory Term Definition (Central Catalog)
   const handleSaveRegulatoryTerm = () => {
     const rawKey = termFormKey.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
@@ -2308,13 +2368,13 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         `${stats.regulatoryProgress}%`,
         ...activeOnlyTerms.map(t => {
           const rec = (project.regulatoryDatabase || []).find(r => r.key === t.key || r.fieldKey === t.key);
+          const txt = (rec?.valueText || rec?.value || '').trim();
           if (rec?.status === 'validado') {
-            const txt = rec.valueText || rec.value || '';
-            const link = rec.valueLink ? ` (Link: ${rec.valueLink})` : '';
-            return `[VALIDADO] ${txt}${link}`;
+            const link = rec.valueLink ? ` (${rec.valueLink})` : '';
+            return `${txt}${link}`.trim() || '—';
           }
           if (rec?.status === 'Em andamento' || rec?.status === 'em análise' || rec?.status === 'Aguardando validação') {
-            return `[EM VALIDAÇÃO] ${rec.valueText || ''}`;
+            return txt || 'Em validação';
           }
           return '—';
         })
@@ -2654,81 +2714,53 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
 
         {/* Top Right Buttons & Tab Pills */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Top View Navigation Tabs (Item 2 & 3: Visão Geral, Próximas Ações, Histórico, Validação Regulatória, Base Regulatória & Termos) */}
-          <div className="hidden xl:flex items-center gap-1 bg-slate-100/90 p-1 rounded-full border border-slate-200/80 mr-2">
+          {/* Top View Navigation Tabs (3 Main Sections: 1. Projeto, 2. Validação Regulatória, 3. Base Regulatória e Termos) */}
+          <div className="hidden lg:flex items-center gap-1.5 bg-slate-100/90 p-1.5 rounded-full border border-slate-200/80 mr-2">
             <button
-              onClick={() => setActiveTopTab('visao_geral')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTopTab === 'visao_geral'
+              onClick={() => setActiveTopTab('projeto')}
+              className={`px-4 py-2 rounded-full text-xs font-black transition-all cursor-pointer flex items-center gap-2 ${
+                isProjetoTab
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
-                activeTopTab === 'visao_geral' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                isProjetoTab ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
               }`}>1</span>
-              Visão Geral
+              <span>Projeto</span>
             </button>
 
             <button
-              onClick={() => setActiveTopTab('proximas_acoes')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTopTab === 'proximas_acoes'
+              onClick={() => setActiveTopTab('validacao')}
+              className={`px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                isValidacaoTab
                   ? 'bg-blue-600 text-white shadow-xs font-black'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
-                activeTopTab === 'proximas_acoes' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                isValidacaoTab ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
               }`}>2</span>
-              Próximas Ações
-            </button>
-
-            <button
-              onClick={() => setActiveTopTab('historico')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTopTab === 'historico'
-                  ? 'bg-blue-600 text-white shadow-xs font-black'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
-                activeTopTab === 'historico' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
-              }`}>3</span>
-              Histórico
-            </button>
-
-            <button
-              onClick={() => setActiveTopTab('contribuicoes')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTopTab === 'contribuicoes'
-                  ? 'bg-blue-600 text-white shadow-xs font-black'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
-                activeTopTab === 'contribuicoes' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
-              }`}>4</span>
               <span>Validação Regulatória</span>
               {totalPendingValidation > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-white animate-pulse">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white animate-pulse">
                   {totalPendingValidation}
                 </span>
               )}
             </button>
 
             <button
-              onClick={() => setActiveTopTab('docs')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTopTab === 'docs'
+              onClick={() => setActiveTopTab('base_termos')}
+              className={`px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                isBaseTermosTab
                   ? 'bg-blue-600 text-white shadow-xs font-black'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
-                activeTopTab === 'docs' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
-              }`}>5</span>
-              <span>Base Regulatória & Termos</span>
+                isBaseTermosTab ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+              }`}>3</span>
+              <span>Base Regulatória e Termos</span>
             </button>
           </div>
 
@@ -2751,31 +2783,34 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       </div>
 
       {/* Top Tabs on smaller screens */}
-      <div className="flex xl:hidden overflow-x-auto pb-2 gap-1.5 no-scrollbar">
+      <div className="flex lg:hidden overflow-x-auto pb-2 gap-1.5 no-scrollbar">
         {[
-          { id: 'visao_geral', num: '1', label: 'Visão Geral' },
-          { id: 'proximas_acoes', num: '2', label: 'Próximas Ações' },
-          { id: 'historico', num: '3', label: 'Histórico' },
-          { id: 'contribuicoes', num: '4', label: 'Validação Regulatória', badge: totalPendingValidation },
-          { id: 'docs', num: '5', label: 'Base Regulatória & Termos' }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTopTab(tab.id as any)}
-            className={`whitespace-nowrap px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeTopTab === tab.id
-                ? 'bg-blue-600 text-white shadow-xs font-black'
-                : 'bg-white border border-slate-200 text-slate-600'
-            }`}
-          >
-            <span>{tab.num}.</span> {tab.label}
-            {tab.badge && tab.badge > 0 ? (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-white ml-0.5">
-                {tab.badge}
-              </span>
-            ) : null}
-          </button>
-        ))}
+          { id: 'projeto', num: '1', label: 'Projeto' },
+          { id: 'validacao', num: '2', label: 'Validação Regulatória', badge: totalPendingValidation },
+          { id: 'base_termos', num: '3', label: 'Base Regulatória e Termos' }
+        ].map(tab => {
+          const isActive = (tab.id === 'projeto' && isProjetoTab) || 
+                           (tab.id === 'validacao' && isValidacaoTab) || 
+                           (tab.id === 'base_termos' && isBaseTermosTab);
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTopTab(tab.id as any)}
+              className={`whitespace-nowrap px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                isActive
+                  ? 'bg-blue-600 text-white shadow-xs font-black'
+                  : 'bg-white border border-slate-200 text-slate-600'
+              }`}
+            >
+              <span>{tab.num}.</span> {tab.label}
+              {tab.badge && tab.badge > 0 ? (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-white ml-0.5">
+                  {tab.badge}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
       </div>
 
       {/* 2. TOP KPI STAT CARDS (Item 1: Progresso Operacional baseado em microatividades concluídas vs Progresso Regulatório) */}
@@ -2872,41 +2907,62 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       </div>
 
-      {/* Conditional rendering for other Top Tabs */}
-      {activeTopTab === 'estrutura' && (
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-            <div>
-              <h2 className="text-lg font-black text-slate-900">Estrutura Completa do Projeto</h2>
-              <p className="text-xs text-slate-500">Árvore hierárquica de Fases, Grupos de Atividades e Microatividades</p>
-            </div>
+
+
+      {/* 2.5 BARRA DE SUB-SEÇÃO INTERNA DO PROJETO (Jornada & Atividades | Próximas Ações | Histórico & Reuniões) */}
+      {isProjetoTab && (
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200/90 shadow-2xs">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setProjetoSubSection('jornada')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                projetoSubSection === 'jornada'
+                  ? 'bg-slate-900 text-white font-black shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <Layers size={13} />
+              <span>Jornada & Atividades</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setProjetoSubSection('proximas_acoes')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                projetoSubSection === 'proximas_acoes'
+                  ? 'bg-slate-900 text-white font-black shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <Clock size={13} />
+              <span>Próximas Ações & Prazos</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setProjetoSubSection('historico')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                projetoSubSection === 'historico'
+                  ? 'bg-slate-900 text-white font-black shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <HistoryIcon size={13} />
+              <span>Histórico & Reuniões</span>
+            </button>
           </div>
-          <div className="space-y-4">
-            {phasesList.map((phase, pIdx) => {
-              const normP = normalizePhaseName(phase).toLowerCase();
-              const macrosInPhase = (project.macroActivities || []).filter(m => normalizePhaseName(m.phase || '').toLowerCase() === normP);
-              return (
-                <div key={phase} className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-sm text-slate-800">{pIdx + 1}. {phase}</span>
-                    <span className="text-xs font-bold text-blue-600">{phaseProgressMap[phase] || 0}% concluído</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 pt-2">
-                    {macrosInPhase.map(m => (
-                      <div key={m.id} className="p-3 bg-white rounded-xl border border-slate-200 text-xs">
-                        <p className="font-bold text-slate-900">{m.name}</p>
-                        <p className="text-[11px] text-slate-400 mt-1">{(m.microActivities || []).length} microatividades</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 pr-2">
+            <span>Fase ativa:</span>
+            <span className="font-black text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
+              {selectedPhase}
+            </span>
           </div>
         </div>
       )}
 
-      {activeTopTab === 'proximas_acoes' && (
+      {(activeTopTab === 'proximas_acoes' || (isProjetoTab && projetoSubSection === 'proximas_acoes')) && (
         <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-5">
           <div className="border-b border-slate-100 pb-4">
             <h2 className="text-lg font-black text-slate-900">Próximas Ações e Prazos do Projeto</h2>
@@ -2938,7 +2994,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       )}
 
       {/* ABA HISTÓRICO - REGISTRO DO QUE ACONTECEU (Item 8) */}
-      {activeTopTab === 'historico' && (
+      {(activeTopTab === 'historico' || (isProjetoTab && projetoSubSection === 'historico')) && (
         <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
@@ -3128,8 +3184,8 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       )}
 
-      {/* ABA 4: CENTRAL DE VALIDAÇÃO REGULATÓRIA (Item 3 & Item 5: Unifica microatividades, decisões e contribuições) */}
-      {activeTopTab === 'contribuicoes' && (
+      {/* SEÇÃO 2: CENTRAL DE VALIDAÇÃO REGULATÓRIA (Fila unificada de microatividades, decisões e contribuições) */}
+      {isValidacaoTab && (
         <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
@@ -3307,6 +3363,15 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                         )}
 
                         <button
+                          type="button"
+                          onClick={() => handleNavigateToOrigin(item)}
+                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700 flex items-center gap-1 shadow-2xs cursor-pointer transition"
+                          title="Navegar diretamente para a atividade, decisão ou reunião de origem"
+                        >
+                          <Compass size={12} className="text-blue-600" /> Ir para origem
+                        </button>
+
+                        <button
                           onClick={() => {
                             setSelectedUnifiedItem(item);
                             setReviewAction(item.currentStatus === 'validada' ? 'aprovar' : (item.currentStatus === 'descartada' ? 'descartar' : 'aprovar'));
@@ -3365,8 +3430,8 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       )}
 
-      {/* ABA 5: BASE REGULATÓRIA & CADASTRO DE TERMOS (Item 4 & Item 6) */}
-      {activeTopTab === 'docs' && (
+      {/* SEÇÃO 3: BASE REGULATÓRIA & CADASTRO DE TERMOS (Matriz Consolidada e Catálogo) */}
+      {isBaseTermosTab && (
         <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-6">
           {/* Sub-Tabs: Matriz Consolidada | Detalhes da Base | Cadastro Central de Termos */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -3467,15 +3532,17 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                         const rec = (project.regulatoryDatabase || []).find(r => r.key === term.key || r.fieldKey === term.key);
                         const isVal = rec?.status === 'validado';
                         const isPend = rec?.status === 'Em andamento' || rec?.status === 'em análise' || rec?.status === 'Aguardando validação';
+                        const rawVal = (rec?.valueText || rec?.value || '').trim();
+                        const cleanVal = rawVal.replace(/^\[(?:Validado|VALIDADO)\]\s*/i, '');
 
-                        if (isVal && (rec.valueText || rec.value)) {
+                        if (isVal && cleanVal) {
                           return (
                             <td key={term.key} className="py-3 px-4 border-r border-slate-100 bg-emerald-50/40">
                               <div className="space-y-1">
-                                <div className="flex items-center gap-1 text-emerald-800 font-bold">
+                                <div className="flex items-center gap-1.5 text-emerald-800 font-bold">
                                   <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
-                                  <span className="truncate max-w-[190px]" title={rec.valueText || rec.value}>
-                                    {rec.valueText || rec.value}
+                                  <span className="truncate max-w-[190px]" title={cleanVal}>
+                                    {cleanVal}
                                   </span>
                                 </div>
                                 {rec.valueLink && (
@@ -3494,10 +3561,11 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                         }
 
                         if (isPend) {
+                          const displayPendVal = cleanVal || 'Em validação';
                           return (
                             <td key={term.key} className="py-3 px-4 border-r border-slate-100 bg-amber-50/40">
                               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 flex items-center gap-1 w-fit">
-                                <Clock size={11} /> ⏳ Em validação
+                                <Clock size={11} /> ⏳ {displayPendVal}
                               </span>
                             </td>
                           );
@@ -3726,8 +3794,8 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       )}
 
-      {/* 3. MAIN WORKSPACE (Active by default: 1. Visão Geral) */}
-      {activeTopTab === 'visao_geral' && (
+      {/* SEÇÃO 1: WORKSPACE DO PROJETO - JORNADA & ATIVIDADES */}
+      {(isProjetoTab && projetoSubSection === 'jornada') && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* LEFT SIDEBAR (FASES + GRUPOS DE ATIVIDADES) - lg:col-span-3 */}
@@ -4955,29 +5023,37 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   </div>
                 )}
 
-                {/* Sub-Tab 5: DISCUSSÕES */}
+                {/* Sub-Tab 5: DISCUSSÕES E NOTAS DO GRUPO */}
                 {groupSubTab === 'discussoes' && (
                   <div className="space-y-4">
                     <div className="space-y-3">
-                      <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-900">Bruna</span>
-                          <span className="text-[10px] text-slate-400">Ontem às 14:30</span>
-                        </div>
-                        <p className="text-slate-600">
-                          Ajustamos a especificação de pureza por SEC-HPLC para manter limite mínimo de 95% para os lotes pré-clínicos.
-                        </p>
-                      </div>
+                      {(() => {
+                        const notesForThisGroup = (project.historyTimeline || []).filter(h => 
+                          (h.title && h.title.includes(activeGroup.name)) ||
+                          h.refId === activeGroup.macroId ||
+                          (h.eventType === 'outro' && h.title && h.title.startsWith('Nota'))
+                        );
 
-                      <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-900">Helton</span>
-                          <span className="text-[10px] text-slate-400">12/08/2025 às 10:15</span>
-                        </div>
-                        <p className="text-slate-600">
-                          Os dados de caracterização foram incluídos na pauta da reunião semanal com a coordenação regulatória.
-                        </p>
-                      </div>
+                        if (notesForThisGroup.length === 0) {
+                          return (
+                            <div className="p-8 text-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                              <p className="text-xs text-slate-400 font-medium">
+                                Nenhuma nota ou discussão registrada neste grupo ainda. Utilize o campo abaixo para adicionar anotações exclusivas deste projeto.
+                              </p>
+                            </div>
+                          );
+                        }
+
+                        return notesForThisGroup.map(note => (
+                          <div key={note.id} className="p-3.5 rounded-2xl bg-white border border-slate-200 text-xs space-y-1 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-900">{note.author}</span>
+                              <span className="text-[10px] text-slate-400 font-medium">{note.date}</span>
+                            </div>
+                            <p className="text-slate-600 whitespace-pre-wrap">{note.description}</p>
+                          </div>
+                        ));
+                      })()}
                     </div>
 
                     {/* Add note input (Item 1: Enter salva imediatamente, Ctrl+Enter quebra linha) */}
@@ -6648,6 +6724,19 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       </option>
                     ))}
                   </select>
+
+                  {/* Warning if term already has a value in this project (Requirement 4) */}
+                  {reviewAction === 'aprovar' && existingValForSelectedTerm && (
+                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-300 text-xs text-amber-900 flex items-start gap-2">
+                      <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold">Aviso de substituição de valor:</p>
+                        <p className="text-[11px] mt-0.5">
+                          Este termo já possui o valor registrado: <strong className="font-mono">"{existingValForSelectedTerm}"</strong>. Ao aprovar, o sistema solicitará sua confirmação expressa antes de substituir, e a versão anterior será preservada no histórico de auditoria.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Validated Value & Link Inputs */}
                   <div className="space-y-2 pt-1">
