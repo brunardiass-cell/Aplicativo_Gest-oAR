@@ -540,6 +540,9 @@ export interface MicroActivity {
   isRetroactive?: boolean;
   documentLink?: string;
   templateType?: string;
+  regulatoryStatus?: 'pendente' | 'validada' | 'ajustes' | 'descartada';
+  regulatoryLinkedFieldKey?: string;
+  regulatoryJustification?: string;
 }
 
 export interface MacroActivity {
@@ -640,12 +643,26 @@ export interface ProjectContributionItem {
   targetFieldKey?: string;
   targetRegulatoryFields?: string[];
   justification?: string;
-  status: 'Pendente de Triagem' | 'Validado para a Base Regulatória' | 'Descartado' | 'pendente' | 'em_analise' | 'validada' | 'descartada';
+  status: 'Pendente de Triagem' | 'Validado para a Base Regulatória' | 'Descartado' | 'pendente' | 'em_analise' | 'validada' | 'descartada' | 'ajustes' | 'em_ajuste';
   discardReason?: string;
   evaluatedBy?: string;
   evaluatedAt?: string;
   validatedAt?: string;
   validatedBy?: string;
+}
+
+export interface RegulatoryTermDefinition {
+  id: string;
+  key: string; // Ex: 'NOME_VACINA', 'NOME_IFA', 'INDICACAO'
+  label: string; // Ex: 'Nome da Vacina e Codinome'
+  description: string;
+  groupName: string;
+  valueType: 'texto' | 'link' | 'ambos';
+  isMandatory: boolean;
+  isActive: boolean;
+  phase?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ProjectHistoryEvent {
@@ -686,6 +703,7 @@ export interface Project {
   description?: string;
   dossierChapters?: DDCMChapterDef[];
   regulatoryDatabase?: RegulatoryRecordItem[];
+  regulatoryTerms?: RegulatoryTermDefinition[];
   contributions?: ProjectContributionItem[];
   historyTimeline?: ProjectHistoryEvent[];
 }

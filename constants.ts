@@ -1,5 +1,5 @@
 
-import { ActivityPlanTemplate, TeamMember, AppUser, RegulatoryStandard, Meeting, TaskGroup } from './types';
+import { ActivityPlanTemplate, TeamMember, AppUser, RegulatoryStandard, Meeting, TaskGroup, RegulatoryTermDefinition } from './types';
 import { 
   FlaskConical, 
   ShieldCheck, 
@@ -1165,6 +1165,22 @@ export const STANDARD_REGULATORY_GROUPS: RegulatoryGroupDefinition[] = [
     ]
   }
 ];
+
+export const INITIAL_REGULATORY_TERMS: RegulatoryTermDefinition[] = STANDARD_REGULATORY_GROUPS.flatMap((group) =>
+  group.fields.map((field) => ({
+    id: `term_${field.key.toLowerCase()}`,
+    key: field.key,
+    label: field.label,
+    description: `Termo técnico-regulatório do grupo "${group.groupName}" (${field.phase}).`,
+    groupName: group.groupName,
+    valueType: 'ambos' as const,
+    isMandatory: field.isMandatory ?? false,
+    isActive: true,
+    phase: field.phase,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z'
+  }))
+);
 
 export const DEFAULT_REGULATORY_SUBJECTS = [
   {
