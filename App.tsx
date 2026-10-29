@@ -3,7 +3,7 @@
 // Versão 1.0.1 - Sincronização operacional e gestão de prazos
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity, RegulatoryEvidence, MacroActivityConfig, RegulatoryInfoItem, RepeatableRecord, RegulatoryNarrative, RegulatoryDocument, Meeting, DossierContribution } from './types';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity, RegulatoryEvidence, MacroActivityConfig, RegulatoryInfoItem, RepeatableRecord, RegulatoryNarrative, RegulatoryDocument, Meeting, DossierContribution, ProjectContributionItem } from './types';
 import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES, DEFAULT_MEETINGS, DEFAULT_ACTIVITY_PLANS, isNameMatch, getAccountEmails } from './constants';
 import { MeetingsManager } from './components/MeetingsManager';
 import UserSelectionView from './components/UserSelectionView';
@@ -1440,6 +1440,53 @@ const App: React.FC = () => {
     }
 
     setTasks(prev => { setDataDirty(); return isEditing ? prev.map(t => t.id === taskToSave.id ? taskToSave : t) : [taskToSave, ...prev]; });
+
+    // Encaminhar atividade com impacto/contribuição regulatória para a Central de Validação do Projeto (Item 1)
+    if (taskToSave.isRegulatoryContribution || taskToSave.generatesRegulatoryContent) {
+      const projNameOrId = taskToSave.project;
+      if (projNameOrId && projNameOrId !== 'Geral') {
+        setProjects(prevProjects => {
+          const targetProj = prevProjects.find(p => 
+            p.id === projNameOrId || 
+            p.name === projNameOrId || 
+            p.name.toLowerCase().trim() === projNameOrId.toLowerCase().trim()
+          );
+
+          if (!targetProj) return prevProjects;
+
+          const contribId = `contrib_task_${taskToSave.id}`;
+          const currentContribs = targetProj.contributions || [];
+          const existingIdx = currentContribs.findIndex(c => c.id === contribId || c.originDetails === taskToSave.id);
+
+          const contribItem: ProjectContributionItem = {
+            id: contribId,
+            projectId: targetProj.id,
+            title: `Atividade: ${taskToSave.activity}`,
+            origin: 'Atividade',
+            originDetails: taskToSave.id,
+            source: 'atividade',
+            content: (taskToSave.description || taskToSave.activity || '').trim(),
+            evidenceLink: taskToSave.fileLocation || undefined,
+            date: taskToSave.completionDate || taskToSave.requestDate || new Date().toISOString().split('T')[0],
+            createdAt: existingIdx >= 0 ? currentContribs[existingIdx].createdAt : new Date().toISOString(),
+            author: taskToSave.projectLead || selectedProfile?.name || 'Equipe',
+            status: existingIdx >= 0 ? currentContribs[existingIdx].status : 'pendente',
+            linkedPhase: targetProj.phases?.[0] || 'Descoberta / Prova de Conceito',
+            justification: existingIdx >= 0 ? currentContribs[existingIdx].justification : taskToSave.regulatoryNotes
+          };
+
+          let updatedContribs: ProjectContributionItem[];
+          if (existingIdx >= 0) {
+            updatedContribs = currentContribs.map((c, idx) => idx === existingIdx ? { ...c, ...contribItem, status: c.status } : c);
+          } else {
+            updatedContribs = [contribItem, ...currentContribs];
+          }
+
+          return prevProjects.map(p => p.id === targetProj.id ? { ...p, contributions: updatedContribs } : p);
+        });
+      }
+    }
+
     setIsModalOpen(false);
     setSelectedTask(null);
   };
@@ -2353,7 +2400,82 @@ const App: React.FC = () => {
             teamMembers={teamMembers}
             regulatoryStandards={regulatoryStandards}
             regulatorySubjects={regulatorySubjects}
-            onUpdateMeetings={(m) => { setMeetings(m); setDataDirty(); }}
+            onUpdateMeetings={(mList) => { 
+              setMeetings(mList); 
+              setDataDirty(); 
+
+              // Encaminhar pautas com impacto regulatório para a Central de Validação do Projeto (Item 1)
+              setProjects(prevProjects => {
+                let anyProjectChanged = false;
+                const nextProjects = prevProjects.map(proj => {
+                  const linkedMeetings = mList.filter(m => 
+                    m.projectId === proj.id || 
+                    m.projectName === proj.name || 
+                    (m.projectName && proj.name && m.projectName.toLowerCase().trim() === proj.name.toLowerCase().trim())
+                  );
+
+                  if (linkedMeetings.length === 0) return proj;
+
+                  let projContribs = [...(proj.contributions || [])];
+                  let projChanged = false;
+
+                  linkedMeetings.forEach(mtg => {
+                    (mtg.agendaItems || []).forEach(ag => {
+                      if (ag.hasRegulatoryImpact) {
+                        const contribId = `contrib_agenda_${ag.id}`;
+                        const existingIdx = projContribs.findIndex(c => c.id === contribId || c.originDetails === ag.id);
+
+                        const contentText = [
+                          ag.decisions ? `Decisão: ${ag.decisions}` : '',
+                          ag.description ? `Pauta: ${ag.description}` : '',
+                          ag.discussions ? `Discussão: ${ag.discussions}` : '',
+                          ag.regulatoryImpactDetails ? `Detalhes Regulatórios: ${ag.regulatoryImpactDetails}` : ''
+                        ].filter(Boolean).join('\n\n') || `Pauta de reunião com impacto regulatório: ${ag.title}`;
+
+                        const evidenceLink = (ag.attachedFiles && ag.attachedFiles[0]?.dataUrl) || mtg.presentationLink || mtg.presentationUrl || undefined;
+
+                        const contribItem: ProjectContributionItem = {
+                          id: contribId,
+                          projectId: proj.id,
+                          title: `Pauta: ${ag.title} (${mtg.title})`,
+                          origin: 'Reunião',
+                          originDetails: ag.id,
+                          source: 'reunião',
+                          content: contentText,
+                          evidenceLink: evidenceLink,
+                          date: mtg.date,
+                          createdAt: existingIdx >= 0 ? projContribs[existingIdx].createdAt : new Date().toISOString(),
+                          author: mtg.moderator || selectedProfile?.name || 'Coordenação',
+                          status: existingIdx >= 0 ? projContribs[existingIdx].status : 'pendente',
+                          linkedPhase: ag.phase || proj.phases?.[0] || 'Descoberta / Prova de Conceito',
+                          linkedMacroId: ag.macroActivityId,
+                          justification: existingIdx >= 0 ? projContribs[existingIdx].justification : ag.regulatoryImpactDetails
+                        };
+
+                        if (existingIdx >= 0) {
+                          projContribs[existingIdx] = {
+                            ...projContribs[existingIdx],
+                            ...contribItem,
+                            status: projContribs[existingIdx].status
+                          };
+                        } else {
+                          projContribs.unshift(contribItem);
+                        }
+                        projChanged = true;
+                      }
+                    });
+                  });
+
+                  if (projChanged) {
+                    anyProjectChanged = true;
+                    return { ...proj, contributions: projContribs };
+                  }
+                  return proj;
+                });
+
+                return anyProjectChanged ? nextProjects : prevProjects;
+              });
+            }}
             onUpdateProjects={(p) => { setProjects(p); setDataDirty(); }}
             onAddDossierContribution={(contrib) => {
               setDossierContributions(prev => [contrib, ...prev]);

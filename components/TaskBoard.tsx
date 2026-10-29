@@ -1444,13 +1444,24 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                 value={quickText}
                 onChange={e => setQuickText(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                    e.preventDefault();
-                    handleQuickSave();
+                  if (e.key === 'Enter') {
+                    if (e.ctrlKey || e.metaKey) {
+                      // Ctrl + Enter: insert newline without saving
+                      e.preventDefault();
+                      const target = e.currentTarget;
+                      const start = target.selectionStart;
+                      const end = target.selectionEnd;
+                      const newText = quickText.substring(0, start) + '\n' + quickText.substring(end);
+                      setQuickText(newText);
+                    } else if (!e.shiftKey) {
+                      // Enter alone: save immediately
+                      e.preventDefault();
+                      handleQuickSave();
+                    }
                   }
                 }}
                 rows={2}
-                placeholder={`O que precisa ser feito ou registrado em ${activeGroup ? activeGroup.name : 'Geral'}? Pressione Ctrl+Enter para salvar...`}
+                placeholder={`O que precisa ser feito ou registrado em ${activeGroup ? activeGroup.name : 'Geral'}? Enter para salvar imediatamente • Ctrl+Enter para nova linha...`}
                 className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-teal-500 resize-none transition"
               />
 
@@ -1588,6 +1599,15 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                 >
                   <Plus size={14} /> Salvar Imediatamente
                 </button>
+              </div>
+
+              <div className="flex items-center justify-between text-[10px] text-slate-400 px-1 pt-0.5">
+                <span>
+                  Atalhos: <strong className="text-slate-700 font-bold">Enter</strong> salva imediatamente • <strong className="text-slate-700 font-bold">Ctrl + Enter</strong> insere nova linha
+                </span>
+                <span>
+                  Autor: <strong>{currentUser !== 'Todos' ? currentUser : 'Usuário'}</strong>
+                </span>
               </div>
             </form>
           </div>

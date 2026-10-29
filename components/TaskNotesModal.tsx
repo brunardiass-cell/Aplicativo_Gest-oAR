@@ -187,12 +187,22 @@ export const TaskNotesModal: React.FC<TaskNotesModalProps> = ({
               value={newNoteText}
               onChange={(e) => setNewNoteText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                  e.preventDefault();
-                  handleAddNote();
+                if (e.key === 'Enter') {
+                  if (e.ctrlKey || e.metaKey) {
+                    // Ctrl + Enter: insert newline
+                    e.preventDefault();
+                    const start = e.currentTarget.selectionStart;
+                    const end = e.currentTarget.selectionEnd;
+                    const newText = newNoteText.substring(0, start) + '\n' + newNoteText.substring(end);
+                    setNewNoteText(newText);
+                  } else if (!e.shiftKey) {
+                    // Enter alone: save immediately
+                    e.preventDefault();
+                    handleAddNote();
+                  }
                 }
               }}
-              placeholder="Digite sua nota ou atualização sobre o andamento desta atividade... (Ctrl+Enter para enviar)"
+              placeholder="Digite sua nota ou atualização... (Enter para salvar • Ctrl+Enter para nova linha)"
               className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-[#008779] focus:border-transparent transition resize-none"
             />
 

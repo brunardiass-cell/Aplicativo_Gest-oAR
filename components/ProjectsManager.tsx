@@ -13,7 +13,7 @@ import {
   FolderKanban, GanttChartSquare, Kanban, ClipboardCheck,
   Printer, BarChart3, TrendingUp, Layers, Folder, Play,
   SlidersHorizontal, MoreVertical, ArrowRight, ListOrdered,
-  ShieldCheck, FilePlus, FileText
+  ShieldCheck, FilePlus, FileText, Calendar, FlaskConical, Bookmark
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -34,7 +34,7 @@ import { ProjectPhaseDetails } from './ProjectPhaseDetails';
 import { NewMicroActivityModal } from './NewMicroActivityModal';
 import { PrerequisitesModal } from './PrerequisitesModal';
 import { RegulatoryDocManagement } from './RegulatoryDocManagement';
-import { isNameMatch } from '../constants';
+import { isNameMatch, INITIAL_REGULATORY_TERMS } from '../constants';
 
 interface ProjectsManagerProps {
   projects: Project[];
@@ -1140,7 +1140,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           </div>
         ) : (
           /* Projects Cards Grid */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-6">
             {filteredProjects.map(project => {
               let totalMicros = 0;
               let doneMicros = 0;
@@ -1161,36 +1161,45 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
               const progress = totalMicros > 0 ? Math.round((doneMicros / totalMicros) * 100) : 0;
               const macrosCount = project.macroActivities.length;
 
-              const stLower = (project.status || '').toLowerCase();
-              let statusBadgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
-              let statusBadgeText: string = project.status || 'Ativo';
+              // Regulatory progress calculation matching requirement 3 & image 1
+              const projectTerms = (project.regulatoryTerms && project.regulatoryTerms.length > 0)
+                ? project.regulatoryTerms
+                : INITIAL_REGULATORY_TERMS;
+              const mandatoryTerms = projectTerms.filter(t => t.isActive !== false && t.isMandatory !== false);
+              const termsTotal = mandatoryTerms.length > 0 ? mandatoryTerms.length : projectTerms.length;
 
-              if (stLower.includes('revis')) {
-                statusBadgeClass = 'bg-blue-100/90 text-blue-800 border-blue-200/80';
-                statusBadgeText = 'EM REVISÃO';
-              } else if (stLower.includes('plan')) {
-                statusBadgeClass = 'bg-amber-100/90 text-amber-800 border-amber-200/80';
-                statusBadgeText = 'PLANEJADO';
-              } else if (stLower.includes('concl')) {
-                statusBadgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
-                statusBadgeText = 'CONCLUÍDO';
-              } else if (stLower.includes('susp')) {
-                statusBadgeClass = 'bg-red-100/90 text-red-800 border-red-200/80';
-                statusBadgeText = 'SUSPENSO';
-              } else {
-                statusBadgeClass = 'bg-emerald-100/90 text-emerald-800 border-emerald-200/80';
-                statusBadgeText = 'EM ANDAMENTO';
-              }
+              const regDb = project.regulatoryDatabase || [];
+              const validTermsCount = mandatoryTerms.filter(term => {
+                const rec = regDb.find(r => r.key === term.key || r.fieldKey === term.key);
+                const val = (rec?.valueText || rec?.value || '').replace(/^\[(?:Validado|VALIDADO)\]\s*/i, '').trim();
+                return rec?.status === 'validado' && val.length > 0;
+              }).length;
+
+              const regProgressPct = termsTotal > 0 ? Math.round((validTermsCount / termsTotal) * 100) : 0;
+              const regProgressText = `${validTermsCount} de ${termsTotal} termos`;
+
+              const stLower = (project.status || '').toLowerCase();
+              let statusText = 'Em andamento';
+              if (stLower.includes('revis')) statusText = 'Em revisão';
+              else if (stLower.includes('plan')) statusText = 'Planejado';
+              else if (stLower.includes('concl')) statusText = 'Concluído';
+              else if (stLower.includes('susp')) statusText = 'Suspenso';
+
+              // Date formatting matching Image 1
+              const projectDateRaw = (project as any).updatedAt || (project as any).updated_at || (project as any).created_at;
+              const updatedDate = projectDateRaw ? new Date(projectDateRaw) : new Date(2024, 9, 28);
+              const dateFormatted = updatedDate.toLocaleDateString('pt-BR');
 
               return (
                 <div 
                   key={project.id} 
-                  className="group p-6 bg-white rounded-3xl border border-slate-200/90 shadow-2xs hover:shadow-lg hover:border-teal-300 transition-all text-left flex flex-col justify-between space-y-5 relative"
+                  className="group p-6 bg-white rounded-3xl border border-slate-200/90 shadow-2xs hover:shadow-lg hover:border-teal-300 transition-all text-left flex flex-col justify-between space-y-4 relative"
                 >
-                  {/* Card Top Row */}
+                  {/* Top Status & Menu */}
                   <div className="flex justify-between items-start gap-2">
-                    <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider border ${statusBadgeClass}`}>
-                      {statusBadgeText}
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200/80">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                      {statusText}
                     </span>
 
                     {/* Menu Options Button */}
@@ -1200,13 +1209,14 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                           e.stopPropagation();
                           setActiveMenuProjectId(activeMenuProjectId === project.id ? null : project.id);
                         }}
-                        className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+                        className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                        title="Mais opções"
                       >
                         <MoreVertical size={16} />
                       </button>
 
                       {activeMenuProjectId === project.id && (
-                        <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-30 animate-in fade-in duration-150">
+                        <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-30 animate-in fade-in duration-150">
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1215,7 +1225,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                               setProjectDetailView('dashboard');
                               setActiveMenuProjectId(null);
                             }}
-                            className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                            className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
                           >
                             <Folder size={14} /> Abrir Projeto
                           </button>
@@ -1225,7 +1235,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                               handleDuplicateProject(project);
                               setActiveMenuProjectId(null);
                             }}
-                            className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                            className="w-full text-left px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
                           >
                             <ListPlus size={14} /> Duplicar
                           </button>
@@ -1236,7 +1246,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                                 onOpenDeletionModal({ type: 'project', ids: { projectId: project.id }, name: project.name });
                                 setActiveMenuProjectId(null);
                               }}
-                              className="w-full text-left px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
+                              className="w-full text-left px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2 cursor-pointer"
                             >
                               <Trash2 size={14} /> Excluir
                             </button>
@@ -1246,80 +1256,125 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                     </div>
                   </div>
 
-                  {/* Main Info */}
+                  {/* Title & Description */}
                   <div 
-                    className="space-y-2 cursor-pointer flex-1"
+                    className="space-y-1.5 cursor-pointer"
                     onClick={() => {
                       setSelectedProject(project);
                       setViewMode('dashboard');
                       setProjectDetailView('dashboard');
                     }}
                   >
-                    <h3 className="text-base font-black text-slate-900 uppercase tracking-tight group-hover:text-teal-800 transition-colors leading-snug">
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight group-hover:text-teal-800 transition-colors leading-snug">
                       {project.name}
                     </h3>
-
-                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 uppercase">
-                      <User size={13} className="text-slate-400" />
-                      <span>{project.responsible || 'BRUNA'}</span>
-                    </div>
-
-                    <p className="text-xs text-slate-500 leading-relaxed line-clamp-2 pt-1 min-h-[34px]">
+                    <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">
                       {project.description || 'Desenvolvimento e acompanhamento de candidato vacinal no módulo CTVacinas.'}
                     </p>
                   </div>
 
-                  {/* Progress Bar & Details */}
+                  {/* Metadata Badges Row matching Image 1 */}
+                  <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-slate-600">
+                    <span className="flex items-center gap-1.5">
+                      <User size={14} className="text-slate-400" />
+                      {project.responsible || 'Bruna'}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <FlaskConical size={14} className="text-slate-400" />
+                      Desenvolvimento
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Bookmark size={14} className="text-slate-400" />
+                      Candidato vacinal
+                    </span>
+                  </div>
+
+                  {/* Dual Progress Bars matching Image 1 */}
                   <div 
-                    className="space-y-2 pt-2 border-t border-slate-100 cursor-pointer"
+                    className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1 cursor-pointer"
                     onClick={() => {
                       setSelectedProject(project);
                       setViewMode('dashboard');
                       setProjectDetailView('dashboard');
                     }}
                   >
-                    <div className="flex items-center justify-between text-xs font-bold">
-                      <span className="font-black text-slate-900">{progress}%</span>
-                      <span className="text-[10px] text-slate-400">{doneMicros} / {totalMicros} atividades</span>
+                    {/* Operational Progress */}
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-bold text-slate-500">Progresso do projeto (atividades)</p>
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-xl font-black text-slate-900">{progress}%</span>
+                        <span className="text-[11px] text-slate-500 font-semibold">{doneMicros} de {totalMicros} atividades</span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mt-1">
+                        <div 
+                          className="h-full bg-teal-600 rounded-full transition-all duration-500" 
+                          style={{ width: `${progress}%` }} 
+                        />
+                      </div>
                     </div>
 
-                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-teal-600 rounded-full transition-all duration-700" 
-                        style={{ width: `${progress}%` }} 
-                      />
+                    {/* Regulatory Progress */}
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-bold text-slate-500">Progresso regulatório</p>
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-xl font-black text-slate-900">{regProgressPct}%</span>
+                        <span className="text-[11px] text-slate-500 font-semibold">{regProgressText}</span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mt-1">
+                        <div 
+                          className="h-full bg-emerald-600 rounded-full transition-all duration-500" 
+                          style={{ width: `${regProgressPct}%` }} 
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  {/* Card Footer Row */}
-                  <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1.5">
-                        <AlertTriangle size={14} className={alertsCount > 0 ? 'text-amber-500' : 'text-slate-300'} />
-                        <span className={`text-[10px] font-black uppercase tracking-tight ${alertsCount > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
-                          {alertsCount} ALERTAS
-                        </span>
-                      </div>
+                  {/* Alerts and Macros Container matching Image 1 */}
+                  <div className="p-3 bg-amber-50/50 rounded-2xl border border-amber-200/60 flex items-center justify-start gap-4 text-xs font-bold text-slate-700">
+                    <div className="flex items-center gap-1.5 text-amber-700 font-bold">
+                      <AlertTriangle size={15} className="text-amber-500" />
+                      <span>{alertsCount} alertas</span>
+                    </div>
+                    <span className="text-amber-200 font-light">|</span>
+                    <div className="flex items-center gap-1.5 text-slate-700 font-bold">
+                      <FolderKanban size={15} className="text-slate-500" />
+                      <span>{macrosCount} macros</span>
+                    </div>
+                  </div>
 
-                      <div className="flex items-center gap-1.5">
-                        <FolderKanban size={14} className="text-slate-400" />
-                        <span className="text-[10px] font-black uppercase tracking-tight text-slate-400">
-                          {macrosCount} MACROS
-                        </span>
-                      </div>
+                  {/* Card Footer matching Image 1 */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold">
+                      <Calendar size={14} className="text-slate-400" />
+                      <span>Atualizado em {dateFormatted}</span>
                     </div>
 
-                    <button 
-                      onClick={() => {
-                        setSelectedProject(project);
-                        setViewMode('dashboard');
-                        setProjectDetailView('dashboard');
-                      }}
-                      className="p-2 text-slate-400 hover:text-teal-700 hover:bg-teal-50 rounded-xl transition"
-                      title="Abrir Projeto"
-                    >
-                      <ArrowRight size={18} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedProject(project);
+                          setIsActivityMapOpen(true);
+                        }}
+                        className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                      >
+                        <Workflow size={14} className="text-slate-500" />
+                        Ver mapa
+                      </button>
+
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          setSelectedProject(project);
+                          setViewMode('dashboard');
+                          setProjectDetailView('dashboard');
+                        }}
+                        className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                      >
+                        Abrir projeto <ArrowRight size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

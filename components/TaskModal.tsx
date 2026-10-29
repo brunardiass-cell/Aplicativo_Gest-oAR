@@ -13,7 +13,8 @@ import {
   CheckCircle,
   Paperclip,
   Trash2,
-  ChevronDown
+  ChevronDown,
+  ShieldCheck
 } from 'lucide-react';
 import { DossierContributionSection } from './DossierContributionSection';
 import { DateInput } from './DateInput';
@@ -522,6 +523,29 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
+
+                {/* Impacto / Contribuição Regulatória (Item 1) */}
+                <div className="p-3.5 bg-teal-50/70 border border-teal-200/90 rounded-2xl sm:col-span-2 space-y-1.5">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(formData.isRegulatoryContribution || formData.generatesRegulatoryContent)}
+                      onChange={e => setFormData({
+                        ...formData,
+                        isRegulatoryContribution: e.target.checked,
+                        generatesRegulatoryContent: e.target.checked,
+                        regulatoryStatus: e.target.checked ? 'pending' : undefined
+                      })}
+                      className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500 cursor-pointer"
+                    />
+                    <span className="text-xs font-black text-teal-900 uppercase tracking-tight flex items-center gap-1.5">
+                      <ShieldCheck size={15} className="text-teal-700" /> Possui Impacto / Contribuição Regulatória
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-teal-700 font-medium pl-6">
+                    Encaminha automaticamente esta atividade para a Central de Validação Regulatória do projeto vinculado para análise técnica.
+                  </p>
+                </div>
               </div>
             </div>
           )}
@@ -879,6 +903,29 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* Impacto / Contribuição Regulatória para Relatórios */}
+              <div className="p-3.5 bg-purple-50/70 border border-purple-200/90 rounded-2xl space-y-1.5">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formData.isRegulatoryContribution || formData.generatesRegulatoryContent)}
+                    onChange={e => setFormData({
+                      ...formData,
+                      isRegulatoryContribution: e.target.checked,
+                      generatesRegulatoryContent: e.target.checked,
+                      regulatoryStatus: e.target.checked ? 'pending' : undefined
+                    })}
+                    className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 cursor-pointer"
+                  />
+                  <span className="text-xs font-black text-purple-900 uppercase tracking-tight flex items-center gap-1.5">
+                    <ShieldCheck size={15} className="text-purple-700" /> Possui Impacto / Contribuição Regulatória
+                  </span>
+                </label>
+                <p className="text-[11px] text-purple-700 font-medium pl-6">
+                  Encaminha automaticamente este relatório e suas evidências para a Central de Validação Regulatória do projeto vinculado.
+                </p>
+              </div>
             </div>
           )}
 
@@ -957,6 +1004,29 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     placeholder="Escreva a anotação, contexto, decisão técnica ou lembrete importante..."
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-amber-500"
                   />
+                </div>
+
+                {/* Impacto / Contribuição Regulatória para Notas */}
+                <div className="p-3.5 bg-amber-50/70 border border-amber-200/90 rounded-2xl sm:col-span-2 space-y-1.5">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(formData.isRegulatoryContribution || formData.generatesRegulatoryContent)}
+                      onChange={e => setFormData({
+                        ...formData,
+                        isRegulatoryContribution: e.target.checked,
+                        generatesRegulatoryContent: e.target.checked,
+                        regulatoryStatus: e.target.checked ? 'pending' : undefined
+                      })}
+                      className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500 cursor-pointer"
+                    />
+                    <span className="text-xs font-black text-amber-900 uppercase tracking-tight flex items-center gap-1.5">
+                      <ShieldCheck size={15} className="text-amber-700" /> Possui Impacto / Contribuição Regulatória
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-amber-700 font-medium pl-6">
+                    Encaminha automaticamente esta anotação para a Central de Validação Regulatória do projeto vinculado para análise técnica.
+                  </p>
                 </div>
               </div>
             </div>
