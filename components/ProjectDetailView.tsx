@@ -89,12 +89,16 @@ import {
   DEFAULT_REGULATORY_STANDARDS
 } from '../constants';
 import { CompleteActivityModal } from './CompleteActivityModal';
+import { CriticalAlertModal } from './CriticalAlertModal';
+import { sendCriticalActivityAlert, cancelCriticalAlert, calculateAlertDate } from '../services/emailService';
+import { AppUser } from '../types';
 
 interface ProjectDetailViewProps {
   project: Project;
   onBack: () => void;
   onUpdateProject: (updatedProject: Project) => void;
   teamMembers?: TeamMember[];
+  appUsers?: AppUser[];
   regulatoryStandards?: RegulatoryStandard[];
   onOpenRegulatoryModal?: (activityName: string) => void;
   onPrint?: () => void;
@@ -486,6 +490,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   onBack,
   onUpdateProject,
   teamMembers = [],
+  appUsers = [],
   regulatoryStandards = [],
   onOpenRegulatoryModal,
   onPrint,
@@ -493,6 +498,11 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   meetings = [],
   tasks = []
 }) => {
+  // Critical Alert Modal State (Item 1)
+  const [isCriticalModalOpen, setIsCriticalModalOpen] = useState(false);
+  const [selectedMicroForCritical, setSelectedMicroForCritical] = useState<MicroActivity | null>(null);
+  const [activeRowMenuMicroId, setActiveRowMenuMicroId] = useState<string | null>(null);
+
   // Top view tab state: 6 Main Project Tabs matching Image 2
   // 1. Jornada e Atividades, 2. Próximas Ações e Prazos, 3. Documentos, 4. Validação Regulatória, 5. Base Regulatória e Termos, 6. Histórico e Reuniões
   const [activeTopTab, setActiveTopTab] = useState<'jornada' | 'proximas_acoes' | 'documentos' | 'validacao' | 'base_termos' | 'historico' | 'projeto' | 'visao_geral' | 'contribuicoes' | 'docs'>('jornada');
@@ -1635,11 +1645,30 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             if (value === 'Concluído e aprovado') {
               updated.progress = 100;
               updated.completionDate = updated.completionDate || todayStr;
+              if (updated.isCritical) {
+                cancelCriticalAlert(microId);
+                updated.criticalAlertStatus = 'cancelado';
+              }
+            } else if (value === 'Concluído com restrições') {
+              if (updated.isCritical) {
+                cancelCriticalAlert(microId);
+                updated.criticalAlertStatus = 'cancelado';
+              }
             } else if (value === 'Em andamento' && (updated.progress === 0 || updated.progress === 100)) {
               updated.progress = 50;
+              if (updated.isCritical && updated.criticalAlertStatus === 'cancelado') {
+                updated.criticalAlertStatus = 'agendado';
+              }
             } else if (value === 'Planejado') {
               updated.progress = 0;
             }
+          }
+
+          // Item 1: Se o prazo for alterado, recalcular momento do alerta
+          if (field === 'dueDate' && updated.isCritical && updated.criticalAlertLeadDays) {
+            updated.criticalAlertScheduledFor = calculateAlertDate(value, updated.criticalAlertLeadDays) || undefined;
+            updated.criticalAlertStatus = 'agendado';
+            updated.criticalAlertSentAt = undefined;
           }
 
           matchedMicroObj = updated;
@@ -1650,6 +1679,89 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       });
       return hasChanged ? { ...macro, microActivities: updatedMicros } : macro;
     });
+
+  // Critical Alert save and remove handlers (Item 1)
+  const handleSaveCriticalAlert = async (config: {
+    isCritical: boolean;
+    leadDays: number;
+    recipientEmail: string;
+    recipientName: string;
+  }) => {
+    if (!selectedMicroForCritical) return;
+
+    const calculatedDate = selectedMicroForCritical.dueDate 
+      ? calculateAlertDate(selectedMicroForCritical.dueDate, config.leadDays) 
+      : undefined;
+
+    // Disparar notificação por e-mail com remetente brunadias@ctvacinas.org
+    const alertResult = await sendCriticalActivityAlert({
+      activityId: selectedMicroForCritical.id,
+      activityTitle: selectedMicroForCritical.name,
+      projectName: project.name,
+      dueDate: selectedMicroForCritical.dueDate,
+      leadDays: config.leadDays,
+      recipientEmail: config.recipientEmail,
+      recipientName: config.recipientName,
+      sender: 'brunadias@ctvacinas.org',
+      isTask: false
+    });
+
+    const updatedMacros = (project.macroActivities || []).map(macro => ({
+      ...macro,
+      microActivities: (macro.microActivities || []).map(m => {
+        if (m.id === selectedMicroForCritical.id) {
+          return {
+            ...m,
+            isCritical: config.isCritical,
+            criticalAlertLeadDays: config.leadDays,
+            criticalAlertRecipientEmail: config.recipientEmail,
+            criticalAlertRecipientName: config.recipientName,
+            criticalAlertScheduledFor: calculatedDate || undefined,
+            criticalAlertSentAt: alertResult.sentAt || m.criticalAlertSentAt,
+            criticalAlertStatus: alertResult.success ? 'enviado' as const : 'agendado' as const,
+            criticalAlertError: alertResult.error
+          };
+        }
+        return m;
+      })
+    }));
+
+    onUpdateProject({
+      ...project,
+      macroActivities: updatedMacros
+    });
+
+    setIsCriticalModalOpen(false);
+    setSelectedMicroForCritical(null);
+  };
+
+  const handleRemoveCriticalAlert = () => {
+    if (!selectedMicroForCritical) return;
+
+    cancelCriticalAlert(selectedMicroForCritical.id);
+
+    const updatedMacros = (project.macroActivities || []).map(macro => ({
+      ...macro,
+      microActivities: (macro.microActivities || []).map(m => {
+        if (m.id === selectedMicroForCritical.id) {
+          return {
+            ...m,
+            isCritical: false,
+            criticalAlertStatus: 'cancelado' as const
+          };
+        }
+        return m;
+      })
+    }));
+
+    onUpdateProject({
+      ...project,
+      macroActivities: updatedMacros
+    });
+
+    setIsCriticalModalOpen(false);
+    setSelectedMicroForCritical(null);
+  };
 
     // If micro was in activeGroup fallback
     if (!matchedMicroObj && activeGroup) {
@@ -5107,6 +5219,20 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                                       }`}>
                                         {micro.name}
                                       </span>
+                                      {micro.isCritical && (
+                                        <span 
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedMicroForCritical(micro);
+                                            setIsCriticalModalOpen(true);
+                                          }}
+                                          className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shrink-0 cursor-pointer hover:bg-amber-200 transition"
+                                          title={`Atividade Crítica com alerta por e-mail (${micro.criticalAlertLeadDays || 2}d antes para ${micro.criticalAlertRecipientEmail || 'gestão regulatória'}). Clique para gerenciar.`}
+                                        >
+                                          <AlertTriangle size={10} className="text-amber-600 fill-amber-500" />
+                                          <span>Crítica ({micro.criticalAlertLeadDays || 2}d)</span>
+                                        </span>
+                                      )}
                                       <Pencil size={11} className="text-slate-400 opacity-0 group-hover/title:opacity-100 transition shrink-0" />
                                     </div>
                                   )}
@@ -5287,22 +5413,80 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                                       <span>{mIdx === 0 ? 2 : mIdx === 1 || mIdx === 4 ? 1 : ''}</span>
                                     </button>
 
-                                    {/* Quick toggle menu */}
-                                    <button
-                                      onClick={() => {
-                                        const nextStatus: MicroActivityStatus = 
-                                          micro.status === 'Concluído e aprovado' 
-                                            ? 'Em andamento' 
-                                            : micro.status === 'Em andamento' 
-                                              ? 'Concluído e aprovado' 
-                                              : 'Em andamento';
-                                        handleQuickStatusChange(micro.id, nextStatus);
-                                      }}
-                                      className="p-1 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
-                                      title="Alternar status rápido"
-                                    >
-                                      <MoreVertical size={14} />
-                                    </button>
+                                    {/* Menu de 3 Pontos (Item 1: Não altera status da atividade, permite marcar como crítica) */}
+                                    <div className="relative">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActiveRowMenuMicroId(activeRowMenuMicroId === micro.id ? null : micro.id);
+                                        }}
+                                        className={`p-1 rounded-lg cursor-pointer transition ${
+                                          micro.isCritical 
+                                            ? 'text-amber-600 bg-amber-50 hover:bg-amber-100' 
+                                            : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                                        }`}
+                                        title="Opções da atividade (Marcar como crítica, detalhes)"
+                                      >
+                                        <MoreVertical size={14} />
+                                      </button>
+
+                                      {activeRowMenuMicroId === micro.id && (
+                                        <>
+                                          <div 
+                                            className="fixed inset-0 z-30" 
+                                            onClick={() => setActiveRowMenuMicroId(null)} 
+                                          />
+                                          <div 
+                                            onClick={e => e.stopPropagation()}
+                                            className="absolute right-0 top-full mt-1 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-40 text-xs font-bold text-slate-700 animate-in fade-in zoom-in-95 text-left"
+                                          >
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setActiveRowMenuMicroId(null);
+                                                setSelectedMicroForCritical(micro);
+                                                setIsCriticalModalOpen(true);
+                                              }}
+                                              className="w-full px-3.5 py-2 text-left hover:bg-amber-50 text-amber-900 flex items-center gap-2 transition cursor-pointer"
+                                            >
+                                              <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+                                              <span>{micro.isCritical ? 'Configurar Alerta Crítico' : 'Marcar como Crítica'}</span>
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setActiveRowMenuMicroId(null);
+                                                handleOpenMicroDetails(micro);
+                                              }}
+                                              className="w-full px-3.5 py-2 text-left hover:bg-slate-50 text-slate-700 flex items-center gap-2 transition cursor-pointer"
+                                            >
+                                              <ExternalLink size={14} className="text-blue-600 shrink-0" />
+                                              <span>Ver detalhes completos</span>
+                                            </button>
+
+                                            {micro.isCritical && (
+                                              <>
+                                                <div className="my-1 border-t border-slate-100" />
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setActiveRowMenuMicroId(null);
+                                                    setSelectedMicroForCritical(micro);
+                                                    handleRemoveCriticalAlert();
+                                                  }}
+                                                  className="w-full px-3.5 py-1.5 text-left hover:bg-rose-50 text-rose-600 flex items-center gap-2 transition text-[11px] cursor-pointer"
+                                                >
+                                                  <Trash2 size={13} />
+                                                  <span>Desmarcar como crítica</span>
+                                                </button>
+                                              </>
+                                            )}
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
                                   </div>
                                 </td>
                               </tr>
@@ -8086,6 +8270,32 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Critical Activity Alert Modal (Requirement 1) */}
+      {isCriticalModalOpen && selectedMicroForCritical && (
+        <CriticalAlertModal
+          isOpen={isCriticalModalOpen}
+          onClose={() => {
+            setIsCriticalModalOpen(false);
+            setSelectedMicroForCritical(null);
+          }}
+          activityTitle={selectedMicroForCritical.name}
+          projectName={project.name}
+          dueDate={selectedMicroForCritical.dueDate}
+          isCritical={selectedMicroForCritical.isCritical}
+          initialLeadDays={selectedMicroForCritical.criticalAlertLeadDays}
+          initialRecipientEmail={selectedMicroForCritical.criticalAlertRecipientEmail}
+          initialRecipientName={selectedMicroForCritical.criticalAlertRecipientName}
+          alertScheduledFor={selectedMicroForCritical.criticalAlertScheduledFor}
+          alertSentAt={selectedMicroForCritical.criticalAlertSentAt}
+          alertStatus={selectedMicroForCritical.criticalAlertStatus}
+          alertError={selectedMicroForCritical.criticalAlertError}
+          teamMembers={teamMembers}
+          appUsers={appUsers}
+          onSave={handleSaveCriticalAlert}
+          onRemoveCritical={handleRemoveCriticalAlert}
+        />
       )}
 
     </div>

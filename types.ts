@@ -142,6 +142,31 @@ export interface Task {
   // Detalhes de Relatório e Reunião
   reportReviewer?: string;
   isMeetingOrganizer?: boolean;
+
+  // Atividades Críticas & Alertas por E-mail
+  isCritical?: boolean;
+  criticalAlertLeadDays?: number;
+  criticalAlertRecipientEmail?: string;
+  criticalAlertRecipientName?: string;
+  criticalAlertScheduledFor?: string;
+  criticalAlertSentAt?: string;
+  criticalAlertStatus?: 'agendado' | 'enviado' | 'cancelado' | 'erro';
+  criticalAlertError?: string;
+}
+
+export interface EmailAuditLog {
+  id: string;
+  type: 'NOVO_PROJETO' | 'ATIVIDADE_CRITICA' | 'ALERTA_PRAZO';
+  sender: string;
+  recipientEmail: string;
+  recipientName?: string;
+  subject: string;
+  content: string;
+  timestamp: string;
+  status: 'enviado' | 'erro' | 'pendente';
+  errorMessage?: string;
+  refId?: string;
+  refType?: 'project' | 'microactivity' | 'task';
 }
 
 export type RegulatoryAssessmentStatus = 'pending' | 'approved' | 'rejected';
@@ -543,6 +568,16 @@ export interface MicroActivity {
   regulatoryStatus?: 'pendente' | 'validada' | 'ajustes' | 'descartada';
   regulatoryLinkedFieldKey?: string;
   regulatoryJustification?: string;
+
+  // Atividades Críticas & Alertas por E-mail
+  isCritical?: boolean;
+  criticalAlertLeadDays?: number;
+  criticalAlertRecipientEmail?: string;
+  criticalAlertRecipientName?: string;
+  criticalAlertScheduledFor?: string;
+  criticalAlertSentAt?: string;
+  criticalAlertStatus?: 'agendado' | 'enviado' | 'cancelado' | 'erro';
+  criticalAlertError?: string;
 }
 
 export interface MacroActivity {

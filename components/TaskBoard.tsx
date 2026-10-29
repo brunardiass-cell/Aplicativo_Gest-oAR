@@ -10,12 +10,15 @@ import {
   Project, 
   TeamMember,
   Meeting,
-  ViewMode
+  ViewMode,
+  AppUser
 } from '../types';
 import { DEFAULT_TASK_GROUPS } from '../constants';
 import { TaskNotesModal } from './TaskNotesModal';
 import { RetroactiveImportModal } from './RetroactiveImportModal';
 import { TaskCompletionModal } from './TaskCompletionModal';
+import { CriticalAlertModal } from './CriticalAlertModal';
+import { sendCriticalActivityAlert, cancelCriticalAlert, calculateAlertDate } from '../services/emailService';
 import { 
   Check, 
   X, 
@@ -53,6 +56,7 @@ interface TaskBoardProps {
   tasks: Task[];
   projects?: Project[];
   teamMembers?: TeamMember[];
+  appUsers?: AppUser[];
   currentUser: string | 'Todos';
   selectedProfile?: TeamMember | null;
   onEdit: (task: Task) => void;
@@ -97,6 +101,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   tasks,
   projects = [],
   teamMembers = [],
+  appUsers = [],
   currentUser,
   selectedProfile,
   onEdit,
@@ -532,6 +537,10 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       ? `Atividade concluída em ${dateStr}. Mantida visível na lista por 7 dias.`
       : `Atividade concluída em ${dateStr}. Movida para o histórico imediatamente.`;
 
+    if (completingTask.isCritical) {
+      cancelCriticalAlert(completingTask.id);
+    }
+
     const updatedTask: Task = {
       ...completingTask,
       status: 'Concluída',
@@ -541,6 +550,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       completedAt: now.toISOString(),
       showInActivitiesUntil: displayUntil,
       completionDisplayChoice: choice,
+      criticalAlertStatus: completingTask.isCritical ? 'cancelado' : completingTask.criticalAlertStatus,
       updates: [
         {
           id: `note_${Date.now()}_${Math.random()}`,
@@ -576,6 +586,58 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   // Modal de Notas de Atualização
   const [notesModalTask, setNotesModalTask] = useState<Task | null>(null);
 
+  // Modal de Alerta Crítico (Item 1)
+  const [isCriticalModalOpen, setIsCriticalModalOpen] = useState(false);
+  const [selectedTaskForCritical, setSelectedTaskForCritical] = useState<Task | null>(null);
+
+  const handleSaveCriticalAlert = async (leadDays: number, recipientEmail: string, recipientName: string) => {
+    if (!selectedTaskForCritical) return;
+    const scheduledDate = selectedTaskForCritical.completionDate 
+      ? calculateAlertDate(selectedTaskForCritical.completionDate, leadDays) 
+      : '';
+
+    const updated: Task = {
+      ...selectedTaskForCritical,
+      isCritical: true,
+      criticalAlertLeadDays: leadDays,
+      criticalAlertRecipientEmail: recipientEmail,
+      criticalAlertRecipientName: recipientName,
+      criticalAlertScheduledFor: scheduledDate,
+      criticalAlertStatus: 'agendado',
+      criticalAlertError: undefined
+    };
+
+    onSaveTask(updated);
+
+    if (selectedTaskForCritical.completionDate) {
+      await sendCriticalActivityAlert({
+        activityId: selectedTaskForCritical.id,
+        activityTitle: selectedTaskForCritical.activity,
+        projectName: selectedTaskForCritical.project || 'Atividades',
+        dueDate: selectedTaskForCritical.completionDate,
+        leadDays,
+        recipientEmail,
+        recipientName
+      });
+    }
+
+    setIsCriticalModalOpen(false);
+    setSelectedTaskForCritical(null);
+  };
+
+  const handleRemoveCriticalAlert = async () => {
+    if (!selectedTaskForCritical) return;
+    await cancelCriticalAlert(selectedTaskForCritical.id);
+    const updated: Task = {
+      ...selectedTaskForCritical,
+      isCritical: false,
+      criticalAlertStatus: 'cancelado'
+    };
+    onSaveTask(updated);
+    setIsCriticalModalOpen(false);
+    setSelectedTaskForCritical(null);
+  };
+
   // Fechar menus ao clicar fora
   useEffect(() => {
     const handleOutside = () => {
@@ -601,11 +663,28 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       reason: 'Alteração rápida de prazo na linha'
     };
 
+    const scheduledDate = (task.isCritical && newDate)
+      ? calculateAlertDate(newDate, task.criticalAlertLeadDays || 2)
+      : (newDate ? task.criticalAlertScheduledFor : undefined);
+
     const updated: Task = {
       ...task,
       completionDate: newDate,
+      criticalAlertScheduledFor: scheduledDate,
       deadlineHistory: [historyEntry, ...(task.deadlineHistory || [])]
     };
+
+    if (task.isCritical && newDate && task.criticalAlertRecipientEmail) {
+      sendCriticalActivityAlert({
+        activityId: task.id,
+        activityTitle: task.activity,
+        projectName: task.project || 'Atividades',
+        dueDate: newDate,
+        leadDays: task.criticalAlertLeadDays || 2,
+        recipientEmail: task.criticalAlertRecipientEmail,
+        recipientName: task.criticalAlertRecipientName || ''
+      });
+    }
 
     onSaveTask(updated);
     setActiveDeadlineTaskId(null);
@@ -835,6 +914,32 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
             onSaveTask(updated);
             setNotesModalTask(updated);
           }}
+        />
+      )}
+
+      {/* MODAL DE ALERTA CRÍTICO (Item 1) */}
+      {isCriticalModalOpen && selectedTaskForCritical && (
+        <CriticalAlertModal
+          isOpen={isCriticalModalOpen}
+          onClose={() => {
+            setIsCriticalModalOpen(false);
+            setSelectedTaskForCritical(null);
+          }}
+          activityTitle={selectedTaskForCritical.activity}
+          projectName={selectedTaskForCritical.project || 'Atividades'}
+          dueDate={selectedTaskForCritical.completionDate}
+          isCritical={selectedTaskForCritical.isCritical}
+          initialLeadDays={selectedTaskForCritical.criticalAlertLeadDays}
+          initialRecipientEmail={selectedTaskForCritical.criticalAlertRecipientEmail}
+          initialRecipientName={selectedTaskForCritical.criticalAlertRecipientName}
+          alertScheduledFor={selectedTaskForCritical.criticalAlertScheduledFor}
+          alertSentAt={selectedTaskForCritical.criticalAlertSentAt}
+          alertStatus={selectedTaskForCritical.criticalAlertStatus}
+          alertError={selectedTaskForCritical.criticalAlertError}
+          teamMembers={teamMembers}
+          appUsers={appUsers}
+          onSave={handleSaveCriticalAlert}
+          onRemoveCritical={handleRemoveCriticalAlert}
         />
       )}
 
@@ -1728,22 +1833,33 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
                       {/* Título com Edição Rápida */}
                       {!isEditingThisTitle ? (
-                        <h4 
-                          onClick={() => {
-                            if (task.status !== 'Concluída') {
-                              setEditingTitleTaskId(task.id);
-                              setTempTitleValue(task.activity);
-                            }
-                          }}
-                          className={`text-xs sm:text-sm font-bold transition leading-snug break-words ${
-                            task.status === 'Concluída'
-                              ? 'line-through text-slate-400 font-medium'
-                              : 'text-slate-900 hover:text-teal-700 cursor-pointer'
-                          }`}
-                          title={task.status === 'Concluída' ? 'Atividade concluída' : 'Clique para editar o título'}
-                        >
-                          {task.activity}
-                        </h4>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 
+                            onClick={() => {
+                              if (task.status !== 'Concluída') {
+                                setEditingTitleTaskId(task.id);
+                                setTempTitleValue(task.activity);
+                              }
+                            }}
+                            className={`text-xs sm:text-sm font-bold transition leading-snug break-words ${
+                              task.status === 'Concluída'
+                                ? 'line-through text-slate-400 font-medium'
+                                : 'text-slate-900 hover:text-teal-700 cursor-pointer'
+                            }`}
+                            title={task.status === 'Concluída' ? 'Atividade concluída' : 'Clique para editar o título'}
+                          >
+                            {task.activity}
+                          </h4>
+                          {task.isCritical && (
+                            <span 
+                              className="px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1 shadow-2xs"
+                              title={task.criticalAlertRecipientName ? `Alerta crítico configurado para ${task.criticalAlertRecipientName}` : 'Atividade marcada como crítica'}
+                            >
+                              <AlertTriangle size={11} className="text-amber-600 shrink-0" />
+                              Crítica {task.criticalAlertLeadDays ? `(${task.criticalAlertLeadDays}d)` : ''}
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <div className="flex items-center gap-1.5 pt-1">
                           <input
@@ -1954,6 +2070,19 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                             className="w-full px-3 py-1.5 text-left hover:bg-slate-50 transition flex items-center gap-2"
                           >
                             <MessageSquare size={13} className="text-teal-600" /> Adicionar Nota
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveRowMenuTaskId(null);
+                              setSelectedTaskForCritical(task);
+                              setIsCriticalModalOpen(true);
+                            }}
+                            className="w-full px-3 py-1.5 text-left hover:bg-amber-50 text-amber-700 transition flex items-center gap-2"
+                          >
+                            <AlertTriangle size={13} className="text-amber-600 shrink-0" />
+                            {task.isCritical ? 'Configurar Alerta Crítico' : 'Marcar como Crítica'}
                           </button>
 
                           <div className="my-1 border-t border-slate-100" />

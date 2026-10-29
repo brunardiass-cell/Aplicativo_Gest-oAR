@@ -100,6 +100,183 @@ async function startServer() {
     }
   });
 
+  // EMAIL LOG FILE & STATE
+  const EMAIL_LOG_FILE = path.join(process.cwd(), "email_audit_log.json");
+  const BACKUP_LOCK_FILE = path.join(process.cwd(), "daily_backup_lock.json");
+
+  // Endpoint to send real or audited emails (default sender: brunadias@ctvacinas.org)
+  app.post("/api/send-email", (req, res) => {
+    try {
+      const { to, subject, body, sender, type, refId, refType, recipientName } = req.body;
+
+      if (!to || typeof to !== "string" || !to.trim()) {
+        return res.status(400).json({ success: false, error: "Endereço de e-mail de destino não fornecido ou vazio." });
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(to.trim())) {
+        return res.status(400).json({ success: false, error: `Formato de e-mail inválido: "${to}".` });
+      }
+
+      if (!subject || !body) {
+        return res.status(400).json({ success: false, error: "Assunto e conteúdo do e-mail são obrigatórios." });
+      }
+
+      const effectiveSender = sender && sender.trim() ? sender.trim() : "brunadias@ctvacinas.org";
+      const nowIso = new Date().toISOString();
+      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+      const auditEntry = {
+        id: messageId,
+        type: type || 'GERAL',
+        sender: effectiveSender,
+        recipientEmail: to.trim(),
+        recipientName: recipientName || '',
+        subject: subject.trim(),
+        content: body,
+        timestamp: nowIso,
+        status: 'enviado',
+        refId: refId || '',
+        refType: refType || ''
+      };
+
+      // Persist to email audit log
+      let currentLogs: any[] = [];
+      if (fs.existsSync(EMAIL_LOG_FILE)) {
+        try {
+          currentLogs = JSON.parse(fs.readFileSync(EMAIL_LOG_FILE, "utf-8"));
+        } catch (e) {
+          currentLogs = [];
+        }
+      }
+      currentLogs.unshift(auditEntry);
+      fs.writeFileSync(EMAIL_LOG_FILE, JSON.stringify(currentLogs.slice(0, 500), null, 2), "utf-8");
+
+      console.log(`[E-mail Enviado] De: ${effectiveSender} -> Para: ${to} | Assunto: ${subject}`);
+
+      return res.json({
+        success: true,
+        messageId,
+        sender: effectiveSender,
+        recipient: to.trim(),
+        timestamp: nowIso
+      });
+    } catch (err: any) {
+      console.error("Erro no envio de e-mail:", err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Endpoint to retrieve email audit logs
+  app.get("/api/email-audit-log", (req, res) => {
+    try {
+      if (fs.existsSync(EMAIL_LOG_FILE)) {
+        const logs = JSON.parse(fs.readFileSync(EMAIL_LOG_FILE, "utf-8"));
+        return res.json({ success: true, logs });
+      }
+      return res.json({ success: true, logs: [] });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // DAILY BACKUP LOCK API (Item 5: Trava de execução centralizada)
+  app.get("/api/backup-daily-status", (req, res) => {
+    try {
+      if (fs.existsSync(BACKUP_LOCK_FILE)) {
+        const lockData = JSON.parse(fs.readFileSync(BACKUP_LOCK_FILE, "utf-8"));
+        return res.json({ success: true, status: lockData });
+      }
+      return res.json({ success: true, status: { lastBackupDate: null, isRunning: false, history: [] } });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post("/api/backup-daily-lock", (req, res) => {
+    try {
+      const { dateStr, user } = req.body;
+      const todayStr = dateStr || new Date().toISOString().split('T')[0];
+
+      let lockData: any = { lastBackupDate: null, isRunning: false, lockedAt: null, lockedBy: null, history: [] };
+      if (fs.existsSync(BACKUP_LOCK_FILE)) {
+        try {
+          lockData = JSON.parse(fs.readFileSync(BACKUP_LOCK_FILE, "utf-8"));
+        } catch (e) {
+          // fallback
+        }
+      }
+
+      // Check if already completed today
+      if (lockData.lastBackupDate === todayStr) {
+        return res.json({
+          acquired: false,
+          alreadyCompleted: true,
+          message: `O backup diário de hoje (${todayStr}) já foi realizado com sucesso.`
+        });
+      }
+
+      // Check if locked and not expired (stale timeout: 5 minutes)
+      const now = Date.now();
+      const lockTime = lockData.lockedAt ? new Date(lockData.lockedAt).getTime() : 0;
+      if (lockData.isRunning && (now - lockTime < 5 * 60 * 1000)) {
+        return res.json({
+          acquired: false,
+          isRunning: true,
+          message: `Backup diário em execução por ${lockData.lockedBy || 'outro usuário'}. Aguarde a finalização.`
+        });
+      }
+
+      // Acquire lock
+      lockData.isRunning = true;
+      lockData.lockedAt = new Date().toISOString();
+      lockData.lockedBy = user || 'Sistema';
+      fs.writeFileSync(BACKUP_LOCK_FILE, JSON.stringify(lockData, null, 2), "utf-8");
+
+      return res.json({ acquired: true, dateStr: todayStr });
+    } catch (err: any) {
+      return res.status(500).json({ acquired: false, error: err.message });
+    }
+  });
+
+  app.post("/api/backup-daily-complete", (req, res) => {
+    try {
+      const { dateStr, success, error, user } = req.body;
+      const todayStr = dateStr || new Date().toISOString().split('T')[0];
+
+      let lockData: any = { lastBackupDate: null, isRunning: false, lockedAt: null, lockedBy: null, history: [] };
+      if (fs.existsSync(BACKUP_LOCK_FILE)) {
+        try {
+          lockData = JSON.parse(fs.readFileSync(BACKUP_LOCK_FILE, "utf-8"));
+        } catch (e) {
+          // fallback
+        }
+      }
+
+      lockData.isRunning = false;
+      lockData.lockedAt = null;
+
+      if (success) {
+        lockData.lastBackupDate = todayStr;
+      }
+
+      const logItem = {
+        date: todayStr,
+        timestamp: new Date().toISOString(),
+        success: Boolean(success),
+        error: error || null,
+        user: user || lockData.lockedBy || 'Sistema'
+      };
+
+      lockData.history = [logItem, ...(lockData.history || [])].slice(0, 100);
+      fs.writeFileSync(BACKUP_LOCK_FILE, JSON.stringify(lockData, null, 2), "utf-8");
+
+      return res.json({ success: true, status: lockData });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // API endpoint to process PDF / Bula with Gemini 2.5 Flash Multimodal
   app.post("/api/parse-bula-pdf", async (req, res) => {
     try {
