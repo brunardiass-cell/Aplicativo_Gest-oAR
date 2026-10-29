@@ -57,7 +57,9 @@ import {
   ChevronUp,
   ChevronDown,
   Workflow,
-  Edit
+  Edit,
+  ClipboardCheck,
+  Users2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { 
@@ -72,6 +74,7 @@ import {
   PlanReferenceGuide,
   MacroActivity,
   RegulatoryRecordItem,
+  RegulatoryRecordHistoryItem,
   ProjectContributionItem,
   ProjectHistoryEvent,
   RegulatoryTermDefinition
@@ -657,12 +660,15 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     return INITIAL_REGULATORY_TERMS;
   }, [project.regulatoryTerms]);
 
-  // Unified Central de Validação Regulatória States (Item 3 & Item 5)
+  // Unified Central de Validação Regulatória States (Item 3, 4 & 5)
   const [validationQueueFilter, setValidationQueueFilter] = useState<'todos' | 'pendentes' | 'ajustes' | 'validados' | 'descartados'>('pendentes');
+  const [validationOriginFilter, setValidationOriginFilter] = useState<'todas' | 'microatividade' | 'atividade' | 'reuniao'>('todas');
+  const [validationSearchTerm, setValidationSearchTerm] = useState<string>('');
   const [unifiedValidationModalOpen, setUnifiedValidationModalOpen] = useState(false);
   const [selectedUnifiedItem, setSelectedUnifiedItem] = useState<{
     id: string;
     originType: 'atividade' | 'decisao' | 'contribuicao';
+    originCategory: 'microatividade' | 'atividade' | 'reuniao';
     title: string;
     phase: string;
     macroName: string;
@@ -678,6 +684,15 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     justification?: string;
     operationalStatus?: string;
   } | null>(null);
+
+  // States for Editing/Altering Matrix Term Values with Confirmation Modal (Requirement 6)
+  const [isEditTermModalOpen, setIsEditTermModalOpen] = useState(false);
+  const [editingTermForValueChange, setEditingTermForValueChange] = useState<{ term: RegulatoryTermDefinition; record?: RegulatoryRecordItem } | null>(null);
+  const [editTermNewValue, setEditTermNewValue] = useState('');
+  const [editTermNewLink, setEditTermNewLink] = useState('');
+  const [editTermJustification, setEditTermJustification] = useState('');
+  const [editTermRequiresApproval, setEditTermRequiresApproval] = useState(false);
+  const [isConfirmValueChangeOpen, setIsConfirmValueChangeOpen] = useState(false);
 
   const [reviewAction, setReviewAction] = useState<'aprovar' | 'ajustes' | 'descartar'>('aprovar');
   const [reviewTermKey, setReviewTermKey] = useState('');
@@ -725,11 +740,12 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     return (item?.valueText || item?.value || '').trim();
   }, [project.regulatoryDatabase, reviewTermKey]);
 
-  // Unified Regulatory Validation Queue: dynamically pulls from microactivities, decisions, contributions, tasks and meetings (Item 1 & Item 3)
+  // Unified Regulatory Validation Queue: dynamically pulls from microactivities, decisions, contributions, tasks and meetings (Item 2 & Item 4)
   const unifiedValidationQueue = useMemo(() => {
     const list: Array<{
       id: string;
       originType: 'atividade' | 'decisao' | 'contribuicao';
+      originCategory: 'microatividade' | 'atividade' | 'reuniao';
       title: string;
       phase: string;
       macroName: string;
@@ -746,25 +762,29 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       operationalStatus?: string;
     }> = [];
 
-    // 1. Microactivities with generatesRegulatoryContent !== false
+    // 1. Microactivities: strictly when marked as CONCLUDED and has regulatory content (Requirement 2)
     (project.macroActivities || []).forEach(macro => {
       (macro.microActivities || []).forEach(micro => {
-        if (micro.generatesRegulatoryContent !== false) {
+        const isMicroDone = micro.status === 'Concluído e aprovado' || micro.status === 'Concluído com restrições' || (micro as any).status === 'Concluída';
+        const hasRegImpact = Boolean(micro.generatesRegulatoryContent);
+
+        if (isMicroDone && hasRegImpact) {
           const content = (micro.observations || micro.documentLink || micro.evidenceDescription || '').trim();
           const evidence = micro.documentLink || micro.reportLink || micro.evidenceUrl;
           const regStatus = micro.regulatoryStatus || 'pendente';
           list.push({
             id: `val_mic_${micro.id}`,
             originType: 'atividade',
+            originCategory: 'microatividade',
             title: `Microatividade: ${micro.name}`,
             phase: macro.phase || 'Desenvolvimento Não Clínico',
             macroName: macro.name,
             macroId: macro.id,
             microId: micro.id,
-            content: content || 'Atividade com insumo regulatório.',
+            content: content || 'Atividade concluída com impacto regulatório.',
             evidenceLink: evidence,
             author: micro.assignee || 'Equipe',
-            date: micro.dueDate || 'Sem prazo',
+            date: micro.completionDate || micro.dueDate || 'Sem prazo',
             currentStatus: regStatus,
             linkedTermKey: micro.regulatoryLinkedFieldKey,
             justification: micro.regulatoryJustification,
@@ -773,15 +793,19 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         }
       });
 
-      // 2. Strategic decisions with regulatory impact
+      // 2. Strategic decisions with regulatory impact (concluded/decided)
       (macro.decisionsList || []).forEach(dec => {
-        if (dec.hasRegulatoryImpact || dec.isMandatory) {
+        const isDecDone = dec.status === 'Decidido' || dec.status === 'Validado';
+        const hasRegImpact = Boolean(dec.hasRegulatoryImpact || dec.isMandatory);
+
+        if (isDecDone && hasRegImpact) {
           let regStatus: 'pendente' | 'validada' | 'ajustes' | 'descartada' = 'pendente';
           if (dec.status === 'Validado') regStatus = 'validada';
           else if (dec.status === 'Em avaliação') regStatus = 'ajustes';
           list.push({
             id: `val_dec_${dec.id}`,
             originType: 'decisao',
+            originCategory: 'microatividade',
             title: `Decisão: ${dec.question}`,
             phase: macro.phase || 'Desenvolvimento Não Clínico',
             macroName: macro.name,
@@ -802,15 +826,17 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
 
     // 3. Project contributions (meetings, manual, notes)
     (project.contributions || []).forEach(c => {
-      if (!c.originDetails || !c.originDetails.startsWith('mic_')) {
+      if ((c.status as string) !== 'inativo_desconcluido' && (!c.originDetails || !c.originDetails.startsWith('mic_'))) {
         let mappedStatus: 'pendente' | 'validada' | 'ajustes' | 'descartada' = 'pendente';
         if (c.status === 'validada') mappedStatus = 'validada';
         else if (c.status === 'ajustes' || c.status === 'em_ajuste') mappedStatus = 'ajustes';
         else if (c.status === 'descartada') mappedStatus = 'descartada';
 
+        const isMeeting = c.origin === 'Reunião' || c.source === 'reunião';
         list.push({
           id: `val_contrib_${c.id}`,
           originType: 'contribuicao',
+          originCategory: isMeeting ? 'reuniao' : 'atividade',
           title: c.title,
           phase: c.targetPhase || selectedPhase,
           macroName: c.linkedMacroName || 'Geral do Projeto',
@@ -826,12 +852,15 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       }
     });
 
-    // 4. Tasks with regulatory impact passed via props (Item 1: Atividades com impacto regulatório)
+    // 4. Tasks with regulatory impact: strictly when concluded (Requirement 2)
     (tasks || []).forEach(t => {
       const tAny = t as any;
       const isLinkedToThisProject = (tAny.projectId && tAny.projectId === project.id) || 
                                     (t.project && (t.project === project.name || t.project.toLowerCase() === project.name.toLowerCase()));
-      if (isLinkedToThisProject && (t.isRegulatoryContribution || tAny.generatesRegulatoryContent)) {
+      const isTaskDone = t.status === 'Concluída';
+      const hasRegImpact = Boolean(t.isRegulatoryContribution || tAny.generatesRegulatoryContent);
+
+      if (isLinkedToThisProject && isTaskDone && hasRegImpact) {
         const alreadyExists = list.some(item => 
           item.id === `val_task_${t.id}` || 
           item.id === `val_contrib_task_${t.id}` || 
@@ -848,6 +877,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           list.push({
             id: `val_task_${t.id}`,
             originType: 'atividade',
+            originCategory: 'atividade',
             title: `Atividade: ${t.activity || tAny.title || 'Sem título'}`,
             phase: selectedPhase,
             macroName: t.project || 'Geral do Projeto',
@@ -858,17 +888,19 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             currentStatus: mappedStatus,
             linkedTermKey: tAny.regulatoryLinkedFieldKey,
             justification: tAny.regulatoryJustification,
-            operationalStatus: t.status || 'Planejada'
+            operationalStatus: t.status || 'Concluída'
           });
         }
       }
     });
 
-    // 5. Meetings with regulatory impact agenda items passed via props (Item 1: Reuniões e pautas)
+    // 5. Meetings with regulatory impact agenda items: strictly when meeting is concluded (Requirement 2)
     (meetings || []).forEach(m => {
       const isLinkedToThisProject = (m.projectId && m.projectId === project.id) ||
                                     (!m.projectId && m.projectName && (m.projectName === project.name || m.projectName.toLowerCase() === project.name.toLowerCase()));
-      if (isLinkedToThisProject && m.agendaItems && m.agendaItems.length > 0) {
+      const isMeetingDone = m.status === 'Concluída';
+
+      if (isLinkedToThisProject && isMeetingDone && m.agendaItems && m.agendaItems.length > 0) {
         m.agendaItems.forEach((ag, agIdx) => {
           if (ag.hasRegulatoryImpact) {
             const alreadyExists = list.some(item => 
@@ -884,6 +916,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               list.push({
                 id: `val_agenda_${ag.id || `${m.id}_${agIdx}`}`,
                 originType: 'contribuicao',
+                originCategory: 'reuniao',
                 title: `Pauta da Reunião: ${ag.title || m.title}`,
                 phase: ag.phase || selectedPhase,
                 macroName: `Reunião: ${m.title}`,
@@ -904,10 +937,29 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     return list;
   }, [project.macroActivities, project.contributions, selectedPhase, tasks, meetings, project.id, project.name]);
 
-  // Pending items badge counter for Tab 4
-  const totalPendingValidation = useMemo(() => {
-    return unifiedValidationQueue.filter(i => i.currentStatus === 'pendente' || i.currentStatus === 'ajustes').length;
+  // Requirement 4: Três indicadores separados de pendências regulatórias
+  const pendingMicroCount = useMemo(() => {
+    return unifiedValidationQueue.filter(i => 
+      i.originCategory === 'microatividade' && (i.currentStatus === 'pendente' || i.currentStatus === 'ajustes')
+    ).length;
   }, [unifiedValidationQueue]);
+
+  const pendingTaskCount = useMemo(() => {
+    return unifiedValidationQueue.filter(i => 
+      i.originCategory === 'atividade' && (i.currentStatus === 'pendente' || i.currentStatus === 'ajustes')
+    ).length;
+  }, [unifiedValidationQueue]);
+
+  const pendingMeetingCount = useMemo(() => {
+    return unifiedValidationQueue.filter(i => 
+      i.originCategory === 'reuniao' && (i.currentStatus === 'pendente' || i.currentStatus === 'ajustes')
+    ).length;
+  }, [unifiedValidationQueue]);
+
+  // Total pending items badge counter for Tab 4 (Requirement 3)
+  const totalPendingValidation = useMemo(() => {
+    return pendingMicroCount + pendingTaskCount + pendingMeetingCount;
+  }, [pendingMicroCount, pendingTaskCount, pendingMeetingCount]);
 
   // Legacy counter maintained for compatibility
   const pendingContributionsCount = totalPendingValidation;
@@ -2362,6 +2414,237 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     setSelectedUnifiedItem(null);
   };
 
+  // Requirement 6: Start manual alteration of a term value
+  const handleStartEditTermValue = (term: RegulatoryTermDefinition, record?: RegulatoryRecordItem) => {
+    setEditingTermForValueChange({ term, record });
+    const currentVal = (record?.valueText || record?.value || '').replace(/^\[(?:Validado|VALIDADO)\]\s*/i, '').trim();
+    setEditTermNewValue(currentVal);
+    setEditTermNewLink(record?.valueLink || '');
+    setEditTermJustification('');
+    setEditTermRequiresApproval(false);
+    setIsEditTermModalOpen(true);
+  };
+
+  // Requirement 6: Submit to confirmation modal
+  const handleProceedToConfirmValueChange = () => {
+    if (!editTermJustification.trim()) {
+      alert('A justificativa da alteração é obrigatória para manter a rastreabilidade e auditoria.');
+      return;
+    }
+    setIsEditTermModalOpen(false);
+    setIsConfirmValueChangeOpen(true);
+  };
+
+  // Requirement 6: Execute confirmed value change and update matrix, version history, timeline
+  const handleExecuteConfirmedValueChange = () => {
+    if (!editingTermForValueChange) return;
+
+    const { term, record } = editingTermForValueChange;
+    const nowIso = new Date().toISOString();
+    const todayStr = nowIso.split('T')[0];
+    const authorName = teamMembers[0]?.name || 'Bruna';
+
+    const previousVal = (record?.valueText || record?.value || '').replace(/^\[(?:Validado|VALIDADO)\]\s*/i, '').trim();
+    const newVal = editTermNewValue.trim();
+    const newVersion = (record?.version || (record?.history?.length || 0)) + 1;
+
+    const newHistoryEntry: RegulatoryRecordHistoryItem = {
+      id: `hist_val_${Date.now()}`,
+      version: newVersion,
+      previousValue: previousVal || undefined,
+      newValue: newVal,
+      author: authorName,
+      timestamp: nowIso,
+      justification: editTermJustification.trim(),
+      evidenceLink: editTermNewLink.trim() || undefined
+    };
+
+    const updatedRecord: RegulatoryRecordItem = {
+      id: record?.id || `reg_${term.key.toLowerCase()}_${Date.now()}`,
+      fieldKey: term.key,
+      key: term.key,
+      label: term.label,
+      fieldLabel: term.label,
+      groupName: term.groupName,
+      valueText: newVal,
+      value: newVal,
+      valueLink: editTermNewLink.trim() || undefined,
+      status: editTermRequiresApproval ? 'em análise' : 'validado',
+      justification: editTermJustification.trim(),
+      version: newVersion,
+      lastModifiedAt: nowIso,
+      updatedBy: authorName,
+      history: [newHistoryEntry, ...(record?.history || [])]
+    };
+
+    const existingRegDb = project.regulatoryDatabase || [];
+    const exists = existingRegDb.some(r => r.key === term.key || r.fieldKey === term.key);
+    const updatedRegDb = exists
+      ? existingRegDb.map(r => (r.key === term.key || r.fieldKey === term.key) ? updatedRecord : r)
+      : [...existingRegDb, updatedRecord];
+
+    const timelineEvent: ProjectHistoryEvent = {
+      id: `hist_evt_${Date.now()}`,
+      date: todayStr,
+      timestamp: nowIso,
+      author: authorName,
+      eventType: 'regulatorio',
+      title: `Alteração na Base Regulatória: [${term.key}]`,
+      description: `Valor do termo "${term.label}" alterado para "${newVal}".`,
+      previousValue: previousVal || undefined,
+      newValue: newVal,
+      justification: editTermJustification.trim(),
+      refType: 'termo_regulatorio',
+      refId: term.key
+    };
+
+    onUpdateProject({
+      ...project,
+      regulatoryDatabase: updatedRegDb,
+      historyTimeline: [timelineEvent, ...(project.historyTimeline || [])]
+    });
+
+    setIsConfirmValueChangeOpen(false);
+    setEditingTermForValueChange(null);
+    setEditTermNewValue('');
+    setEditTermNewLink('');
+    setEditTermJustification('');
+  };
+
+  // Quick Approve Item directly from Validation Table (matching Image 3)
+  const handleQuickApproveItem = (item: typeof unifiedValidationQueue[0]) => {
+    const nowIso = new Date().toISOString();
+    const todayStr = nowIso.split('T')[0];
+    const authorName = teamMembers[0]?.name || 'Bruna';
+
+    let updatedMacros = project.macroActivities || [];
+    let updatedContributions = project.contributions || [];
+    let updatedRegDb = project.regulatoryDatabase || [];
+    const newHistoryEvents: ProjectHistoryEvent[] = [];
+
+    const targetTermKey = item.linkedTermKey || activeTermsList[0]?.key || 'NOME_VACINA';
+
+    if (item.originType === 'atividade' && item.microId) {
+      updatedMacros = updatedMacros.map(macro => {
+        const hasMicro = (macro.microActivities || []).some(m => m.id === item.microId);
+        if (hasMicro) {
+          const nextMicros = macro.microActivities.map(m => {
+            if (m.id === item.microId) {
+              return {
+                ...m,
+                regulatoryStatus: 'validada' as const,
+                regulatoryValidationDate: nowIso,
+                regulatoryEvaluator: authorName,
+                regulatoryReviewNotes: 'Aprovado via Validação Regulatória Rápida.'
+              };
+            }
+            return m;
+          });
+          return { ...macro, microActivities: nextMicros };
+        }
+        return macro;
+      });
+    } else if (item.originType === 'decisao' && item.decisionId) {
+      updatedMacros = updatedMacros.map(macro => {
+        const hasDec = (macro.decisionsList || []).some((d: any) => d.id === item.decisionId);
+        if (hasDec) {
+          const nextDecs = (macro.decisionsList || []).map((d: any) => {
+            if (d.id === item.decisionId) {
+              return {
+                ...d,
+                status: 'Validado' as const,
+                regulatoryImpact: true
+              };
+            }
+            return d;
+          });
+          return { ...macro, decisionsList: nextDecs };
+        }
+        return macro;
+      });
+    } else if (item.originType === 'contribuicao') {
+      updatedContributions = updatedContributions.map(c => {
+        if (c.id === item.id) {
+          return {
+            ...c,
+            status: 'validada' as const,
+            triageDate: nowIso,
+            triagedBy: authorName,
+            justification: 'Aprovado via Validação Regulatória Rápida.'
+          };
+        }
+        return c;
+      });
+    }
+
+    // Update regulatory database with the item content
+    const recIndex = updatedRegDb.findIndex(r => r.key === targetTermKey || r.fieldKey === targetTermKey);
+    const existingRec = recIndex >= 0 ? updatedRegDb[recIndex] : undefined;
+    const currentVal = existingRec?.valueText || existingRec?.value || '';
+    const cleanCurrent = currentVal.replace(/^\[(?:Validado|VALIDADO)\]\s*/i, '').trim();
+    const nextVal = item.content.trim() || cleanCurrent || `Valor validado a partir de ${item.title}`;
+    const newVersion = (existingRec?.version || (existingRec?.history?.length || 0)) + 1;
+
+    const historyItem: RegulatoryRecordHistoryItem = {
+      id: `hist_reg_${Date.now()}`,
+      version: newVersion,
+      previousValue: cleanCurrent || undefined,
+      newValue: nextVal,
+      author: authorName,
+      timestamp: nowIso,
+      justification: 'Validação técnica rápida aprovada diretamente pela central.',
+      evidenceLink: item.evidenceLink || existingRec?.valueLink
+    };
+
+    const targetTermDef = activeTermsList.find(t => t.key === targetTermKey);
+
+    const updatedRec: RegulatoryRecordItem = {
+      id: existingRec?.id || `reg_${targetTermKey.toLowerCase()}_${Date.now()}`,
+      fieldKey: targetTermKey,
+      key: targetTermKey,
+      label: targetTermDef?.label || targetTermKey,
+      fieldLabel: targetTermDef?.label || targetTermKey,
+      groupName: targetTermDef?.groupName || 'Dados Gerais do Candidato Vacinal',
+      valueText: nextVal,
+      value: nextVal,
+      valueLink: item.evidenceLink || existingRec?.valueLink,
+      status: 'validado',
+      justification: 'Validação técnica rápida aprovada.',
+      version: newVersion,
+      lastModifiedAt: nowIso,
+      updatedBy: authorName,
+      history: [historyItem, ...(existingRec?.history || [])]
+    };
+
+    if (recIndex >= 0) {
+      updatedRegDb = updatedRegDb.map((r, i) => i === recIndex ? updatedRec : r);
+    } else {
+      updatedRegDb = [...updatedRegDb, updatedRec];
+    }
+
+    newHistoryEvents.push({
+      id: `hist_val_${Date.now()}`,
+      date: todayStr,
+      timestamp: nowIso,
+      author: authorName,
+      eventType: 'regulatorio',
+      title: `Item Aprovado na Validação: ${item.title}`,
+      description: `Item validado com sucesso e vinculado ao termo [${targetTermKey}].`,
+      newValue: nextVal,
+      justification: 'Aprovado via validação rápida.',
+      refType: item.originType,
+      refId: item.id
+    });
+
+    onUpdateProject({
+      ...project,
+      macroActivities: updatedMacros,
+      contributions: updatedContributions,
+      regulatoryDatabase: updatedRegDb,
+      historyTimeline: [...newHistoryEvents, ...(project.historyTimeline || [])]
+    });
+  };
+
   // Requirement 3: Navigate from validation queue to original activity, decision or meeting
   const handleNavigateToOrigin = (item: typeof unifiedValidationQueue[0]) => {
     setActiveTopTab('projeto');
@@ -3055,7 +3338,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               <IconComp size={15} className={isActive ? 'text-emerald-700' : 'text-slate-400'} />
               <span>{tab.label}</span>
               {tab.badge && tab.badge > 0 ? (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white animate-pulse">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white shadow-xs animate-pulse">
                   {tab.badge}
                 </span>
               ) : null}
@@ -3399,24 +3682,21 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       )}
 
-      {/* SEÇÃO 2: CENTRAL DE VALIDAÇÃO REGULATÓRIA (Fila unificada de microatividades, decisões e contribuições) */}
+      {/* SEÇÃO 2: CENTRAL DE VALIDAÇÃO REGULATÓRIA (Matching Image 3) */}
       {isValidacaoTab && (
         <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-6">
+          {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="text-blue-600" size={22} />
-                <h2 className="text-lg font-black text-slate-900">Central de Validação Regulatória</h2>
-                {totalPendingValidation > 0 && (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-500 text-white animate-pulse">
-                    {totalPendingValidation} pendência{totalPendingValidation > 1 ? 's' : ''}
-                  </span>
-                )}
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200/60 shadow-2xs">
+                <ShieldCheck size={22} className="stroke-[2.2]" />
               </div>
-              <p className="text-xs text-slate-500 mt-1">
-                Fila unificada de validação técnica: microatividades marcadas, decisões estratégicas e contribuições da equipe.
-                A aprovação regulatória é independente da conclusão operacional.
-              </p>
+              <div>
+                <h2 className="text-lg font-black text-slate-900">Validação Regulatória</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Analise e aprove as contribuições regulatórias provenientes das microatividades (notas) e reuniões deste projeto.
+                </p>
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
@@ -3429,218 +3709,309 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             </div>
           </div>
 
-          {/* Stats Bar */}
-          {(() => {
-            const allItems = unifiedValidationQueue;
-            const pendentes = allItems.filter(i => i.currentStatus === 'pendente').length;
-            const ajustes = allItems.filter(i => i.currentStatus === 'ajustes').length;
-            const validados = allItems.filter(i => i.currentStatus === 'validada').length;
-            const descartados = allItems.filter(i => i.currentStatus === 'descartada').length;
-
-            return (
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
-                  <span className="text-[11px] font-bold text-slate-500">Total na Fila</span>
-                  <p className="text-2xl font-black text-slate-900">{allItems.length}</p>
+          {/* 3 Top Indicator Cards matching Image 3 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Card 1: Microatividades */}
+            <div 
+              onClick={() => setValidationOriginFilter(validationOriginFilter === 'microatividade' ? 'todas' : 'microatividade')}
+              className={`p-4 rounded-2xl border transition flex items-center justify-between cursor-pointer select-none ${
+                validationOriginFilter === 'microatividade'
+                  ? 'border-emerald-400 bg-emerald-50/90 shadow-sm ring-2 ring-emerald-300'
+                  : 'border-emerald-200/80 bg-emerald-50/70 hover:bg-emerald-50 hover:border-emerald-300'
+              }`}
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <ClipboardCheck size={20} className="stroke-[2.2]" />
                 </div>
-                <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-amber-700">Pendentes</span>
-                    {pendentes > 0 && <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />}
-                  </div>
-                  <p className="text-2xl font-black text-amber-900">{pendentes}</p>
-                </div>
-                <div className="p-3.5 bg-indigo-50 rounded-2xl border border-indigo-200">
-                  <span className="text-[11px] font-bold text-indigo-700">Em Ajustes</span>
-                  <p className="text-2xl font-black text-indigo-900">{ajustes}</p>
-                </div>
-                <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200">
-                  <span className="text-[11px] font-bold text-emerald-700">Validados</span>
-                  <p className="text-2xl font-black text-emerald-900">{validados}</p>
-                </div>
-                <div className="p-3.5 bg-slate-100 rounded-2xl border border-slate-200">
-                  <span className="text-[11px] font-bold text-slate-500">Descartados</span>
-                  <p className="text-2xl font-black text-slate-700">{descartados}</p>
+                <div>
+                  <p className="text-xs font-semibold text-slate-600">Microatividades</p>
+                  <p className="text-2xl font-black text-slate-900">{pendingMicroCount}</p>
+                  <p className="text-[11px] text-slate-500">Decisões pendentes</p>
                 </div>
               </div>
-            );
-          })()}
+              <ChevronRight size={18} className="text-slate-400" />
+            </div>
 
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="text-slate-400 font-bold mr-1 flex items-center gap-1">
-              <Filter size={12} /> Filtrar Status:
-            </span>
-            {[
-              { id: 'pendentes', label: 'Pendentes de Análise' },
-              { id: 'ajustes', label: 'Em Ajustes' },
-              { id: 'validados', label: 'Validados' },
-              { id: 'descartados', label: 'Descartados' },
-              { id: 'todos', label: 'Todos os Itens' }
-            ].map(f => (
-              <button
-                key={f.id}
-                onClick={() => setValidationQueueFilter(f.id as any)}
-                className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer ${
-                  validationQueueFilter === f.id
-                    ? 'bg-blue-600 text-white shadow-2xs font-black'
-                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+            {/* Card 2: Atividades (Notas) */}
+            <div 
+              onClick={() => setValidationOriginFilter(validationOriginFilter === 'atividade' ? 'todas' : 'atividade')}
+              className={`p-4 rounded-2xl border transition flex items-center justify-between cursor-pointer select-none ${
+                validationOriginFilter === 'atividade'
+                  ? 'border-blue-400 bg-blue-50/90 shadow-sm ring-2 ring-blue-300'
+                  : 'border-blue-200/80 bg-blue-50/70 hover:bg-blue-50 hover:border-blue-300'
+              }`}
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                  <FileText size={20} className="stroke-[2.2]" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-600">Atividades (Notas)</p>
+                  <p className="text-2xl font-black text-slate-900">{pendingTaskCount}</p>
+                  <p className="text-[11px] text-slate-500">Itens pendentes</p>
+                </div>
+              </div>
+              <ChevronRight size={18} className="text-slate-400" />
+            </div>
+
+            {/* Card 3: Reuniões e Pautas */}
+            <div 
+              onClick={() => setValidationOriginFilter(validationOriginFilter === 'reuniao' ? 'todas' : 'reuniao')}
+              className={`p-4 rounded-2xl border transition flex items-center justify-between cursor-pointer select-none ${
+                validationOriginFilter === 'reuniao'
+                  ? 'border-purple-400 bg-purple-50/90 shadow-sm ring-2 ring-purple-300'
+                  : 'border-purple-200/80 bg-purple-50/70 hover:bg-purple-50 hover:border-purple-300'
+              }`}
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                  <Users2 size={20} className="stroke-[2.2]" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-600">Reuniões e Pautas</p>
+                  <p className="text-2xl font-black text-slate-900">{pendingMeetingCount}</p>
+                  <p className="text-[11px] text-slate-500">Itens pendentes</p>
+                </div>
+              </div>
+              <ChevronRight size={18} className="text-slate-400" />
+            </div>
           </div>
 
-          {/* Unified Validation Feed */}
-          <div className="space-y-3">
-            {(() => {
-              const list = unifiedValidationQueue.filter(item => {
-                if (validationQueueFilter === 'todos') return true;
-                if (validationQueueFilter === 'pendentes') return item.currentStatus === 'pendente';
-                if (validationQueueFilter === 'ajustes') return item.currentStatus === 'ajustes';
-                if (validationQueueFilter === 'validados') return item.currentStatus === 'validada';
-                if (validationQueueFilter === 'descartados') return item.currentStatus === 'descartada';
-                return true;
-              });
+          {/* Filter Bar matching Image 3 */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">
+            <div className="relative flex-1">
+              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={validationSearchTerm}
+                onChange={e => setValidationSearchTerm(e.target.value)}
+                placeholder="Buscar por título, origem ou termo..."
+                className="w-full pl-9 pr-3 py-2 bg-slate-50/80 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
 
-              if (list.length === 0) {
-                return (
-                  <div className="p-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                    <CheckCircle2 size={36} className="mx-auto text-emerald-500 mb-2" />
-                    <p className="text-xs font-bold uppercase text-slate-600">Nenhum item nesta visualização</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      {validationQueueFilter === 'pendentes'
-                        ? 'Todas as contribuições, microatividades e decisões regulatórias foram avaliadas!'
-                        : 'Não há registros para o filtro selecionado.'}
-                    </p>
-                  </div>
-                );
-              }
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-slate-500 font-semibold">Origem</span>
+                <select
+                  value={validationOriginFilter}
+                  onChange={e => setValidationOriginFilter(e.target.value as any)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white"
+                >
+                  <option value="todas">Todas</option>
+                  <option value="microatividade">Microatividades</option>
+                  <option value="atividade">Atividades (Notas)</option>
+                  <option value="reuniao">Reuniões e Pautas</option>
+                </select>
+              </div>
 
-              return list.map(item => {
-                const isApproved = item.currentStatus === 'validada';
-                const isAdjustments = item.currentStatus === 'ajustes';
-                const isDiscarded = item.currentStatus === 'descartada';
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-slate-500 font-semibold">Status</span>
+                <select
+                  value={validationQueueFilter}
+                  onChange={e => setValidationQueueFilter(e.target.value as any)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white"
+                >
+                  <option value="todos">Todas</option>
+                  <option value="pendentes">Pendente</option>
+                  <option value="ajustes">Em análise</option>
+                  <option value="validados">Aprovado</option>
+                  <option value="descartados">Descartado</option>
+                </select>
+              </div>
 
-                return (
-                  <div 
-                    key={item.id} 
-                    className={`p-4 rounded-2xl border transition space-y-3 ${
-                      isApproved 
-                        ? 'border-emerald-200 bg-emerald-50/30' 
-                        : isAdjustments 
-                          ? 'border-indigo-200 bg-indigo-50/30' 
-                          : isDiscarded 
-                            ? 'border-slate-200 bg-slate-50/50 opacity-75' 
-                            : 'border-amber-200 bg-white hover:border-amber-300 shadow-2xs'
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {/* Origin Type Badge */}
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                            item.originType === 'atividade' ? 'bg-blue-100 text-blue-800' :
-                            item.originType === 'decisao' ? 'bg-indigo-100 text-indigo-800' : 'bg-purple-100 text-purple-800'
-                          }`}>
-                            {item.originType}
-                          </span>
+              {(validationSearchTerm || validationOriginFilter !== 'todas' || validationQueueFilter !== 'todos') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setValidationSearchTerm('');
+                    setValidationOriginFilter('todas');
+                    setValidationQueueFilter('todos');
+                  }}
+                  className="text-xs text-slate-500 hover:text-slate-800 font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <X size={13} /> Limpar filtros
+                </button>
+              )}
+            </div>
+          </div>
 
-                          {/* Independent Regulatory Status Badge */}
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                            isApproved ? 'bg-emerald-600 text-white shadow-2xs' :
-                            isAdjustments ? 'bg-indigo-600 text-white shadow-2xs' :
-                            isDiscarded ? 'bg-slate-300 text-slate-700' : 'bg-amber-500 text-white shadow-2xs'
-                          }`}>
-                            {isApproved ? 'Validada ✓' : isAdjustments ? 'Em Ajustes ⚠️' : isDiscarded ? 'Descartada' : 'Pendente de Validação ⏳'}
-                          </span>
+          {/* Table matching Image 3 */}
+          <div className="overflow-x-auto border border-slate-200/90 rounded-2xl">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-50 text-[11px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                  <th className="py-3 px-3 w-8">
+                    <input type="checkbox" className="rounded-sm border-slate-300" />
+                  </th>
+                  <th className="py-3 px-3 w-[150px]">ORIGEM</th>
+                  <th className="py-3 px-4 min-w-[220px]">TÍTULO / DESCRIÇÃO</th>
+                  <th className="py-3 px-3 w-[160px]">TERMO AFETADO</th>
+                  <th className="py-3 px-3 min-w-[180px]">GRUPO REGULATÓRIO</th>
+                  <th className="py-3 px-3 w-[120px]">STATUS</th>
+                  <th className="py-3 px-3 text-right w-[100px]">AÇÕES</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {(() => {
+                  const filteredList = unifiedValidationQueue.filter(item => {
+                    // Filter by origin category
+                    if (validationOriginFilter !== 'todas') {
+                      if (item.originCategory !== validationOriginFilter) return false;
+                    }
+                    // Filter by status
+                    if (validationQueueFilter === 'pendentes' && item.currentStatus !== 'pendente') return false;
+                    if (validationQueueFilter === 'ajustes' && item.currentStatus !== 'ajustes') return false;
+                    if (validationQueueFilter === 'validados' && item.currentStatus !== 'validada') return false;
+                    if (validationQueueFilter === 'descartados' && item.currentStatus !== 'descartada') return false;
 
-                          <h4 className="text-xs font-black text-slate-900">{item.title}</h4>
-                        </div>
+                    // Search term
+                    if (validationSearchTerm.trim()) {
+                      const q = validationSearchTerm.toLowerCase();
+                      const matchTitle = item.title.toLowerCase().includes(q);
+                      const matchContent = item.content.toLowerCase().includes(q);
+                      const matchTerm = (item.linkedTermKey || '').toLowerCase().includes(q);
+                      const matchMacro = item.macroName.toLowerCase().includes(q);
+                      if (!matchTitle && !matchContent && !matchTerm && !matchMacro) return false;
+                    }
+                    return true;
+                  });
 
-                        <p className="text-[11px] text-slate-500">
-                          Fase: <strong className="text-slate-700">{item.phase}</strong> • Macro: <strong className="text-slate-700">{item.macroName}</strong> • Autor: <strong className="text-slate-700">{item.author}</strong> • Prazo/Data: {item.date}
-                        </p>
-                      </div>
+                  if (filteredList.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-slate-400">
+                          <CheckCircle2 size={32} className="mx-auto text-emerald-500 mb-2" />
+                          <p className="text-xs font-bold text-slate-700">Nenhum item encontrado nesta visualização</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Todas as contribuições, microatividades concluídas e pautas foram processadas ou não atendem aos filtros.
+                          </p>
+                        </td>
+                      </tr>
+                    );
+                  }
 
-                      {/* Action Button */}
-                      <div className="flex items-center gap-2">
-                        {item.evidenceLink && (
-                          <a
-                            href={item.evidenceLink}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-2.5 py-1 bg-white border border-slate-200 rounded-xl text-[11px] font-bold text-blue-600 hover:bg-slate-50 flex items-center gap-1 shadow-2xs"
-                          >
-                            <ExternalLink size={12} /> Evidência
-                          </a>
-                        )}
+                  return filteredList.map(item => {
+                    const isApproved = item.currentStatus === 'validada';
+                    const isAdjustments = item.currentStatus === 'ajustes';
+                    const isDiscarded = item.currentStatus === 'descartada';
+                    const isPending = item.currentStatus === 'pendente';
 
-                        <button
-                          type="button"
-                          onClick={() => handleNavigateToOrigin(item)}
-                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700 flex items-center gap-1 shadow-2xs cursor-pointer transition"
-                          title="Navegar diretamente para a atividade, decisão ou reunião de origem"
-                        >
-                          <Compass size={12} className="text-blue-600" /> Ir para origem
-                        </button>
+                    // Origin badge
+                    const originBadge = item.originCategory === 'microatividade' ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200/60 whitespace-nowrap">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        MICROATIVIDADE
+                      </span>
+                    ) : item.originCategory === 'atividade' ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-blue-50 text-blue-700 border border-blue-200/60 whitespace-nowrap">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                        ATIVIDADE (NOTA)
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-purple-50 text-purple-700 border border-purple-200/60 whitespace-nowrap">
+                        <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                        REUNIÃO
+                      </span>
+                    );
 
-                        <button
-                          onClick={() => {
-                            setSelectedUnifiedItem(item);
-                            setReviewAction(item.currentStatus === 'validada' ? 'aprovar' : (item.currentStatus === 'descartada' ? 'descartar' : 'aprovar'));
-                            setReviewTermKey(item.linkedTermKey || activeTermsList[0]?.key || '');
-                            setReviewTextValue(item.content);
-                            setReviewLinkValue(item.evidenceLink || '');
-                            setReviewJustification(item.justification || '');
-                            setIsInlineCreateTermOpen(false);
-                            setUnifiedValidationModalOpen(true);
-                          }}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-2xs cursor-pointer ${
-                            isApproved 
-                              ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' 
-                              : 'bg-blue-600 hover:bg-blue-700 text-white'
-                          }`}
-                        >
-                          <Sliders size={13} /> {isApproved ? 'Revisar Validação' : 'Avaliar / Validar'}
-                        </button>
-                      </div>
-                    </div>
+                    // Linked term definition
+                    const termDef = activeTermsList.find(t => t.key === item.linkedTermKey);
+                    const groupRegName = termDef?.groupName || 'Dados Gerais do Candidato Vacinal';
 
-                    {/* Content Box */}
-                    <div className="text-xs text-slate-700 bg-white p-3 rounded-xl border border-slate-200/80 leading-relaxed font-medium">
-                      {item.content}
-                    </div>
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/70 transition">
+                        <td className="py-3 px-3">
+                          <input type="checkbox" className="rounded-sm border-slate-300" />
+                        </td>
+                        <td className="py-3 px-3">
+                          {originBadge}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="space-y-0.5 max-w-[340px]">
+                            <p className="font-bold text-slate-900 leading-snug">{item.title}</p>
+                            <p className="text-[11px] text-slate-500 line-clamp-1">{item.content}</p>
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 font-mono font-bold text-slate-700">
+                          [{item.linkedTermKey || 'NOME_VACINA'}]
+                        </td>
+                        <td className="py-3 px-3 text-slate-600 font-medium">
+                          {groupRegName}
+                        </td>
+                        <td className="py-3 px-3">
+                          {isApproved ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Aprovado &gt;
+                            </span>
+                          ) : isAdjustments ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                              Em análise
+                            </span>
+                          ) : isDiscarded ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                              Descartado
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              Pendente &gt;
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
+                          <div className="inline-flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleQuickApproveItem(item)}
+                              className="w-8 h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition shadow-2xs cursor-pointer"
+                              title="Aprovar e atualizar base regulatória"
+                            >
+                              <Check size={14} className="stroke-[2.5]" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedUnifiedItem(item);
+                                setReviewAction(item.currentStatus === 'validada' ? 'aprovar' : (item.currentStatus === 'descartada' ? 'descartar' : 'aprovar'));
+                                setReviewTermKey(item.linkedTermKey || activeTermsList[0]?.key || '');
+                                setReviewTextValue(item.content);
+                                setReviewLinkValue(item.evidenceLink || '');
+                                setReviewJustification(item.justification || '');
+                                setIsInlineCreateTermOpen(false);
+                                setUnifiedValidationModalOpen(true);
+                              }}
+                              className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 flex items-center justify-center transition shadow-2xs cursor-pointer"
+                              title="Avaliar detalhes, termo e justificativa"
+                            >
+                              <Send size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
+              </tbody>
+            </table>
+          </div>
 
-                    {/* Operational Status (Independent from Regulatory) & Linked Term */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px]">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-400">Status Operacional:</span>
-                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-200">
-                          {item.operationalStatus || 'Ativo'}
-                        </span>
-                      </div>
-
-                      {item.linkedTermKey && (
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-slate-400">Termo Vinculado:</span>
-                          <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-mono font-bold rounded-lg border border-blue-200">
-                            [{item.linkedTermKey}]
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {item.justification && (
-                      <p className="text-[11px] text-slate-600 italic bg-slate-50 p-2 rounded-xl border border-slate-200">
-                        <strong>Parecer do Gestor:</strong> {item.justification}
-                      </p>
-                    )}
-                  </div>
-                );
-              });
-            })()}
+          {/* Table Footer matching Image 3 */}
+          <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+            <span>
+              {unifiedValidationQueue.length} itens encontrados
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button className="px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 disabled:opacity-40" disabled>
+                &lt;
+              </button>
+              <button className="px-2.5 py-1 rounded-lg bg-teal-700 text-white font-bold text-xs">
+                1
+              </button>
+              <button className="px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 disabled:opacity-40" disabled>
+                &gt;
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -3774,7 +4145,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       <th className="py-3 px-4 border-r border-slate-800 w-[200px]">CHAVE ÚNICA</th>
                       <th className="py-3 px-4 border-r border-slate-800 w-[280px]">NOME LEGÍVEL</th>
                       <th className="py-3 px-4 border-r border-slate-800 w-[220px]">GRUPO REGULATÓRIO</th>
-                      <th className="py-3 px-4">VALOR</th>
+                      <th className="py-3 px-4">VALOR VIGENTE</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
@@ -3818,7 +4189,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                               {term.groupName}
                             </td>
 
-                            {/* Col 4: Valor */}
+                            {/* Col 4: Valor Vigente */}
                             <td className="py-3 px-4">
                               <div className="flex items-center justify-between gap-3">
                                 {isVal ? (
@@ -3851,17 +4222,30 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                                   </span>
                                 )}
 
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedTermForDetails({ term, record: rec });
-                                  }}
-                                  className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition shrink-0 opacity-0 group-hover:opacity-100"
-                                  title="Ver detalhes, evidências e histórico do termo"
-                                >
-                                  <Eye size={14} />
-                                </button>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleStartEditTermValue(term, rec);
+                                    }}
+                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                    title="Alterar valor vigente deste termo"
+                                  >
+                                    <Pencil size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedTermForDetails({ term, record: rec });
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                    title="Ver detalhes, evidências e histórico do termo"
+                                  >
+                                    <Eye size={14} />
+                                  </button>
+                                </div>
                               </div>
                             </td>
                           </tr>
@@ -4259,6 +4643,8 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               >
                 {currentPhaseGroups.slice(0, 8).map((group, idx) => {
                   const isSelected = selectedGroupIndex === idx;
+                  const isCompleted = group.progress === 100;
+                  const isInProgress = group.progress > 0 && group.progress < 100;
 
                   return (
                     <div
@@ -4266,23 +4652,35 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       onClick={() => setSelectedGroupIndex(idx)}
                       className={`min-w-[175px] max-w-[190px] p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between shrink-0 snap-start select-none ${
                         isSelected 
-                          ? 'border-blue-500 bg-blue-50/20 shadow-md ring-2 ring-blue-500/20' 
-                          : 'border-slate-200/90 bg-white hover:border-slate-300 shadow-2xs'
+                          ? isCompleted
+                            ? 'border-emerald-400 bg-emerald-50/90 shadow-md ring-2 ring-emerald-400/40'
+                            : isInProgress
+                              ? 'border-amber-400 bg-amber-50/90 shadow-md ring-2 ring-amber-400/40'
+                              : 'border-blue-500 bg-blue-50/30 shadow-md ring-2 ring-blue-500/20'
+                          : isCompleted
+                            ? 'border-emerald-200/90 bg-emerald-50/70 hover:bg-emerald-50 shadow-2xs'
+                            : isInProgress
+                              ? 'border-amber-200/90 bg-amber-50/70 hover:bg-amber-50 shadow-2xs'
+                              : 'border-slate-200/90 bg-white hover:border-slate-300 shadow-2xs'
                       }`}
                     >
                       <div className="space-y-2">
                         {/* Number badge and Progress badge */}
                         <div className="flex items-center justify-between">
                           <div className={`w-5 h-5 rounded-full font-black text-[11px] flex items-center justify-center ${
-                            isSelected ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white'
+                            isCompleted 
+                              ? 'bg-blue-600 text-white' 
+                              : isInProgress
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-blue-600 text-white'
                           }`}>
                             {group.number}
                           </div>
                           <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md ${
-                            group.progress === 100 
+                            isCompleted 
                               ? 'bg-emerald-100 text-emerald-800' 
-                              : group.progress > 0 
-                                ? 'bg-blue-100 text-blue-800' 
+                              : isInProgress 
+                                ? 'bg-amber-100 text-amber-800' 
                                 : 'bg-slate-100 text-slate-500'
                           }`}>
                             {group.progress}%
@@ -4305,7 +4703,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                         </ul>
                       </div>
 
-                      {/* Espaço Principal: Ícone Exclusivo da Macroatividade (Item 4: sem ilustrações genéricas) */}
+                      {/* Espaço Principal: Ícone Exclusivo da Macroatividade */}
                       <div className="pt-3">
                         {(() => {
                           const IconComp = getMacroIconComponent(group.matchedMacro?.icon);
@@ -4319,9 +4717,11 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                                 }
                               }}
                               className={`h-20 rounded-xl border flex flex-col items-center justify-center relative group/iconcard cursor-pointer transition-all ${
-                                isSelected
-                                  ? 'bg-blue-100/60 border-blue-300 text-blue-700 shadow-inner'
-                                  : 'bg-slate-50/80 hover:bg-blue-50/60 border-slate-200/80 text-blue-600'
+                                isCompleted
+                                  ? 'bg-white/90 border-emerald-200 text-blue-600 hover:bg-emerald-100/50'
+                                  : isInProgress
+                                    ? 'bg-white/90 border-amber-200 text-blue-600 hover:bg-amber-100/50'
+                                    : 'bg-slate-50/80 hover:bg-blue-50/60 border-slate-200/80 text-blue-600'
                               }`}
                               title="Clique para personalizar o ícone desta macroatividade neste projeto"
                             >
@@ -4338,38 +4738,48 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 })}
               </div>
 
-              {/* Connected Journey Line & Percentage Nodes (Matching reference line) */}
-              <div className="relative pt-2 pb-1 overflow-x-auto no-scrollbar">
+              {/* Connected Journey Line & Status Nodes (Matching Image 1 Reference) */}
+              <div className="relative pt-2 pb-3 overflow-x-auto no-scrollbar">
                 <div className="min-w-[700px] relative">
                   {/* Continuous connector line */}
-                  <div className="absolute top-[9px] left-8 right-6 h-0.5 bg-sky-200" />
+                  <div className="absolute top-[11px] left-8 right-6 h-0.5 bg-emerald-400/80" />
                   {/* Arrowhead at the right end */}
-                  <div className="absolute top-[5px] right-2 text-sky-500">
+                  <div className="absolute top-[5px] right-2 text-emerald-500">
                     <ChevronRight size={14} className="stroke-[3]" />
                   </div>
 
-                  {/* Percentage pills under each step */}
+                  {/* Status node circles under each step */}
                   <div className="flex justify-between relative z-10 px-6">
                     {currentPhaseGroups.slice(0, 8).map((group, idx) => {
                       const isSelected = selectedGroupIndex === idx;
+                      const isCompleted = group.progress === 100;
+                      const isInProgress = group.progress > 0 && group.progress < 100;
 
                       return (
-                        <div key={group.name} className="flex flex-col items-center">
-                          {/* Node circle on the line */}
-                          <div className={`w-4 h-4 rounded-full border-2 bg-white transition-all ${
-                            isSelected ? 'border-blue-600 ring-2 ring-blue-200 scale-125' : 'border-sky-400'
-                          }`} />
-
-                          {/* Percentage badge underneath */}
-                          <div className={`mt-2 px-2 py-0.5 rounded-full text-[10px] font-black border transition-all ${
-                            isSelected 
-                              ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' 
-                              : group.progress > 0 
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                                : 'bg-slate-50 text-slate-500 border-slate-200'
-                          }`}>
-                            {group.progress}%
-                          </div>
+                        <div 
+                          key={group.name} 
+                          onClick={() => setSelectedGroupIndex(idx)}
+                          className="flex flex-col items-center cursor-pointer transition-transform hover:scale-105"
+                          title={`${group.name}: ${group.progress}%`}
+                        >
+                          {/* Node circle on the line matching Image 1 */}
+                          {isCompleted ? (
+                            <div className={`w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-xs ring-4 transition-all ${
+                              isSelected ? 'ring-emerald-300 scale-110' : 'ring-white'
+                            }`}>
+                              <Check size={14} className="stroke-[3]" />
+                            </div>
+                          ) : isInProgress ? (
+                            <div className={`w-6 h-6 rounded-full border-2 border-amber-500 bg-white ring-4 flex items-center justify-center shadow-xs transition-all ${
+                              isSelected ? 'ring-amber-300 scale-110' : 'ring-white'
+                            }`}>
+                              <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                            </div>
+                          ) : (
+                            <div className={`w-5 h-5 rounded-full border-2 border-slate-300 bg-white ring-4 transition-all ${
+                              isSelected ? 'border-blue-500 ring-blue-200 scale-115' : 'ring-white shadow-2xs'
+                            }`} />
+                          )}
                         </div>
                       );
                     })}
@@ -4807,6 +5217,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                                         setSelectedUnifiedItem({
                                           id: `val_mic_${micro.id}`,
                                           originType: 'atividade',
+                                          originCategory: 'microatividade',
                                           title: `Microatividade: ${micro.name}`,
                                           phase: selectedPhase,
                                           macroName: activeGroup.name,
@@ -7297,7 +7708,242 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       )}
 
-      {/* MODAL: DETALHES DO TERMO REGULATÓRIO (Requirement 3: Justificativa, Evidência e Histórico Auditável de Versões) */}
+      {/* MODAL 1: EDITAR VALOR DO TERMO REGULATÓRIO (Requirement 6) */}
+      {isEditTermModalOpen && editingTermForValueChange && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200 my-auto">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-100 flex items-start justify-between bg-slate-50/70">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-lg">
+                    [{editingTermForValueChange.term.key}]
+                  </span>
+                  <span className="text-xs text-slate-400">•</span>
+                  <span className="text-xs font-semibold text-slate-500">
+                    {editingTermForValueChange.term.groupName}
+                  </span>
+                </div>
+                <h3 className="text-base font-black text-slate-900">
+                  Alterar Valor do Termo Regulatório
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {editingTermForValueChange.term.label}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditTermModalOpen(false);
+                  setEditingTermForValueChange(null);
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-200/60 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4 text-xs">
+              {/* Valor Atual */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Valor Vigente Atual:
+                </span>
+                <p className="font-semibold text-slate-800">
+                  {(editingTermForValueChange.record?.valueText || editingTermForValueChange.record?.value || '').replace(/^\[(?:Validado|VALIDADO)\]\s*/i, '').trim() || (
+                    <span className="italic text-slate-400">Não preenchido</span>
+                  )}
+                </p>
+              </div>
+
+              {/* Novo Valor */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700 block">
+                  Novo Valor Proposto <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={editTermNewValue}
+                  onChange={e => setEditTermNewValue(e.target.value)}
+                  placeholder="Digite o novo valor aprovado ou técnico para este termo..."
+                  className="w-full p-3 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                />
+              </div>
+
+              {/* Link da Evidência */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700 block">
+                  Link da Evidência ou Relatório (Opcional)
+                </label>
+                <input
+                  type="url"
+                  value={editTermNewLink}
+                  onChange={e => setEditTermNewLink(e.target.value)}
+                  placeholder="https://exemplo.com/relatorio.pdf"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Justificativa */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700 block">
+                  Justificativa Técnica da Alteração <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={2}
+                  value={editTermJustification}
+                  onChange={e => setEditTermJustification(e.target.value)}
+                  placeholder="Explique o motivo da alteração (decisão de comitê, resultado de ensaio, etc.)..."
+                  className="w-full p-3 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                />
+                <p className="text-[10px] text-slate-400">
+                  A justificativa é obrigatória e ficará permanentemente registrada no histórico de versões para fins de auditoria.
+                </p>
+              </div>
+
+              {/* Approval Option */}
+              <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={editTermRequiresApproval}
+                  onChange={e => setEditTermRequiresApproval(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded-sm border-slate-300 focus:ring-blue-500"
+                />
+                <span className="font-medium text-slate-700 text-xs">
+                  Manter em análise e encaminhar para fila de validação regulatória
+                </span>
+              </label>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditTermModalOpen(false);
+                  setEditingTermForValueChange(null);
+                }}
+                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleProceedToConfirmValueChange}
+                disabled={!editTermNewValue.trim() || !editTermJustification.trim()}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-black transition shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <span>Prosseguir para Confirmação</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: CONFIRMAÇÃO EXPLÍCITA DE ALTERAÇÃO DA MATRIZ (Requirement 6) */}
+      {isConfirmValueChangeOpen && editingTermForValueChange && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200 my-auto">
+            {/* Warning Alert Banner */}
+            <div className="p-5 bg-amber-50 border-b border-amber-200/80 flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <AlertTriangle size={22} className="stroke-[2.2]" />
+              </div>
+              <div className="space-y-0.5">
+                <h3 className="text-sm font-black text-amber-900">
+                  Confirmação de Alteração na Matriz de Termos
+                </h3>
+                <p className="text-xs text-amber-800 leading-relaxed font-medium">
+                  Atenção: O valor deste termo regulatório será alterado e a operação ficará registrada no histórico de auditoria.
+                </p>
+              </div>
+            </div>
+
+            {/* Audit Summary Details */}
+            <div className="p-6 space-y-4 text-xs">
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Termo Regulatório
+                  </span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="font-mono font-black text-blue-700">[{editingTermForValueChange.term.key}]</span>
+                    <span className="font-bold text-slate-800">{editingTermForValueChange.term.label}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/70">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Valor Anterior
+                    </span>
+                    <p className="font-semibold text-slate-500 line-through mt-0.5 truncate">
+                      {(editingTermForValueChange.record?.valueText || editingTermForValueChange.record?.value || '').replace(/^\[(?:Validado|VALIDADO)\]\s*/i, '').trim() || 'Não preenchido'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">
+                      Novo Valor Proposto
+                    </span>
+                    <p className="font-black text-emerald-800 mt-0.5 truncate">
+                      {editTermNewValue.trim()}
+                    </p>
+                  </div>
+                </div>
+
+                {editTermNewLink.trim() && (
+                  <div className="pt-2 border-t border-slate-200/70">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Link da Evidência
+                    </span>
+                    <p className="font-semibold text-blue-600 mt-0.5 truncate">
+                      {editTermNewLink.trim()}
+                    </p>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-slate-200/70">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Justificativa da Alteração
+                  </span>
+                  <p className="font-medium text-slate-700 italic mt-0.5 bg-white p-2 rounded-lg border border-slate-200">
+                    "{editTermJustification.trim()}"
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200/70 text-[11px] text-slate-400">
+                  <span><strong>Responsável:</strong> {teamMembers[0]?.name || 'Bruna'}</span>
+                  <span><strong>Data/Hora:</strong> {new Date().toLocaleString('pt-BR')}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsConfirmValueChangeOpen(false);
+                  setIsEditTermModalOpen(true);
+                }}
+                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteConfirmedValueChange}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Check size={14} className="stroke-[2.5]" />
+                Confirmar alteração
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {selectedTermForDetails && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200 my-auto">

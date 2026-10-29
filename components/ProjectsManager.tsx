@@ -127,7 +127,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   const [areaFilter, setAreaFilter] = useState<string>('Todas');
   const [typeFilter, setTypeFilter] = useState<string>('Todos');
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'progress'>('recent');
-  const [projectsLayoutMode, setProjectsLayoutMode] = useState<'list' | 'cards'>('list');
+  const [projectsLayoutMode, setProjectsLayoutMode] = useState<'list' | 'cards'>('cards');
   const [showFiltersBar, setShowFiltersBar] = useState<boolean>(true);
   const [activeMenuProjectId, setActiveMenuProjectId] = useState<string | null>(null);
 
@@ -1176,7 +1176,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
               }).length;
 
               const regProgressPct = termsTotal > 0 ? Math.round((validTermsCount / termsTotal) * 100) : 0;
-              const regProgressText = `${validTermsCount} de ${termsTotal} termos`;
+              const regProgressText = termsTotal > 0 ? `${validTermsCount} de ${termsTotal} termos` : 'Sem termos configurados';
 
               const stLower = (project.status || '').toLowerCase();
               let statusText = 'Em andamento';

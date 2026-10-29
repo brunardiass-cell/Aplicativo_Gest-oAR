@@ -588,6 +588,7 @@ export interface RegulatoryRecordHistoryItem {
   newValue?: any;
   changeNote?: string;
   justification?: string;
+  evidenceLink?: string;
 }
 
 export interface RegulatoryRecordItem {
@@ -601,7 +602,7 @@ export interface RegulatoryRecordItem {
   origin?: string;
   originRefId?: string;
   originRefName?: string;
-  phase: string; // Fase correspondente
+  phase?: string; // Fase correspondente
   macroActivityName?: string; // Macroatividade de origem
   decisionQuestion?: string; // Decisão estratégica vinculada
   decisionId?: string;
@@ -617,6 +618,7 @@ export interface RegulatoryRecordItem {
   lastModifiedAt?: string;
   updatedBy?: string;
   lastModifiedBy?: string;
+  justification?: string;
   history?: RegulatoryRecordHistoryItem[];
 }
 
