@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, ArrowRight, Activity, Beaker, ClipboardCheck, 
   Microscope, ShieldCheck, Truck, Factory, Search,
@@ -39,12 +39,26 @@ const ProjectActivityMap: React.FC<ProjectActivityMapProps> = ({ onClose, templa
     return projects.length > 0 ? projects[0].id : null;
   });
   const [selectedTemplate, setSelectedTemplate] = useState<ActivityPlanTemplate | null>(() => {
-    const defaultProj = initialProjectId && projects.find(p => p.id === initialProjectId) || (projects.length > 0 ? projects[0] : null);
+    const defaultProj = (initialProjectId && projects.find(p => p.id === initialProjectId)) || (projects.length > 0 ? projects[0] : null);
     if (defaultProj) {
       return templates.find(t => t.id === defaultProj.templateId) || (templates.length > 0 ? templates[0] : null);
     }
     return templates.length > 0 ? templates[0] : null;
   });
+
+  useEffect(() => {
+    if (initialProjectId && projects.some(p => p.id === initialProjectId)) {
+      setSelectedProjectId(initialProjectId);
+      const targetProj = projects.find(p => p.id === initialProjectId);
+      if (targetProj) {
+        const matchingTemplate = templates.find(t => t.id === targetProj.templateId);
+        if (matchingTemplate) {
+          setSelectedTemplate(matchingTemplate);
+        }
+      }
+    }
+  }, [initialProjectId, projects, templates]);
+
   const [selectedMacro, setSelectedMacro] = useState<any | null>(null);
 
   const selectedProject = showEmptyModel ? undefined : projects.find(p => p.id === selectedProjectId);

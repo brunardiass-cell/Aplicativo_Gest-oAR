@@ -714,6 +714,71 @@ const App: React.FC = () => {
     }
   }, [isMsalAuthenticated, account, appUsers, teamMembers, isAuthorized, verifyAndAuthorize]);
 
+  // Backup Diário no SharePoint acionado no primeiro acesso do dia com lock centralizado (Requisito 5)
+  useEffect(() => {
+    if (!isAuthorized || !isMsalAuthenticated) return;
+
+    const checkAndRunDailyBackup = async () => {
+      try {
+        const lockRes = await fetch('/api/backup-daily-lock', { method: 'POST' }).then(r => r.json()).catch(() => null);
+        if (!lockRes?.acquired) {
+          return;
+        }
+
+        console.log('[Daily Backup] Lock adquirido para o primeiro acesso do dia:', lockRes.date);
+
+        const currentState = {
+          tasks, 
+          projects, 
+          teamMembers, 
+          activityPlans, 
+          notifications, 
+          logs, 
+          appUsers,
+          regulatoryStandards,
+          regulatorySubjects,
+          vaccineCandidates,
+          vaccineComponents,
+          formulationBatches,
+          vaccineImpurities,
+          regulatoryEvidence,
+          macroActivityConfigs,
+          regulatoryInfoItems,
+          repeatableRecords,
+          regulatoryNarratives,
+          regulatoryDocs,
+          meetings,
+          dossierContributions,
+          managerEmail
+        };
+
+        const backupRes = await MicrosoftGraphService.saveDailyBackupToSharePoint(currentState);
+
+        await fetch('/api/backup-daily-complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: lockRes.date,
+            success: backupRes.success,
+            files: backupRes.success ? [
+              `backup_${lockRes.date}.json`,
+              `gestao_projetos_${lockRes.date}.json`,
+              `normas_regulatorias_${lockRes.date}.json`,
+              `vacinas_componentes_${lockRes.date}.json`
+            ] : [],
+            error: backupRes.error,
+            timestamp: new Date().toISOString()
+          })
+        }).catch(err => console.warn('Falha ao registrar conclusão de backup diário:', err));
+      } catch (err) {
+        console.warn('[Daily Backup] Falha na execução do backup diário:', err);
+      }
+    };
+
+    const timer = setTimeout(checkAndRunDailyBackup, 4000);
+    return () => clearTimeout(timer);
+  }, [isAuthorized, isMsalAuthenticated, tasks, projects, teamMembers, meetings]);
+
   const resolveConflictsAndSave = async () => {
     setIsPreSaveModalOpen(false);
     loadDataFromSharePoint();
@@ -2222,6 +2287,7 @@ const App: React.FC = () => {
                 tasks={tasksForBoard} 
                 projects={activeProjects}
                 teamMembers={teamMembers}
+                appUsers={appUsers}
                 currentUser={selectedProfile?.name || 'Todos'} 
                 selectedProfile={selectedProfile}
                 onEdit={(task) => { setSelectedTask(task); setIsModalOpen(true); }} 
@@ -2312,7 +2378,7 @@ const App: React.FC = () => {
                 if (p.length > activeProjects.length) {
                   const newProj = p.find(proj => !activeProjects.some(old => old.id === proj.id));
                   if (newProj) {
-                    sendNewProjectEmail(newProj.name, selectedProfile?.name || 'Administrador', managerEmail);
+                    sendNewProjectEmail(newProj.id, newProj.name, selectedProfile?.name || newProj.responsible || 'Administrador', managerEmail);
                   }
                 }
                 const deletedProjects = projects.filter(old => old.deleted);
@@ -2325,6 +2391,8 @@ const App: React.FC = () => {
               onUpdateActivityPlans={(ap) => { setActivityPlans(ap); setDataDirty(); }} 
               onOpenDeletionModal={(item) => handleOpenDeleteItemModal(item as any)} 
               teamMembers={teamMembers} 
+              appUsers={appUsers}
+              managerEmail={managerEmail}
               currentUserRole={currentUserRole} 
               initialProjectId={initialProjectId} 
               targetMicroId={targetMicroId}

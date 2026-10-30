@@ -590,18 +590,23 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   const [isCriticalModalOpen, setIsCriticalModalOpen] = useState(false);
   const [selectedTaskForCritical, setSelectedTaskForCritical] = useState<Task | null>(null);
 
-  const handleSaveCriticalAlert = async (leadDays: number, recipientEmail: string, recipientName: string) => {
+  const handleSaveCriticalAlert = async (config: {
+    isCritical: boolean;
+    leadDays: number;
+    recipientEmail: string;
+    recipientName: string;
+  }) => {
     if (!selectedTaskForCritical) return;
     const scheduledDate = selectedTaskForCritical.completionDate 
-      ? calculateAlertDate(selectedTaskForCritical.completionDate, leadDays) 
-      : '';
+      ? calculateAlertDate(selectedTaskForCritical.completionDate, config.leadDays) || undefined
+      : undefined;
 
     const updated: Task = {
       ...selectedTaskForCritical,
-      isCritical: true,
-      criticalAlertLeadDays: leadDays,
-      criticalAlertRecipientEmail: recipientEmail,
-      criticalAlertRecipientName: recipientName,
+      isCritical: config.isCritical,
+      criticalAlertLeadDays: config.leadDays,
+      criticalAlertRecipientEmail: config.recipientEmail,
+      criticalAlertRecipientName: config.recipientName,
       criticalAlertScheduledFor: scheduledDate,
       criticalAlertStatus: 'agendado',
       criticalAlertError: undefined
@@ -615,9 +620,11 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         activityTitle: selectedTaskForCritical.activity,
         projectName: selectedTaskForCritical.project || 'Atividades',
         dueDate: selectedTaskForCritical.completionDate,
-        leadDays,
-        recipientEmail,
-        recipientName
+        leadDays: config.leadDays,
+        recipientEmail: config.recipientEmail,
+        recipientName: config.recipientName,
+        sender: 'brunadias@ctvacinas.org',
+        isTask: true
       });
     }
 
@@ -664,7 +671,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     };
 
     const scheduledDate = (task.isCritical && newDate)
-      ? calculateAlertDate(newDate, task.criticalAlertLeadDays || 2)
+      ? calculateAlertDate(newDate, task.criticalAlertLeadDays || 2) || undefined
       : (newDate ? task.criticalAlertScheduledFor : undefined);
 
     const updated: Task = {
@@ -682,7 +689,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         dueDate: newDate,
         leadDays: task.criticalAlertLeadDays || 2,
         recipientEmail: task.criticalAlertRecipientEmail,
-        recipientName: task.criticalAlertRecipientName || ''
+        recipientName: task.criticalAlertRecipientName || '',
+        sender: 'brunadias@ctvacinas.org',
+        isTask: true
       });
     }
 

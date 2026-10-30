@@ -35,6 +35,7 @@ import { NewMicroActivityModal } from './NewMicroActivityModal';
 import { PrerequisitesModal } from './PrerequisitesModal';
 import { RegulatoryDocManagement } from './RegulatoryDocManagement';
 import { isNameMatch, INITIAL_REGULATORY_TERMS } from '../constants';
+import { sendNewProjectEmail } from '../services/emailService';
 
 interface ProjectsManagerProps {
   projects: Project[];
@@ -43,6 +44,8 @@ interface ProjectsManagerProps {
   onUpdateActivityPlans: (plans: ActivityPlanTemplate[]) => void;
   onOpenDeletionModal: (item: { type: 'project' | 'macro' | 'micro', ids: { projectId: string; macroId?: string; microId?: string; }, name: string }) => void;
   teamMembers: TeamMember[];
+  appUsers?: AppUser[];
+  managerEmail?: string;
   currentUserRole: AppUser['role'] | null;
   initialProjectId?: string | null;
   targetMicroId?: string | null;
@@ -74,6 +77,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   onUpdateActivityPlans,
   onOpenDeletionModal,
   teamMembers,
+  appUsers = [],
+  managerEmail = 'brunadias@ctvacinas.org',
   currentUserRole,
   initialProjectId,
   targetMicroId,
@@ -330,12 +335,16 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
   const [isActivityMapOpen, setIsActivityMapOpen] = useState(false);
 
-  const addProject = (project: Project) => {
+  const addProject = async (project: Project) => {
     const updatedProjects = [...projects, project];
     onUpdateProjects(updatedProjects);
     setSelectedProject(project);
     setViewMode('dashboard');
     setProjectDetailView('dashboard');
+
+    // Notificar gestor configurado sobre a criação do novo projeto com link direto
+    const responsible = project.responsible || currentUser?.name || 'Bruna';
+    await sendNewProjectEmail(project.id, project.name, responsible, managerEmail);
   };
 
   const handleUpdateProject = (updatedProject: Project) => {
@@ -1405,6 +1414,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           <ProjectActivityMap 
             templates={activityPlans} 
             projects={projects}
+            initialProjectId={selectedProject?.id || initialProjectId || undefined}
             onClose={() => setIsActivityMapOpen(false)} 
             onNavigateToProject={handleNavigateToProject}
           />
@@ -1443,6 +1453,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           onBack={() => setViewMode('selection')}
           onUpdateProject={handleUpdateProject}
           teamMembers={teamMembers}
+          appUsers={appUsers}
           regulatoryStandards={regulatoryStandards}
           onOpenRegulatoryModal={onOpenRegulatoryModal}
           onPrint={handlePrint}

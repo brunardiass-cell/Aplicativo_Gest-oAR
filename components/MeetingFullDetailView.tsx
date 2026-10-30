@@ -254,6 +254,50 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
     setTimeout(() => setSaveSuccess(false), 2500);
   };
 
+  // Handle Explicit Finalize Meeting (Requirement 3)
+  const handleFinalizeMeeting = () => {
+    if (window.confirm(`Deseja finalizar esta reunião? As pautas, discussões, decisões e atas serão consolidadas na ata oficial, preservando as ações pendentes nos seus respectivos estados sem concluí-las automaticamente.`)) {
+      const updated: Meeting = {
+        ...meetingState,
+        status: 'Concluída',
+        headerText: headerTitle,
+        footerText: footerText,
+        headerLogoUrl: headerLogoUrl,
+        updatedAt: new Date().toISOString()
+      };
+
+      const createdContributions: DossierContribution[] = [];
+      meetingState.agendaItems.forEach(agenda => {
+        if (agenda.hasRegulatoryImpact) {
+          const contrib: DossierContribution = {
+            id: `contrib_mtg_${updated.id}_${agenda.id}`,
+            projectId: updated.projectId,
+            projectName: updated.projectName || 'Projeto',
+            macroActivityId: agenda.macroActivityId,
+            macroActivityName: agenda.phase,
+            activityId: agenda.id,
+            activityName: `[Reunião: ${updated.title}] ${agenda.title}`,
+            chapterId: 'cap_1',
+            chapterTitle: 'Registro de Decisão de Reunião com Impacto Regulatório',
+            type: 'texto',
+            content: `Decisão tomada na reunião "${updated.title}" em ${updated.date}:\n\n${agenda.decisions || agenda.description || ''}\n\nDetalhes Regulatórios: ${agenda.regulatoryImpactDetails || ''}`,
+            status: 'Em Revisão',
+            version: 1,
+            author: updated.moderator || currentUser,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          createdContributions.push(contrib);
+        }
+      });
+
+      setMeetingState(updated);
+      onSaveMeeting(updated, createdContributions);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2500);
+    }
+  };
+
   // Add Comment to Discussion
   const handleAddComment = (agendaId: string, customAuthor?: string, customText?: string) => {
     const text = (customText !== undefined ? customText : commentInputs[agendaId])?.trim();
@@ -1062,6 +1106,17 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
             <Monitor size={14} className="text-indigo-600" />
             <span>Projetar Pauta</span>
           </button>
+
+          {meetingState.status !== 'Concluída' && (
+            <button
+              onClick={handleFinalizeMeeting}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition shadow-sm hover:shadow active:scale-95 cursor-pointer"
+              title="Finalizar reunião e consolidar pautas e decisões na ata oficial"
+            >
+              <CheckCircle2 size={16} />
+              <span>Finalizar Reunião</span>
+            </button>
+          )}
 
           <button
             onClick={handleSaveAll}

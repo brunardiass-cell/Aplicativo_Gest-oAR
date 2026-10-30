@@ -1680,89 +1680,6 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       return hasChanged ? { ...macro, microActivities: updatedMicros } : macro;
     });
 
-  // Critical Alert save and remove handlers (Item 1)
-  const handleSaveCriticalAlert = async (config: {
-    isCritical: boolean;
-    leadDays: number;
-    recipientEmail: string;
-    recipientName: string;
-  }) => {
-    if (!selectedMicroForCritical) return;
-
-    const calculatedDate = selectedMicroForCritical.dueDate 
-      ? calculateAlertDate(selectedMicroForCritical.dueDate, config.leadDays) 
-      : undefined;
-
-    // Disparar notificação por e-mail com remetente brunadias@ctvacinas.org
-    const alertResult = await sendCriticalActivityAlert({
-      activityId: selectedMicroForCritical.id,
-      activityTitle: selectedMicroForCritical.name,
-      projectName: project.name,
-      dueDate: selectedMicroForCritical.dueDate,
-      leadDays: config.leadDays,
-      recipientEmail: config.recipientEmail,
-      recipientName: config.recipientName,
-      sender: 'brunadias@ctvacinas.org',
-      isTask: false
-    });
-
-    const updatedMacros = (project.macroActivities || []).map(macro => ({
-      ...macro,
-      microActivities: (macro.microActivities || []).map(m => {
-        if (m.id === selectedMicroForCritical.id) {
-          return {
-            ...m,
-            isCritical: config.isCritical,
-            criticalAlertLeadDays: config.leadDays,
-            criticalAlertRecipientEmail: config.recipientEmail,
-            criticalAlertRecipientName: config.recipientName,
-            criticalAlertScheduledFor: calculatedDate || undefined,
-            criticalAlertSentAt: alertResult.sentAt || m.criticalAlertSentAt,
-            criticalAlertStatus: alertResult.success ? 'enviado' as const : 'agendado' as const,
-            criticalAlertError: alertResult.error
-          };
-        }
-        return m;
-      })
-    }));
-
-    onUpdateProject({
-      ...project,
-      macroActivities: updatedMacros
-    });
-
-    setIsCriticalModalOpen(false);
-    setSelectedMicroForCritical(null);
-  };
-
-  const handleRemoveCriticalAlert = () => {
-    if (!selectedMicroForCritical) return;
-
-    cancelCriticalAlert(selectedMicroForCritical.id);
-
-    const updatedMacros = (project.macroActivities || []).map(macro => ({
-      ...macro,
-      microActivities: (macro.microActivities || []).map(m => {
-        if (m.id === selectedMicroForCritical.id) {
-          return {
-            ...m,
-            isCritical: false,
-            criticalAlertStatus: 'cancelado' as const
-          };
-        }
-        return m;
-      })
-    }));
-
-    onUpdateProject({
-      ...project,
-      macroActivities: updatedMacros
-    });
-
-    setIsCriticalModalOpen(false);
-    setSelectedMicroForCritical(null);
-  };
-
     // If micro was in activeGroup fallback
     if (!matchedMicroObj && activeGroup) {
       const foundInActive = activeGroup.microActivities.find(m => m.id === microId);
@@ -1856,6 +1773,89 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       contributions: updatedContributions,
       historyTimeline: [historyEvent, ...(project.historyTimeline || [])]
     });
+  };
+
+  // Critical Alert save and remove handlers (Item 1)
+  const handleSaveCriticalAlert = async (config: {
+    isCritical: boolean;
+    leadDays: number;
+    recipientEmail: string;
+    recipientName: string;
+  }) => {
+    if (!selectedMicroForCritical) return;
+
+    const calculatedDate = selectedMicroForCritical.dueDate 
+      ? calculateAlertDate(selectedMicroForCritical.dueDate, config.leadDays) 
+      : undefined;
+
+    // Disparar notificação por e-mail com remetente brunadias@ctvacinas.org
+    const alertResult = await sendCriticalActivityAlert({
+      activityId: selectedMicroForCritical.id,
+      activityTitle: selectedMicroForCritical.name,
+      projectName: project.name,
+      dueDate: selectedMicroForCritical.dueDate,
+      leadDays: config.leadDays,
+      recipientEmail: config.recipientEmail,
+      recipientName: config.recipientName,
+      sender: 'brunadias@ctvacinas.org',
+      isTask: false
+    });
+
+    const updatedMacros = (project.macroActivities || []).map(macro => ({
+      ...macro,
+      microActivities: (macro.microActivities || []).map(m => {
+        if (m.id === selectedMicroForCritical.id) {
+          return {
+            ...m,
+            isCritical: config.isCritical,
+            criticalAlertLeadDays: config.leadDays,
+            criticalAlertRecipientEmail: config.recipientEmail,
+            criticalAlertRecipientName: config.recipientName,
+            criticalAlertScheduledFor: calculatedDate || undefined,
+            criticalAlertSentAt: alertResult.sentAt || m.criticalAlertSentAt,
+            criticalAlertStatus: alertResult.success ? 'enviado' as const : 'agendado' as const,
+            criticalAlertError: alertResult.error
+          };
+        }
+        return m;
+      })
+    }));
+
+    onUpdateProject({
+      ...project,
+      macroActivities: updatedMacros
+    });
+
+    setIsCriticalModalOpen(false);
+    setSelectedMicroForCritical(null);
+  };
+
+  const handleRemoveCriticalAlert = () => {
+    if (!selectedMicroForCritical) return;
+
+    cancelCriticalAlert(selectedMicroForCritical.id);
+
+    const updatedMacros = (project.macroActivities || []).map(macro => ({
+      ...macro,
+      microActivities: (macro.microActivities || []).map(m => {
+        if (m.id === selectedMicroForCritical.id) {
+          return {
+            ...m,
+            isCritical: false,
+            criticalAlertStatus: 'cancelado' as const
+          };
+        }
+        return m;
+      })
+    }));
+
+    onUpdateProject({
+      ...project,
+      macroActivities: updatedMacros
+    });
+
+    setIsCriticalModalOpen(false);
+    setSelectedMicroForCritical(null);
   };
 
   // Rapid registration in Atividades and Todos os Grupos (Item 1)

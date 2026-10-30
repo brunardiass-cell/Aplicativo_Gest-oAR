@@ -136,6 +136,21 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
     setSelectedMeetingForEdit(null);
   };
 
+  // Handle Explicit Meeting Finalization (Requirement 3)
+  const handleFinalizeMeeting = (meetingToFinalize: Meeting) => {
+    if (window.confirm(`Deseja finalizar a reunião "${meetingToFinalize.title}"? As pautas, decisões e comentários serão consolidados na ata oficial, mantendo as pendências de ação nos seus respectivos estados sem concluí-las automaticamente.`)) {
+      const finalized: Meeting = {
+        ...meetingToFinalize,
+        status: 'Concluída',
+        updatedAt: new Date().toISOString()
+      };
+      handleSaveMeeting(finalized);
+      if (activeFullMeeting?.id === meetingToFinalize.id) {
+        setActiveFullMeeting(finalized);
+      }
+    }
+  };
+
   // Handle Delete Meeting
   const handleDeleteMeeting = (meetingId: string) => {
     if (window.confirm('Tem certeza de que deseja excluir esta reunião? O histórico e pautas associados serão removidos.')) {
@@ -478,18 +493,32 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
                                   <span>Iniciar Reunião</span>
                                 </button>
                               ) : mtg.status === 'Em Andamento' ? (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveFullMeeting(mtg);
-                                  }}
-                                  className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition hover:shadow cursor-pointer animate-pulse"
-                                  title="Continuar reunião em andamento"
-                                >
-                                  <Play size={13} className="fill-current text-white" />
-                                  <span>Continuar Reunião</span>
-                                </button>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveFullMeeting(mtg);
+                                    }}
+                                    className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition hover:shadow cursor-pointer"
+                                    title="Continuar reunião em andamento"
+                                  >
+                                    <Play size={13} className="fill-current text-white" />
+                                    <span>Continuar</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleFinalizeMeeting(mtg);
+                                    }}
+                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition hover:shadow cursor-pointer"
+                                    title="Finalizar esta reunião"
+                                  >
+                                    <CheckCircle2 size={13} className="text-white" />
+                                    <span>Finalizar</span>
+                                  </button>
+                                </div>
                               ) : (
                                 <span className="px-3 py-1 bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold">
                                   {mtg.status}
@@ -515,7 +544,7 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
                                       className="fixed inset-0 z-40" 
                                       onClick={() => setOpenMenuMeetingId(null)}
                                     />
-                                    <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-50 text-xs font-bold text-slate-700 animate-in fade-in-50 zoom-in-95 duration-150">
+                                    <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-50 text-xs font-bold text-slate-700 animate-in fade-in-50 zoom-in-95 duration-150">
                                       <button
                                         onClick={() => {
                                           setOpenMenuMeetingId(null);
@@ -526,6 +555,19 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
                                         <Play size={14} />
                                         <span>Acessar Reunião</span>
                                       </button>
+
+                                      {mtg.status !== 'Concluída' && (
+                                        <button
+                                          onClick={() => {
+                                            setOpenMenuMeetingId(null);
+                                            handleFinalizeMeeting(mtg);
+                                          }}
+                                          className="w-full px-4 py-2.5 text-left hover:bg-emerald-50 text-emerald-700 flex items-center gap-2 transition"
+                                        >
+                                          <CheckCircle2 size={14} className="text-emerald-600" />
+                                          <span>Finalizar Reunião</span>
+                                        </button>
+                                      )}
 
                                       <button
                                         onClick={() => {
