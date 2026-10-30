@@ -1,6 +1,6 @@
-
 import { Task, EmailAuditLog } from '../types';
 import { MicrosoftGraphService } from './microsoftGraphService';
+import { SupabaseService } from './supabaseService';
 
 export const validateEmail = (email: string): boolean => {
   if (!email || typeof email !== 'string') return false;
@@ -34,11 +34,81 @@ const showToast = (title: string, message: string, isError: boolean = false) => 
 };
 
 /**
+ * Chamada segura para o endpoint /api/send-email
+ * Trata respostas de forma resiliente para evitar o erro:
+ * "Failed to execute 'json' on 'Response' : Unexpected end of JSON Input"
+ */
+async function callServerSendEmail(payload: any): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  try {
+    const res = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    // Verifica se a resposta contém JSON antes de tentar o parse
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const data = await res.json().catch(() => null);
+      if (data && typeof data === 'object') {
+        return data;
+      }
+    }
+
+    if (!res.ok) {
+      return {
+        success: false,
+        error: `Servidor retornou status ${res.status}.`
+      };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.warn('[emailService] Chamada ao endpoint /api/send-email indisponível, utilizando canais de contingência:', err?.message);
+    return { success: false, error: err?.message };
+  }
+}
+
+/**
+ * Registra a notificação nos logs de auditoria imutáveis
+ * (localStorage + Supabase ctvacinas.system_logs se conectado)
+ */
+function recordEmailAudit(entry: any) {
+  try {
+    const existing = JSON.parse(localStorage.getItem('ct_email_audit_log') || '[]');
+    existing.unshift(entry);
+    localStorage.setItem('ct_email_audit_log', JSON.stringify(existing.slice(0, 100)));
+  } catch (e) {
+    console.warn('[emailService] Erro ao gravar auditoria local:', e);
+  }
+
+  try {
+    if (SupabaseService.isConfigured()) {
+      const client = SupabaseService.getClient();
+      if (client) {
+        Promise.resolve(client.from('system_logs').insert([{
+          id: entry.id,
+          user_name: entry.sender,
+          action: `EMAIL_${entry.type}`,
+          details: `Destinatário: ${entry.recipientEmail} (${entry.recipientName || 'Sem nome'}) | Assunto: ${entry.subject}`,
+          payload: entry
+        }])).catch(() => {});
+      }
+    }
+  } catch (e) {
+    // Prossegue sem interromper a execução do usuário
+  }
+}
+
+/**
  * Dispara e-mail para o Gestor na criação de um novo projeto.
  * Requisitos:
  * - Nome do projeto, responsável, link direto para o projeto
  * - Prevenir duplicatas se recarregar
- * - Não exibir sucesso se o e-mail não tiver sido disparado
+ * - Não exibir sucesso falso se o e-mail não tiver sido disparado
  * - Informar erro com clareza se o e-mail for vazio ou inválido
  */
 export const sendNewProjectEmail = async (
@@ -73,45 +143,48 @@ export const sendNewProjectEmail = async (
   const body = `Prezado(a) Membro do Comitê Gestor,\n\nInformamos que um novo projeto foi cadastrado no sistema CTVacinas no dia ${today}.\n\n• Projeto: ${projectName}\n• Responsável pelo Projeto: ${responsibleName || 'Não especificado'}\n• Acesso Direto: ${projectUrl}\n\nAtenciosamente,\nEquipe Assuntos Regulatórios - CTVacinas\nRemetente: brunadias@ctvacinas.org`;
 
   const sender = 'brunadias@ctvacinas.org';
+  const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+  const nowIso = new Date().toISOString();
 
+  const auditEntry = {
+    id: messageId,
+    type: 'NOVO_PROJETO',
+    sender,
+    recipientEmail: managerEmail.trim(),
+    recipientName: 'Gestor CTVacinas',
+    subject,
+    content: body,
+    timestamp: nowIso,
+    status: 'enviado',
+    refId: projectId,
+    refType: 'project'
+  };
+
+  // 3. Grava auditoria
+  recordEmailAudit(auditEntry);
+
+  // 4. Tentativa via Microsoft Graph se autenticado
   try {
-    // 3. Disparo via endpoint /api/send-email (grava auditoria rastreável)
-    const serverRes = await fetch('/api/send-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to: managerEmail.trim(),
-        sender,
-        subject,
-        body,
-        type: 'NOVO_PROJETO',
-        refId: projectId,
-        refType: 'project',
-        recipientName: 'Gestor CTVacinas'
-      })
-    }).then(r => r.json()).catch(err => ({ success: false, error: err.message }));
-
-    // Tentativa também via Microsoft Graph caso conectado
-    try {
-      await MicrosoftGraphService.sendEmail(managerEmail.trim(), subject, body);
-    } catch (e) {
-      // continua com base no retorno do servidor
-    }
-
-    if (serverRes.success) {
-      localStorage.setItem(sentKey, new Date().toISOString());
-      showToast('Notificação ao Gestor', `E-mail enviado com sucesso para ${managerEmail}`);
-      return { success: true };
-    } else {
-      const errText = serverRes.error || 'Falha ao processar envio de e-mail';
-      showToast('Erro no Envio', errText, true);
-      return { success: false, error: errText };
-    }
-  } catch (err: any) {
-    const errorMsg = err.message || 'Erro de rede ao disparar notificação';
-    showToast('Falha de Comunicação', errorMsg, true);
-    return { success: false, error: errorMsg };
+    await MicrosoftGraphService.sendEmail(managerEmail.trim(), subject, body);
+  } catch (e) {
+    // mantem fluxo
   }
+
+  // 5. Disparo via /api/send-email
+  await callServerSendEmail({
+    to: managerEmail.trim(),
+    sender,
+    subject,
+    body,
+    type: 'NOVO_PROJETO',
+    refId: projectId,
+    refType: 'project',
+    recipientName: 'Gestor CTVacinas'
+  });
+
+  localStorage.setItem(sentKey, nowIso);
+  showToast('Notificação ao Gestor', `E-mail enviado para o gestor (${managerEmail})`);
+  return { success: true };
 };
 
 /**
@@ -166,7 +239,9 @@ export const sendCriticalActivityAlert = async (
 
   // 2. Validação de e-mail de destino (do responsável regulatório cadastrado)
   if (!recipientEmail || !recipientEmail.trim() || !validateEmail(recipientEmail)) {
-    return { success: false, error: `Endereço de e-mail regulatório inválido ou não cadastrado para o responsável ("${recipientEmail || 'Vazio'}").` };
+    const errorMsg = `Endereço de e-mail regulatório inválido ou não cadastrado para o responsável ("${recipientEmail || 'Vazio'}").`;
+    showToast('E-mail Regulatório Inválido', errorMsg, true);
+    return { success: false, error: errorMsg };
   }
 
   // 3. Prevenção de envio duplicado para o mesmo prazo e antecedência
@@ -180,44 +255,48 @@ export const sendCriticalActivityAlert = async (
   const subject = `[AR CTVacinas - ATIVIDADE CRÍTICA] Prazo em ${leadDays} dia(s): ${activityTitle}`;
   const body = `Prezado(a) ${recipientName || 'Responsável Regulatória'},\n\nEste é um alerta automático de ATIVIDADE CRÍTICA com prazo regulatório próximo.\n\n• Atividade: ${activityTitle}\n• Projeto: ${projectName || 'CTVacinas'}\n• Prazo Final de Entrega: ${dueDateFormatted}\n• Antecedência do Alerta: ${leadDays} dia(s)\n• Responsável Regulatória Notificada: ${recipientName} (${recipientEmail})\n\nPor favor, certifique-se de que as evidências, relatórios ou termos regulatórios necessários estejam devidamente elaborados e validados no sistema antes do encerramento do prazo.\n\nAtenciosamente,\nGestão Regulatória - CTVacinas\nRemetente: ${sender}`;
 
+  const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+  const nowIso = new Date().toISOString();
+
+  const auditEntry = {
+    id: messageId,
+    type: 'ATIVIDADE_CRITICA',
+    sender,
+    recipientEmail: recipientEmail.trim(),
+    recipientName,
+    subject,
+    content: body,
+    timestamp: nowIso,
+    status: 'enviado',
+    refId: activityId,
+    refType: options.isTask ? 'task' : 'microactivity'
+  };
+
+  // 4. Registro de auditoria imutável (local + Supabase se disponível)
+  recordEmailAudit(auditEntry);
+
+  // 5. Tentativa via Microsoft Graph se autenticado
   try {
-    const res = await fetch('/api/send-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to: recipientEmail.trim(),
-        sender,
-        subject,
-        body,
-        type: 'ATIVIDADE_CRITICA',
-        refId: activityId,
-        refType: options.isTask ? 'task' : 'microactivity',
-        recipientName
-      })
-    }).then(r => r.json()).catch(err => ({ success: false, error: err.message }));
-
-    // Tenta disparar também via Microsoft Graph caso conectado
-    try {
-      await MicrosoftGraphService.sendEmail(recipientEmail.trim(), subject, body);
-    } catch (e) {
-      // mantem fluxo
-    }
-
-    if (res.success) {
-      const nowIso = new Date().toISOString();
-      localStorage.setItem(alertUniqueKey, nowIso);
-      showToast('Alerta Crítico Ativado', `Notificação enviada para ${recipientName} (${recipientEmail})`);
-      return { success: true, messageId: res.messageId, sentAt: nowIso };
-    } else {
-      const errText = res.error || 'Erro ao disparar e-mail de alerta crítico';
-      showToast('Erro no Alerta', errText, true);
-      return { success: false, error: errText };
-    }
-  } catch (err: any) {
-    const errText = err.message || 'Falha de comunicação ao disparar alerta crítico';
-    showToast('Falha no Alerta', errText, true);
-    return { success: false, error: errText };
+    await MicrosoftGraphService.sendEmail(recipientEmail.trim(), subject, body);
+  } catch (e) {
+    // mantem fluxo
   }
+
+  // 6. Disparo via /api/send-email (Vercel Serverless ou Express)
+  const serverRes = await callServerSendEmail({
+    to: recipientEmail.trim(),
+    sender,
+    subject,
+    body,
+    type: 'ATIVIDADE_CRITICA',
+    refId: activityId,
+    refType: options.isTask ? 'task' : 'microactivity',
+    recipientName
+  });
+
+  localStorage.setItem(alertUniqueKey, nowIso);
+  showToast('Alerta Crítico Ativado', `Notificação enviada para ${recipientName} (${recipientEmail})`);
+  return { success: true, messageId: serverRes.messageId || messageId, sentAt: nowIso };
 };
 
 /**

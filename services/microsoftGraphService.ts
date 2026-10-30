@@ -28,7 +28,7 @@ let msalInstance: msal.PublicClientApplication | null = null;
 let msalInstancePromise: Promise<msal.PublicClientApplication> | null = null;
 
 const loginRequest = {
-  scopes: ["User.Read", "Files.ReadWrite", "Sites.ReadWrite.All"]
+  scopes: ["User.Read", "Files.ReadWrite", "Sites.ReadWrite.All", "Mail.Send"]
 };
 
 const SHAREPOINT_HOST = "ctvacinas974.sharepoint.com";
