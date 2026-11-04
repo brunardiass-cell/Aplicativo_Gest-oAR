@@ -117,8 +117,10 @@ export interface Task {
   meetingAgenda?: string;
   reportType?: string;
   deadlineHistory?: TaskDeadlineHistory[];
-  changeHistory?: TaskChangeHistory[];
   attachments?: TaskAttachment[];
+  fileLinks?: MeetingFileLink[];
+  linkedRegulatoryStandardIds?: string[];
+  meetingId?: string;
 
   // Campos para Atividades Rápidas, Grupos e Contribuições Regulatórias
   group?: string;
@@ -196,6 +198,9 @@ export interface MeetingActionItem {
   status: 'Pendente' | 'Em Andamento' | 'Concluído';
   convertedToActivity?: boolean;
   convertedActivityId?: string;
+  convertedToTask?: boolean;
+  convertedTaskId?: string;
+  actionDestination?: 'project' | 'task' | 'meeting_only';
   targetProjectId?: string;
   targetProjectName?: string;
   targetMacroId?: string;
@@ -220,6 +225,13 @@ export interface MeetingAgendaFile {
   url?: string;
 }
 
+export interface MeetingFileLink {
+  id: string;
+  name: string;
+  url: string;
+  addedAt?: string;
+}
+
 export interface MeetingAgendaItem {
   id: string;
   title: string;
@@ -237,6 +249,7 @@ export interface MeetingAgendaItem {
   regulatoryImpactDetails?: string;
   actionItems?: MeetingActionItem[];
   attachedFiles?: MeetingAgendaFile[];
+  fileLinks?: MeetingFileLink[];
   presentationLink?: string;
   presentationUrl?: string;
 }
@@ -261,6 +274,9 @@ export interface Meeting {
   headerText?: string;
   footerText?: string;
   headerLogoUrl?: string;
+  linkedRegulatoryStandardIds?: string[];
+  attachedFiles?: MeetingAgendaFile[];
+  fileLinks?: MeetingFileLink[];
   agendaItems: MeetingAgendaItem[];
   generalConclusions?: string;
   minutesTemplate?: string;

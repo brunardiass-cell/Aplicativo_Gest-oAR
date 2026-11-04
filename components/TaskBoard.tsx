@@ -11,13 +11,19 @@ import {
   TeamMember,
   Meeting,
   ViewMode,
-  AppUser
+  AppUser,
+  RegulatoryStandard,
+  MeetingAgendaItem,
+  MeetingActionItem,
+  MeetingAgendaFile,
+  MeetingFileLink
 } from '../types';
 import { DEFAULT_TASK_GROUPS } from '../constants';
 import { TaskNotesModal } from './TaskNotesModal';
 import { RetroactiveImportModal } from './RetroactiveImportModal';
 import { TaskCompletionModal } from './TaskCompletionModal';
 import { CriticalAlertModal } from './CriticalAlertModal';
+import { RegisterActionAsActivityModal } from './RegisterActionAsActivityModal';
 import { sendCriticalActivityAlert, cancelCriticalAlert, calculateAlertDate } from '../services/emailService';
 import { 
   Check, 
@@ -48,7 +54,12 @@ import {
   Menu, 
   Sparkles,
   ArrowRight,
-  UserCheck
+  UserCheck,
+  Paperclip,
+  Link as LinkIcon,
+  BookOpen,
+  Folder,
+  ExternalLink
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -57,6 +68,7 @@ interface TaskBoardProps {
   projects?: Project[];
   teamMembers?: TeamMember[];
   appUsers?: AppUser[];
+  regulatoryStandards?: RegulatoryStandard[];
   currentUser: string | 'Todos';
   selectedProfile?: TeamMember | null;
   onEdit: (task: Task) => void;
@@ -66,6 +78,15 @@ interface TaskBoardProps {
   onBatchImportTasks?: (tasks: Task[]) => void;
   onAddMeeting?: (meeting: Meeting) => void;
   onNavigateTab?: (tab: ViewMode) => void;
+  onConvertToActivity?: (
+    projectId: string,
+    macroActivityId: string,
+    actionItem: MeetingActionItem,
+    targetMicroId?: string,
+    customMicroName?: string,
+    assigneeOverride?: string,
+    dueDateOverride?: string
+  ) => any;
   hasFullAccess?: boolean;
   isLeader?: boolean;
   // Props mantidas para retrocompatibilidade
@@ -102,6 +123,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   projects = [],
   teamMembers = [],
   appUsers = [],
+  regulatoryStandards = [],
   currentUser,
   selectedProfile,
   onEdit,
@@ -111,6 +133,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   onBatchImportTasks,
   onAddMeeting,
   onNavigateTab,
+  onConvertToActivity,
   hasFullAccess = true,
   isLeader = true
 }) => {
@@ -267,16 +290,219 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   const [quickType, setQuickType] = useState<ActivityType>('general');
   const [isSavingQuick, setIsSavingQuick] = useState(false);
 
-  // Campos específicos para Reunião e Relatório no salvamento rápido
-  const [quickIsMeetingOrganizer, setQuickIsMeetingOrganizer] = useState(true);
+  // Campos específicos para Relatório no salvamento rápido
   const [quickReportReviewer, setQuickReportReviewer] = useState('');
   const [quickReportInReview, setQuickReportInReview] = useState(true);
+
+  // Campos específicos para Reunião no salvamento rápido (requisitos CTVacinas)
+  const [quickMeetingRole, setQuickMeetingRole] = useState<'organizer' | 'participant' | 'recorder'>('organizer');
+  const [quickMeetingProjectMode, setQuickMeetingProjectMode] = useState<'existing' | 'other'>('existing');
+  const [quickMeetingProjectId, setQuickMeetingProjectId] = useState<string>('');
+  const [quickMeetingCustomProject, setQuickMeetingCustomProject] = useState<string>('');
+  const [quickMeetingResponsible, setQuickMeetingResponsible] = useState<string>('');
+  const [quickMeetingParticipants, setQuickMeetingParticipants] = useState<string[]>([]);
+  const [quickMeetingNewParticipant, setQuickMeetingNewParticipant] = useState<string>('');
+  const [quickMeetingCallLink, setQuickMeetingCallLink] = useState<string>('');
+  const [quickMeetingDate, setQuickMeetingDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [quickMeetingTime, setQuickMeetingTime] = useState<string>('10:00');
+  const [quickMeetingFileLinks, setQuickMeetingFileLinks] = useState<MeetingFileLink[]>([]);
+  const [quickMeetingNewLinkName, setQuickMeetingNewLinkName] = useState<string>('');
+  const [quickMeetingNewLinkUrl, setQuickMeetingNewLinkUrl] = useState<string>('');
+  const [quickMeetingAttachedFiles, setQuickMeetingAttachedFiles] = useState<MeetingAgendaFile[]>([]);
+  const [quickMeetingLinkedStandards, setQuickMeetingLinkedStandards] = useState<string[]>([]);
+  
+  // Pautas e Encaminhamentos da Reunião Rápida
+  const [quickMeetingPautas, setQuickMeetingPautas] = useState<Array<{
+    id: string;
+    title: string;
+    linkedRegulatoryStandardIds?: string[];
+    discussions?: string;
+    decisions?: string;
+    actionItems: Array<MeetingActionItem>;
+  }>>([
+    {
+      id: 'pauta_init_1',
+      title: 'Pauta Principal',
+      linkedRegulatoryStandardIds: [],
+      actionItems: []
+    }
+  ]);
+
+  // Modal de registro de encaminhamento no projeto
+  const [actionForRegisterModal, setActionForRegisterModal] = useState<{
+    agendaId: string;
+    action: MeetingActionItem;
+  } | null>(null);
+
+  // Popover placement detector (Evita que o popover abra para baixo forçando rolagem de tela)
+  const [popoverPlacement, setPopoverPlacement] = useState<Record<string, 'up' | 'down'>>({});
+
+  const handleOpenPopover = (id: string, e: React.MouseEvent<HTMLElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const placement = spaceBelow < 240 && rect.top > 180 ? 'up' : 'down';
+    setPopoverPlacement(prev => ({ ...prev, [id]: placement }));
+  };
 
   // Identificar grupo ativo atual
   const activeGroup = useMemo(() => {
     if (selectedGroupId === 'all') return null;
     return groups.find(g => g.id === selectedGroupId) || null;
   }, [groups, selectedGroupId]);
+
+  // Combined regulatory members and app users
+  const regulatoryNames = useMemo(() => {
+    const names = new Set<string>();
+    teamMembers.forEach(tm => { if (tm.name) names.add(tm.name.trim()); });
+    appUsers.forEach(au => { if (au.username) names.add(au.username.trim()); });
+    return Array.from(names);
+  }, [teamMembers, appUsers]);
+
+  const handleAddFileLink = () => {
+    const url = quickMeetingNewLinkUrl.trim();
+    if (!url) return;
+    const name = quickMeetingNewLinkName.trim() || 'Link do Documento';
+    const newLink: MeetingFileLink = {
+      id: 'link_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+      name,
+      url: url.startsWith('http') ? url : `https://${url}`,
+      addedAt: new Date().toISOString()
+    };
+    setQuickMeetingFileLinks(prev => [...prev, newLink]);
+    setQuickMeetingNewLinkName('');
+    setQuickMeetingNewLinkUrl('');
+  };
+
+  const handleRemoveFileLink = (linkId: string) => {
+    setQuickMeetingFileLinks(prev => prev.filter(l => l.id !== linkId));
+  };
+
+  const handleAttachLocalFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        const sizeFormatted = file.size > 1024 * 1024
+          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+          : `${Math.round(file.size / 1024)} KB`;
+
+        const newFileObj: MeetingAgendaFile = {
+          id: 'file_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+          name: file.name,
+          size: sizeFormatted,
+          type: file.type || file.name.split('.').pop() || 'documento',
+          dataUrl: dataUrl
+        };
+
+        setQuickMeetingAttachedFiles(prev => [...prev, newFileObj]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const handleRemoveAttachedFile = (fileId: string) => {
+    setQuickMeetingAttachedFiles(prev => prev.filter(f => f.id !== fileId));
+  };
+
+  const handleAddQuickParticipant = (nameToAdd: string) => {
+    const clean = nameToAdd.trim();
+    if (!clean) return;
+    if (!quickMeetingParticipants.includes(clean)) {
+      setQuickMeetingParticipants(prev => [...prev, clean]);
+    }
+    setQuickMeetingNewParticipant('');
+  };
+
+  const handleRemoveQuickParticipant = (nameToRemove: string) => {
+    setQuickMeetingParticipants(prev => prev.filter(p => p !== nameToRemove));
+  };
+
+  const handleAddQuickPauta = () => {
+    const newPauta = {
+      id: 'pauta_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+      title: 'Pauta ' + (quickMeetingPautas.length + 1),
+      linkedRegulatoryStandardIds: [],
+      actionItems: []
+    };
+    setQuickMeetingPautas(prev => [...prev, newPauta]);
+  };
+
+  const handleRemoveQuickPauta = (pautaId: string) => {
+    if (quickMeetingPautas.length <= 1) return;
+    setQuickMeetingPautas(prev => prev.filter(p => p.id !== pautaId));
+  };
+
+  const handleAddQuickActionItem = (
+    pautaId: string, 
+    actionText: string, 
+    resp: string, 
+    dueDate: string, 
+    destination: 'project' | 'task' | 'meeting_only'
+  ) => {
+    if (!actionText.trim()) return;
+    const newAct: MeetingActionItem = {
+      id: 'act_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+      action: actionText.trim(),
+      responsible: resp.trim() || currentUser || 'Responsável',
+      dueDate: dueDate || quickMeetingDate || new Date().toISOString().split('T')[0],
+      status: 'Pendente',
+      actionDestination: destination,
+      convertedToTask: destination === 'task',
+      convertedToActivity: destination === 'project'
+    };
+
+    setQuickMeetingPautas(prev => prev.map(p => {
+      if (p.id === pautaId) {
+        return {
+          ...p,
+          actionItems: [...p.actionItems, newAct]
+        };
+      }
+      return p;
+    }));
+
+    // Se a opção for registrar nas atividades da nota rápida imediatamente:
+    if (destination === 'task') {
+      const targetGroup = activeGroup || groups[0] || { id: 'group_geral', name: 'Geral' };
+      const projectAssociated = quickMeetingProjectMode === 'other'
+        ? (quickMeetingCustomProject.trim() || 'Outros Projetos')
+        : (projects.find(p => p.id === quickMeetingProjectId)?.name || targetGroup.projectName || 'Geral');
+
+      const newTaskFromAction: Task = {
+        id: `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        activity: actionText.trim(),
+        description: `Encaminhamento de reunião: "${actionText.trim()}"`,
+        project: projectAssociated,
+        group: targetGroup.name,
+        groupId: targetGroup.id,
+        activityType: 'general',
+        isReport: false,
+        priority: 'Sem prioridade',
+        status: 'Em Andamento',
+        requestDate: new Date().toISOString().split('T')[0],
+        plannedStartDate: new Date().toISOString().split('T')[0],
+        completionDate: dueDate || quickMeetingDate || '',
+        progress: 0,
+        nextStep: '',
+        projectLead: resp.trim() || currentUser || 'Responsável',
+        collaborators: [],
+        updates: [
+          {
+            id: `note_${Date.now()}`,
+            date: new Date().toISOString(),
+            user: currentUser || 'Usuário',
+            note: 'Encaminhamento registrado via Notas Rápidas / Reunião.'
+          }
+        ],
+        isRegulatoryContribution: false
+      };
+      onSaveTask(newTaskFromAction);
+    }
+  };
 
   const handleQuickSave = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -288,7 +514,23 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const targetGroup = activeGroup || groups[0] || { id: 'group_geral', name: 'Geral' };
-    const projectAssociated = targetGroup.projectName || 'Geral';
+
+    // Determinar projeto associado
+    let finalProjectId = targetGroup.projectName || 'geral';
+    let finalProjectName = targetGroup.projectName || 'Geral';
+
+    if (quickType === 'meeting') {
+      if (quickMeetingProjectMode === 'other') {
+        finalProjectId = 'outros';
+        finalProjectName = quickMeetingCustomProject.trim() || 'Outros Projetos';
+      } else if (quickMeetingProjectId) {
+        const foundProj = projects.find(p => p.id === quickMeetingProjectId);
+        if (foundProj) {
+          finalProjectId = foundProj.id;
+          finalProjectName = foundProj.name;
+        }
+      }
+    }
 
     const isNote = quickType === 'note';
     const isMeeting = quickType === 'meeting';
@@ -297,8 +539,10 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     const newTask: Task = {
       id: `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       activity: quickText.trim(),
-      description: `Criado via Notas Rápidas no grupo ${targetGroup.name}`,
-      project: projectAssociated,
+      description: isMeeting 
+        ? `Reunião: ${quickText.trim()} • Local/Link: ${quickMeetingCallLink || 'Presencial/MS Teams'}` 
+        : `Criado via Notas Rápidas no grupo ${targetGroup.name}`,
+      project: finalProjectName,
       group: targetGroup.name,
       groupId: targetGroup.id,
       activityType: quickType,
@@ -306,53 +550,69 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       reportReviewer: isReport ? (quickReportReviewer.trim() || undefined) : undefined,
       currentReviewer: isReport ? (quickReportReviewer.trim() || undefined) : undefined,
       reportStage: isReport ? (quickReportInReview ? 'Revisão Colaboradores' : 'Em Elaboração') : undefined,
-      isMeetingOrganizer: isMeeting ? quickIsMeetingOrganizer : undefined,
+      isMeetingOrganizer: isMeeting ? (quickMeetingRole === 'organizer') : undefined,
       priority: 'Sem prioridade',
       status: isNote ? 'Concluída' : 'Em Andamento',
       requestDate: todayStr,
       plannedStartDate: todayStr,
-      completionDate: isMeeting ? todayStr : '', // Sem prazo por padrão para tarefas gerais
+      completionDate: isMeeting ? (quickMeetingDate || todayStr) : '',
       completedAt: isNote ? now.toISOString() : undefined,
-      // NOTA ou REUNIÃO: ficam salvas por 7 dias em Atividades, e permanentemente no Visão Geral
       showInActivitiesUntil: (isNote || isMeeting) ? sevenDaysFromNow : undefined,
       completionDisplayChoice: isNote ? 'keep_7_days' : undefined,
       progress: isNote ? 100 : 0,
       nextStep: '',
-      projectLead: currentUser !== 'Todos' ? currentUser : (teamMembers[0]?.name || 'Usuário'),
-      collaborators: [],
+      projectLead: isMeeting && quickMeetingResponsible.trim() 
+        ? quickMeetingResponsible.trim() 
+        : (currentUser !== 'Todos' ? currentUser : (teamMembers[0]?.name || 'Usuário')),
+      collaborators: isMeeting ? quickMeetingParticipants : [],
       updates: [],
-      isRegulatoryContribution: false // Sem contribuição regulatória por padrão
+      isRegulatoryContribution: isMeeting ? (quickMeetingLinkedStandards.length > 0) : false,
+      fileLinks: isMeeting ? quickMeetingFileLinks : undefined,
+      linkedRegulatoryStandardIds: isMeeting ? quickMeetingLinkedStandards : undefined
     };
 
     onSaveTask(newTask);
 
-    // Se for reunião e o usuário for o organizador:
-    // Inserir a reunião em "Reuniões Previstas (por Projeto)" e encaminhar para a aba reuniões!
-    if (isMeeting && quickIsMeetingOrganizer) {
-      const targetProject = projects.find(p => p.name === projectAssociated) || projects[0];
+    // Se for reunião: SEMPRE salvar na central de reuniões, independente de ser ou não participante/organizador!
+    if (isMeeting) {
+      const moderatorName = quickMeetingResponsible.trim() || (currentUser !== 'Todos' ? currentUser : 'Usuário');
+      const participantsList = quickMeetingParticipants.length > 0 
+        ? quickMeetingParticipants 
+        : [moderatorName];
+
+      const mappedAgendaItems: MeetingAgendaItem[] = quickMeetingPautas.map((p, idx) => ({
+        id: p.id || `agenda_${Date.now()}_${idx}`,
+        title: p.title || quickText.trim(),
+        discussions: p.discussions || '',
+        decisions: p.decisions || '',
+        linkedRegulatoryStandardIds: p.linkedRegulatoryStandardIds || [],
+        actionItems: p.actionItems || [],
+        attachedFiles: quickMeetingAttachedFiles,
+        fileLinks: quickMeetingFileLinks,
+        presentationLink: quickMeetingFileLinks[0]?.url || undefined,
+        presentationUrl: quickMeetingFileLinks[0]?.url || undefined
+      }));
+
       const newMeeting: Meeting = {
         id: `meeting_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         title: quickText.trim(),
-        projectId: targetProject?.id || 'geral',
-        projectName: targetProject?.name || projectAssociated,
-        date: todayStr,
-        time: '14:00',
+        projectId: finalProjectId,
+        projectName: finalProjectName,
+        date: quickMeetingDate || todayStr,
+        time: quickMeetingTime || '10:00',
+        location: quickMeetingCallLink.trim() || 'MS Teams / CTVacinas',
         type: 'Alinhamento',
-        status: 'Agendada', // Inserida em Reuniões Previstas (por Projeto)
-        moderator: currentUser !== 'Todos' ? currentUser : 'Usuário',
-        participants: [currentUser !== 'Todos' ? currentUser : 'Usuário'],
+        status: 'Agendada',
+        moderator: moderatorName,
+        participants: participantsList,
         presentParticipants: [],
         absentParticipants: [],
-        agendaItems: [
-          {
-            id: `agenda_${Date.now()}_1`,
-            title: quickText.trim(),
-            description: `Pauta inicial registrada via Bloco de Notas Rápidas.`,
-            discussions: '',
-            decisions: '',
-            actionItems: []
-          }
-        ],
+        presentationLink: quickMeetingFileLinks[0]?.url || undefined,
+        presentationUrl: quickMeetingFileLinks[0]?.url || undefined,
+        linkedRegulatoryStandardIds: quickMeetingLinkedStandards,
+        attachedFiles: quickMeetingAttachedFiles,
+        fileLinks: quickMeetingFileLinks,
+        agendaItems: mappedAgendaItems,
         createdAt: now.toISOString(),
         updatedAt: now.toISOString()
       };
@@ -361,14 +621,28 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         onAddMeeting(newMeeting);
       }
 
-      // Encaminhar imediatamente para a aba de reuniões
-      if (onNavigateTab) {
+      // Se for organizador, navega opcionalmente para a aba reuniões
+      if (quickMeetingRole === 'organizer' && onNavigateTab) {
         onNavigateTab('meetings');
       }
     }
 
+    // Resetar campos
     setQuickText('');
     setQuickReportReviewer('');
+    setQuickMeetingFileLinks([]);
+    setQuickMeetingAttachedFiles([]);
+    setQuickMeetingLinkedStandards([]);
+    setQuickMeetingParticipants([]);
+    setQuickMeetingCallLink('');
+    setQuickMeetingPautas([
+      {
+        id: 'pauta_init_1',
+        title: 'Pauta Principal',
+        linkedRegulatoryStandardIds: [],
+        actionItems: []
+      }
+    ]);
     setIsSavingQuick(false);
   };
 
@@ -1612,43 +1886,569 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                 </div>
               )}
 
-              {/* Opções contextuais para Reunião */}
+              {/* Opções completas para Reunião no Bloco de Notas */}
               {quickType === 'meeting' && (
-                <div className="p-3 bg-blue-50/70 rounded-2xl border border-blue-200/80 flex flex-wrap items-center justify-between gap-3 text-xs animate-in fade-in">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex items-center gap-1.5 text-blue-950 font-black">
-                      <Users size={14} className="text-blue-600 shrink-0" />
-                      <span>Sou organizador da reunião?</span>
+                <div className="p-4 bg-blue-50/80 rounded-3xl border border-blue-200/90 space-y-4 text-xs animate-in fade-in">
+                  
+                  {/* Linha 1: Papel do Usuário + Projeto */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
+                        <Users size={12} className="text-blue-600 shrink-0" />
+                        <span>Seu Papel nesta Reunião</span>
+                      </label>
+                      <div className="grid grid-cols-2 gap-1.5 bg-white/90 p-1 rounded-2xl border border-blue-200">
+                        <button
+                          type="button"
+                          onClick={() => setQuickMeetingRole('organizer')}
+                          className={`py-1.5 px-2 rounded-xl text-xs font-black transition text-center ${
+                            quickMeetingRole === 'organizer' 
+                              ? 'bg-blue-600 text-white shadow-2xs' 
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Organizador(a)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQuickMeetingRole('participant')}
+                          className={`py-1.5 px-2 rounded-xl text-xs font-black transition text-center ${
+                            quickMeetingRole !== 'organizer' 
+                              ? 'bg-slate-800 text-white shadow-2xs' 
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Participante / Registro
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-blue-200">
-                      <button
-                        type="button"
-                        onClick={() => setQuickIsMeetingOrganizer(true)}
-                        className={`px-3 py-1 rounded-lg text-xs font-black transition ${
-                          quickIsMeetingOrganizer ? 'bg-blue-600 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        Sim (Organizador)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQuickIsMeetingOrganizer(false)}
-                        className={`px-3 py-1 rounded-lg text-xs font-black transition ${
-                          !quickIsMeetingOrganizer ? 'bg-slate-700 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        Não (Participante)
-                      </button>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
+                        <Folder size={12} className="text-blue-600 shrink-0" />
+                        <span>Projeto Vinculado</span>
+                      </label>
+                      <div className="flex gap-1.5">
+                        <select
+                          value={quickMeetingProjectMode === 'other' ? 'outros' : (quickMeetingProjectId || (projects[0]?.id || ''))}
+                          onChange={e => {
+                            if (e.target.value === 'outros') {
+                              setQuickMeetingProjectMode('other');
+                              setQuickMeetingProjectId('outros');
+                            } else {
+                              setQuickMeetingProjectMode('existing');
+                              setQuickMeetingProjectId(e.target.value);
+                            }
+                          }}
+                          className="flex-1 p-2 bg-white border border-blue-200 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 text-xs"
+                        >
+                          <option value="">Selecione o projeto...</option>
+                          {projects.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                          <option value="outros">Outros Projetos / Não pertence aos meus projetos</option>
+                        </select>
+                      </div>
+
+                      {quickMeetingProjectMode === 'other' && (
+                        <input
+                          type="text"
+                          value={quickMeetingCustomProject}
+                          onChange={e => setQuickMeetingCustomProject(e.target.value)}
+                          placeholder="Digite o nome do projeto externo/outro projeto..."
+                          className="w-full mt-1.5 p-2 bg-white border border-blue-300 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      )}
                     </div>
                   </div>
 
-                  {quickIsMeetingOrganizer && (
-                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-800">
-                      <Sparkles size={12} className="text-blue-600 shrink-0" />
-                      <span>Será agendada em <strong>Reuniões Previstas</strong> e você será direcionado para definir a pauta.</span>
+                  {/* Linha 2: Responsável / Organizador (Livre ou Lista) + Data e Horário */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1 sm:col-span-1">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
+                        <UserCheck size={12} className="text-blue-600 shrink-0" />
+                        <span>Responsável / Organizador</span>
+                      </label>
+                      <input
+                        list="quick-meeting-resp-list"
+                        type="text"
+                        value={quickMeetingResponsible}
+                        onChange={e => setQuickMeetingResponsible(e.target.value)}
+                        placeholder={currentUser !== 'Todos' ? currentUser : 'Nome do responsável...'}
+                        className="w-full p-2 bg-white border border-blue-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <datalist id="quick-meeting-resp-list">
+                        {regulatoryNames.map(name => (
+                          <option key={name} value={name} />
+                        ))}
+                      </datalist>
+                      <span className="text-[10px] text-blue-900/70 block">
+                        Pode escolher da lista regulatória ou digitar qualquer nome.
+                      </span>
                     </div>
-                  )}
+
+                    <div className="space-y-1 sm:col-span-1">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
+                        <CalendarIcon size={12} className="text-blue-600 shrink-0" />
+                        <span>Data da Reunião</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={quickMeetingDate}
+                        onChange={e => setQuickMeetingDate(e.target.value)}
+                        className="w-full p-2 bg-white border border-blue-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <div className="space-y-1 sm:col-span-1">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
+                        <Clock size={12} className="text-blue-600 shrink-0" />
+                        <span>Horário</span>
+                      </label>
+                      <input
+                        type="time"
+                        value={quickMeetingTime}
+                        onChange={e => setQuickMeetingTime(e.target.value)}
+                        className="w-full p-2 bg-white border border-blue-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Linha 3: Link da Reunião (Opcional quando não for organizador) */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
+                      <LinkIcon size={12} className="text-blue-600 shrink-0" />
+                      <span>Link da Chamada (Teams / Meet / Sala) {quickMeetingRole !== 'organizer' ? <strong className="text-blue-600 font-bold">(Opcional / Não obrigatório)</strong> : ''}</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={quickMeetingCallLink}
+                      onChange={e => setQuickMeetingCallLink(e.target.value)}
+                      placeholder={quickMeetingRole !== 'organizer' ? "Opcional: link da chamada virtual se houver..." : "Link do MS Teams ou Google Meet..."}
+                      className="w-full p-2 bg-white border border-blue-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Linha 4: Participantes (Qualquer nome ou lista) */}
+                  <div className="space-y-2 bg-white/60 p-3 rounded-2xl border border-blue-200/80">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
+                        <Users size={12} className="text-blue-600 shrink-0" />
+                        <span>Participantes & Convidados ({quickMeetingParticipants.length})</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const names = teamMembers.map(tm => tm.name);
+                          setQuickMeetingParticipants(Array.from(new Set([...quickMeetingParticipants, ...names])));
+                        }}
+                        className="text-[10px] font-bold text-blue-700 hover:underline"
+                      >
+                        + Adicionar toda equipe regulatória
+                      </button>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <input
+                        list="quick-meeting-part-list"
+                        type="text"
+                        value={quickMeetingNewParticipant}
+                        onChange={e => setQuickMeetingNewParticipant(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddQuickParticipant(quickMeetingNewParticipant);
+                          }
+                        }}
+                        placeholder="Digite qualquer nome ou escolha da lista..."
+                        className="flex-1 p-2 bg-white border border-blue-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <datalist id="quick-meeting-part-list">
+                        {regulatoryNames.map(name => (
+                          <option key={name} value={name} />
+                        ))}
+                      </datalist>
+                      <button
+                        type="button"
+                        onClick={() => handleAddQuickParticipant(quickMeetingNewParticipant)}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shrink-0"
+                      >
+                        + Adicionar
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {quickMeetingParticipants.map(part => (
+                        <span 
+                          key={part} 
+                          className="px-2.5 py-1 bg-blue-100/90 text-blue-900 border border-blue-300 rounded-xl text-xs font-bold flex items-center gap-1"
+                        >
+                          <span>{part}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveQuickParticipant(part)}
+                            className="text-blue-700 hover:text-rose-600"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                      {quickMeetingParticipants.length === 0 && (
+                        <span className="text-[11px] text-blue-900/60 italic">Nenhum participante adicionado ainda.</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Linha 5: Links e Anexos de Arquivos (Mesmo quando não sou participante) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    
+                    {/* Links de Arquivos (SharePoint / OneDrive / Drive) */}
+                    <div className="bg-white/90 p-3 rounded-2xl border border-blue-200 space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
+                        <LinkIcon size={12} className="text-blue-600 shrink-0" />
+                        <span>Links de Arquivos (SharePoint, OneDrive, Drive, URLs)</span>
+                      </label>
+
+                      <div className="space-y-1.5">
+                        <input
+                          type="text"
+                          value={quickMeetingNewLinkName}
+                          onChange={e => setQuickMeetingNewLinkName(e.target.value)}
+                          placeholder="Título do documento (ex: Minuta de Acordo)..."
+                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none"
+                        />
+                        <div className="flex gap-1.5">
+                          <input
+                            type="url"
+                            value={quickMeetingNewLinkUrl}
+                            onChange={e => setQuickMeetingNewLinkUrl(e.target.value)}
+                            placeholder="https://ctvacinas.sharepoint.com/... ou link na nuvem"
+                            className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleAddFileLink}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shrink-0"
+                          >
+                            + Link
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1 pt-1">
+                        {quickMeetingFileLinks.map(link => (
+                          <div key={link.id} className="p-1.5 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-xs">
+                            <a 
+                              href={link.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="font-bold text-blue-800 truncate flex items-center gap-1 hover:underline"
+                            >
+                              <ExternalLink size={11} className="shrink-0" />
+                              <span className="truncate">{link.name}</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFileLink(link.id)}
+                              className="text-slate-400 hover:text-rose-600 p-1"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Anexar Arquivos Locais */}
+                    <div className="bg-white/90 p-3 rounded-2xl border border-blue-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
+                          <Paperclip size={12} className="text-teal-600 shrink-0" />
+                          <span>Anexar Arquivos do Computador</span>
+                        </label>
+                        <label className="cursor-pointer px-2.5 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-[10px] flex items-center gap-1 transition shadow-2xs">
+                          <Plus size={11} />
+                          <span>Anexar</span>
+                          <input
+                            type="file"
+                            multiple
+                            className="hidden"
+                            onChange={handleAttachLocalFile}
+                          />
+                        </label>
+                      </div>
+
+                      <div className="space-y-1 max-h-32 overflow-y-auto">
+                        {quickMeetingAttachedFiles.map(f => (
+                          <div key={f.id} className="p-1.5 bg-teal-50 border border-teal-200 rounded-xl flex items-center justify-between text-xs">
+                            <span className="font-bold text-teal-900 truncate">{f.name} <span className="text-[10px] text-teal-600 font-normal">({f.size})</span></span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAttachedFile(f.id)}
+                              className="text-slate-400 hover:text-rose-600 p-1"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                        {quickMeetingAttachedFiles.length === 0 && (
+                          <p className="text-[11px] text-slate-400 italic py-2 text-center">Nenhum arquivo anexado ainda.</p>
+                        )}
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Linha 6: Vincular Norma Regulatória */}
+                  <div className="p-3 bg-white/90 rounded-2xl border border-blue-200 space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
+                        <BookOpen size={12} className="text-indigo-600 shrink-0" />
+                        <span>Vincular Norma Regulatória à Reunião</span>
+                      </label>
+                      <select
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val && !quickMeetingLinkedStandards.includes(val)) {
+                            setQuickMeetingLinkedStandards(prev => [...prev, val]);
+                          }
+                          e.target.value = '';
+                        }}
+                        className="p-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                      >
+                        <option value="">+ Vincular Norma...</option>
+                        {regulatoryStandards.map(std => (
+                          <option key={std.id} value={std.id}>
+                            [{std.type || 'Norma'}] {std.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5">
+                      {quickMeetingLinkedStandards.map(stdId => {
+                        const std = regulatoryStandards.find(s => s.id === stdId);
+                        if (!std) return null;
+                        return (
+                          <span key={stdId} className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                            <BookOpen size={11} className="text-indigo-600" />
+                            <span><strong>[{std.type || 'Norma'}]</strong> {std.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => setQuickMeetingLinkedStandards(prev => prev.filter(id => id !== stdId))}
+                              className="text-slate-400 hover:text-rose-600 ml-1"
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        );
+                      })}
+                      {quickMeetingLinkedStandards.length === 0 && (
+                        <span className="text-[11px] text-slate-400 italic">Nenhuma norma regulatória vinculada a esta reunião.</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Linha 7: Pautas e Encaminhamentos com 3 Opções Explícitas */}
+                  <div className="space-y-3 pt-2 border-t border-blue-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase text-blue-950 flex items-center gap-1.5">
+                        <Layers size={13} className="text-blue-600" />
+                        Pautas e Encaminhamentos da Reunião
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleAddQuickPauta}
+                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition shadow-2xs"
+                      >
+                        <Plus size={12} /> + Nova Pauta
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {quickMeetingPautas.map((pauta, pIdx) => (
+                        <div key={pauta.id} className="p-3 bg-white rounded-2xl border border-blue-200/90 space-y-2.5 shadow-2xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-1">
+                              <span className="w-5 h-5 rounded-lg bg-blue-100 text-blue-900 font-black text-[11px] flex items-center justify-center shrink-0">
+                                {pIdx + 1}
+                              </span>
+                              <input
+                                type="text"
+                                value={pauta.title}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setQuickMeetingPautas(prev => prev.map(p => p.id === pauta.id ? { ...p, title: val } : p));
+                                }}
+                                placeholder="Título da Pauta..."
+                                className="w-full text-xs font-bold text-slate-800 bg-transparent border-b border-dashed border-slate-300 focus:border-blue-500 outline-none px-1 py-0.5"
+                              />
+                            </div>
+                            {quickMeetingPautas.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveQuickPauta(pauta.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 transition"
+                                title="Remover Pauta"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Lista de Encaminhamentos desta Pauta */}
+                          <div className="space-y-1.5 pl-6">
+                            {pauta.actionItems.map(act => (
+                              <div key={act.id} className="p-2 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs">
+                                <div className="space-y-0.5">
+                                  <span className="font-bold text-slate-800 block">{act.action}</span>
+                                  <span className="text-[10px] text-slate-500">
+                                    Resp: <strong>{act.responsible}</strong> • Prazo: {act.dueDate ? act.dueDate.split('-').reverse().join('/') : 'Sem prazo'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  {act.actionDestination === 'project' && (
+                                    <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
+                                      <FolderKanban size={10} /> No Projeto
+                                    </span>
+                                  )}
+                                  {act.actionDestination === 'task' && (
+                                    <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-teal-100 text-teal-800 border border-teal-200 flex items-center gap-1">
+                                      <CheckCircle size={10} /> Em Atividades
+                                    </span>
+                                  )}
+                                  {act.actionDestination === 'meeting_only' && (
+                                    <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1">
+                                      <FileText size={10} /> Na Reunião
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setQuickMeetingPautas(prev => prev.map(p => {
+                                        if (p.id === pauta.id) {
+                                          return {
+                                            ...p,
+                                            actionItems: p.actionItems.filter(a => a.id !== act.id)
+                                          };
+                                        }
+                                        return p;
+                                      }));
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-rose-600"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+
+                            {/* Formulário para Adicionar Encaminhamento com as 3 Opções Explícitas */}
+                            <div className="p-2.5 bg-slate-50/90 rounded-xl border border-dashed border-slate-300 space-y-2">
+                              <span className="text-[10px] font-black uppercase text-slate-500 block">Novo Encaminhamento da Pauta</span>
+                              <input
+                                id={`quick-action-text-${pauta.id}`}
+                                type="text"
+                                placeholder="Ação / Encaminhamento deliberado..."
+                                className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none"
+                              />
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <input
+                                  id={`quick-action-resp-${pauta.id}`}
+                                  list="quick-meeting-resp-list"
+                                  type="text"
+                                  placeholder="Responsável (qualquer nome ou lista)..."
+                                  className="w-full p-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                                />
+                                <input
+                                  id={`quick-action-date-${pauta.id}`}
+                                  type="date"
+                                  defaultValue={quickMeetingDate}
+                                  className="w-full p-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                                />
+                              </div>
+
+                              {/* 3 OPÇÕES EXPLÍCITAS CONFORME SOLICITADO */}
+                              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const textEl = document.getElementById(`quick-action-text-${pauta.id}`) as HTMLInputElement;
+                                    const respEl = document.getElementById(`quick-action-resp-${pauta.id}`) as HTMLInputElement;
+                                    const dateEl = document.getElementById(`quick-action-date-${pauta.id}`) as HTMLInputElement;
+                                    const text = textEl?.value?.trim() || '';
+                                    if (!text) return;
+                                    const resp = respEl?.value?.trim() || currentUser || 'Responsável';
+                                    const date = dateEl?.value || quickMeetingDate;
+
+                                    const tempAction: MeetingActionItem = {
+                                      id: 'act_' + Date.now(),
+                                      action: text,
+                                      responsible: resp,
+                                      dueDate: date,
+                                      status: 'Pendente',
+                                      actionDestination: 'project'
+                                    };
+
+                                    setActionForRegisterModal({
+                                      agendaId: pauta.id,
+                                      action: tempAction
+                                    });
+
+                                    textEl.value = '';
+                                  }}
+                                  className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[11px] font-bold flex items-center gap-1 shadow-2xs transition"
+                                >
+                                  <FolderKanban size={12} />
+                                  <span>1. Registrar no Projeto</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const textEl = document.getElementById(`quick-action-text-${pauta.id}`) as HTMLInputElement;
+                                    const respEl = document.getElementById(`quick-action-resp-${pauta.id}`) as HTMLInputElement;
+                                    const dateEl = document.getElementById(`quick-action-date-${pauta.id}`) as HTMLInputElement;
+                                    const text = textEl?.value?.trim() || '';
+                                    if (!text) return;
+                                    const resp = respEl?.value?.trim() || currentUser || 'Responsável';
+                                    const date = dateEl?.value || quickMeetingDate;
+                                    handleAddQuickActionItem(pauta.id, text, resp, date, 'task');
+                                    textEl.value = '';
+                                  }}
+                                  className="px-2.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-[11px] font-bold flex items-center gap-1 shadow-2xs transition"
+                                >
+                                  <CheckCircle size={12} />
+                                  <span>2. Registrar nas Atividades</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const textEl = document.getElementById(`quick-action-text-${pauta.id}`) as HTMLInputElement;
+                                    const respEl = document.getElementById(`quick-action-resp-${pauta.id}`) as HTMLInputElement;
+                                    const dateEl = document.getElementById(`quick-action-date-${pauta.id}`) as HTMLInputElement;
+                                    const text = textEl?.value?.trim() || '';
+                                    if (!text) return;
+                                    const resp = respEl?.value?.trim() || currentUser || 'Responsável';
+                                    const date = dateEl?.value || quickMeetingDate;
+                                    handleAddQuickActionItem(pauta.id, text, resp, date, 'meeting_only');
+                                    textEl.value = '';
+                                  }}
+                                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-[11px] font-bold flex items-center gap-1 shadow-2xs transition ml-auto"
+                                >
+                                  <FileText size={12} />
+                                  <span>3. Apenas Encaminhamento</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                 </div>
               )}
 
@@ -1904,12 +2704,13 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                   {/* LADO DIREITO: PRAZO, PRIORIDADE, REGULATÓRIA, NOTAS, 3 PONTOS */}
                   <div className="flex flex-wrap items-center gap-2 self-start md:self-center shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
                     
-                    {/* 1. PRAZO EDITÁVEL */}
+                    {/* 1. PRAZO EDITÁVEL (Com Auto-flip para cima quando próximo ao rodapé) */}
                     <div className="relative">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          handleOpenPopover(`deadline_${task.id}`, e);
                           if (activeDeadlineTaskId === task.id) {
                             setActiveDeadlineTaskId(null);
                           } else {
@@ -1917,42 +2718,44 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                             setTempDeadlineValue(task.completionDate || '');
                           }
                         }}
-                        className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border transition flex items-center gap-1.5 ${
+                        className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
                           task.completionDate
                             ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                             : 'bg-slate-50 border-dashed border-slate-200 text-slate-400 hover:text-slate-600'
                         }`}
                         title="Clique para definir ou alterar o prazo"
                       >
-                        <CalendarIcon size={11} className={task.completionDate ? 'text-teal-600' : 'text-slate-400'} />
+                        <CalendarIcon size={13} className={task.completionDate ? 'text-teal-600' : 'text-slate-400'} />
                         <span>{formatDateBR(task.completionDate)}</span>
                       </button>
 
-                      {/* Popover de Prazo */}
+                      {/* Popover de Prazo com Auto-Flip */}
                       {activeDeadlineTaskId === task.id && (
                         <div 
                           onClick={e => e.stopPropagation()}
-                          className="absolute right-0 top-8 z-50 p-3 bg-white rounded-2xl shadow-xl border border-slate-200 w-56 space-y-2 animate-in fade-in"
+                          className={`absolute right-0 z-50 p-3.5 bg-white rounded-2xl shadow-2xl border border-slate-200 w-64 space-y-2.5 animate-in fade-in ${
+                            popoverPlacement[`deadline_${task.id}`] === 'up' ? 'bottom-full mb-2' : 'top-9'
+                          }`}
                         >
-                          <span className="text-[10px] font-black uppercase text-slate-500 block">Alterar Prazo</span>
+                          <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 block">Alterar Prazo</span>
                           <input
                             type="date"
                             value={tempDeadlineValue}
                             onChange={e => setTempDeadlineValue(e.target.value)}
-                            className="w-full px-2 py-1 text-xs font-bold border border-slate-200 rounded-lg outline-none"
+                            className="w-full px-2.5 py-1.5 text-xs font-bold border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-teal-500"
                           />
-                          <div className="flex items-center gap-1 pt-1">
+                          <div className="flex items-center gap-1.5 pt-1">
                             <button
                               type="button"
                               onClick={() => handleSaveDeadline(task, tempDeadlineValue)}
-                              className="flex-1 py-1 bg-teal-600 text-white rounded-lg text-[10px] font-bold hover:bg-teal-700"
+                              className="flex-1 py-1.5 bg-teal-600 text-white rounded-xl text-xs font-bold hover:bg-teal-700 transition"
                             >
                               Salvar
                             </button>
                             <button
                               type="button"
                               onClick={() => handleSaveDeadline(task, '')}
-                              className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-200"
+                              className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition"
                             >
                               Sem prazo
                             </button>
@@ -1961,54 +2764,57 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                       )}
                     </div>
 
-                    {/* 2. PRIORIDADE EDITÁVEL */}
+                    {/* 2. PRIORIDADE EDITÁVEL (Com Auto-flip) */}
                     <div className="relative">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          handleOpenPopover(`priority_${task.id}`, e);
                           setActivePriorityTaskId(activePriorityTaskId === task.id ? null : task.id);
                         }}
-                        className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border transition flex items-center gap-1.5 ${priorityInfo.bg} ${priorityInfo.text}`}
+                        className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${priorityInfo.bg} ${priorityInfo.text}`}
                         title="Clique para alterar a prioridade"
                       >
                         <span className={`w-2 h-2 rounded-full ${priorityInfo.dot}`} />
                         <span>{priorityInfo.label}</span>
                       </button>
 
-                      {/* Dropdown de Prioridade */}
+                      {/* Dropdown de Prioridade com Auto-flip */}
                       {activePriorityTaskId === task.id && (
                         <div 
                           onClick={e => e.stopPropagation()}
-                          className="absolute right-0 top-8 z-50 w-44 bg-white rounded-2xl shadow-xl border border-slate-200 py-1 animate-in fade-in text-xs font-bold"
+                          className={`absolute right-0 z-50 w-48 bg-white rounded-2xl shadow-2xl border border-slate-200 py-1.5 animate-in fade-in text-xs font-bold ${
+                            popoverPlacement[`priority_${task.id}`] === 'up' ? 'bottom-full mb-2' : 'top-9'
+                          }`}
                         >
                           <button
                             type="button"
                             onClick={() => handleSavePriority(task, 'Alta')}
-                            className="w-full px-3 py-1.5 text-left hover:bg-rose-50 text-rose-700 flex items-center gap-2"
+                            className="w-full px-3.5 py-2 text-left hover:bg-rose-50 text-rose-700 flex items-center gap-2"
                           >
-                            <span className="w-2 h-2 rounded-full bg-rose-500" /> Alta prioridade
+                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Alta prioridade
                           </button>
                           <button
                             type="button"
                             onClick={() => handleSavePriority(task, 'Média')}
-                            className="w-full px-3 py-1.5 text-left hover:bg-amber-50 text-amber-700 flex items-center gap-2"
+                            className="w-full px-3.5 py-2 text-left hover:bg-amber-50 text-amber-700 flex items-center gap-2"
                           >
-                            <span className="w-2 h-2 rounded-full bg-amber-500" /> Média prioridade
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Média prioridade
                           </button>
                           <button
                             type="button"
                             onClick={() => handleSavePriority(task, 'Baixa')}
-                            className="w-full px-3 py-1.5 text-left hover:bg-sky-50 text-sky-700 flex items-center gap-2"
+                            className="w-full px-3.5 py-2 text-left hover:bg-sky-50 text-sky-700 flex items-center gap-2"
                           >
-                            <span className="w-2 h-2 rounded-full bg-sky-500" /> Baixa prioridade
+                            <span className="w-2.5 h-2.5 rounded-full bg-sky-500" /> Baixa prioridade
                           </button>
                           <button
                             type="button"
                             onClick={() => handleSavePriority(task, 'Sem prioridade')}
-                            className="w-full px-3 py-1.5 text-left hover:bg-slate-50 text-slate-500 flex items-center gap-2"
+                            className="w-full px-3.5 py-2 text-left hover:bg-slate-50 text-slate-500 flex items-center gap-2"
                           >
-                            <span className="w-2 h-2 rounded-full bg-slate-300" /> Sem prioridade
+                            <span className="w-2.5 h-2.5 rounded-full bg-slate-300" /> Sem prioridade
                           </button>
                         </div>
                       )}
@@ -2018,14 +2824,14 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                     <button
                       type="button"
                       onClick={() => handleToggleRegulatory(task)}
-                      className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border transition flex items-center gap-1.5 ${
+                      className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
                         isRegulatory
                           ? 'bg-teal-50 border-teal-200 text-teal-800 hover:bg-teal-100'
                           : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-700'
                       }`}
                       title="Clique para alternar Contribuição Regulatória (Sim / Não)"
                     >
-                      {isRegulatory ? <ShieldCheck size={12} className="text-teal-600" /> : <ShieldAlert size={12} className="text-slate-400" />}
+                      {isRegulatory ? <ShieldCheck size={13} className="text-teal-600" /> : <ShieldAlert size={13} className="text-slate-400" />}
                       <span>Regulatória: {isRegulatory ? 'Sim' : 'Não'}</span>
                     </button>
 
@@ -2033,31 +2839,34 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                     <button
                       type="button"
                       onClick={() => setNotesModalTask(task)}
-                      className="px-2.5 py-1 rounded-xl text-[10px] font-bold border border-slate-200 bg-slate-50 hover:bg-teal-50 hover:text-teal-800 text-slate-600 transition flex items-center gap-1.5"
+                      className="px-2.5 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-slate-50 hover:bg-teal-50 hover:text-teal-800 text-slate-600 transition flex items-center gap-1.5"
                       title="Consultar e adicionar notas de atualização"
                     >
-                      <MessageSquare size={12} className="text-teal-600" />
+                      <MessageSquare size={13} className="text-teal-600" />
                       <span>{task.updates?.length || 0}</span>
                     </button>
 
-                    {/* 5. MENU 3 PONTOS DA LINHA */}
+                    {/* 5. MENU 3 PONTOS DA LINHA (Com Auto-flip) */}
                     <div className="relative">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          handleOpenPopover(`row_${task.id}`, e);
                           setActiveRowMenuTaskId(activeRowMenuTaskId === task.id ? null : task.id);
                         }}
-                        className="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center transition"
+                        className="w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center transition border border-transparent hover:border-slate-200"
                         title="Ações do registro"
                       >
-                        <MoreVertical size={14} />
+                        <MoreVertical size={15} />
                       </button>
 
                       {activeRowMenuTaskId === task.id && (
                         <div 
                           onClick={e => e.stopPropagation()}
-                          className="absolute right-0 top-8 z-50 w-44 bg-white rounded-2xl shadow-xl border border-slate-100 py-1.5 animate-in fade-in text-xs font-bold text-slate-700"
+                          className={`absolute right-0 z-50 w-52 bg-white rounded-2xl shadow-2xl border border-slate-200 py-1.5 animate-in fade-in text-xs font-bold text-slate-700 ${
+                            popoverPlacement[`row_${task.id}`] === 'up' ? 'bottom-full mb-2' : 'top-9'
+                          }`}
                         >
                           <button
                             type="button"
@@ -2065,7 +2874,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                               setActiveRowMenuTaskId(null);
                               onEdit(task);
                             }}
-                            className="w-full px-3 py-1.5 text-left hover:bg-slate-50 transition flex items-center gap-2"
+                            className="w-full px-3.5 py-2 text-left hover:bg-slate-50 transition flex items-center gap-2.5"
                           >
                             <Edit2 size={13} className="text-slate-400" /> Edição Completa
                           </button>
@@ -2076,7 +2885,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                               setActiveRowMenuTaskId(null);
                               setNotesModalTask(task);
                             }}
-                            className="w-full px-3 py-1.5 text-left hover:bg-slate-50 transition flex items-center gap-2"
+                            className="w-full px-3.5 py-2 text-left hover:bg-slate-50 transition flex items-center gap-2.5"
                           >
                             <MessageSquare size={13} className="text-teal-600" /> Adicionar Nota
                           </button>
@@ -2088,7 +2897,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                               setSelectedTaskForCritical(task);
                               setIsCriticalModalOpen(true);
                             }}
-                            className="w-full px-3 py-1.5 text-left hover:bg-amber-50 text-amber-700 transition flex items-center gap-2"
+                            className="w-full px-3.5 py-2 text-left hover:bg-amber-50 text-amber-700 transition flex items-center gap-2.5"
                           >
                             <AlertTriangle size={13} className="text-amber-600 shrink-0" />
                             {task.isCritical ? 'Configurar Alerta Crítico' : 'Marcar como Crítica'}
@@ -2102,7 +2911,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                               setActiveRowMenuTaskId(null);
                               onDelete(task);
                             }}
-                            className="w-full px-3 py-1.5 text-left hover:bg-rose-50 text-rose-600 transition flex items-center gap-2"
+                            className="w-full px-3.5 py-2 text-left hover:bg-rose-50 text-rose-600 transition flex items-center gap-2.5"
                           >
                             <Trash2 size={13} /> Excluir Registro
                           </button>
@@ -2129,6 +2938,54 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         </div>
 
       </div>
+
+      {/* REGISTRO DE ENCAMINHAMENTO NO PROJETO VIA NOTAS RÁPIDAS */}
+      {actionForRegisterModal && (
+        <RegisterActionAsActivityModal
+          isOpen={Boolean(actionForRegisterModal)}
+          onClose={() => setActionForRegisterModal(null)}
+          actionItem={actionForRegisterModal.action}
+          agendaTitle={quickMeetingPautas.find(p => p.id === actionForRegisterModal.agendaId)?.title || 'Pauta da Reunião'}
+          meetingTitle={quickText.trim() || 'Reunião'}
+          defaultProjectId={quickMeetingProjectId}
+          projects={projects}
+          teamMembers={teamMembers}
+          onConfirm={(data) => {
+            if (onConvertToActivity) {
+              onConvertToActivity(
+                data.projectId,
+                data.macroActivityId,
+                actionForRegisterModal.action,
+                data.targetMicroId,
+                data.microName,
+                data.assignee,
+                data.dueDate
+              );
+            }
+            setQuickMeetingPautas(prev => prev.map(p => {
+              if (p.id === actionForRegisterModal.agendaId) {
+                return {
+                  ...p,
+                  actionItems: [
+                    ...p.actionItems,
+                    {
+                      ...actionForRegisterModal.action,
+                      actionDestination: 'project',
+                      convertedToActivity: true,
+                      targetProjectId: data.projectId,
+                      targetMacroId: data.macroActivityId,
+                      targetMicroId: data.targetMicroId,
+                      targetMicroName: data.microName
+                    }
+                  ]
+                };
+              }
+              return p;
+            }));
+            setActionForRegisterModal(null);
+          }}
+        />
+      )}
 
     </div>
   );

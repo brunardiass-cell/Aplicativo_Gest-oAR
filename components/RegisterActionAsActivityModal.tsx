@@ -284,15 +284,19 @@ export const RegisterActionAsActivityModal: React.FC<RegisterActionAsActivityMod
                       <label className="text-[10px] font-black uppercase text-slate-500 block flex items-center gap-1">
                         <UserCheck size={11} /> Responsável
                       </label>
-                      <select
+                      <input
+                        list="register-modal-assignee-list"
+                        type="text"
                         value={assignee}
                         onChange={e => setAssignee(e.target.value)}
-                        className="w-full p-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none"
-                      >
+                        placeholder="Nome do responsável..."
+                        className="w-full p-2 bg-white border border-slate-300 rounded-xl font-bold text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <datalist id="register-modal-assignee-list">
                         {teamMembers.map(tm => (
-                          <option key={tm.id} value={tm.name}>{tm.name}</option>
+                          <option key={tm.id} value={tm.name}>{tm.name} ({tm.role || 'Equipe'})</option>
                         ))}
-                      </select>
+                      </datalist>
                     </div>
 
                     <div className="space-y-1">

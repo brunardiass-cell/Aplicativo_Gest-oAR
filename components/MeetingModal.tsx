@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Meeting, MeetingAgendaItem, MeetingActionItem, Project, TeamMember, RegulatoryStandard, DossierContribution } from '../types';
-import { X, Plus, Trash2, Calendar, Clock, MapPin, Users, ShieldCheck, CheckCircle2, FileText, ArrowRight, Layers, Sparkles, MessageSquare, AlertCircle, Link as LinkIcon, Check, BookOpen, UserCheck, UserX, Paperclip, Download, FolderKanban } from 'lucide-react';
+import { Meeting, MeetingAgendaItem, MeetingActionItem, Project, TeamMember, RegulatoryStandard, DossierContribution, MeetingFileLink, Task } from '../types';
+import { X, Plus, Trash2, Calendar, Clock, MapPin, Users, ShieldCheck, CheckCircle2, FileText, ArrowRight, Layers, Sparkles, MessageSquare, AlertCircle, Link as LinkIcon, Check, BookOpen, UserCheck, UserX, Paperclip, Download, FolderKanban, CheckCircle } from 'lucide-react';
 import { RegisterActionAsActivityModal } from './RegisterActionAsActivityModal';
 
 interface MeetingModalProps {
@@ -20,6 +20,7 @@ interface MeetingModalProps {
     dueDateOverride?: string
   ) => any;
   onOpenMinutes: (meeting: Meeting) => void;
+  onSaveTask?: (task: Task) => void;
 }
 
 export const MeetingModal: React.FC<MeetingModalProps> = ({
@@ -30,12 +31,14 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
   onClose,
   onSave,
   onConvertToActivity,
-  onOpenMinutes
+  onOpenMinutes,
+  onSaveTask
 }) => {
   // Only show conducting tabs (encaminhamentos, conclusoes) if meeting is already conducted or completed
   const isEditing = Boolean(meeting && meeting.status === 'Concluída');
 
   const [projectId, setProjectId] = useState(meeting?.projectId || (projects[0]?.id || ''));
+  const [customProjectName, setCustomProjectName] = useState(meeting?.projectName || '');
   const [title, setTitle] = useState(meeting?.title || '');
   const [date, setDate] = useState(meeting?.date || new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState(meeting?.time || '10:00');
@@ -55,6 +58,12 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
   const [presentationLink, setPresentationLink] = useState(meeting?.presentationLink || meeting?.presentationUrl || '');
   const [agendaItems, setAgendaItems] = useState<MeetingAgendaItem[]>(meeting?.agendaItems || []);
   const [activeTab, setActiveTab] = useState<'info' | 'pautas' | 'encaminhamentos' | 'conclusoes'>('info');
+
+  // Links de Arquivos e Normas Vinculadas à Reunião
+  const [meetingFileLinks, setMeetingFileLinks] = useState<MeetingFileLink[]>(meeting?.fileLinks || []);
+  const [newFileLinkName, setNewFileLinkName] = useState('');
+  const [newFileLinkUrl, setNewFileLinkUrl] = useState('');
+  const [linkedMeetingStandards, setLinkedMeetingStandards] = useState<string[]>(meeting?.linkedRegulatoryStandardIds || []);
 
   const selectedProject = projects.find(p => p.id === projectId);
 
@@ -258,6 +267,42 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
     setActionForRegisterModal({ agenda, action: actionItem });
   };
 
+  const handleConvertActionToTask = (agenda: MeetingAgendaItem, act: MeetingActionItem) => {
+    if (!onSaveTask) return;
+    const newTask: Task = {
+      id: `task_mtg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      project: selectedProject?.name || customProjectName || 'Geral',
+      activity: act.action,
+      description: `Encaminhamento de reunião: ${title || 'Reunião'}\nPauta: ${agenda.title}\nResponsável: ${act.responsible}`,
+      projectLead: act.responsible || moderator || 'Equipe',
+      collaborators: [],
+      status: 'Planejada',
+      priority: 'Média',
+      requestDate: new Date().toISOString().split('T')[0],
+      plannedStartDate: new Date().toISOString().split('T')[0],
+      completionDate: act.dueDate || '',
+      progress: 0,
+      nextStep: '',
+      updates: [],
+      isReport: false,
+      activityType: 'general'
+    };
+    onSaveTask(newTask);
+    handleUpdateActionItem(agenda.id, act.id, {
+      convertedToTask: true,
+      convertedTaskId: newTask.id,
+      actionDestination: 'task'
+    });
+  };
+
+  const handleMarkAsMeetingOnly = (agenda: MeetingAgendaItem, act: MeetingActionItem) => {
+    handleUpdateActionItem(agenda.id, act.id, {
+      actionDestination: 'meeting_only',
+      convertedToActivity: false,
+      convertedToTask: false
+    });
+  };
+
   const handleFileUploadForPautaInModal = (agendaId: string, filesList: FileList | null) => {
     if (!filesList || filesList.length === 0) return;
 
@@ -323,7 +368,7 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
         const contrib: DossierContribution = {
           id: `contrib_mtg_${meeting?.id || Date.now()}_${agenda.id}`,
           projectId: projectId,
-          projectName: selectedProject?.name || 'Projeto',
+          projectName: projectId === 'outros' ? (customProjectName.trim() || 'Outros Projetos') : (selectedProject?.name || 'Projeto'),
           macroActivityId: agenda.macroActivityId,
           macroActivityName: selectedProject?.macroActivities.find(m => m.id === agenda.macroActivityId)?.name,
           activityId: agenda.id,
@@ -331,7 +376,7 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
           chapterId: (agenda.regulatoryDocId as any) || 'cap_1',
           chapterTitle: 'Registro de Decisão de Reunião com Impacto Regulatório',
           type: 'texto',
-          content: `Decisão tomada na reunião "${title}" em ${date}:\n\n${agenda.decisions || agenda.description || ''}\n\nDetalhes Regulatórios: ${agenda.regulatoryImpactDetails || ''}`,
+          content: `Decisão tomada na reunião "${title}" em ${date}:\n\n${agenda.decisions || agenda.title || ''}\n\nDetalhes Regulatórios: ${agenda.regulatoryImpactDetails || ''}`,
           status: 'Em Revisão',
           version: 1,
           author: moderator || 'Moderador',
@@ -342,11 +387,15 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
       }
     });
 
+    const finalProjName = projectId === 'outros'
+      ? (customProjectName.trim() || 'Outros Projetos')
+      : (selectedProject?.name || 'Geral');
+
     const updatedMeeting: Meeting = {
       id: meeting?.id || 'mtg_' + Date.now(),
       title: title.trim(),
       projectId: projectId,
-      projectName: selectedProject?.name || 'Geral',
+      projectName: finalProjName,
       date: date,
       time: time,
       location: location,
@@ -358,6 +407,8 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
       absentParticipants: absentParticipants,
       presentationLink: presentationLink.trim(),
       presentationUrl: presentationLink.trim(),
+      linkedRegulatoryStandardIds: linkedMeetingStandards,
+      fileLinks: meetingFileLinks,
       agendaItems: agendaItems,
       generalConclusions: generalConclusions,
       minutesTemplate: meeting?.minutesTemplate,
@@ -381,7 +432,7 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
         const contrib: DossierContribution = {
           id: `contrib_mtg_${meeting?.id || Date.now()}_${agenda.id}`,
           projectId: projectId,
-          projectName: selectedProject?.name || 'Projeto',
+          projectName: projectId === 'outros' ? (customProjectName.trim() || 'Outros Projetos') : (selectedProject?.name || 'Projeto'),
           macroActivityId: agenda.macroActivityId,
           macroActivityName: selectedProject?.macroActivities.find(m => m.id === agenda.macroActivityId)?.name,
           activityId: agenda.id,
@@ -389,7 +440,7 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
           chapterId: (agenda.regulatoryDocId as any) || 'cap_1',
           chapterTitle: 'Registro de Decisão de Reunião com Impacto Regulatório',
           type: 'texto',
-          content: `Decisão tomada na reunião "${title}" em ${date}:\n\n${agenda.decisions || agenda.description || ''}\n\nDetalhes Regulatórios: ${agenda.regulatoryImpactDetails || ''}`,
+          content: `Decisão tomada na reunião "${title}" em ${date}:\n\n${agenda.decisions || agenda.title || ''}\n\nDetalhes Regulatórios: ${agenda.regulatoryImpactDetails || ''}`,
           status: 'Em Revisão',
           version: 1,
           author: moderator || 'Moderador',
@@ -400,11 +451,15 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
       }
     });
 
+    const finalProjName = projectId === 'outros'
+      ? (customProjectName.trim() || 'Outros Projetos')
+      : (selectedProject?.name || 'Geral');
+
     const finalizedMeeting: Meeting = {
       id: meeting?.id || 'mtg_' + Date.now(),
       title: title.trim(),
       projectId: projectId,
-      projectName: selectedProject?.name || 'Geral',
+      projectName: finalProjName,
       date: date,
       time: time,
       location: location,
@@ -416,6 +471,8 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
       absentParticipants: absentParticipants,
       presentationLink: presentationLink.trim(),
       presentationUrl: presentationLink.trim(),
+      linkedRegulatoryStandardIds: linkedMeetingStandards,
+      fileLinks: meetingFileLinks,
       agendaItems: agendaItems,
       generalConclusions: generalConclusions,
       minutesTemplate: meeting?.minutesTemplate,
@@ -532,7 +589,18 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                     {projects.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
+                    <option value="outros">Outros Projetos / Não pertence aos meus projetos</option>
                   </select>
+
+                  {projectId === 'outros' && (
+                    <input
+                      type="text"
+                      value={customProjectName}
+                      onChange={e => setCustomProjectName(e.target.value)}
+                      placeholder="Digite o nome do projeto externo/outro projeto..."
+                      className="w-full mt-2 p-2.5 bg-white border border-indigo-300 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  )}
                 </div>
 
                 <div className="space-y-1 sm:col-span-2">
@@ -598,27 +666,152 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                 </div>
 
                 <div className="space-y-1 sm:col-span-2">
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Local / Canal</label>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                    Local / Canal (Teams / Meet / Sala de Reunião) <span className="text-slate-400 font-normal">(Opcional se não for organizador)</span>
+                  </label>
                   <input
                     type="text"
                     value={location}
                     onChange={e => setLocation(e.target.value)}
-                    placeholder="Ex: Sala de Reuniões CTVacinas / Microsoft Teams"
+                    placeholder="Ex: Microsoft Teams / Google Meet / Sala de Reuniões CTVacinas"
                     className="w-full p-3 bg-white border border-slate-300 rounded-2xl font-bold text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
                   />
                 </div>
 
                 <div className="space-y-1 sm:col-span-2">
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Moderador</label>
-                  <select
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                    Moderador / Organizador Responsável
+                  </label>
+                  <input
+                    list="modal-moderator-list"
+                    type="text"
                     value={moderator}
                     onChange={e => setModerator(e.target.value)}
-                    className="w-full p-3 bg-white border border-slate-300 rounded-2xl font-bold text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-sm"
-                  >
+                    placeholder="Digite qualquer nome ou selecione da lista..."
+                    className="w-full p-3 bg-white border border-slate-300 rounded-2xl font-bold text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                  />
+                  <datalist id="modal-moderator-list">
                     {teamMembers.map(tm => (
-                      <option key={tm.id} value={tm.name}>{tm.name} ({tm.role})</option>
+                      <option key={tm.id} value={tm.name}>{tm.name} ({tm.role || 'Regulatório'})</option>
                     ))}
-                  </select>
+                  </datalist>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Permite selecionar qualquer pessoa da lista regulatória atualizada ou digitar um nome livremente.
+                  </p>
+                </div>
+
+                {/* Links de Arquivos (SharePoint, OneDrive, Google Drive, URLs) */}
+                <div className="space-y-2 sm:col-span-2 p-4 bg-indigo-50/50 border border-indigo-200/80 rounded-3xl">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
+                    <LinkIcon size={12} className="text-indigo-600" />
+                    <span>Links de Arquivos na Nuvem (SharePoint, OneDrive, Google Drive, URLs)</span>
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={newFileLinkName}
+                      onChange={e => setNewFileLinkName(e.target.value)}
+                      placeholder="Título do link (ex: Especificações, Parecer)..."
+                      className="flex-1 p-2.5 bg-white border border-indigo-200 rounded-xl text-xs font-semibold text-slate-800 outline-none"
+                    />
+                    <input
+                      type="url"
+                      value={newFileLinkUrl}
+                      onChange={e => setNewFileLinkUrl(e.target.value)}
+                      placeholder="https://... link do arquivo"
+                      className="flex-1 p-2.5 bg-white border border-indigo-200 rounded-xl text-xs font-semibold text-slate-800 outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = newFileLinkUrl.trim();
+                        if (!url) return;
+                        setMeetingFileLinks(prev => [
+                          ...prev,
+                          {
+                            id: 'link_' + Date.now(),
+                            name: newFileLinkName.trim() || 'Link do Documento',
+                            url: url.startsWith('http') ? url : `https://${url}`,
+                            addedAt: new Date().toISOString()
+                          }
+                        ]);
+                        setNewFileLinkName('');
+                        setNewFileLinkUrl('');
+                      }}
+                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shrink-0 transition"
+                    >
+                      + Adicionar Link
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {meetingFileLinks.map(fl => (
+                      <span key={fl.id} className="px-3 py-1.5 bg-white border border-indigo-200 text-indigo-900 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs">
+                        <LinkIcon size={11} className="text-indigo-600 shrink-0" />
+                        <a href={fl.url} target="_blank" rel="noopener noreferrer" className="hover:underline truncate max-w-xs">{fl.name}</a>
+                        <button
+                          type="button"
+                          onClick={() => setMeetingFileLinks(prev => prev.filter(l => l.id !== fl.id))}
+                          className="text-slate-400 hover:text-rose-600 ml-1"
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                    {meetingFileLinks.length === 0 && (
+                      <p className="text-[11px] text-indigo-400 italic">Nenhum link de arquivo adicionado à reunião.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Normas Regulatórias Vinculadas à Reunião */}
+                <div className="space-y-2 sm:col-span-2 p-4 bg-indigo-50/50 border border-indigo-200/80 rounded-3xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
+                      <BookOpen size={12} className="text-indigo-600" />
+                      <span>Normas Regulatórias Vinculadas a esta Reunião</span>
+                    </label>
+                    <select
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val && !linkedMeetingStandards.includes(val)) {
+                          setLinkedMeetingStandards(prev => [...prev, val]);
+                        }
+                        e.target.value = '';
+                      }}
+                      className="p-1.5 bg-white border border-indigo-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                    >
+                      <option value="">+ Vincular Norma...</option>
+                      {regulatoryStandards.map(std => (
+                        <option key={std.id} value={std.id}>
+                          [{std.type || 'Norma'}] {std.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {linkedMeetingStandards.map(stdId => {
+                      const std = regulatoryStandards.find(s => s.id === stdId);
+                      if (!std) return null;
+                      return (
+                        <span key={stdId} className="px-3 py-1.5 bg-white border border-indigo-200 text-indigo-900 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs">
+                          <BookOpen size={11} className="text-indigo-600 shrink-0" />
+                          <span><strong>[{std.type || 'Norma'}]</strong> {std.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setLinkedMeetingStandards(prev => prev.filter(id => id !== stdId))}
+                            className="text-slate-400 hover:text-rose-600 ml-1"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      );
+                    })}
+                    {linkedMeetingStandards.length === 0 && (
+                      <p className="text-[11px] text-indigo-400 italic">Nenhuma norma regulatória vinculada a esta reunião.</p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-1 sm:col-span-2">
@@ -838,17 +1031,6 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Description input */}
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Descrição / Contexto Prévia</label>
-                        <input
-                          type="text"
-                          value={agenda.description || ''}
-                          onChange={e => handleUpdateAgendaItem(agenda.id, { description: e.target.value })}
-                          placeholder="Objetivo ou questão técnica a ser tratada..."
-                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none"
-                        />
-                      </div>
 
                       {/* Vinculação de Normas Regulatórias */}
                       <div className="p-3 bg-indigo-50/60 border border-indigo-200/80 rounded-2xl space-y-2">
@@ -1121,15 +1303,19 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
 
                             <div className="sm:col-span-3">
                               <label className="text-[9px] font-black uppercase text-slate-400 block mb-0.5">Responsável</label>
-                              <select
+                              <input
+                                list={`modal-action-resp-list-${act.id}`}
+                                type="text"
                                 value={act.responsible}
                                 onChange={e => handleUpdateActionItem(agenda.id, act.id, { responsible: e.target.value })}
-                                className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-xs text-slate-800 outline-none"
-                              >
-                                {teamMembers.map(tm => (
-                                  <option key={tm.id} value={tm.name}>{tm.name}</option>
+                                placeholder="Nome do responsável..."
+                                className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-xs text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                              />
+                              <datalist id={`modal-action-resp-list-${act.id}`}>
+                                {combinedTeamList.map(tm => (
+                                  <option key={tm.id} value={tm.name}>{tm.name} ({tm.role})</option>
                                 ))}
-                              </select>
+                              </datalist>
                             </div>
 
                             <div className="sm:col-span-2">
@@ -1154,13 +1340,13 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                             </div>
                           </div>
 
-                          {/* Action Conversion Option */}
+                          {/* Action Destination Options - 3 explicit choices */}
                           <div className="pt-2 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-2">
                             {act.convertedToActivity ? (
                               <div className="flex flex-wrap items-center gap-1.5">
-                                <span className="text-[10px] font-black uppercase text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                                <span className="text-[10px] font-black uppercase text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-xl flex items-center gap-1 shadow-xs">
                                   <Check size={12} className="text-emerald-700 shrink-0" />
-                                  <span>Atividade no Projeto: {act.targetProjectName || 'Projeto'}{act.targetMacroName ? ` › ${act.targetMacroName}` : ''}{act.targetMicroName ? ` › ${act.targetMicroName}` : ''}</span>
+                                  <span>Registrado no Projeto: {act.targetProjectName || 'Projeto'}{act.targetMacroName ? ` › ${act.targetMacroName}` : ''}{act.targetMicroName ? ` › ${act.targetMicroName}` : ''}</span>
                                 </span>
                                 <button
                                   type="button"
@@ -1170,15 +1356,64 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
                                   Alterar Vínculo
                                 </button>
                               </div>
+                            ) : act.convertedToTask ? (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-[10px] font-black uppercase text-sky-800 bg-sky-100 border border-sky-300 px-2.5 py-1 rounded-xl flex items-center gap-1 shadow-xs">
+                                  <Check size={12} className="text-sky-700 shrink-0" />
+                                  <span>Registrado nas Atividades Rápidas</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateActionItem(agenda.id, act.id, { convertedToTask: false, actionDestination: undefined })}
+                                  className="text-[10px] font-bold text-slate-500 hover:text-slate-800 underline cursor-pointer px-1"
+                                >
+                                  Alterar Destino
+                                </button>
+                              </div>
+                            ) : act.actionDestination === 'meeting_only' ? (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-[10px] font-black uppercase text-slate-700 bg-slate-100 border border-slate-300 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                                  <span>📝 Apenas Encaminhamento da Reunião</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateActionItem(agenda.id, act.id, { actionDestination: undefined })}
+                                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer px-1"
+                                >
+                                  Mudar
+                                </button>
+                              </div>
                             ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleConvertActionToActivity(agenda, act)}
-                                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-extrabold text-[10px] uppercase tracking-wider flex items-center gap-1.5 transition shadow-xs cursor-pointer ml-auto"
-                              >
-                                <FolderKanban size={12} />
-                                <span>Registrar como Atividade do Projeto</span>
-                              </button>
+                              <div className="flex flex-wrap items-center gap-2 ml-auto">
+                                <button
+                                  type="button"
+                                  onClick={() => handleConvertActionToActivity(agenda, act)}
+                                  className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-extrabold text-[10px] uppercase tracking-wider flex items-center gap-1 transition shadow-xs cursor-pointer"
+                                  title="Criar ou vincular a uma microatividade no projeto"
+                                >
+                                  <FolderKanban size={12} />
+                                  <span>1. Registrar no Projeto</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleConvertActionToTask(agenda, act)}
+                                  className="px-2.5 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-extrabold text-[10px] uppercase tracking-wider flex items-center gap-1 transition shadow-xs cursor-pointer"
+                                  title="Adicionar à lista de Atividades / Bloco de Notas Rápidas"
+                                >
+                                  <Plus size={12} />
+                                  <span>2. Registrar nas Atividades</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleMarkAsMeetingOnly(agenda, act)}
+                                  className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-extrabold text-[10px] uppercase tracking-wider flex items-center gap-1 transition cursor-pointer"
+                                  title="Manter apenas como ata e encaminhamento desta reunião"
+                                >
+                                  <span>3. Apenas Encaminhamento</span>
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>

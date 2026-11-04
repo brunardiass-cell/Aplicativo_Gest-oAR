@@ -3,7 +3,7 @@
 // Versão 1.0.1 - Sincronização operacional e gestão de prazos
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity, RegulatoryEvidence, MacroActivityConfig, RegulatoryInfoItem, RepeatableRecord, RegulatoryNarrative, RegulatoryDocument, Meeting, DossierContribution, ProjectContributionItem } from './types';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity, RegulatoryEvidence, MacroActivityConfig, RegulatoryInfoItem, RepeatableRecord, RegulatoryNarrative, RegulatoryDocument, Meeting, DossierContribution, ProjectContributionItem, MeetingActionItem } from './types';
 import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES, DEFAULT_MEETINGS, DEFAULT_ACTIVITY_PLANS, isNameMatch, getAccountEmails } from './constants';
 import { MeetingsManager } from './components/MeetingsManager';
 import UserSelectionView from './components/UserSelectionView';
@@ -41,6 +41,7 @@ import ProjectActivityMap from './components/ProjectActivityMap';
 import PreSaveConfirmationModal from './components/PreSaveConfirmationModal';
 import ComiteGestorView from './components/ComiteGestorView';
 import { sendNewProjectEmail } from './services/emailService';
+import { notificationService } from './services/notificationService';
 
 function isEqual(a: any, b: any): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -1556,6 +1557,81 @@ const App: React.FC = () => {
     setSelectedTask(null);
   };
 
+  const handleConvertToActivity = useCallback((
+    targetProjectId: string,
+    targetMacroId: string,
+    actionItem: MeetingActionItem,
+    targetMicroId?: string,
+    customMicroName?: string,
+    assigneeOverride?: string,
+    dueDateOverride?: string
+  ) => {
+    let finalMicroId = targetMicroId;
+    let finalMicroName = customMicroName || actionItem.action;
+
+    setProjects(prevProjects => {
+      const targetProject = prevProjects.find(p => p.id === targetProjectId);
+      if (!targetProject) return prevProjects;
+
+      const targetMacro = targetProject.macroActivities.find(m => m.id === targetMacroId);
+      if (!targetMacro) return prevProjects;
+
+      const updatedMacroActivities = targetProject.macroActivities.map(m => {
+        if (m.id === targetMacroId) {
+          if (targetMicroId) {
+            return {
+              ...m,
+              microActivities: m.microActivities.map(mic => {
+                if (mic.id === targetMicroId) {
+                  const prevObs = mic.observations ? mic.observations + '\n' : '';
+                  return {
+                    ...mic,
+                    observations: `${prevObs}[Encaminhamento de Reunião]: ${actionItem.action} (Responsável: ${assigneeOverride || actionItem.responsible || mic.assignee}, Prazo: ${dueDateOverride || actionItem.dueDate || mic.dueDate})`,
+                    assignee: assigneeOverride || actionItem.responsible || mic.assignee,
+                    dueDate: dueDateOverride || actionItem.dueDate || mic.dueDate
+                  };
+                }
+                return mic;
+              })
+            };
+          } else {
+            const generatedId = 'micro_' + Math.random().toString(36).substring(2, 9);
+            finalMicroId = generatedId;
+            const newMicro = {
+              id: generatedId,
+              name: finalMicroName,
+              assignee: assigneeOverride || actionItem.responsible || 'Usuário',
+              dueDate: dueDateOverride || actionItem.dueDate || new Date().toISOString().split('T')[0],
+              status: 'Planejado' as const,
+              observations: `Atividade originada do encaminhamento de reunião: "${actionItem.action}".`,
+              progress: 0
+            };
+            return {
+              ...m,
+              microActivities: [...m.microActivities, newMicro]
+            };
+          }
+        }
+        return m;
+      });
+
+      const updatedProject = {
+        ...targetProject,
+        macroActivities: updatedMacroActivities
+      };
+
+      return prevProjects.map(p => p.id === targetProjectId ? updatedProject : p);
+    });
+
+    setDataDirty();
+
+    return {
+      success: true,
+      microId: finalMicroId,
+      microName: finalMicroName
+    };
+  }, []);
+
   const handleCompleteCollaboration = (taskId: string) => {
     if (!selectedProfile) return;
     const collaboratorName = selectedProfile.name;
@@ -2236,10 +2312,24 @@ const App: React.FC = () => {
                     )}
                   </div>
                 )}
-                <div className="relative p-1.5 sm:p-2 bg-white rounded-xl shadow-sm border border-slate-100">
-                    <Bell size={isMobile ? 16 : 20} className="text-slate-400"/>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const granted = await notificationService.requestPermission();
+                    if (granted) {
+                      notificationService.sendNotification({
+                        title: 'CTVacinas — Notificações Ativadas',
+                        body: 'Alertas de prazos e atividades críticas ativos sem custo de token ou serviços pagos.',
+                        tag: 'ct-notif-enabled'
+                      });
+                    }
+                  }}
+                  className="relative p-1.5 sm:p-2 bg-white rounded-xl shadow-sm border border-slate-100 hover:border-indigo-300 hover:text-indigo-600 transition cursor-pointer"
+                  title="Notificações do Navegador / Web Notifications API (Custo R$ 0 / 0 Tokens)"
+                >
+                    <Bell size={isMobile ? 16 : 20} className="text-slate-400 hover:text-indigo-600"/>
                     {pendingReviewCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center animate-pulse">{pendingReviewCount}</span>}
-                </div>
+                </button>
                 {view === 'tasks' && (
                   <>
                     <button onClick={() => setIsReportModalOpen(true)} className="p-2 sm:p-3 bg-white border border-slate-200 rounded-full text-slate-500 hover:bg-slate-100 transition"><FileText size={isMobile ? 18 : 20}/></button>
@@ -2333,6 +2423,8 @@ const App: React.FC = () => {
                 isSyncingSharePoint={isSyncingSharePoint}
                 hasFullAccess={hasFullAccess}
                 isLeader={hasFullAccess || Boolean(selectedProfile?.isComiteGestor) || currentUserRole === 'admin'}
+                regulatoryStandards={regulatoryStandards}
+                onConvertToActivity={handleConvertToActivity}
               />
             ) : (
               <ProjectTaskBoard 
@@ -2549,6 +2641,8 @@ const App: React.FC = () => {
               setDossierContributions(prev => [contrib, ...prev]);
               setDataDirty();
             }}
+            onConvertToActivity={handleConvertToActivity}
+            onSaveTask={handleSaveTask}
             currentUser={selectedProfile}
             currentUserRole={currentUserRole}
           />

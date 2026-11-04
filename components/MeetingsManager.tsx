@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Meeting, Project, TeamMember, RegulatoryStandard, RegulatorySubject, MeetingActionItem, DossierContribution } from '../types';
+import { Meeting, Project, TeamMember, RegulatoryStandard, RegulatorySubject, MeetingActionItem, DossierContribution, Task } from '../types';
 import { DEFAULT_MINUTES_TEMPLATE, isNameMatch } from '../constants';
 import { DecisionsHistoryView } from './DecisionsHistoryView';
 import { MeetingModal } from './MeetingModal';
@@ -19,6 +19,16 @@ interface MeetingsManagerProps {
   onUpdateMeetings: (meetings: Meeting[]) => void;
   onUpdateProjects?: (projects: Project[]) => void;
   onAddDossierContribution?: (contribution: DossierContribution) => void;
+  onConvertToActivity?: (
+    projectId: string,
+    macroActivityId: string,
+    actionItem: MeetingActionItem,
+    targetMicroId?: string,
+    customMicroName?: string,
+    assigneeOverride?: string,
+    dueDateOverride?: string
+  ) => any;
+  onSaveTask?: (task: Task) => void;
   currentUser?: TeamMember | null;
   currentUserRole?: string | null;
 }
@@ -32,6 +42,8 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
   onUpdateMeetings,
   onUpdateProjects,
   onAddDossierContribution,
+  onConvertToActivity,
+  onSaveTask,
   currentUser,
   currentUserRole
 }) => {
@@ -82,7 +94,8 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
       const inAccessibleProject = accessibleProjectIds.has(m.projectId);
       const isModerator = isNameMatch(m.moderator, currentUserName);
       const isParticipant = (m.participants || []).some(p => isNameMatch(p, currentUserName));
-      return inAccessibleProject || isModerator || isParticipant;
+      const isOtherProject = m.projectId === 'outros' || !accessibleProjectIds.has(m.projectId);
+      return inAccessibleProject || isModerator || isParticipant || isOtherProject;
     });
   }, [meetings, accessibleProjects, isComiteGestor, currentUser]);
 
@@ -272,7 +285,8 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
           handleSaveMeeting(updatedMeeting, createdContributions);
           setActiveFullMeeting(updatedMeeting);
         }}
-        onConvertToActivity={handleConvertToActivity}
+        onConvertToActivity={onConvertToActivity || handleConvertToActivity}
+        onSaveTask={onSaveTask}
       />
     );
   }
@@ -621,6 +635,110 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
             })
           )}
 
+          {/* Outros Projetos / Projetos Externos Section */}
+          {(() => {
+            const accessibleProjectIds = new Set(accessibleProjects.map(p => p.id));
+            const otherPendingMeetings = accessibleMeetings.filter(m => !accessibleProjectIds.has(m.projectId) && m.status !== 'Concluída');
+            const otherCompletedMeetings = accessibleMeetings.filter(m => !accessibleProjectIds.has(m.projectId) && m.status === 'Concluída');
+
+            if (otherPendingMeetings.length === 0 && otherCompletedMeetings.length === 0) return null;
+
+            return (
+              <div key="outros_projetos_card" className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center shrink-0">
+                      <Folder size={18} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black uppercase text-slate-900 tracking-tight">
+                        Outros Projetos & Atividades Externas
+                      </h3>
+                      <p className="text-xs text-slate-500 font-medium">
+                        Reuniões registradas para outros projetos, parcerias ou não pertencentes à sua lista principal
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full font-black text-xs">
+                      {otherPendingMeetings.length} Reuniões Previstas
+                    </span>
+                    <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full font-black text-xs">
+                      {otherCompletedMeetings.length} Concluídas
+                    </span>
+                  </div>
+                </div>
+
+                {otherPendingMeetings.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-2">Nenhuma reunião pendente em outros projetos.</p>
+                ) : (
+                  <div className="space-y-3 pt-1">
+                    {otherPendingMeetings.map(mtg => {
+                      const dateFormatted = mtg.date ? mtg.date.split('-').reverse().join('/') : 'Data N/I';
+
+                      return (
+                        <div 
+                          key={mtg.id}
+                          className="p-4 bg-white rounded-2xl border border-slate-200/80 hover:border-amber-300 hover:shadow-xs transition flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                        >
+                          <div className="flex items-center gap-3.5">
+                            <div className="w-10 h-10 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-700 flex items-center justify-center shrink-0">
+                              <Calendar size={18} />
+                            </div>
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-2">
+                                <h5 className="text-sm font-bold text-slate-900 leading-snug">{mtg.title}</h5>
+                                <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md text-[10px] font-bold">
+                                  {mtg.projectName || 'Outro Projeto'}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-500 font-medium">
+                                {dateFormatted} {mtg.time ? `às ${mtg.time}` : ''} • {mtg.location || 'Online'} • Moderador: {mtg.moderator || 'Não informado'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 self-end sm:self-center">
+                            <button
+                              type="button"
+                              onClick={() => setActiveFullMeeting(mtg)}
+                              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition hover:shadow cursor-pointer"
+                            >
+                              <Play size={13} fill="currentColor" />
+                              <span>Continuar Reunião</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedMeetingForEdit(mtg);
+                                setIsMeetingModalOpen(true);
+                              }}
+                              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition"
+                              title="Editar"
+                            >
+                              <Edit size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteMeeting(mtg.id)}
+                              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
+                              title="Excluir"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
         </div>
       )}
 
@@ -832,11 +950,12 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
             setSelectedMeetingForEdit(null);
           }}
           onSave={handleSaveMeeting}
-          onConvertToActivity={handleConvertToActivity}
+          onConvertToActivity={onConvertToActivity || handleConvertToActivity}
           onOpenMinutes={(mtg) => {
             setSelectedMeetingForMinutes(mtg);
             setIsMinutesModalOpen(true);
           }}
+          onSaveTask={onSaveTask}
         />
       )}
 
