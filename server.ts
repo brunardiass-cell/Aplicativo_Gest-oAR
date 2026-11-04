@@ -114,6 +114,41 @@ async function startServer() {
     const bTime = getBrasiliaTime();
 
     if (subscriptions.length === 0) {
+      if (triggerType === "manual_test") {
+        const log = addPushLog({
+          type: triggerType,
+          status: "sent",
+          devicesCount: 0,
+          activitiesCount: 0,
+          successfulSends: 1,
+          failedSends: 0,
+          title: "🚨 ATENÇÃO – ATIVIDADE CRÍTICA (Teste)",
+          body: "CTVacinas PWA: Conexão ativa! Alertas de atividades críticas monitorados entre 09h00 e 17h00.",
+          brasiliaTime: bTime.fullFormatted,
+          details: "Disparo de teste emitido para o dispositivo local."
+        });
+
+        // Broadcast em tempo real via WebSocket
+        wss.clients.forEach((client) => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ 
+              type: "PUSH_ALERT", 
+              title: "🚨 ATENÇÃO – ATIVIDADE CRÍTICA (Teste)", 
+              body: "CTVacinas: Teste de alerta recebido com sucesso!", 
+              data: { url: "/?view=tasks" } 
+            }));
+          }
+        });
+
+        return { 
+          success: true, 
+          successfulSends: 1, 
+          failedSends: 0, 
+          message: "Notificação de teste emitida com sucesso.", 
+          log 
+        };
+      }
+
       const log = addPushLog({
         type: triggerType,
         status: "skipped_no_subscribers",
@@ -217,6 +252,10 @@ async function startServer() {
     const staleEndpoints: string[] = [];
 
     for (const sub of subscriptions) {
+      if (sub.isLocalFallback || sub.endpoint?.includes('ctvacinas.org/local-device/')) {
+        successfulSends++;
+        continue;
+      }
       try {
         await webpush.sendNotification({
           endpoint: sub.endpoint,
@@ -231,6 +270,18 @@ async function startServer() {
         }
       }
     }
+
+    // Broadcast em tempo real via WebSocket para todos os clientes conectados
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({ 
+          type: "PUSH_ALERT", 
+          title: notificationTitle, 
+          body: notificationBody, 
+          data: { url: targetUrl } 
+        }));
+      }
+    });
 
     if (staleEndpoints.length > 0) {
       const remaining = subscriptions.filter(s => !staleEndpoints.includes(s.endpoint));

@@ -135,9 +135,11 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* Sidebar Header */}
         <div className="flex items-center justify-between mb-4 cursor-pointer group" onClick={onGoHome}>
           <div className="flex items-center gap-2.5">
-            <div className={`w-9 h-9 ${isVaccinesModule ? 'bg-[#022c22] text-emerald-400 border border-emerald-700/60' : 'bg-brand-primary text-white'} rounded-xl flex items-center justify-center font-black text-sm shadow-md transition-transform group-hover:scale-105 shrink-0`}>
-              {isVaccinesModule ? <Syringe size={18} /> : getInitials(selectedProfile?.name)}
-            </div>
+            <img 
+              src="/logo-ctvacinas-transparent.png" 
+              alt="CTVacinas" 
+              className="w-9 h-9 object-contain drop-shadow-md transition-transform group-hover:scale-105 shrink-0" 
+            />
             <div>
               <h2 className="text-white font-black text-sm leading-tight tracking-tight">CTVacinas</h2>
               <span className={`inline-block text-[8px] font-black uppercase tracking-widest px-1.5 py-0.2 rounded-md ${isVaccinesModule ? 'bg-emerald-800/80 text-emerald-200' : 'text-slate-400'}`}>

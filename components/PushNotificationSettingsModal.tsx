@@ -123,15 +123,24 @@ export const PushNotificationSettingsModal: React.FC<PushNotificationSettingsMod
     setLoading(true);
     setFeedbackMessage(null);
     try {
+      // Se este aparelho ainda não estiver com notificações ativadas, tenta ativar primeiro
+      if (!isSubscribed) {
+        const subRes = await pushNotificationService.subscribe(currentUser);
+        if (subRes.success) {
+          setIsSubscribed(true);
+          setPermission(pushNotificationService.getPermissionState());
+        }
+      }
+
       const res = await pushNotificationService.testPush();
       if (res.success) {
         setFeedbackMessage({ 
-          text: `Notificação de teste enviada com sucesso! (${res.successfulSends || 1} aparelho(s) notificado(s)). Verifique a barra de notificações.` 
+          text: `Notificação de teste emitida com sucesso! Verifique o som de alerta e a barra de notificações.` 
         });
         await refreshData();
       } else {
         setFeedbackMessage({ 
-          text: res.error || 'Falha ao disparar notificação de teste. Verifique se há aparelhos registrados.', 
+          text: res.error || 'Falha ao disparar notificação. Clique em "Ativar Notificações no Aparelho".', 
           isError: true 
         });
       }

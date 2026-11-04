@@ -40,14 +40,19 @@ const UserSelectionView: React.FC<UserSelectionViewProps> = ({
   onBackToModules,
   onOpenSupabaseMigration
 }) => {
-  // Ensure Comitê Gestor is in the list if not already present
+  // Organizado em ordem alfabética, sem perfil "Liderança", respeitando remoções
   const displayMembers = React.useMemo(() => {
-    const list = [...teamMembers];
-    const hasComite = list.some(m => m.isComiteGestor || m.name === 'Comitê Gestor');
-    if (!hasComite) {
-      list.push({ id: 'tm_comite', name: 'Comitê Gestor', role: 'Gestão', isLeader: false, isComiteGestor: true });
-    }
-    return list;
+    const list = teamMembers.filter(m => {
+      const name = (m.name || '').trim();
+      if (!name) return false;
+      const lower = name.toLowerCase();
+      // Não exibir perfil "Liderança"
+      if (lower === 'lideranca' || lower === 'liderança') return false;
+      return true;
+    });
+
+    // Ordenação alfabética rigorosa (A-Z)
+    return list.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
   }, [teamMembers]);
 
   return (
@@ -74,10 +79,18 @@ const UserSelectionView: React.FC<UserSelectionViewProps> = ({
       </div>
       
       <div className="w-full max-w-2xl text-center animate-in-slow">
-        <h1 className="text-xl font-black text-slate-800 uppercase tracking-widest">Quem está acessando?</h1>
+        {/* Logo CTVacinas Transparente */}
+        <div className="flex justify-center mb-5">
+          <img 
+            src="/logo-ctvacinas-transparent.png" 
+            alt="CTVacinas" 
+            className="w-20 h-20 sm:w-24 sm:h-24 object-contain drop-shadow-md hover:scale-105 transition-transform" 
+          />
+        </div>
+        <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-widest">Quem está acessando?</h1>
         <p className="text-sm text-slate-500 mt-1">Selecione seu perfil para continuar</p>
 
-        <div className="mt-12 bg-white p-4 sm:p-8 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="mt-8 bg-white p-4 sm:p-8 rounded-2xl border border-slate-200 shadow-sm">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
             {displayMembers.map(member => {
               const isLeaderProfile = member.isLeader;

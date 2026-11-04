@@ -42,7 +42,7 @@ import PreSaveConfirmationModal from './components/PreSaveConfirmationModal';
 import ComiteGestorView from './components/ComiteGestorView';
 import { sendNewProjectEmail } from './services/emailService';
 import { notificationService } from './services/notificationService';
-import { pushNotificationService } from './services/pushNotificationService';
+import { pushNotificationService, showLocalNotification } from './services/pushNotificationService';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { PushNotificationSettingsModal } from './components/PushNotificationSettingsModal';
 
@@ -295,6 +295,20 @@ const App: React.FC = () => {
             }
           } else if (data.type === 'PRESENCE_UPDATE') {
             setActiveUsers(data.users);
+          } else if (data.type === 'PUSH_ALERT') {
+            showLocalNotification(data.title || '🚨 ATENÇÃO – ATIVIDADE CRÍTICA', {
+              body: data.body,
+              tag: `push-ws-${Date.now()}`
+            });
+            setNotifications(prev => [{
+              id: `notif_${Date.now()}`,
+              userId: selectedProfile?.name || 'Sistema',
+              message: `${data.title || 'Alerta Crítico'}: ${data.body || ''}`,
+              timestamp: new Date().toISOString(),
+              read: false,
+              type: 'TASK_UPDATE',
+              refId: `push_${Date.now()}`
+            }, ...prev]);
           }
         } catch (e) {
           console.error('Error parsing WS message:', e);
@@ -398,12 +412,17 @@ const App: React.FC = () => {
     });
 
     const rawTeamMembers = (cloudData.teamMembers && cloudData.teamMembers.length > 0) ? cloudData.teamMembers : DEFAULT_TEAM_MEMBERS;
-    const sanitizedTeamMembers = rawTeamMembers.map((m: any) => {
-      if (m.id === 'tm_2' || (m.name && m.name.toLowerCase().includes('bruna dias'))) {
-        return { ...m, role: 'Líder', isLeader: true };
-      }
-      return m;
-    });
+    const sanitizedTeamMembers = rawTeamMembers
+      .filter((m: any) => {
+        const name = (m.name || '').toLowerCase().trim();
+        return name !== 'lideranca' && name !== 'liderança';
+      })
+      .map((m: any) => {
+        if (m.id === 'tm_2' || (m.name && m.name.toLowerCase().includes('bruna dias'))) {
+          return { ...m, role: 'Líder', isLeader: true };
+        }
+        return m;
+      });
 
     const fullData = {
       tasks: cloudData.tasks || [],
@@ -428,30 +447,10 @@ const App: React.FC = () => {
       regulatoryDocs: cloudData.regulatoryDocs || [],
       meetings: (cloudData.meetings && cloudData.meetings.length > 0) ? cloudData.meetings : DEFAULT_MEETINGS,
       dossierContributions: cloudData.dossierContributions || [],
-      taskGroups: (cloudData.taskGroups && cloudData.taskGroups.length > 0) ? cloudData.taskGroups : DEFAULT_TASK_GROUPS,
+      taskGroups: Array.isArray(cloudData.taskGroups) ? cloudData.taskGroups : DEFAULT_TASK_GROUPS,
     };
 
-    // Auto-descoberta: assegura que todos os grupos das tarefas estejam presentes
-    const initialGroups: TaskGroup[] = fullData.taskGroups || DEFAULT_TASK_GROUPS;
-    const groupNames = new Set(initialGroups.map(g => (g.name || '').trim().toLowerCase()));
-    const discovered: TaskGroup[] = [];
-    (fullData.tasks || []).forEach((t: any) => {
-      const gName = (t.group || '').trim();
-      if (gName && !groupNames.has(gName.toLowerCase())) {
-        groupNames.add(gName.toLowerCase());
-        discovered.push({
-          id: t.groupId || `group_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-          name: gName,
-          projectName: t.project || undefined,
-          color: '#0d9488',
-          createdAt: new Date().toISOString(),
-          createdBy: 'Sistema'
-        });
-      }
-    });
-
-    const finalGroups = [...initialGroups, ...discovered];
-    fullData.taskGroups = finalGroups;
+    const finalGroups = fullData.taskGroups;
 
     setTasks(fullData.tasks);
     setProjects(fullData.projects);
@@ -889,7 +888,9 @@ const App: React.FC = () => {
 
   const handleUpdateGroups = useCallback(async (newGroups: TaskGroup[]) => {
     setTaskGroups(newGroups);
+    const profileKey = (selectedProfile?.name || 'geral').trim().toLowerCase();
     try {
+      localStorage.setItem(`ctvacinas_task_groups_${profileKey}`, JSON.stringify(newGroups));
       localStorage.setItem('ctvacinas_task_groups', JSON.stringify(newGroups));
     } catch (e) {}
 
@@ -899,7 +900,7 @@ const App: React.FC = () => {
     }
 
     // Persiste no servidor backend para sincronização entre notebook e celular
-    fetch('/api/task-groups', {
+    fetch(`/api/task-groups?user=${encodeURIComponent(profileKey)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ groups: newGroups, user: selectedProfile?.name || 'Sistema' })
@@ -1376,6 +1377,22 @@ const App: React.FC = () => {
     setLeadFilter('Todos');
     // Usuários ativos autenticados no SharePoint / sistema acessam sem requisição de senha
     setIsPasswordAuthenticated(true);
+
+    // Carregar grupos deste perfil específico (ou iniciar zerado se for novo perfil)
+    const profileKey = (user.name || '').trim().toLowerCase();
+    try {
+      const saved = localStorage.getItem(`ctvacinas_task_groups_${profileKey}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setTaskGroups(Array.isArray(parsed) ? parsed : []);
+      } else {
+        // Novo perfil começa com grupos zerados
+        setTaskGroups([]);
+      }
+    } catch {
+      setTaskGroups([]);
+    }
+
     if (user.isComiteGestor) {
       setProjectSubView('visual');
       setProjectVisualizationMode('phases');
@@ -2465,9 +2482,6 @@ const App: React.FC = () => {
                 )}
             </div>
         </header>
-
-        {/* PWA Install Banner */}
-        <PWAInstallPrompt variant="banner" />
 
         {view === 'dashboard' && (
           selectedProfile?.isComiteGestor ? (

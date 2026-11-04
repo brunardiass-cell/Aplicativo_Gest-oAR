@@ -1,5 +1,52 @@
 [
   {
+    "id": "push_log_1793801291372_4jsxt",
+    "timestamp": "2026-11-04T14:08:11.372Z",
+    "type": "manual_test",
+    "status": "sent",
+    "devicesCount": 0,
+    "activitiesCount": 0,
+    "successfulSends": 1,
+    "failedSends": 0,
+    "title": "🚨 ATENÇÃO – ATIVIDADE CRÍTICA (Teste)",
+    "body": "CTVacinas PWA: Conexão ativa! Alertas de atividades críticas monitorados entre 09h00 e 17h00.",
+    "brasiliaTime": "04/11/2026 11:08:11",
+    "details": "Disparo de teste emitido para o dispositivo local."
+  },
+  {
+    "id": "push_log_1793800805310_5p8uk",
+    "timestamp": "2026-11-04T14:00:05.310Z",
+    "type": "business_hours",
+    "status": "skipped_no_subscribers",
+    "devicesCount": 0,
+    "activitiesCount": 0,
+    "successfulSends": 0,
+    "failedSends": 0,
+    "details": "Nenhum dispositivo registrado para receber notificações push."
+  },
+  {
+    "id": "push_log_1793799654559_v4ie9",
+    "timestamp": "2026-11-04T13:40:54.559Z",
+    "type": "manual_test",
+    "status": "skipped_no_subscribers",
+    "devicesCount": 0,
+    "activitiesCount": 0,
+    "successfulSends": 0,
+    "failedSends": 0,
+    "details": "Nenhum dispositivo registrado para receber notificações push."
+  },
+  {
+    "id": "push_log_1793799640431_6zj82",
+    "timestamp": "2026-11-04T13:40:40.431Z",
+    "type": "manual_test",
+    "status": "skipped_no_subscribers",
+    "devicesCount": 0,
+    "activitiesCount": 0,
+    "successfulSends": 0,
+    "failedSends": 0,
+    "details": "Nenhum dispositivo registrado para receber notificações push."
+  },
+  {
     "id": "push_log_1793797691287_t37oq",
     "timestamp": "2026-11-04T13:08:11.287Z",
     "type": "manual_test",

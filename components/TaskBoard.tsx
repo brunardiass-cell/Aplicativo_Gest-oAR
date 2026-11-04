@@ -176,36 +176,6 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       onUpdateGroups(newGroups);
     }
   };
-
-  // Auto-descoberta de grupos em tarefas para sincronizar perfeitamente no notebook e celular
-  useEffect(() => {
-    if (!tasks || tasks.length === 0) return;
-    const knownNames = new Set(groups.map(g => (g.name || '').trim().toLowerCase()));
-    let hasNew = false;
-    const toAdd: TaskGroup[] = [];
-
-    tasks.forEach(t => {
-      const groupName = (t.group || '').trim();
-      if (groupName && !knownNames.has(groupName.toLowerCase())) {
-        knownNames.add(groupName.toLowerCase());
-        hasNew = true;
-        toAdd.push({
-          id: t.groupId || `group_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-          name: groupName,
-          projectName: t.project || undefined,
-          color: '#0d9488',
-          createdAt: new Date().toISOString(),
-          createdBy: 'Sistema'
-        });
-      }
-    });
-
-    if (hasNew && toAdd.length > 0) {
-      const merged = [...groups, ...toAdd];
-      saveGroupsToStorage(merged);
-    }
-  }, [tasks, groups]);
-
   // Grupo selecionado ('all' para todos os grupos)
   const [selectedGroupId, setSelectedGroupId] = useState<string>('all');
   const [isMobileGroupDrawerOpen, setIsMobileGroupDrawerOpen] = useState(false);
@@ -865,14 +835,27 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         return false;
       }
 
-      // Filtro de Grupo
+      // Filtro de Grupo com isolamento estrito
       if (selectedGroupId !== 'all') {
         const grp = groups.find(g => g.id === selectedGroupId);
         if (grp) {
-          const matchId = t.groupId === grp.id;
-          const matchName = t.group === grp.name;
-          const matchProject = grp.projectName && t.project === grp.projectName;
-          if (!matchId && !matchName && !matchProject) return false;
+          const grpNameLower = (grp.name || '').trim().toLowerCase();
+          const taskGroupLower = (t.group || '').trim().toLowerCase();
+          const matchId = Boolean(t.groupId && t.groupId === grp.id);
+          const matchName = Boolean(taskGroupLower && taskGroupLower === grpNameLower);
+
+          // Se a tarefa possui um grupo atribuído diferente deste, NUNCA exibir
+          if (taskGroupLower && !matchName && !matchId) {
+            return false;
+          }
+
+          // Se a tarefa não possui grupo explicitamente informado, aceita apenas se o projeto for específico e coincidir
+          if (!taskGroupLower && !t.groupId) {
+            const matchProject = Boolean(grp.projectName && grp.projectName.trim().toLowerCase() !== 'geral' && t.project === grp.projectName);
+            if (!matchProject) return false;
+          } else if (!matchName && !matchId) {
+            return false;
+          }
         }
       }
 
@@ -943,11 +926,14 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     const map: Record<string, number> = {};
     tasks.forEach(t => {
       if (t.deleted || t.status === 'Concluída') return;
+      const taskGroupLower = (t.group || '').trim().toLowerCase();
       if (t.groupId) {
         map[t.groupId] = (map[t.groupId] || 0) + 1;
-      } else if (t.group) {
-        const found = groups.find(g => g.name === t.group);
-        if (found) map[found.id] = (map[found.id] || 0) + 1;
+      } else if (taskGroupLower) {
+        const found = groups.find(g => (g.name || '').trim().toLowerCase() === taskGroupLower);
+        if (found) {
+          map[found.id] = (map[found.id] || 0) + 1;
+        }
       }
     });
     return map;
@@ -1221,10 +1207,18 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       if (selectedGroupId !== 'all') {
         const grp = groups.find(g => g.id === selectedGroupId);
         if (grp) {
-          const matchId = t.groupId === grp.id;
-          const matchName = t.group === grp.name;
-          const matchProject = grp.projectName && t.project === grp.projectName;
-          if (!matchId && !matchName && !matchProject) return false;
+          const grpNameLower = (grp.name || '').trim().toLowerCase();
+          const taskGroupLower = (t.group || '').trim().toLowerCase();
+          const matchId = Boolean(t.groupId && t.groupId === grp.id);
+          const matchName = Boolean(taskGroupLower && taskGroupLower === grpNameLower);
+
+          if (taskGroupLower && !matchName && !matchId) return false;
+          if (!taskGroupLower && !t.groupId) {
+            const matchProject = Boolean(grp.projectName && grp.projectName.trim().toLowerCase() !== 'geral' && t.project === grp.projectName);
+            if (!matchProject) return false;
+          } else if (!matchName && !matchId) {
+            return false;
+          }
         }
       }
       return true;
