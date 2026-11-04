@@ -89,7 +89,7 @@ const App: React.FC = () => {
   const [regulatoryStandards, setRegulatoryStandards] = useState<RegulatoryStandard[]>([]);
   const [regulatorySubjects, setRegulatorySubjects] = useState<RegulatorySubject[]>([]);
   const [currentModule, setCurrentModule] = useState<'activities_projects' | 'regulatory_standards' | 'vaccines_components'>('activities_projects');
-  const [hasChosenModule, setHasChosenModule] = useState<boolean>(false);
+  const [hasChosenModule, setHasChosenModule] = useState<boolean>(true);
   const [vaccineTab, setVaccineTab] = useState<'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog' | 'impurities'>('dashboard');
   const [vaccineCandidates, setVaccineCandidates] = useState<VaccineCandidate[]>(DEFAULT_VACCINE_CANDIDATES);
   const [vaccineComponents, setVaccineComponents] = useState<VaccineComponent[]>(DEFAULT_VACCINE_COMPONENTS);
@@ -115,7 +115,7 @@ const App: React.FC = () => {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const isMobile = windowWidth < 1024;
   
-  const [view, setView] = useState<ViewMode>('dashboard');
+  const [view, setView] = useState<ViewMode>('tasks');
   const [isMsalAuthenticated, setIsMsalAuthenticated] = useState(false);
   const [account, setAccount] = useState<AccountInfo | null>(null);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
@@ -612,12 +612,20 @@ const App: React.FC = () => {
     setUnauthorizedReason(null);
     setIsAuthorized(true);
     setIsPasswordAuthenticated(true);
+    setHasChosenModule(true);
+    setView('tasks');
 
     const userName = authorizedUser?.username || currentAccount.name;
     const matchingMember = currentTeamMembers.find(m => isNameMatch(m.name, userName));
     if (matchingMember) {
       setSelectedProfile(matchingMember);
       setFilterMember(matchingMember.name);
+    } else {
+      const defaultLeader = currentTeamMembers.find(m => m.name.toLowerCase().includes('bruna')) || currentTeamMembers[0];
+      if (defaultLeader) {
+        setSelectedProfile(defaultLeader);
+        setFilterMember(defaultLeader.name);
+      }
     }
 
     try {
@@ -667,6 +675,11 @@ const App: React.FC = () => {
         console.warn('Erro ao inicializar cache local:', e);
       }
 
+      // 1.4 Garantir configuração do Supabase carregada (sincronizada via servidor para abas anônimas e novos acessos)
+      try {
+        await SupabaseService.ensureConfigLoaded();
+      } catch (e) {}
+
       // 1.5 Carregar do Supabase imediatamente se configurado (metadados sempre disponíveis em todo acesso)
       if (SupabaseService.isConfigured()) {
         try {
@@ -698,6 +711,16 @@ const App: React.FC = () => {
           setIsMsalAuthenticated(true);
           await verifyAndAuthorize(acc, currentAppUsers, currentTeamMembers);
         } else {
+          // Se não houver conta Microsoft conectada no momento, seleciona o perfil de liderança (Bruna Dias)
+          // para abrir direto o bloco de notas de atividades
+          const defaultLeader = currentTeamMembers.find(m => m.name.toLowerCase().includes('bruna')) || currentTeamMembers[0];
+          if (defaultLeader) {
+            setSelectedProfile(defaultLeader);
+            setFilterMember(defaultLeader.name);
+            setIsPasswordAuthenticated(true);
+            setHasChosenModule(true);
+            setView('tasks');
+          }
           setIsLoading(false);
         }
       } catch (err) {

@@ -59,7 +59,9 @@ import {
   Link as LinkIcon,
   BookOpen,
   Folder,
-  ExternalLink
+  ExternalLink,
+  ListOrdered,
+  CheckSquare
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -334,6 +336,27 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     action: MeetingActionItem;
   } | null>(null);
 
+  // Modal Nova Reunião Simplificada (Imagem de referência)
+  const [isSimpleMeetingModalOpen, setIsSimpleMeetingModalOpen] = useState(false);
+  const [quickMeetingTitle, setQuickMeetingTitle] = useState('');
+  const [isMeetingTitleHidden, setIsMeetingTitleHidden] = useState(false);
+  const [isMeetingDateTimeHidden, setIsMeetingDateTimeHidden] = useState(false);
+  const [quickMeetingFreeNotes, setQuickMeetingFreeNotes] = useState('');
+  const [meetingStartMode, setMeetingStartMode] = useState(false);
+  const [activeMeetingQuickSections, setActiveMeetingQuickSections] = useState<{
+    participants: boolean;
+    pauta: boolean;
+    actions: boolean;
+    links: boolean;
+    standards: boolean;
+  }>({
+    participants: false,
+    pauta: false,
+    actions: false,
+    links: false,
+    standards: false
+  });
+
   // Popover placement detector (Evita que o popover abra para baixo forçando rolagem de tela)
   const [popoverPlacement, setPopoverPlacement] = useState<Record<string, 'up' | 'down'>>({});
 
@@ -436,6 +459,15 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     setQuickMeetingPautas(prev => prev.filter(p => p.id !== pautaId));
   };
 
+  const handleRemoveQuickActionItem = (pautaId: string, actionId: string) => {
+    setQuickMeetingPautas(prev => prev.map(p => {
+      if (p.id === pautaId) {
+        return { ...p, actionItems: (p.actionItems || []).filter(a => a.id !== actionId) };
+      }
+      return p;
+    }));
+  };
+
   const handleAddQuickActionItem = (
     pautaId: string, 
     actionText: string, 
@@ -502,6 +534,129 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       };
       onSaveTask(newTaskFromAction);
     }
+  };
+
+  const handleSaveSimpleMeeting = () => {
+    const title = quickMeetingTitle.trim() || quickText.trim() || 'Nova Reunião';
+    const targetGroup = activeGroup || groups[0] || { id: 'group_geral', name: 'Geral' };
+
+    let finalProjectId = targetGroup.projectName || 'geral';
+    let finalProjectName = targetGroup.projectName || 'Geral';
+
+    if (quickMeetingProjectMode === 'other') {
+      finalProjectId = 'outros';
+      finalProjectName = quickMeetingCustomProject.trim() || 'Outros Projetos';
+    } else if (quickMeetingProjectId) {
+      const foundProj = projects.find(p => p.id === quickMeetingProjectId);
+      if (foundProj) {
+        finalProjectId = foundProj.id;
+        finalProjectName = foundProj.name;
+      }
+    }
+
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const meetingTask: Task = {
+      id: `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      activity: title,
+      description: quickMeetingFreeNotes.trim() 
+        ? quickMeetingFreeNotes.trim() 
+        : `Reunião: ${title} • Data: ${quickMeetingDate} às ${quickMeetingTime}`,
+      project: finalProjectName,
+      group: targetGroup.name,
+      groupId: targetGroup.id,
+      activityType: 'meeting',
+      isReport: false,
+      isMeetingOrganizer: quickMeetingRole === 'organizer',
+      priority: 'Sem prioridade',
+      status: 'Concluída',
+      requestDate: todayStr,
+      plannedStartDate: todayStr,
+      completionDate: quickMeetingDate || todayStr,
+      completedAt: now.toISOString(),
+      showInActivitiesUntil: sevenDaysFromNow,
+      completionDisplayChoice: 'keep_7_days',
+      progress: 100,
+      nextStep: '',
+      projectLead: quickMeetingResponsible.trim() || (currentUser !== 'Todos' ? currentUser : (teamMembers[0]?.name || 'Usuário')),
+      collaborators: quickMeetingParticipants,
+      updates: [],
+      isRegulatoryContribution: quickMeetingLinkedStandards.length > 0,
+      fileLinks: quickMeetingFileLinks,
+      meetingPautas: quickMeetingPautas
+    };
+
+    onSaveTask(meetingTask);
+
+    // Salvar encaminhamentos gerados para o projeto ou para as atividades
+    quickMeetingPautas.forEach(p => {
+      (p.actionItems || []).forEach(ai => {
+        if (ai.actionDestination === 'project' && onConvertToActivity && finalProjectId && finalProjectId !== 'outros') {
+          onConvertToActivity(finalProjectId, '', ai, undefined, undefined, ai.responsible, ai.dueDate);
+        } else if (ai.actionDestination === 'task') {
+          const newTaskFromAction: Task = {
+            id: `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            activity: ai.action,
+            description: `Encaminhamento da pauta: ${p.title} (${title})`,
+            project: finalProjectName,
+            group: targetGroup.name,
+            groupId: targetGroup.id,
+            activityType: 'general',
+            isReport: false,
+            priority: 'Sem prioridade',
+            status: 'Planejada',
+            requestDate: todayStr,
+            plannedStartDate: todayStr,
+            completionDate: ai.dueDate || quickMeetingDate,
+            progress: 0,
+            nextStep: '',
+            projectLead: ai.responsible || (currentUser !== 'Todos' ? currentUser : 'Responsável'),
+            collaborators: [],
+            updates: [],
+            isRegulatoryContribution: false
+          };
+          onSaveTask(newTaskFromAction);
+        }
+      });
+    });
+
+    if (meetingStartMode && onNavigateTab) {
+      if (onAddMeeting) {
+        onAddMeeting({
+          id: `meet_${Date.now()}`,
+          title,
+          date: quickMeetingDate,
+          time: quickMeetingTime,
+          location: quickMeetingCallLink || 'MS Teams / Sala',
+          type: 'Alinhamento',
+          status: 'Agendada',
+          projectId: finalProjectId,
+          projectName: finalProjectName,
+          moderator: quickMeetingResponsible || currentUser || 'Responsável',
+          participants: quickMeetingParticipants,
+          agendaItems: quickMeetingPautas.map(p => ({
+            id: p.id,
+            title: p.title,
+            objective: '',
+            context: '',
+            discussions: p.discussions || '',
+            decisions: p.decisions || '',
+            actionItems: p.actionItems || []
+          })),
+          minutesDocument: quickMeetingFreeNotes,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+      onNavigateTab('meetings');
+    }
+
+    setQuickMeetingTitle('');
+    setQuickMeetingFreeNotes('');
+    setQuickText('');
+    setIsSimpleMeetingModalOpen(false);
   };
 
   const handleQuickSave = (e?: React.FormEvent) => {
@@ -1564,8 +1719,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
           ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         
-        {/* LATERAL INTERNA: GRUPOS (lg:col-span-3) */}
-        <div className="lg:col-span-3 bg-white rounded-3xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 space-y-4">
+        {/* LATERAL INTERNA: GRUPOS (Ordem 2 no Celular, Coluna 3 no Desktop) */}
+        <div className="order-2 lg:order-1 lg:col-span-3 bg-white rounded-3xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Layers size={16} className="text-teal-600" />
@@ -1712,8 +1867,40 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
           </button>
         </div>
 
-        {/* ÁREA PRINCIPAL: BLOCO DE NOTAS RÁPIDAS & REGISTROS EM ABERTO (lg:col-span-9) */}
-        <div className="lg:col-span-9 space-y-4">
+        {/* ÁREA PRINCIPAL: BLOCO DE NOTAS RÁPIDAS & REGISTROS EM ABERTO (Ordem 1 no Celular: Primeiro elemento visível) */}
+        <div className="order-1 lg:order-2 lg:col-span-9 space-y-4">
+
+          {/* SELETOR HORIZONTAL RÁPIDO DE GRUPOS NO CELULAR (Responsivo e ergonômico) */}
+          <div className="lg:hidden flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <button
+              type="button"
+              onClick={() => setSelectedGroupId('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition flex items-center gap-1.5 shadow-2xs ${
+                selectedGroupId === 'all'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-white border border-slate-200 text-slate-700'
+              }`}
+            >
+              <span>Todos os Grupos</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20 text-current font-black">{totalOpenCount}</span>
+            </button>
+            {groups.map(g => (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => setSelectedGroupId(g.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition flex items-center gap-1.5 shadow-2xs ${
+                  selectedGroupId === g.id
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'bg-white border border-slate-200 text-slate-700'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color || '#0d9488' }} />
+                <span>{g.name}</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20 text-current font-black">{openCountByGroup[g.id] || 0}</span>
+              </button>
+            ))}
+          </div>
           
           {/* BARRA SUPERIOR: TÍTULO, GRUPO ATIVO, HISTÓRICO & MENU 3 PONTOS */}
           <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -1886,569 +2073,23 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                 </div>
               )}
 
-              {/* Opções completas para Reunião no Bloco de Notas */}
+              {/* Indicação amigável quando o tipo Reunião está ativo */}
               {quickType === 'meeting' && (
-                <div className="p-4 bg-blue-50/80 rounded-3xl border border-blue-200/90 space-y-4 text-xs animate-in fade-in">
-                  
-                  {/* Linha 1: Papel do Usuário + Projeto */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
-                        <Users size={12} className="text-blue-600 shrink-0" />
-                        <span>Seu Papel nesta Reunião</span>
-                      </label>
-                      <div className="grid grid-cols-2 gap-1.5 bg-white/90 p-1 rounded-2xl border border-blue-200">
-                        <button
-                          type="button"
-                          onClick={() => setQuickMeetingRole('organizer')}
-                          className={`py-1.5 px-2 rounded-xl text-xs font-black transition text-center ${
-                            quickMeetingRole === 'organizer' 
-                              ? 'bg-blue-600 text-white shadow-2xs' 
-                              : 'text-slate-600 hover:text-slate-900'
-                          }`}
-                        >
-                          Organizador(a)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setQuickMeetingRole('participant')}
-                          className={`py-1.5 px-2 rounded-xl text-xs font-black transition text-center ${
-                            quickMeetingRole !== 'organizer' 
-                              ? 'bg-slate-800 text-white shadow-2xs' 
-                              : 'text-slate-600 hover:text-slate-900'
-                          }`}
-                        >
-                          Participante / Registro
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
-                        <Folder size={12} className="text-blue-600 shrink-0" />
-                        <span>Projeto Vinculado</span>
-                      </label>
-                      <div className="flex gap-1.5">
-                        <select
-                          value={quickMeetingProjectMode === 'other' ? 'outros' : (quickMeetingProjectId || (projects[0]?.id || ''))}
-                          onChange={e => {
-                            if (e.target.value === 'outros') {
-                              setQuickMeetingProjectMode('other');
-                              setQuickMeetingProjectId('outros');
-                            } else {
-                              setQuickMeetingProjectMode('existing');
-                              setQuickMeetingProjectId(e.target.value);
-                            }
-                          }}
-                          className="flex-1 p-2 bg-white border border-blue-200 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-                        >
-                          <option value="">Selecione o projeto...</option>
-                          {projects.map(p => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                          ))}
-                          <option value="outros">Outros Projetos / Não pertence aos meus projetos</option>
-                        </select>
-                      </div>
-
-                      {quickMeetingProjectMode === 'other' && (
-                        <input
-                          type="text"
-                          value={quickMeetingCustomProject}
-                          onChange={e => setQuickMeetingCustomProject(e.target.value)}
-                          placeholder="Digite o nome do projeto externo/outro projeto..."
-                          className="w-full mt-1.5 p-2 bg-white border border-blue-300 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      )}
-                    </div>
+                <div className="p-3 bg-purple-50/70 rounded-2xl border border-purple-200/80 flex flex-wrap items-center justify-between gap-3 text-xs animate-in fade-in">
+                  <div className="flex items-center gap-2 text-purple-900 font-bold">
+                    <CalendarIcon size={14} className="text-purple-600 shrink-0" />
+                    <span>Janela de Nova Reunião simplificada disponível</span>
                   </div>
-
-                  {/* Linha 2: Responsável / Organizador (Livre ou Lista) + Data e Horário */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="space-y-1 sm:col-span-1">
-                      <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
-                        <UserCheck size={12} className="text-blue-600 shrink-0" />
-                        <span>Responsável / Organizador</span>
-                      </label>
-                      <input
-                        list="quick-meeting-resp-list"
-                        type="text"
-                        value={quickMeetingResponsible}
-                        onChange={e => setQuickMeetingResponsible(e.target.value)}
-                        placeholder={currentUser !== 'Todos' ? currentUser : 'Nome do responsável...'}
-                        className="w-full p-2 bg-white border border-blue-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <datalist id="quick-meeting-resp-list">
-                        {regulatoryNames.map(name => (
-                          <option key={name} value={name} />
-                        ))}
-                      </datalist>
-                      <span className="text-[10px] text-blue-900/70 block">
-                        Pode escolher da lista regulatória ou digitar qualquer nome.
-                      </span>
-                    </div>
-
-                    <div className="space-y-1 sm:col-span-1">
-                      <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
-                        <CalendarIcon size={12} className="text-blue-600 shrink-0" />
-                        <span>Data da Reunião</span>
-                      </label>
-                      <input
-                        type="date"
-                        value={quickMeetingDate}
-                        onChange={e => setQuickMeetingDate(e.target.value)}
-                        className="w-full p-2 bg-white border border-blue-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-
-                    <div className="space-y-1 sm:col-span-1">
-                      <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
-                        <Clock size={12} className="text-blue-600 shrink-0" />
-                        <span>Horário</span>
-                      </label>
-                      <input
-                        type="time"
-                        value={quickMeetingTime}
-                        onChange={e => setQuickMeetingTime(e.target.value)}
-                        className="w-full p-2 bg-white border border-blue-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Linha 3: Link da Reunião (Opcional quando não for organizador) */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
-                      <LinkIcon size={12} className="text-blue-600 shrink-0" />
-                      <span>Link da Chamada (Teams / Meet / Sala) {quickMeetingRole !== 'organizer' ? <strong className="text-blue-600 font-bold">(Opcional / Não obrigatório)</strong> : ''}</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={quickMeetingCallLink}
-                      onChange={e => setQuickMeetingCallLink(e.target.value)}
-                      placeholder={quickMeetingRole !== 'organizer' ? "Opcional: link da chamada virtual se houver..." : "Link do MS Teams ou Google Meet..."}
-                      className="w-full p-2 bg-white border border-blue-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  {/* Linha 4: Participantes (Qualquer nome ou lista) */}
-                  <div className="space-y-2 bg-white/60 p-3 rounded-2xl border border-blue-200/80">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
-                        <Users size={12} className="text-blue-600 shrink-0" />
-                        <span>Participantes & Convidados ({quickMeetingParticipants.length})</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const names = teamMembers.map(tm => tm.name);
-                          setQuickMeetingParticipants(Array.from(new Set([...quickMeetingParticipants, ...names])));
-                        }}
-                        className="text-[10px] font-bold text-blue-700 hover:underline"
-                      >
-                        + Adicionar toda equipe regulatória
-                      </button>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <input
-                        list="quick-meeting-part-list"
-                        type="text"
-                        value={quickMeetingNewParticipant}
-                        onChange={e => setQuickMeetingNewParticipant(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAddQuickParticipant(quickMeetingNewParticipant);
-                          }
-                        }}
-                        placeholder="Digite qualquer nome ou escolha da lista..."
-                        className="flex-1 p-2 bg-white border border-blue-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <datalist id="quick-meeting-part-list">
-                        {regulatoryNames.map(name => (
-                          <option key={name} value={name} />
-                        ))}
-                      </datalist>
-                      <button
-                        type="button"
-                        onClick={() => handleAddQuickParticipant(quickMeetingNewParticipant)}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shrink-0"
-                      >
-                        + Adicionar
-                      </button>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {quickMeetingParticipants.map(part => (
-                        <span 
-                          key={part} 
-                          className="px-2.5 py-1 bg-blue-100/90 text-blue-900 border border-blue-300 rounded-xl text-xs font-bold flex items-center gap-1"
-                        >
-                          <span>{part}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveQuickParticipant(part)}
-                            className="text-blue-700 hover:text-rose-600"
-                          >
-                            <X size={12} />
-                          </button>
-                        </span>
-                      ))}
-                      {quickMeetingParticipants.length === 0 && (
-                        <span className="text-[11px] text-blue-900/60 italic">Nenhum participante adicionado ainda.</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Linha 5: Links e Anexos de Arquivos (Mesmo quando não sou participante) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    
-                    {/* Links de Arquivos (SharePoint / OneDrive / Drive) */}
-                    <div className="bg-white/90 p-3 rounded-2xl border border-blue-200 space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
-                        <LinkIcon size={12} className="text-blue-600 shrink-0" />
-                        <span>Links de Arquivos (SharePoint, OneDrive, Drive, URLs)</span>
-                      </label>
-
-                      <div className="space-y-1.5">
-                        <input
-                          type="text"
-                          value={quickMeetingNewLinkName}
-                          onChange={e => setQuickMeetingNewLinkName(e.target.value)}
-                          placeholder="Título do documento (ex: Minuta de Acordo)..."
-                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none"
-                        />
-                        <div className="flex gap-1.5">
-                          <input
-                            type="url"
-                            value={quickMeetingNewLinkUrl}
-                            onChange={e => setQuickMeetingNewLinkUrl(e.target.value)}
-                            placeholder="https://ctvacinas.sharepoint.com/... ou link na nuvem"
-                            className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={handleAddFileLink}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shrink-0"
-                          >
-                            + Link
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1 pt-1">
-                        {quickMeetingFileLinks.map(link => (
-                          <div key={link.id} className="p-1.5 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-xs">
-                            <a 
-                              href={link.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="font-bold text-blue-800 truncate flex items-center gap-1 hover:underline"
-                            >
-                              <ExternalLink size={11} className="shrink-0" />
-                              <span className="truncate">{link.name}</span>
-                            </a>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveFileLink(link.id)}
-                              className="text-slate-400 hover:text-rose-600 p-1"
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Anexar Arquivos Locais */}
-                    <div className="bg-white/90 p-3 rounded-2xl border border-blue-200 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
-                          <Paperclip size={12} className="text-teal-600 shrink-0" />
-                          <span>Anexar Arquivos do Computador</span>
-                        </label>
-                        <label className="cursor-pointer px-2.5 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-[10px] flex items-center gap-1 transition shadow-2xs">
-                          <Plus size={11} />
-                          <span>Anexar</span>
-                          <input
-                            type="file"
-                            multiple
-                            className="hidden"
-                            onChange={handleAttachLocalFile}
-                          />
-                        </label>
-                      </div>
-
-                      <div className="space-y-1 max-h-32 overflow-y-auto">
-                        {quickMeetingAttachedFiles.map(f => (
-                          <div key={f.id} className="p-1.5 bg-teal-50 border border-teal-200 rounded-xl flex items-center justify-between text-xs">
-                            <span className="font-bold text-teal-900 truncate">{f.name} <span className="text-[10px] text-teal-600 font-normal">({f.size})</span></span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveAttachedFile(f.id)}
-                              className="text-slate-400 hover:text-rose-600 p-1"
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        ))}
-                        {quickMeetingAttachedFiles.length === 0 && (
-                          <p className="text-[11px] text-slate-400 italic py-2 text-center">Nenhum arquivo anexado ainda.</p>
-                        )}
-                      </div>
-                    </div>
-
-                  </div>
-
-                  {/* Linha 6: Vincular Norma Regulatória */}
-                  <div className="p-3 bg-white/90 rounded-2xl border border-blue-200 space-y-2">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <label className="text-[10px] font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
-                        <BookOpen size={12} className="text-indigo-600 shrink-0" />
-                        <span>Vincular Norma Regulatória à Reunião</span>
-                      </label>
-                      <select
-                        onChange={e => {
-                          const val = e.target.value;
-                          if (val && !quickMeetingLinkedStandards.includes(val)) {
-                            setQuickMeetingLinkedStandards(prev => [...prev, val]);
-                          }
-                          e.target.value = '';
-                        }}
-                        className="p-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
-                      >
-                        <option value="">+ Vincular Norma...</option>
-                        {regulatoryStandards.map(std => (
-                          <option key={std.id} value={std.id}>
-                            [{std.type || 'Norma'}] {std.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5">
-                      {quickMeetingLinkedStandards.map(stdId => {
-                        const std = regulatoryStandards.find(s => s.id === stdId);
-                        if (!std) return null;
-                        return (
-                          <span key={stdId} className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-xl text-xs font-bold flex items-center gap-1.5">
-                            <BookOpen size={11} className="text-indigo-600" />
-                            <span><strong>[{std.type || 'Norma'}]</strong> {std.name}</span>
-                            <button
-                              type="button"
-                              onClick={() => setQuickMeetingLinkedStandards(prev => prev.filter(id => id !== stdId))}
-                              className="text-slate-400 hover:text-rose-600 ml-1"
-                            >
-                              <X size={12} />
-                            </button>
-                          </span>
-                        );
-                      })}
-                      {quickMeetingLinkedStandards.length === 0 && (
-                        <span className="text-[11px] text-slate-400 italic">Nenhuma norma regulatória vinculada a esta reunião.</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Linha 7: Pautas e Encaminhamentos com 3 Opções Explícitas */}
-                  <div className="space-y-3 pt-2 border-t border-blue-200">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black uppercase text-blue-950 flex items-center gap-1.5">
-                        <Layers size={13} className="text-blue-600" />
-                        Pautas e Encaminhamentos da Reunião
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleAddQuickPauta}
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition shadow-2xs"
-                      >
-                        <Plus size={12} /> + Nova Pauta
-                      </button>
-                    </div>
-
-                    <div className="space-y-3">
-                      {quickMeetingPautas.map((pauta, pIdx) => (
-                        <div key={pauta.id} className="p-3 bg-white rounded-2xl border border-blue-200/90 space-y-2.5 shadow-2xs">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 flex-1">
-                              <span className="w-5 h-5 rounded-lg bg-blue-100 text-blue-900 font-black text-[11px] flex items-center justify-center shrink-0">
-                                {pIdx + 1}
-                              </span>
-                              <input
-                                type="text"
-                                value={pauta.title}
-                                onChange={e => {
-                                  const val = e.target.value;
-                                  setQuickMeetingPautas(prev => prev.map(p => p.id === pauta.id ? { ...p, title: val } : p));
-                                }}
-                                placeholder="Título da Pauta..."
-                                className="w-full text-xs font-bold text-slate-800 bg-transparent border-b border-dashed border-slate-300 focus:border-blue-500 outline-none px-1 py-0.5"
-                              />
-                            </div>
-                            {quickMeetingPautas.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveQuickPauta(pauta.id)}
-                                className="p-1 text-slate-400 hover:text-rose-600 transition"
-                                title="Remover Pauta"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Lista de Encaminhamentos desta Pauta */}
-                          <div className="space-y-1.5 pl-6">
-                            {pauta.actionItems.map(act => (
-                              <div key={act.id} className="p-2 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs">
-                                <div className="space-y-0.5">
-                                  <span className="font-bold text-slate-800 block">{act.action}</span>
-                                  <span className="text-[10px] text-slate-500">
-                                    Resp: <strong>{act.responsible}</strong> • Prazo: {act.dueDate ? act.dueDate.split('-').reverse().join('/') : 'Sem prazo'}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  {act.actionDestination === 'project' && (
-                                    <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
-                                      <FolderKanban size={10} /> No Projeto
-                                    </span>
-                                  )}
-                                  {act.actionDestination === 'task' && (
-                                    <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-teal-100 text-teal-800 border border-teal-200 flex items-center gap-1">
-                                      <CheckCircle size={10} /> Em Atividades
-                                    </span>
-                                  )}
-                                  {act.actionDestination === 'meeting_only' && (
-                                    <span className="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1">
-                                      <FileText size={10} /> Na Reunião
-                                    </span>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setQuickMeetingPautas(prev => prev.map(p => {
-                                        if (p.id === pauta.id) {
-                                          return {
-                                            ...p,
-                                            actionItems: p.actionItems.filter(a => a.id !== act.id)
-                                          };
-                                        }
-                                        return p;
-                                      }));
-                                    }}
-                                    className="p-1 text-slate-400 hover:text-rose-600"
-                                  >
-                                    <X size={12} />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-
-                            {/* Formulário para Adicionar Encaminhamento com as 3 Opções Explícitas */}
-                            <div className="p-2.5 bg-slate-50/90 rounded-xl border border-dashed border-slate-300 space-y-2">
-                              <span className="text-[10px] font-black uppercase text-slate-500 block">Novo Encaminhamento da Pauta</span>
-                              <input
-                                id={`quick-action-text-${pauta.id}`}
-                                type="text"
-                                placeholder="Ação / Encaminhamento deliberado..."
-                                className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none"
-                              />
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                <input
-                                  id={`quick-action-resp-${pauta.id}`}
-                                  list="quick-meeting-resp-list"
-                                  type="text"
-                                  placeholder="Responsável (qualquer nome ou lista)..."
-                                  className="w-full p-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
-                                />
-                                <input
-                                  id={`quick-action-date-${pauta.id}`}
-                                  type="date"
-                                  defaultValue={quickMeetingDate}
-                                  className="w-full p-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
-                                />
-                              </div>
-
-                              {/* 3 OPÇÕES EXPLÍCITAS CONFORME SOLICITADO */}
-                              <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const textEl = document.getElementById(`quick-action-text-${pauta.id}`) as HTMLInputElement;
-                                    const respEl = document.getElementById(`quick-action-resp-${pauta.id}`) as HTMLInputElement;
-                                    const dateEl = document.getElementById(`quick-action-date-${pauta.id}`) as HTMLInputElement;
-                                    const text = textEl?.value?.trim() || '';
-                                    if (!text) return;
-                                    const resp = respEl?.value?.trim() || currentUser || 'Responsável';
-                                    const date = dateEl?.value || quickMeetingDate;
-
-                                    const tempAction: MeetingActionItem = {
-                                      id: 'act_' + Date.now(),
-                                      action: text,
-                                      responsible: resp,
-                                      dueDate: date,
-                                      status: 'Pendente',
-                                      actionDestination: 'project'
-                                    };
-
-                                    setActionForRegisterModal({
-                                      agendaId: pauta.id,
-                                      action: tempAction
-                                    });
-
-                                    textEl.value = '';
-                                  }}
-                                  className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[11px] font-bold flex items-center gap-1 shadow-2xs transition"
-                                >
-                                  <FolderKanban size={12} />
-                                  <span>1. Registrar no Projeto</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const textEl = document.getElementById(`quick-action-text-${pauta.id}`) as HTMLInputElement;
-                                    const respEl = document.getElementById(`quick-action-resp-${pauta.id}`) as HTMLInputElement;
-                                    const dateEl = document.getElementById(`quick-action-date-${pauta.id}`) as HTMLInputElement;
-                                    const text = textEl?.value?.trim() || '';
-                                    if (!text) return;
-                                    const resp = respEl?.value?.trim() || currentUser || 'Responsável';
-                                    const date = dateEl?.value || quickMeetingDate;
-                                    handleAddQuickActionItem(pauta.id, text, resp, date, 'task');
-                                    textEl.value = '';
-                                  }}
-                                  className="px-2.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-[11px] font-bold flex items-center gap-1 shadow-2xs transition"
-                                >
-                                  <CheckCircle size={12} />
-                                  <span>2. Registrar nas Atividades</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const textEl = document.getElementById(`quick-action-text-${pauta.id}`) as HTMLInputElement;
-                                    const respEl = document.getElementById(`quick-action-resp-${pauta.id}`) as HTMLInputElement;
-                                    const dateEl = document.getElementById(`quick-action-date-${pauta.id}`) as HTMLInputElement;
-                                    const text = textEl?.value?.trim() || '';
-                                    if (!text) return;
-                                    const resp = respEl?.value?.trim() || currentUser || 'Responsável';
-                                    const date = dateEl?.value || quickMeetingDate;
-                                    handleAddQuickActionItem(pauta.id, text, resp, date, 'meeting_only');
-                                    textEl.value = '';
-                                  }}
-                                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-[11px] font-bold flex items-center gap-1 shadow-2xs transition ml-auto"
-                                >
-                                  <FileText size={12} />
-                                  <span>3. Apenas Encaminhamento</span>
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickMeetingTitle(quickText.trim());
+                      setIsSimpleMeetingModalOpen(true);
+                    }}
+                    className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition shadow-2xs flex items-center gap-1.5"
+                  >
+                    <CalendarIcon size={12} /> Abrir Janela da Reunião
+                  </button>
                 </div>
               )}
 
@@ -2483,14 +2124,18 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => setQuickType('meeting')}
+                    onClick={() => {
+                      setQuickType('meeting');
+                      setQuickMeetingTitle(quickText.trim());
+                      setIsSimpleMeetingModalOpen(true);
+                    }}
                     className={`px-3 py-1.5 rounded-xl border transition flex items-center gap-1.5 ${
                       quickType === 'meeting'
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-2xs font-black'
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-2xs font-black'
                         : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
                   >
-                    <Users size={12} /> Reunião
+                    <CalendarIcon size={12} className={quickType === 'meeting' ? 'text-white' : 'text-purple-600'} /> Reunião
                   </button>
 
                   <button
@@ -2985,6 +2630,584 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
             setActionForRegisterModal(null);
           }}
         />
+      )}
+
+
+      {/* =========================================================================
+          MODAL NOVA REUNIÃO SIMPLIFICADA (Conforme Imagem de Referência)
+          ========================================================================= */}
+      {isSimpleMeetingModalOpen && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in"
+          onClick={() => setIsSimpleMeetingModalOpen(false)}
+        >
+          <div 
+            onClick={e => e.stopPropagation()}
+            className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-xl p-5 sm:p-6 space-y-4 my-auto animate-in zoom-in-95"
+          >
+            {/* Cabeçalho do Modal */}
+            <div className="flex items-center justify-between pb-1">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
+                  <CalendarIcon size={18} />
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                  Nova reunião
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSimpleMeetingModalOpen(false)}
+                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* 1. TÍTULO (OPCIONAL) com Toggle Ocultar */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <span className="font-serif font-black text-sm text-slate-600">T</span>
+                  <span>Título (opcional)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsMeetingTitleHidden(!isMeetingTitleHidden)}
+                  className="text-[11px] text-slate-400 hover:text-slate-600 font-semibold transition"
+                >
+                  {isMeetingTitleHidden ? 'mostrar' : 'ocultar'}
+                </button>
+              </div>
+
+              {!isMeetingTitleHidden && (
+                <input
+                  type="text"
+                  value={quickMeetingTitle}
+                  onChange={e => setQuickMeetingTitle(e.target.value)}
+                  placeholder="Ex: Reunião com o cliente"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-2xl text-xs sm:text-sm font-semibold text-slate-800 placeholder:text-slate-400 outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20 transition"
+                />
+              )}
+            </div>
+
+            {/* 2. DATA E HORA com Toggle Ocultar */}
+            <div className="border border-slate-200 rounded-2xl p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <CalendarIcon size={14} className="text-purple-600" />
+                  <span>Data e hora</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsMeetingDateTimeHidden(!isMeetingDateTimeHidden)}
+                  className="text-[11px] text-slate-400 hover:text-slate-600 font-semibold transition"
+                >
+                  {isMeetingDateTimeHidden ? 'mostrar' : 'ocultar'}
+                </button>
+              </div>
+
+              {!isMeetingDateTimeHidden && (
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={quickMeetingDate}
+                      onChange={e => setQuickMeetingDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-purple-600"
+                    />
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="time"
+                      value={quickMeetingTime}
+                      onChange={e => setQuickMeetingTime(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-purple-600"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 3. VINCULAR AO PROJETO & MODO REUNIÕES (Gerar Ata) */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                  <Folder size={13} className="text-purple-600" />
+                  Vincular a um Projeto (Opcional)
+                </span>
+                {quickMeetingProjectId && (
+                  <button
+                    type="button"
+                    onClick={() => setQuickMeetingProjectId('')}
+                    className="text-[10px] text-slate-400 hover:text-slate-600 font-bold"
+                  >
+                    Desvincular
+                  </button>
+                )}
+              </div>
+
+              <select
+                value={quickMeetingProjectMode === 'other' ? 'outros' : quickMeetingProjectId}
+                onChange={e => {
+                  if (e.target.value === 'outros') {
+                    setQuickMeetingProjectMode('other');
+                    setQuickMeetingProjectId('outros');
+                  } else {
+                    setQuickMeetingProjectMode('existing');
+                    setQuickMeetingProjectId(e.target.value);
+                  }
+                }}
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-purple-600"
+              >
+                <option value="">Nenhum projeto específico (Atividade Geral)</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+                <option value="outros">Outro Projeto (Externo / Não cadastrado)</option>
+              </select>
+
+              {quickMeetingProjectMode === 'other' && (
+                <input
+                  type="text"
+                  value={quickMeetingCustomProject}
+                  onChange={e => setQuickMeetingCustomProject(e.target.value)}
+                  placeholder="Nome do projeto externo..."
+                  className="w-full p-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-purple-600"
+                />
+              )}
+
+              {/* Opção para Iniciar no Modo de Reuniões e Gerar Ata */}
+              <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={meetingStartMode}
+                  onChange={e => setMeetingStartMode(e.target.checked)}
+                  className="rounded text-purple-600 focus:ring-purple-500"
+                />
+                <span className="text-xs font-bold text-purple-950">
+                  Iniciar no Modo de Reuniões para Gerar Ata oficial da reunião
+                </span>
+              </label>
+            </div>
+
+            {/* 4. CAMPOS RÁPIDOS: PARTICIPANTES, PAUTA, ENCAMINHAMENTOS, LINKS, NORMAS */}
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-slate-600">Campos rápidos:</span>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveMeetingQuickSections(prev => ({ ...prev, participants: !prev.participants }))}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 ${
+                    activeMeetingQuickSections.participants
+                      ? 'bg-purple-900 text-white shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  <Users size={13} /> Participantes {quickMeetingParticipants.length > 0 && `(${quickMeetingParticipants.length})`}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveMeetingQuickSections(prev => ({ ...prev, pauta: !prev.pauta }))}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 ${
+                    activeMeetingQuickSections.pauta
+                      ? 'bg-purple-900 text-white shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  <ListOrdered size={13} /> Pauta {quickMeetingPautas.length > 0 && `(${quickMeetingPautas.length})`}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveMeetingQuickSections(prev => ({ ...prev, actions: !prev.actions }))}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 ${
+                    activeMeetingQuickSections.actions
+                      ? 'bg-purple-900 text-white shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  <CheckSquare size={13} /> Encaminhamentos
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveMeetingQuickSections(prev => ({ ...prev, links: !prev.links }))}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 ${
+                    activeMeetingQuickSections.links
+                      ? 'bg-purple-900 text-white shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  <LinkIcon size={13} /> Links / Arquivos {quickMeetingFileLinks.length > 0 && `(${quickMeetingFileLinks.length})`}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveMeetingQuickSections(prev => ({ ...prev, standards: !prev.standards }))}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition flex items-center gap-1.5 ${
+                    activeMeetingQuickSections.standards
+                      ? 'bg-purple-900 text-white shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  <BookOpen size={13} /> Norma
+                </button>
+              </div>
+
+              {/* SEÇÃO EXPANDIDA: PARTICIPANTES (Livre ou Lista) */}
+              {activeMeetingQuickSections.participants && (
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black uppercase text-slate-700">Participantes da Reunião</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const names = teamMembers.map(tm => tm.name);
+                        setQuickMeetingParticipants(Array.from(new Set([...quickMeetingParticipants, ...names])));
+                      }}
+                      className="text-[10px] font-bold text-purple-700 hover:underline"
+                    >
+                      + Toda equipe regulatória
+                    </button>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <input
+                      list="meeting-participant-suggestions"
+                      type="text"
+                      value={quickMeetingNewParticipant}
+                      onChange={e => setQuickMeetingNewParticipant(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const val = quickMeetingNewParticipant.trim();
+                          if (val && !quickMeetingParticipants.includes(val)) {
+                            setQuickMeetingParticipants([...quickMeetingParticipants, val]);
+                            setQuickMeetingNewParticipant('');
+                          }
+                        }
+                      }}
+                      placeholder="Digite qualquer nome ou selecione..."
+                      className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-purple-600"
+                    />
+                    <datalist id="meeting-participant-suggestions">
+                      {regulatoryNames.map(name => (
+                        <option key={name} value={name} />
+                      ))}
+                    </datalist>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const val = quickMeetingNewParticipant.trim();
+                        if (val && !quickMeetingParticipants.includes(val)) {
+                          setQuickMeetingParticipants([...quickMeetingParticipants, val]);
+                          setQuickMeetingNewParticipant('');
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-purple-600 text-white rounded-xl text-xs font-bold"
+                    >
+                      Adicionar
+                    </button>
+                  </div>
+
+                  {quickMeetingParticipants.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {quickMeetingParticipants.map(name => (
+                        <span key={name} className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                          <span>{name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setQuickMeetingParticipants(quickMeetingParticipants.filter(n => n !== name))}
+                            className="text-slate-400 hover:text-red-500"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SEÇÃO EXPANDIDA: PAUTA */}
+              {activeMeetingQuickSections.pauta && (
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5 animate-in fade-in">
+                  <span className="text-[11px] font-black uppercase text-slate-700 block">Pautas da Reunião</span>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      id="new-simple-pauta-input"
+                      placeholder="Nome / título da pauta..."
+                      className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-purple-600"
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const input = e.currentTarget;
+                          const val = input.value.trim();
+                          if (val) {
+                            setQuickMeetingPautas([...quickMeetingPautas, { id: `pauta_${Date.now()}`, title: val, actionItems: [] }]);
+                            input.value = '';
+                          }
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const input = document.getElementById('new-simple-pauta-input') as HTMLInputElement;
+                        const val = input?.value?.trim();
+                        if (val) {
+                          setQuickMeetingPautas([...quickMeetingPautas, { id: `pauta_${Date.now()}`, title: val, actionItems: [] }]);
+                          input.value = '';
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-purple-600 text-white rounded-xl text-xs font-bold"
+                    >
+                      + Pauta
+                    </button>
+                  </div>
+
+                  <div className="space-y-1.5 pt-1">
+                    {quickMeetingPautas.map((p, idx) => (
+                      <div key={p.id} className="p-2 bg-white rounded-xl border border-slate-200 flex items-center justify-between text-xs font-bold text-slate-800">
+                        <span>{idx + 1}. {p.title}</span>
+                        <button
+                          type="button"
+                          onClick={() => setQuickMeetingPautas(quickMeetingPautas.filter(item => item.id !== p.id))}
+                          className="text-slate-400 hover:text-red-500"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* SEÇÃO EXPANDIDA: ENCAMINHAMENTOS */}
+              {activeMeetingQuickSections.actions && (
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5 animate-in fade-in">
+                  <span className="text-[11px] font-black uppercase text-slate-700 block">Encaminhamentos & Ações Decorrentes</span>
+                  <div className="space-y-2 bg-white p-3 rounded-xl border border-slate-200 text-xs">
+                    <input
+                      type="text"
+                      id="simple-action-desc"
+                      placeholder="Descrição da ação a ser realizada..."
+                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 outline-none"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        list="meeting-participant-suggestions"
+                        type="text"
+                        id="simple-action-resp"
+                        placeholder="Responsável..."
+                        className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 outline-none"
+                      />
+                      <input
+                        type="date"
+                        id="simple-action-date"
+                        defaultValue={quickMeetingDate}
+                        className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800 outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const descEl = document.getElementById('simple-action-desc') as HTMLInputElement;
+                          const respEl = document.getElementById('simple-action-resp') as HTMLInputElement;
+                          const dateEl = document.getElementById('simple-action-date') as HTMLInputElement;
+                          const desc = descEl?.value?.trim();
+                          if (!desc) return;
+                          const pautaId = quickMeetingPautas[0]?.id || 'pauta_init_1';
+                          handleAddQuickActionItem(pautaId, desc, respEl?.value?.trim() || currentUser || 'Responsável', dateEl?.value || quickMeetingDate, 'project');
+                          descEl.value = '';
+                        }}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-2xs"
+                      >
+                        <FolderKanban size={12} /> Adicionar no Projeto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const descEl = document.getElementById('simple-action-desc') as HTMLInputElement;
+                          const respEl = document.getElementById('simple-action-resp') as HTMLInputElement;
+                          const dateEl = document.getElementById('simple-action-date') as HTMLInputElement;
+                          const desc = descEl?.value?.trim();
+                          if (!desc) return;
+                          const pautaId = quickMeetingPautas[0]?.id || 'pauta_init_1';
+                          handleAddQuickActionItem(pautaId, desc, respEl?.value?.trim() || currentUser || 'Responsável', dateEl?.value || quickMeetingDate, 'task');
+                          descEl.value = '';
+                        }}
+                        className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-2xs"
+                      >
+                        <CheckCircle size={12} /> Adicionar nas Atividades
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Lista de encaminhamentos cadastrados */}
+                  {quickMeetingPautas.some(p => p.actionItems && p.actionItems.length > 0) && (
+                    <div className="space-y-1.5 pt-1">
+                      {quickMeetingPautas.map(p => (
+                        (p.actionItems || []).map(ai => (
+                          <div key={ai.id} className="p-2 bg-white rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                            <div>
+                              <strong className="text-slate-800">{ai.action}</strong>
+                              <span className="text-[10px] text-slate-500 block">Resp: {ai.responsible} • Prazo: {formatDateBR(ai.dueDate)} • Destino: {ai.actionDestination === 'project' ? 'Projeto' : 'Atividades'}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveQuickActionItem(p.id, ai.id)}
+                              className="text-slate-400 hover:text-red-500"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SEÇÃO EXPANDIDA: LINKS / ARQUIVOS (Para organizador ou participante) */}
+              {activeMeetingQuickSections.links && (
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5 animate-in fade-in">
+                  <span className="text-[11px] font-black uppercase text-slate-700 block">Links e Arquivos Anexos</span>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Nome do arquivo ou descrição..."
+                      value={quickMeetingNewLinkName}
+                      onChange={e => setQuickMeetingNewLinkName(e.target.value)}
+                      className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                    />
+                    <input
+                      type="url"
+                      placeholder="https://... (Link SharePoint / Web)"
+                      value={quickMeetingNewLinkUrl}
+                      onChange={e => setQuickMeetingNewLinkUrl(e.target.value)}
+                      className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (quickMeetingNewLinkUrl.trim()) {
+                          setQuickMeetingFileLinks([...quickMeetingFileLinks, {
+                            id: `link_${Date.now()}`,
+                            name: quickMeetingNewLinkName.trim() || 'Link do Documento',
+                            url: quickMeetingNewLinkUrl.trim()
+                          }]);
+                          setQuickMeetingNewLinkName('');
+                          setQuickMeetingNewLinkUrl('');
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-purple-600 text-white rounded-xl text-xs font-bold"
+                    >
+                      Adicionar Link
+                    </button>
+                  </div>
+
+                  {quickMeetingFileLinks.length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      {quickMeetingFileLinks.map(fl => (
+                        <div key={fl.id} className="p-2 bg-white rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                          <a href={fl.url} target="_blank" rel="noopener noreferrer" className="text-purple-700 hover:underline font-bold flex items-center gap-1.5">
+                            <ExternalLink size={12} /> {fl.name}
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => setQuickMeetingFileLinks(quickMeetingFileLinks.filter(item => item.id !== fl.id))}
+                            className="text-slate-400 hover:text-red-500"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SEÇÃO EXPANDIDA: NORMA REGULATÓRIA */}
+              {activeMeetingQuickSections.standards && (
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5 animate-in fade-in">
+                  <span className="text-[11px] font-black uppercase text-slate-700 block">Vincular Norma Regulatória</span>
+                  <select
+                    onChange={e => {
+                      const id = e.target.value;
+                      if (id && !quickMeetingLinkedStandards.includes(id)) {
+                        setQuickMeetingLinkedStandards([...quickMeetingLinkedStandards, id]);
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                  >
+                    <option value="">Selecione uma norma para vincular...</option>
+                    {regulatoryStandards.map(std => (
+                      <option key={std.id} value={std.id}>{std.code} - {std.title}</option>
+                    ))}
+                  </select>
+
+                  {quickMeetingLinkedStandards.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {quickMeetingLinkedStandards.map(stdId => {
+                        const std = regulatoryStandards.find(s => s.id === stdId);
+                        return (
+                          <span key={stdId} className="px-2.5 py-1 bg-teal-50 border border-teal-200 text-teal-800 rounded-lg text-xs font-bold flex items-center gap-1.5">
+                            <span>{std ? std.code : stdId}</span>
+                            <button
+                              type="button"
+                              onClick={() => setQuickMeetingLinkedStandards(quickMeetingLinkedStandards.filter(id => id !== stdId))}
+                              className="text-teal-600 hover:text-red-500"
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 5. ANOTAÇÕES LIVRES */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 block">
+                Anotações livres
+              </label>
+              <textarea
+                value={quickMeetingFreeNotes}
+                onChange={e => setQuickMeetingFreeNotes(e.target.value)}
+                rows={4}
+                placeholder="Escreva qualquer coisa sobre a reunião..."
+                className="w-full p-3.5 bg-white border border-slate-300 rounded-2xl text-xs sm:text-sm font-medium text-slate-800 placeholder:text-slate-400 outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20 resize-none transition"
+              />
+            </div>
+
+            {/* RODAPÉ DO MODAL (Cancelar e Salvar em Roxo Vibrante como na Imagem 4) */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsSimpleMeetingModalOpen(false)}
+                className="px-5 py-2.5 rounded-2xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSimpleMeeting}
+                className="px-7 py-2.5 bg-[#8b2cf5] hover:bg-[#7822d9] text-white rounded-2xl text-xs sm:text-sm font-black shadow-lg shadow-purple-500/25 transition active:scale-95"
+              >
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

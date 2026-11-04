@@ -240,8 +240,18 @@ export const MicrosoftGraphService = {
 
           if (docLib) {
             selectedDriveId = docLib.id;
+            if (docLib.webUrl) {
+              try {
+                localStorage.setItem('ct_sharepoint_sistema_url', `${docLib.webUrl}/${FOLDER_NAME}`);
+              } catch (e) {}
+            }
           } else if (drives.length > 0) {
             selectedDriveId = drives[0].id;
+            if (drives[0].webUrl) {
+              try {
+                localStorage.setItem('ct_sharepoint_sistema_url', `${drives[0].webUrl}/${FOLDER_NAME}`);
+              } catch (e) {}
+            }
           }
         }
       } catch (driveLookupErr) {
@@ -256,6 +266,12 @@ export const MicrosoftGraphService = {
         if (!driveRes.ok) throw new Error("Drive não encontrado");
         const driveData = await driveRes.json();
         selectedDriveId = driveData.id;
+      }
+
+      if (siteData.webUrl && !localStorage.getItem('ct_sharepoint_sistema_url')) {
+        try {
+          localStorage.setItem('ct_sharepoint_sistema_url', `${siteData.webUrl}`);
+        } catch (e) {}
       }
 
       return { siteId: siteData.id, driveId: selectedDriveId };

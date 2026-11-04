@@ -379,7 +379,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           {/* Link para abrir pasta no SharePoint quando conectado */}
           {isMsalAuthenticated && lastSync?.status === 'synced' && (
             <a
-              href="https://ctvacinas974.sharepoint.com/sites/regulatorios/Shared%20Documents/Sistema"
+              href={localStorage.getItem('ct_sharepoint_sistema_url') || "https://ctvacinas974.sharepoint.com/sites/regulatorios/Documentos%20Compartilhados/Sistema"}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-2 w-full py-1 px-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[8px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition"

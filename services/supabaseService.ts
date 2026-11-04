@@ -12,22 +12,92 @@ export interface SupabaseConfig {
 let cachedClient: SupabaseClient<any, any, any> | null = null;
 let lastTestedConfig: { url: string; key: string } | null = null;
 
+let memoryConfig: SupabaseConfig | null = null;
+
 export const SupabaseService = {
+  async ensureConfigLoaded(): Promise<SupabaseConfig> {
+    if (memoryConfig && memoryConfig.anonKey) {
+      return memoryConfig;
+    }
+    const current = this.getConfig();
+    if (current.anonKey) {
+      memoryConfig = current;
+      try {
+        fetch('/api/supabase-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(current)
+        }).catch(() => {});
+      } catch (e) {}
+      return current;
+    }
+
+    try {
+      const res = await fetch('/api/supabase-config');
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.config?.anonKey) {
+          try {
+            if (data.config.url) localStorage.setItem('ct_supabase_url', data.config.url);
+            localStorage.setItem('ct_supabase_anon_key', data.config.anonKey);
+          } catch (storageErr) {}
+          memoryConfig = {
+            url: data.config.url || DEFAULT_SUPABASE_URL,
+            anonKey: data.config.anonKey,
+            schema: data.config.schema || SCHEMA_NAME
+          };
+          cachedClient = null;
+          return memoryConfig;
+        }
+      }
+    } catch (e) {
+      console.warn('Não foi possível sincronizar config do Supabase com o servidor:', e);
+    }
+
+    return current;
+  },
+
   getConfig(): SupabaseConfig {
-    const url = localStorage.getItem('ct_supabase_url') || 
+    if (memoryConfig && memoryConfig.anonKey) {
+      return memoryConfig;
+    }
+    let localUrl = '';
+    let localKey = '';
+    try {
+      localUrl = localStorage.getItem('ct_supabase_url') || '';
+      localKey = localStorage.getItem('ct_supabase_anon_key') || '';
+    } catch (e) {}
+
+    const url = localUrl || 
                 (import.meta as any).env?.VITE_SUPABASE_URL || 
                 DEFAULT_SUPABASE_URL;
-    const anonKey = localStorage.getItem('ct_supabase_anon_key') || 
-                   (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || 
-                   '';
+    const anonKey = localKey || 
+                    (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || 
+                    '';
     const schema = (import.meta as any).env?.VITE_SUPABASE_SCHEMA || SCHEMA_NAME;
     return { url, anonKey, schema };
   },
 
   saveConfig(url: string, anonKey: string) {
-    if (url) localStorage.setItem('ct_supabase_url', url.trim());
-    if (anonKey) localStorage.setItem('ct_supabase_anon_key', anonKey.trim());
-    cachedClient = null; // reset client
+    const cleanUrl = url ? url.trim() : DEFAULT_SUPABASE_URL;
+    const cleanKey = anonKey ? anonKey.trim() : '';
+    const cleanSchema = SCHEMA_NAME;
+
+    memoryConfig = { url: cleanUrl, anonKey: cleanKey, schema: cleanSchema };
+    try {
+      if (cleanUrl) localStorage.setItem('ct_supabase_url', cleanUrl);
+      if (cleanKey) localStorage.setItem('ct_supabase_anon_key', cleanKey);
+    } catch (e) {}
+
+    cachedClient = null;
+
+    try {
+      fetch('/api/supabase-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: cleanUrl, anonKey: cleanKey, schema: cleanSchema })
+      }).catch(() => {});
+    } catch (e) {}
   },
 
   isConfigured(): boolean {

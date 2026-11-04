@@ -143,6 +143,7 @@ export interface Task {
 
   // Detalhes de Relatório e Reunião
   reportReviewer?: string;
+  meetingPautas?: any[];
   isMeetingOrganizer?: boolean;
 
   // Atividades Críticas & Alertas por E-mail

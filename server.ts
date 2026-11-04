@@ -100,6 +100,39 @@ async function startServer() {
     }
   });
 
+  // Supabase Configuration Persistence for all sessions / incognito / mobile
+  const SUPABASE_CONFIG_FILE = path.join(process.cwd(), "supabase_config.json");
+
+  app.get("/api/supabase-config", (req, res) => {
+    try {
+      if (fs.existsSync(SUPABASE_CONFIG_FILE)) {
+        const config = JSON.parse(fs.readFileSync(SUPABASE_CONFIG_FILE, "utf-8"));
+        return res.json({ success: true, config });
+      }
+      const envUrl = process.env.VITE_SUPABASE_URL || "https://ytjhipjsigaalboztcdz.supabase.co";
+      const envKey = process.env.VITE_SUPABASE_ANON_KEY || "";
+      const envSchema = process.env.VITE_SUPABASE_SCHEMA || "ctvacinas";
+      return res.json({ success: true, config: { url: envUrl, anonKey: envKey, schema: envSchema } });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post("/api/supabase-config", (req, res) => {
+    try {
+      const { url, anonKey, schema } = req.body;
+      const config = {
+        url: url ? url.trim() : "https://ytjhipjsigaalboztcdz.supabase.co",
+        anonKey: anonKey ? anonKey.trim() : "",
+        schema: schema ? schema.trim() : "ctvacinas"
+      };
+      fs.writeFileSync(SUPABASE_CONFIG_FILE, JSON.stringify(config, null, 2), "utf-8");
+      return res.json({ success: true, config });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // EMAIL LOG FILE & STATE
   const EMAIL_LOG_FILE = path.join(process.cwd(), "email_audit_log.json");
   const BACKUP_LOCK_FILE = path.join(process.cwd(), "daily_backup_lock.json");
