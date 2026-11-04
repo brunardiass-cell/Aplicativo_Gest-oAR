@@ -28,11 +28,14 @@ import {
   RefreshCw,
   LogIn,
   CheckCircle2,
-  ExternalLink
+  ExternalLink,
+  Bell,
+  Smartphone
 } from 'lucide-react';
 
 interface SidebarProps {
   currentModule?: 'activities_projects' | 'regulatory_standards' | 'vaccines_components';
+  onOpenPushSettings?: () => void;
   onSwitchModule?: () => void;
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
@@ -76,6 +79,7 @@ const getInitials = (name?: string): string => {
 
 const Sidebar: React.FC<SidebarProps> = ({ 
   currentModule,
+  onOpenPushSettings,
   onSwitchModule,
   currentView, 
   onViewChange, 
@@ -244,6 +248,15 @@ const Sidebar: React.FC<SidebarProps> = ({
               icon={<Calendar size={18} />} 
               label="Reuniões" 
             />
+
+            {onOpenPushSettings && (
+              <SidebarButton 
+                active={false} 
+                onClick={() => { onOpenPushSettings(); onClose?.(); }} 
+                icon={<Bell size={18} className="text-teal-400" />} 
+                label="Alertas 09h00 (PWA)" 
+              />
+            )}
 
             {hasFullAccess && !selectedProfile?.isComiteGestor && (
               <>

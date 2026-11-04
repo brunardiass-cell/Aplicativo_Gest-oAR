@@ -42,6 +42,9 @@ import PreSaveConfirmationModal from './components/PreSaveConfirmationModal';
 import ComiteGestorView from './components/ComiteGestorView';
 import { sendNewProjectEmail } from './services/emailService';
 import { notificationService } from './services/notificationService';
+import { pushNotificationService } from './services/pushNotificationService';
+import { PWAInstallPrompt } from './components/PWAInstallPrompt';
+import { PushNotificationSettingsModal } from './components/PushNotificationSettingsModal';
 
 function isEqual(a: any, b: any): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -129,6 +132,7 @@ const App: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isExcelReportsModalOpen, setIsExcelReportsModalOpen] = useState(false);
+  const [isPushModalOpen, setIsPushModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [filterMember, setFilterMember] = useState<string | 'Todos'>('Todos');
   const [isSyncingSharePoint, setIsSyncingSharePoint] = useState(false);
@@ -179,6 +183,43 @@ const App: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const spMetadataMapRef = useRef<SPMetadataMap>({});
+  const criticalTasksCount = useMemo(() => {
+    return tasks.filter(t => Boolean(t.isCritical) && t.status !== 'Concluída' && t.status !== 'Não Aplicável').length;
+  }, [tasks]);
+
+  // PWA Service Worker Registration & Notification Routing
+  useEffect(() => {
+    pushNotificationService.registerServiceWorker();
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'NAVIGATE_TO_ACTIVITY') {
+        setView('tasks');
+        if (event.data.activityId) {
+          const found = tasks.find(t => t.id === event.data.activityId);
+          if (found) {
+            setSelectedTask(found);
+            setIsDetailsOpen(true);
+          }
+        }
+      }
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleMessage);
+    }
+    return () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleMessage);
+      }
+    };
+  }, [tasks]);
+
+  // Sync tasks to backend push evaluator for autonomous 09:00 dispatches
+  useEffect(() => {
+    if (tasks.length > 0) {
+      pushNotificationService.syncTasks(tasks);
+    }
+  }, [tasks]);
 
   useEffect(() => {
     const handleGlobalClick = async (e: MouseEvent) => {
@@ -2198,6 +2239,7 @@ const App: React.FC = () => {
           projectSubView={projectSubView}
           onSelectProjectSubView={setProjectSubView}
           onOpenExcelReports={() => setIsExcelReportsModalOpen(true)}
+          onOpenPushSettings={() => setIsPushModalOpen(true)}
           isMsalAuthenticated={isMsalAuthenticated}
           onConnectMsal={handleLogin}
           onForceCloudSync={handleForceCloudSync}
@@ -2335,23 +2377,21 @@ const App: React.FC = () => {
                     )}
                   </div>
                 )}
+                <PWAInstallPrompt variant="button" />
                 <button
                   type="button"
-                  onClick={async () => {
-                    const granted = await notificationService.requestPermission();
-                    if (granted) {
-                      notificationService.sendNotification({
-                        title: 'CTVacinas — Notificações Ativadas',
-                        body: 'Alertas de prazos e atividades críticas ativos sem custo de token ou serviços pagos.',
-                        tag: 'ct-notif-enabled'
-                      });
-                    }
-                  }}
-                  className="relative p-1.5 sm:p-2 bg-white rounded-xl shadow-sm border border-slate-100 hover:border-indigo-300 hover:text-indigo-600 transition cursor-pointer"
-                  title="Notificações do Navegador / Web Notifications API (Custo R$ 0 / 0 Tokens)"
+                  onClick={() => setIsPushModalOpen(true)}
+                  className="relative p-1.5 sm:p-2 bg-white rounded-xl shadow-sm border border-slate-100 hover:border-teal-300 hover:text-teal-600 transition cursor-pointer"
+                  title="Notificações Push / PWA (Alertas de Atividades Críticas às 09h00)"
                 >
-                    <Bell size={isMobile ? 16 : 20} className="text-slate-400 hover:text-indigo-600"/>
-                    {pendingReviewCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center animate-pulse">{pendingReviewCount}</span>}
+                    <Bell size={isMobile ? 16 : 20} className={criticalTasksCount > 0 ? "text-teal-600" : "text-slate-400 hover:text-teal-600"}/>
+                    {criticalTasksCount > 0 ? (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-teal-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center shadow-sm">
+                        {criticalTasksCount}
+                      </span>
+                    ) : (
+                      pendingReviewCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center animate-pulse">{pendingReviewCount}</span>
+                    )}
                 </button>
                 {view === 'tasks' && (
                   <>
@@ -2361,6 +2401,9 @@ const App: React.FC = () => {
                 )}
             </div>
         </header>
+
+        {/* PWA Install Banner */}
+        <PWAInstallPrompt variant="banner" />
 
         {view === 'dashboard' && (
           selectedProfile?.isComiteGestor ? (
@@ -2752,6 +2795,13 @@ const App: React.FC = () => {
             message: `Dados sincronizados com o Supabase em ${dateStr} às ${timeStr}` 
           });
         }}
+      />
+
+      <PushNotificationSettingsModal 
+        isOpen={isPushModalOpen}
+        onClose={() => setIsPushModalOpen(false)}
+        currentUser={selectedProfile?.name || 'Bruna'}
+        criticalTasksCount={criticalTasksCount}
       />
     </div>
     </>
