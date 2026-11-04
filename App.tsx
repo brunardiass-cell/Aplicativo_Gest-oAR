@@ -3,8 +3,8 @@
 // Versão 1.0.1 - Sincronização operacional e gestão de prazos
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
-import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity, RegulatoryEvidence, MacroActivityConfig, RegulatoryInfoItem, RepeatableRecord, RegulatoryNarrative, RegulatoryDocument, Meeting, DossierContribution, ProjectContributionItem, MeetingActionItem } from './types';
-import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES, DEFAULT_MEETINGS, DEFAULT_ACTIVITY_PLANS, isNameMatch, getAccountEmails } from './constants';
+import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity, RegulatoryEvidence, MacroActivityConfig, RegulatoryInfoItem, RepeatableRecord, RegulatoryNarrative, RegulatoryDocument, Meeting, DossierContribution, ProjectContributionItem, MeetingActionItem, TaskGroup } from './types';
+import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES, DEFAULT_MEETINGS, DEFAULT_ACTIVITY_PLANS, DEFAULT_TASK_GROUPS, isNameMatch, getAccountEmails } from './constants';
 import { MeetingsManager } from './components/MeetingsManager';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
@@ -106,6 +106,16 @@ const App: React.FC = () => {
   const [regulatoryDocs, setRegulatoryDocs] = useState<RegulatoryDocument[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>(DEFAULT_MEETINGS);
   const [dossierContributions, setDossierContributions] = useState<DossierContribution[]>([]);
+  const [taskGroups, setTaskGroups] = useState<TaskGroup[]>(() => {
+    try {
+      const saved = localStorage.getItem('ctvacinas_task_groups');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_TASK_GROUPS;
+  });
   const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
   const [dataVersion, setDataVersion] = useState<string | null>(null);
   const [isDataDirty, setIsDataDirty] = useState(false);
@@ -418,7 +428,30 @@ const App: React.FC = () => {
       regulatoryDocs: cloudData.regulatoryDocs || [],
       meetings: (cloudData.meetings && cloudData.meetings.length > 0) ? cloudData.meetings : DEFAULT_MEETINGS,
       dossierContributions: cloudData.dossierContributions || [],
+      taskGroups: (cloudData.taskGroups && cloudData.taskGroups.length > 0) ? cloudData.taskGroups : DEFAULT_TASK_GROUPS,
     };
+
+    // Auto-descoberta: assegura que todos os grupos das tarefas estejam presentes
+    const initialGroups: TaskGroup[] = fullData.taskGroups || DEFAULT_TASK_GROUPS;
+    const groupNames = new Set(initialGroups.map(g => (g.name || '').trim().toLowerCase()));
+    const discovered: TaskGroup[] = [];
+    (fullData.tasks || []).forEach((t: any) => {
+      const gName = (t.group || '').trim();
+      if (gName && !groupNames.has(gName.toLowerCase())) {
+        groupNames.add(gName.toLowerCase());
+        discovered.push({
+          id: t.groupId || `group_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          name: gName,
+          projectName: t.project || undefined,
+          color: '#0d9488',
+          createdAt: new Date().toISOString(),
+          createdBy: 'Sistema'
+        });
+      }
+    });
+
+    const finalGroups = [...initialGroups, ...discovered];
+    fullData.taskGroups = finalGroups;
 
     setTasks(fullData.tasks);
     setProjects(fullData.projects);
@@ -442,6 +475,10 @@ const App: React.FC = () => {
     setRegulatoryDocs(fullData.regulatoryDocs);
     setMeetings(fullData.meetings);
     setDossierContributions(fullData.dossierContributions);
+    setTaskGroups(finalGroups);
+    try {
+      localStorage.setItem('ctvacinas_task_groups', JSON.stringify(finalGroups));
+    } catch (e) {}
     setBaseData(JSON.parse(JSON.stringify(fullData)));
     persistDataLocally(fullData);
     setDataVersion(version);
@@ -850,6 +887,32 @@ const App: React.FC = () => {
     setServerStateOnSave(null);
   };
 
+  const handleUpdateGroups = useCallback(async (newGroups: TaskGroup[]) => {
+    setTaskGroups(newGroups);
+    try {
+      localStorage.setItem('ctvacinas_task_groups', JSON.stringify(newGroups));
+    } catch (e) {}
+
+    // Sincroniza imediatamente com o Supabase
+    if (SupabaseService.isConfigured()) {
+      SupabaseService.saveTaskGroups(newGroups, selectedProfile?.name || 'Sistema').catch(() => {});
+    }
+
+    // Persiste no servidor backend para sincronização entre notebook e celular
+    fetch('/api/task-groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groups: newGroups, user: selectedProfile?.name || 'Sistema' })
+    }).catch(() => {});
+
+    // Notifica outros clientes conectados via WebSocket
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: selectedProfile?.name || 'Sistema' }));
+    }
+
+    setDataDirty();
+  }, [selectedProfile]);
+
   const handleSaveChanges = async () => {
     if (!isDataDirty) return;
     const currentUser = selectedProfile?.name || 'Sistema';
@@ -875,6 +938,7 @@ const App: React.FC = () => {
       regulatoryDocs,
       meetings,
       dossierContributions,
+      taskGroups,
       managerEmail,
       lastEditor: currentUser
     };
@@ -2491,6 +2555,8 @@ const App: React.FC = () => {
                 isLeader={hasFullAccess || Boolean(selectedProfile?.isComiteGestor) || currentUserRole === 'admin'}
                 regulatoryStandards={regulatoryStandards}
                 onConvertToActivity={handleConvertToActivity}
+                groups={taskGroups}
+                onUpdateGroups={handleUpdateGroups}
               />
             ) : (
               <ProjectTaskBoard 
@@ -2777,6 +2843,7 @@ const App: React.FC = () => {
           regulatoryDocs,
           meetings,
           dossierContributions,
+          taskGroups,
           managerEmail
         }}
         currentUser={selectedProfile?.name || 'Sistema'}

@@ -154,7 +154,7 @@ async function startServer() {
     let sampleActivitiesList: any[] = [];
 
     if (criticalTasks.length === 0) {
-      if (triggerType === "daily_0900") {
+      if (triggerType !== "manual_test") {
         const log = addPushLog({
           type: triggerType,
           status: "skipped_no_critical",
@@ -163,12 +163,12 @@ async function startServer() {
           successfulSends: 0,
           failedSends: 0,
           brasiliaTime: bTime.fullFormatted,
-          details: "Nenhuma atividade crítica pendente no momento das 09h00."
+          details: "Nenhuma atividade crítica pendente no momento da verificação."
         });
         return { success: true, count: 0, log };
       } else {
         notificationTitle = "🚨 ATENÇÃO – ATIVIDADE CRÍTICA (Teste)";
-        notificationBody = "CTVacinas PWA: Conexão ativa! Alertas automáticos de atividades críticas ocorrem exclusivamente às 09h00.";
+        notificationBody = "CTVacinas PWA: Conexão ativa! Alertas de atividades críticas são enviados entre 09h00 e 17h00.";
         sampleActivitiesList = [{ id: "test", activity: "Teste de Notificação Push", project: "Sistema CTVacinas" }];
       }
     } else {
@@ -253,7 +253,7 @@ async function startServer() {
     });
 
     return {
-      success: successfulSends > 0 || (triggerType === "daily_0900" && criticalTasks.length === 0),
+      success: successfulSends > 0 || (triggerType !== "manual_test" && criticalTasks.length === 0),
       successfulSends,
       failedSends,
       log
@@ -261,34 +261,38 @@ async function startServer() {
   }
 
   // ---------------------------------------------------------------------------
-  // AUTOMATED SCHEDULER: 09:00 AM (America/Sao_Paulo) EXCLUSIVELY
-  // Strict rule: Never dispatch outside 09:00.
+  // AUTOMATED SCHEDULER: 09:00 to 17:00 (America/Sao_Paulo)
+  // Window: 09:00 - 17:00 (Business hours)
+  // Testing: Allowed at any time without restriction
   // ---------------------------------------------------------------------------
   setInterval(async () => {
     try {
       const bTime = getBrasiliaTime();
-      if (bTime.hour === 9 && bTime.minute === 0) {
-        let dailyLock: any = { lastExecutedDate: null };
+      // Janela ativa entre 09:00 e 17:00
+      if (bTime.hour >= 9 && bTime.hour <= 17) {
+        let dailyLock: any = { lastExecutedDate: null, lastExecutedHourKey: null };
         if (fs.existsSync(PUSH_DAILY_LOCK_FILE)) {
           try {
             dailyLock = JSON.parse(fs.readFileSync(PUSH_DAILY_LOCK_FILE, "utf-8"));
           } catch {}
         }
 
-        if (dailyLock.lastExecutedDate !== bTime.dateStr) {
-          console.log(`[Scheduler 09:00 America/Sao_Paulo] Iniciando disparo automático de atividades críticas (${bTime.dateStr})...`);
+        const hourKey = `${bTime.dateStr}_${bTime.hour}`;
+        if (dailyLock.lastExecutedHourKey !== hourKey) {
+          console.log(`[Scheduler Push 09h-17h America/Sao_Paulo] Verificando atividades críticas (${hourKey})...`);
+          dailyLock.lastExecutedHourKey = hourKey;
           dailyLock.lastExecutedDate = bTime.dateStr;
           dailyLock.executedAt = new Date().toISOString();
           dailyLock.brasiliaTime = bTime.fullFormatted;
           fs.writeFileSync(PUSH_DAILY_LOCK_FILE, JSON.stringify(dailyLock, null, 2), "utf-8");
 
-          await executePushNotificationCycle("daily_0900");
+          await executePushNotificationCycle("business_hours");
         }
       }
     } catch (err) {
-      console.error("[Scheduler 09:00] Erro:", err);
+      console.error("[Scheduler Push] Erro:", err);
     }
-  }, 25000);
+  }, 30000);
 
   // Track connected clients and their user names
   const clients = new Map<WebSocket, string>();
@@ -722,6 +726,7 @@ async function startServer() {
 
       const subscriptions = getPushSubscriptions();
       const logs = getPushLogs();
+      const isWithinActiveWindow = bTime.hour >= 9 && bTime.hour <= 17;
 
       return res.json({
         success: true,
@@ -729,9 +734,11 @@ async function startServer() {
         currentBrasiliaTime: bTime.fullFormatted,
         lastDailyExecutionDate: dailyLock.lastExecutedDate,
         alreadyExecutedToday: dailyLock.lastExecutedDate === bTime.dateStr,
-        nextScheduledTime: "09:00:00 (America/Sao_Paulo)",
+        notificationWindow: "09:00 às 17:00 (America/Sao_Paulo)",
+        isWithinActiveWindow,
+        nextScheduledTime: "Janela contínua das 09:00 às 17:00 (America/Sao_Paulo)",
         timezone: "America/Sao_Paulo (Horário Oficial de Brasília)",
-        strictRule: "Notificações automáticas disparadas exclusivamente às 09h00 para atividades com isCritical === true.",
+        rule: "Notificações de atividades críticas enviadas na janela das 09h00 às 17h00. Teste manual disponível a qualquer momento sem restrição de horário.",
         recentLogsCount: logs.length
       });
     } catch (err: any) {
@@ -756,6 +763,67 @@ async function startServer() {
         return res.json({ success: true, tasksCount: tasks.length });
       }
       return res.status(400).json({ success: false, error: "tasks deve ser um array." });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 9. Manual evaluate route (evaluates and dispatches critical tasks on demand anytime)
+  app.post("/api/push/evaluate", async (req, res) => {
+    try {
+      const result = await executePushNotificationCycle("manual_test");
+      return res.json({
+        success: result.success,
+        successfulSends: result.successfulSends,
+        failedSends: result.failedSends,
+        log: result.log
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 10. Task Groups Management & Synchronization between Notebook & Mobile
+  app.get("/api/task-groups", (req, res) => {
+    try {
+      if (fs.existsSync(DB_FILE)) {
+        const fileContent = fs.readFileSync(DB_FILE, "utf-8");
+        const data = JSON.parse(fileContent);
+        if (Array.isArray(data.taskGroups)) {
+          return res.json({ success: true, groups: data.taskGroups });
+        }
+      }
+      return res.json({ success: true, groups: [] });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post("/api/task-groups", (req, res) => {
+    try {
+      const { groups, user } = req.body;
+      if (!Array.isArray(groups)) {
+        return res.status(400).json({ success: false, error: "groups deve ser um array." });
+      }
+
+      let storedData: any = {};
+      if (fs.existsSync(DB_FILE)) {
+        try {
+          storedData = JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
+        } catch {}
+      }
+      storedData.taskGroups = groups;
+      storedData.lastGroupsUpdate = new Date().toISOString();
+      fs.writeFileSync(DB_FILE, JSON.stringify(storedData, null, 2), "utf-8");
+
+      // Broadcast para os outros navegadores conectados (notebooks e celulares)
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({ type: "DATA_UPDATED", user: user || "Sistema", entity: "task_groups" }));
+        }
+      });
+
+      return res.json({ success: true, count: groups.length });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
     }

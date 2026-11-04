@@ -118,6 +118,8 @@ interface TaskBoardProps {
   onClearAllNotifications?: () => void;
   onCompleteCollaboration?: (taskId: string) => void;
   onAssignReview?: (taskId: string, reviewer: string) => void;
+  groups?: TaskGroup[];
+  onUpdateGroups?: (newGroups: TaskGroup[]) => void;
 }
 
 export const TaskBoard: React.FC<TaskBoardProps> = ({
@@ -137,12 +139,15 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   onNavigateTab,
   onConvertToActivity,
   hasFullAccess = true,
-  isLeader = true
+  isLeader = true,
+  groups: groupsProp,
+  onUpdateGroups
 }) => {
   // ---------------------------------------------------------------------------
-  // 1. GERENCIAMENTO DE GRUPOS (Lateral Interna)
+  // 1. GERENCIAMENTO DE GRUPOS (Sincronizado via Supabase e Servidor)
   // ---------------------------------------------------------------------------
-  const [groups, setGroups] = useState<TaskGroup[]>(() => {
+  const [internalGroups, setInternalGroups] = useState<TaskGroup[]>(() => {
+    if (groupsProp && groupsProp.length > 0) return groupsProp;
     try {
       const saved = localStorage.getItem('ctvacinas_task_groups');
       if (saved) {
@@ -155,15 +160,51 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     return DEFAULT_TASK_GROUPS;
   });
 
-  // Salvar grupos no localStorage sempre que houver alteração
+  const groups = useMemo(() => {
+    return (groupsProp && groupsProp.length > 0) ? groupsProp : internalGroups;
+  }, [groupsProp, internalGroups]);
+
+  // Salvar grupos localmente e sincronizar com o banco de dados Supabase
   const saveGroupsToStorage = (newGroups: TaskGroup[]) => {
-    setGroups(newGroups);
+    setInternalGroups(newGroups);
     try {
       localStorage.setItem('ctvacinas_task_groups', JSON.stringify(newGroups));
     } catch (e) {
       console.error('Erro ao salvar grupos:', e);
     }
+    if (onUpdateGroups) {
+      onUpdateGroups(newGroups);
+    }
   };
+
+  // Auto-descoberta de grupos em tarefas para sincronizar perfeitamente no notebook e celular
+  useEffect(() => {
+    if (!tasks || tasks.length === 0) return;
+    const knownNames = new Set(groups.map(g => (g.name || '').trim().toLowerCase()));
+    let hasNew = false;
+    const toAdd: TaskGroup[] = [];
+
+    tasks.forEach(t => {
+      const groupName = (t.group || '').trim();
+      if (groupName && !knownNames.has(groupName.toLowerCase())) {
+        knownNames.add(groupName.toLowerCase());
+        hasNew = true;
+        toAdd.push({
+          id: t.groupId || `group_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          name: groupName,
+          projectName: t.project || undefined,
+          color: '#0d9488',
+          createdAt: new Date().toISOString(),
+          createdBy: 'Sistema'
+        });
+      }
+    });
+
+    if (hasNew && toAdd.length > 0) {
+      const merged = [...groups, ...toAdd];
+      saveGroupsToStorage(merged);
+    }
+  }, [tasks, groups]);
 
   // Grupo selecionado ('all' para todos os grupos)
   const [selectedGroupId, setSelectedGroupId] = useState<string>('all');

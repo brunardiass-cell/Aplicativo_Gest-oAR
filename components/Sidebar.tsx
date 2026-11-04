@@ -249,15 +249,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               label="Reuniões" 
             />
 
-            {onOpenPushSettings && (
-              <SidebarButton 
-                active={false} 
-                onClick={() => { onOpenPushSettings(); onClose?.(); }} 
-                icon={<Bell size={18} className="text-teal-400" />} 
-                label="Alertas 09h00 (PWA)" 
-              />
-            )}
-
             {hasFullAccess && !selectedProfile?.isComiteGestor && (
               <>
                 <SidebarButton active={currentView === 'quality'} onClick={() => { onViewChange('quality'); onClose?.(); }} icon={<ShieldCheck size={18} />} label="Acessos" />

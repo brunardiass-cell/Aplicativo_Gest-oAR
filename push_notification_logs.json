@@ -1,5 +1,16 @@
 [
   {
+    "id": "push_log_1793797691287_t37oq",
+    "timestamp": "2026-11-04T13:08:11.287Z",
+    "type": "manual_test",
+    "status": "skipped_no_subscribers",
+    "devicesCount": 0,
+    "activitiesCount": 0,
+    "successfulSends": 0,
+    "failedSends": 0,
+    "details": "Nenhum dispositivo registrado para receber notificações push."
+  },
+  {
     "id": "push_log_1793793326672_puzcz",
     "timestamp": "2026-11-04T11:55:26.672Z",
     "type": "manual_test",

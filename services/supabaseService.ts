@@ -286,6 +286,34 @@ export const SupabaseService = {
         }
       });
 
+      // Extrai grupos de atividades salvos em app_config
+      let storedGroups: any[] = [];
+      if (Array.isArray(configMap.task_groups) && configMap.task_groups.length > 0) {
+        storedGroups = configMap.task_groups;
+      } else if (Array.isArray(configMap.activity_groups) && configMap.activity_groups.length > 0) {
+        storedGroups = configMap.activity_groups;
+      }
+
+      // Auto-descoberta: detecta grupos presentes em tarefas para garantir que nenhum grupo seja perdido
+      const knownGroupNames = new Set(storedGroups.map(g => (g.name || '').trim().toLowerCase()));
+      const discoveredGroups: any[] = [];
+      (tasks || []).forEach((t: any) => {
+        const groupName = (t.group || '').trim();
+        if (groupName && !knownGroupNames.has(groupName.toLowerCase())) {
+          knownGroupNames.add(groupName.toLowerCase());
+          discoveredGroups.push({
+            id: t.groupId || `group_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            name: groupName,
+            projectName: t.project || undefined,
+            color: '#0d9488',
+            createdAt: new Date().toISOString(),
+            createdBy: 'Sistema'
+          });
+        }
+      });
+
+      const effectiveTaskGroups = [...storedGroups, ...discoveredGroups];
+
       const fullData = {
         projects: projects || [],
         tasks: tasks || [],
@@ -308,6 +336,7 @@ export const SupabaseService = {
         meetings: meetings.length > 0 ? meetings : undefined,
         notifications: notifications || [],
         logs: logs || [],
+        taskGroups: effectiveTaskGroups.length > 0 ? effectiveTaskGroups : undefined,
         managerEmail: configMap.managerEmail || 'brunadias@ctvacinas.org'
       };
 
@@ -592,13 +621,24 @@ export const SupabaseService = {
         updated_at: timestamp
       }));
 
-      // 20. App Config (managerEmail e configurações gerais)
+      // 20. App Config (managerEmail, task_groups e configurações gerais)
       if (fullData.managerEmail) {
         await client
           .from('app_config')
           .upsert({
             key: 'managerEmail',
             value: fullData.managerEmail,
+            updated_at: timestamp,
+            updated_by: user
+          }, { onConflict: 'key' });
+      }
+
+      if (Array.isArray(fullData.taskGroups)) {
+        await client
+          .from('app_config')
+          .upsert({
+            key: 'task_groups',
+            value: fullData.taskGroups,
             updated_at: timestamp,
             updated_by: user
           }, { onConflict: 'key' });
@@ -618,6 +658,26 @@ export const SupabaseService = {
     } catch (e: any) {
       console.error('Erro ao salvar no Supabase:', e);
       return { success: false, error: e.message };
+    }
+  },
+
+  async saveTaskGroups(taskGroups: any[], user: string = 'Sistema'): Promise<boolean> {
+    const client = this.getClient();
+    if (!client) return false;
+    try {
+      const timestamp = new Date().toISOString();
+      const { error } = await client
+        .from('app_config')
+        .upsert({
+          key: 'task_groups',
+          value: taskGroups,
+          updated_at: timestamp,
+          updated_by: user
+        }, { onConflict: 'key' });
+      return !error;
+    } catch (e) {
+      console.warn('Erro ao salvar grupos no Supabase:', e);
+      return false;
     }
   },
 

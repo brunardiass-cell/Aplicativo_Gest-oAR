@@ -170,11 +170,11 @@ export const PushNotificationSettingsModal: React.FC<PushNotificationSettingsMod
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 Notificações Inteligentes & PWA
                 <span className="px-2 py-0.5 bg-teal-500/30 text-teal-200 text-[10px] font-black rounded-full uppercase tracking-wider">
-                  09h00 Exclusivo
+                  09h00 às 17h00
                 </span>
               </h3>
               <p className="text-xs text-teal-200/80">
-                Alertas automáticos de atividades críticas no celular e computador
+                Alertas de atividades críticas no celular e computador (com teste a qualquer momento)
               </p>
             </div>
           </div>
@@ -324,30 +324,26 @@ export const PushNotificationSettingsModal: React.FC<PushNotificationSettingsMod
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-teal-900">
-                      Regra Oficial de Disparo: Exclusivamente às 09h00
+                      Janela de Notificações: das 09h00 às 17h00 (Horário Comercial)
                     </h4>
                     <p className="text-[11px] text-teal-800 mt-0.5 leading-relaxed">
-                      Para evitar interrupções inadequadas e garantir pontualidade na rotina de laboratório e gestão, as notificações automáticas obedecem a parâmetros estritos:
+                      Alertas automáticos para atividades críticas durante o expediente de laboratório e gestão regulatória:
                     </p>
                   </div>
                 </div>
 
                 <div className="space-y-2 text-[11px] text-teal-950 bg-white/70 p-3 rounded-xl border border-teal-200/60">
                   <div className="flex items-start gap-2">
-                    <span className="font-bold text-teal-700 shrink-0">1. Horário Fixo:</span>
-                    <span>Disparos automáticos ocorrem <strong>apenas às 09h00</strong> (Horário Oficial de Brasília / America/Sao_Paulo).</span>
+                    <span className="font-bold text-teal-700 shrink-0">1. Janela Ativa:</span>
+                    <span>Disparos automáticos ocorrem no expediente <strong>entre 09h00 e 17h00</strong> (Horário Oficial de Brasília / America/Sao_Paulo).</span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <span className="font-bold text-teal-700 shrink-0">2. Escopo Crítico:</span>
-                    <span>Apenas atividades com a marcação <strong>Crítica (isCritical)</strong> e status pendente/em andamento são notificadas. Atividades concluídas ou canceladas são excluídas.</span>
+                    <span className="font-bold text-teal-700 shrink-0">2. Atividades Críticas:</span>
+                    <span>Apenas atividades com a marcação <strong>Crítica (isCritical)</strong> e status pendente/em andamento são alertadas. Atividades concluídas ou canceladas são excluídas.</span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <span className="font-bold text-teal-700 shrink-0">3. Janela Inviolável:</span>
-                    <span>Se uma atividade for marcada como crítica após as 09h00, ela aguardará a janela das 09h00 do dia seguinte. Nunca ocorrem disparos fora do horário programado.</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-bold text-teal-700 shrink-0">4. Trava Diária:</span>
-                    <span>O sistema armazena uma trava centralizada garantindo <strong>exatamente 1 envio por dia</strong>.</span>
+                    <span className="font-bold text-teal-700 shrink-0">3. Teste Imediato a Qualquer Hora:</span>
+                    <span>Para seus testes, o botão <strong>"Testar Notificação Agora"</strong> funciona a qualquer momento (sem restrição de horário), enviando o alerta diretamente para os aparelhos conectados.</span>
                   </div>
                 </div>
 
@@ -358,10 +354,8 @@ export const PushNotificationSettingsModal: React.FC<PushNotificationSettingsMod
                       <strong>{statusData.currentBrasiliaTime}</strong>
                     </div>
                     <div>
-                      <span>Ciclo de hoje: </span>
-                      <strong className={statusData.alreadyExecutedToday ? 'text-emerald-700' : 'text-slate-600'}>
-                        {statusData.alreadyExecutedToday ? 'Executado às 09h00' : 'Aguardando 09h00'}
-                      </strong>
+                      <span>Janela: </span>
+                      <strong className="text-emerald-700">09:00 às 17:00</strong>
                     </div>
                   </div>
                 )}
