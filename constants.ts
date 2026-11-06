@@ -89,7 +89,15 @@ export const getMacroIconComponent = (key?: string) => {
   return found ? found.icon : FlaskConical;
 };
 
-export const DEFAULT_TASK_GROUPS: TaskGroup[] = [];
+export const INITIAL_BRUNA_TASK_GROUPS: TaskGroup[] = [
+  { id: 'group_chagas', name: 'Chagas', projectName: 'Vacina doença de Chagas – TRASP', color: '#0d9488', createdAt: new Date().toISOString(), createdBy: 'Bruna' },
+  { id: 'group_unimav', name: 'UniMaV', projectName: 'Vacina Malaria Universal – UniMaV', color: '#0d9488', createdAt: new Date().toISOString(), createdBy: 'Bruna' },
+  { id: 'group_spin_utg', name: 'SpiN-UTG', projectName: 'Vacina doença de Chagas – TRASP', color: '#0d9488', createdAt: new Date().toISOString(), createdBy: 'Bruna' },
+  { id: 'group_imunotera', name: 'Imunotera', projectName: 'Geral', color: '#0d9488', createdAt: new Date().toISOString(), createdBy: 'Bruna' },
+  { id: 'group_geral', name: 'Geral', projectName: 'Geral', color: '#0d9488', createdAt: new Date().toISOString(), createdBy: 'Bruna' }
+];
+
+export const DEFAULT_TASK_GROUPS: TaskGroup[] = INITIAL_BRUNA_TASK_GROUPS;
 
 export const DEFAULT_APP_USERS: AppUser[] = [
   {

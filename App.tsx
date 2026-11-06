@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
 import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity, RegulatoryEvidence, MacroActivityConfig, RegulatoryInfoItem, RepeatableRecord, RegulatoryNarrative, RegulatoryDocument, Meeting, DossierContribution, ProjectContributionItem, MeetingActionItem, TaskGroup } from './types';
-import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES, DEFAULT_MEETINGS, DEFAULT_ACTIVITY_PLANS, DEFAULT_TASK_GROUPS, isNameMatch, getAccountEmails } from './constants';
+import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES, DEFAULT_MEETINGS, DEFAULT_ACTIVITY_PLANS, DEFAULT_TASK_GROUPS, INITIAL_BRUNA_TASK_GROUPS, isNameMatch, getAccountEmails } from './constants';
 import { MeetingsManager } from './components/MeetingsManager';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
@@ -93,7 +93,7 @@ const App: React.FC = () => {
   const [regulatorySubjects, setRegulatorySubjects] = useState<RegulatorySubject[]>([]);
   const [currentModule, setCurrentModule] = useState<'activities_projects' | 'regulatory_standards' | 'vaccines_components'>('activities_projects');
   const [hasChosenModule, setHasChosenModule] = useState<boolean>(true);
-  const [vaccineTab, setVaccineTab] = useState<'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog' | 'impurities'>('dashboard');
+  const [vaccineTab, setVaccineTab] = useState<'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'explorer' | 'catalog' | 'impurities'>('dashboard');
   const [vaccineCandidates, setVaccineCandidates] = useState<VaccineCandidate[]>(DEFAULT_VACCINE_CANDIDATES);
   const [vaccineComponents, setVaccineComponents] = useState<VaccineComponent[]>(DEFAULT_VACCINE_COMPONENTS);
   const [formulationBatches, setFormulationBatches] = useState<FormulationBatch[]>(DEFAULT_FORMULATION_BATCHES);
@@ -106,15 +106,35 @@ const App: React.FC = () => {
   const [regulatoryDocs, setRegulatoryDocs] = useState<RegulatoryDocument[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>(DEFAULT_MEETINGS);
   const [dossierContributions, setDossierContributions] = useState<DossierContribution[]>([]);
-  const [taskGroups, setTaskGroups] = useState<TaskGroup[]>(() => {
+  // Grupos de atividades independentes por perfil
+  const [profileTaskGroupsMap, setProfileTaskGroupsMap] = useState<Record<string, TaskGroup[]>>(() => {
     try {
-      const saved = localStorage.getItem('ctvacinas_task_groups');
+      const saved = localStorage.getItem('ctvacinas_profile_task_groups');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (parsed && typeof parsed === 'object') return parsed;
       }
     } catch (e) {}
-    return DEFAULT_TASK_GROUPS;
+
+    const brunaSaved = (() => {
+      try {
+        const b = localStorage.getItem('ctvacinas_task_groups_bruna') || localStorage.getItem('ctvacinas_task_groups');
+        if (b) {
+          const parsed = JSON.parse(b);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {}
+      return INITIAL_BRUNA_TASK_GROUPS;
+    })();
+
+    return {
+      'bruna': brunaSaved,
+      'bruna dias': brunaSaved
+    };
+  });
+
+  const [taskGroups, setTaskGroups] = useState<TaskGroup[]>(() => {
+    return INITIAL_BRUNA_TASK_GROUPS;
   });
   const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
   const [dataVersion, setDataVersion] = useState<string | null>(null);

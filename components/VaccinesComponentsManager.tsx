@@ -55,8 +55,8 @@ interface VaccinesComponentsManagerProps {
   onUpdateImpurities?: (impurities: VaccineImpurity[]) => void;
   projects?: any[];
   currentUser?: any;
-  activeTab?: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog' | 'impurities';
-  onTabChange?: (tab: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog' | 'impurities') => void;
+  activeTab?: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'explorer' | 'catalog' | 'impurities';
+  onTabChange?: (tab: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'explorer' | 'catalog' | 'impurities') => void;
   onSwitchModule?: () => void;
 }
 
@@ -75,7 +75,7 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
   onSwitchModule
 }) => {
   // Main Module Tabs
-  const [internalMainTab, setInternalMainTab] = useState<'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog' | 'impurities'>('dashboard');
+  const [internalMainTab, setInternalMainTab] = useState<'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'explorer' | 'catalog' | 'impurities'>('dashboard');
   const mainTab = activeTab || internalMainTab;
   const setMainTab = onTabChange || setInternalMainTab;
   
@@ -119,10 +119,6 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
   const [spreadsheetText, setSpreadsheetText] = useState('');
   const [spreadsheetStatus, setSpreadsheetStatus] = useState<'idle' | 'success'>('idle');
 
-  // PDF Import State
-  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
-  const [pdfProcessing, setPdfProcessing] = useState(false);
-  const [pdfResult, setPdfResult] = useState<string | null>(null);
 
   // Explorer State
   const [explorerFilter, setExplorerFilter] = useState('');
@@ -449,90 +445,6 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
     } else {
       alert('Nenhum registro no formato correto foi identificado. Verifique os dados e tente novamente.');
     }
-  };
-
-  // Process PDF with Real Gemini AI API
-  const handleProcessPdfWithGemini = async () => {
-    if (pdfFiles.length === 0) {
-      alert('Selecione ou solte ao menos um arquivo PDF de bula.');
-      return;
-    }
-
-    const file = pdfFiles[0];
-    setPdfProcessing(true);
-    setPdfResult(null);
-
-    try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const base64Data = reader.result as string;
-          const response = await fetch('/api/parse-bula-pdf', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              pdfBase64: base64Data,
-              filename: file.name
-            })
-          });
-
-          const data = await response.json();
-          setPdfProcessing(false);
-
-          if (!response.ok || data.error) {
-            alert('Erro ao processar PDF com Gemini: ' + (data.error || 'Falha no servidor.'));
-            setPdfResult(`Erro na análise da bula PDF: ${data.error || 'Erro desconhecido.'}`);
-          } else {
-            setPdfResult(data.text);
-          }
-        } catch (err: any) {
-          setPdfProcessing(false);
-          alert('Erro de comunicação ao enviar PDF: ' + err.message);
-          setPdfResult('Erro na análise da bula PDF.');
-        }
-      };
-
-      reader.onerror = () => {
-        setPdfProcessing(false);
-        alert('Erro ao carregar o arquivo PDF do seu sistema.');
-      };
-
-      reader.readAsDataURL(file);
-    } catch (err: any) {
-      setPdfProcessing(false);
-      alert('Erro inesperado: ' + err.message);
-    }
-  };
-
-  // Helper to import extracted PDF data directly into catalog
-  const handleImportExtractedPdfData = () => {
-    if (!pdfResult) return;
-    const now = new Date().toISOString().split('T')[0];
-    
-    // Extract candidate name or default to file name
-    const nameMatch = pdfResult.match(/Nome Comercial.*?:?\s*(.*)/i) || pdfResult.match(/Marca.*?:?\s*(.*)/i);
-    const extractedName = nameMatch && nameMatch[1]?.trim() ? nameMatch[1].trim().replace(/[\*\_]/g, '') : (pdfFiles[0]?.name.replace('.pdf', '') || 'Vacina Bula Importada');
-
-    const newCand: VaccineCandidate = {
-      id: `cand_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-      name: extractedName,
-      codeName: `BUL-PDF-${Date.now().toString().slice(-4)}`,
-      platform: pdfResult.toLowerCase().includes('rnam') || pdfResult.toLowerCase().includes('mrna') ? 'RNA/mRNA' : pdfResult.toLowerCase().includes('vetor') ? 'Vetor Viral' : 'Proteína Recombinante',
-      targetPathogen: 'Definido na Bula PDF',
-      phase: 'Registro / Produção',
-      status: 'Aprovado',
-      leadResearcher: 'Titular / Bula Regulamentada',
-      description: `Importado via Bula PDF (${pdfFiles[0]?.name || 'Bula'}).\n\nResumo da Extração Gemini:\n${pdfResult.slice(0, 400)}...`,
-      associatedComponentIds: [],
-      anvisaStatus: 'Bula Registrada ANVISA',
-      technicalNotes: pdfResult,
-      createdDate: now,
-      updatedDate: now
-    };
-
-    onUpdateCandidates([newCand, ...candidates]);
-    alert(`Sucesso! A vacina "${extractedName}" foi cadastrada no catálogo com dados extraídos do PDF.`);
-    setMainTab('catalog');
   };
 
   const phasesList: VaccinePhase[] = [
@@ -1293,91 +1205,6 @@ export const VaccinesComponentsManager: React.FC<VaccinesComponentsManagerProps>
         </div>
       )}
 
-      {/* ==================== 4. IMPORTAR PDF VIEW ==================== */}
-      {mainTab === 'import_pdf' && (
-        <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-slate-200 shadow-xs space-y-6">
-          <div>
-            <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">IMPORTAR PDF</h2>
-            <p className="text-xs font-bold text-slate-400">Extração inteligente de PDF de bulas via Gemini</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-200 space-y-4">
-              <div className="flex items-center gap-2 text-teal-700 font-black text-sm uppercase">
-                <Sparkles size={18} /> Leitor Inteligente de Bulas em PDF (Gemini AI)
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Selecione um ou mais arquivos em formato PDF de bulas ou documentos regulatórios de vacinas. O Gemini analisará o documento completo e coletará dezenas de informações estruturadas automaticamente.
-              </p>
-
-              <div
-                onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = '.pdf';
-                  input.onchange = (e: any) => {
-                    if (e.target.files?.[0]) setPdfFiles([e.target.files[0]]);
-                  };
-                  input.click();
-                }}
-                className="p-8 border-2 border-dashed border-slate-300 hover:border-teal-500 rounded-2xl text-center cursor-pointer transition bg-white space-y-2"
-              >
-                <Upload size={32} className="mx-auto text-slate-400" />
-                <p className="text-xs font-black uppercase text-slate-700">Arraste e solte ou clique aqui</p>
-                <p className="text-[10px] text-slate-400">Formatos suportados: Apenas arquivos .PDF</p>
-                {pdfFiles.length > 0 && (
-                  <span className="inline-block px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold">
-                    Selecionado: {pdfFiles[0].name}
-                  </span>
-                )}
-              </div>
-
-              <button
-                onClick={handleProcessPdfWithGemini}
-                disabled={pdfProcessing}
-                className="w-full py-3 bg-slate-900 hover:bg-teal-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-md flex items-center justify-center gap-2"
-              >
-                <Sparkles size={16} /> {pdfProcessing ? 'Analisando PDF com Gemini...' : 'Processar Lote de PDFs com Gemini'}
-              </button>
-            </div>
-
-            {/* Ficha de Revisão Vazia / Output */}
-            <div className="p-6 bg-white rounded-3xl border border-slate-200 flex flex-col justify-start items-start text-left space-y-4">
-              {pdfResult ? (
-                <div className="w-full space-y-4">
-                  <div className="flex items-center justify-between border-b border-teal-200 pb-3">
-                    <div className="flex items-center gap-2 text-teal-900 font-black text-xs uppercase">
-                      <Sparkles size={16} className="text-teal-600" /> Relatório de Extração da Bula (Gemini AI)
-                    </div>
-                    <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold">
-                      Processado com Sucesso
-                    </span>
-                  </div>
-
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-left text-xs font-mono text-slate-800 whitespace-pre-line w-full max-h-[420px] overflow-y-auto custom-scrollbar leading-relaxed">
-                    {pdfResult}
-                  </div>
-
-                  <button
-                    onClick={handleImportExtractedPdfData}
-                    className="w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition shadow-lg flex items-center justify-center gap-2"
-                  >
-                    <Plus size={16} /> Cadastrar Vacina & Componentes Extraídos no Catálogo
-                  </button>
-                </div>
-              ) : (
-                <div className="w-full py-12 flex flex-col items-center justify-center text-center space-y-3">
-                  <FileText size={48} className="text-slate-300" />
-                  <h3 className="text-xs font-black uppercase text-slate-600">Ficha de Revisão Vazia</h3>
-                  <p className="text-[11px] text-slate-400 max-w-xs leading-relaxed">
-                    Adicione seus PDFs de bulas e clique em "Processar Lote de PDFs com Gemini" para executar a extração automatizada de ingredientes.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ==================== IMPUREZAS VIEW ==================== */}
       {mainTab === 'impurities' && (

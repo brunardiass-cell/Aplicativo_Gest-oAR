@@ -201,6 +201,7 @@ export interface MeetingActionItem {
   convertedActivityId?: string;
   convertedToTask?: boolean;
   convertedTaskId?: string;
+  taskId?: string;
   actionDestination?: 'project' | 'task' | 'meeting_only';
   targetProjectId?: string;
   targetProjectName?: string;
@@ -1156,4 +1157,16 @@ export interface RegulatoryMarkerMapping {
   sourceCategory: KnowledgeCategory | 'Registro Repetitivo';
   sourceKey: string;
   description?: string;
+}
+
+export interface MaintenancePeriod {
+  id: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  title: string;
+  description?: string;
+  status: 'Programada' | 'Em Andamento' | 'Concluída';
+  impactLevel?: 'Baixo' | 'Médio' | 'Alto' | 'Indisponibilidade Total';
+  createdAt?: string;
+  createdBy?: string;
 }

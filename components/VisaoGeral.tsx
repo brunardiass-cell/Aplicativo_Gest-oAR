@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Task, Project, TeamMember, Priority, Status, ActivityType, TaskNote } from '../types';
+import { Task, Project, TeamMember, Priority, Status, ActivityType, TaskNote, MaintenancePeriod } from '../types';
 import { TaskNotesModal } from './TaskNotesModal';
 import { 
   Calendar as CalendarIcon, 
@@ -16,6 +16,7 @@ import {
   ChevronRight, 
   Eye, 
   Edit2, 
+  Edit3,
   FolderKanban, 
   X, 
   Check, 
@@ -27,7 +28,9 @@ import {
   ChevronDown,
   Plus,
   Star,
-  UserCheck
+  UserCheck,
+  Wrench,
+  Trash2
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -81,6 +84,43 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
   const [calendarViewMode, setCalendarViewMode] = useState<'day' | 'month' | 'year'>('month');
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
   const [selectedCalendarDateStr, setSelectedCalendarDateStr] = useState<string | null>(null);
+
+  // Períodos de Manutenção do Sistema no Calendário de Acompanhamento
+  const [maintenancePeriods, setMaintenancePeriods] = useState<MaintenancePeriod[]>(() => {
+    try {
+      const saved = localStorage.getItem('ctvacinas_maintenance_periods');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [
+      {
+        id: 'maint_init_1',
+        startDate: '2026-10-25',
+        endDate: '2026-10-27',
+        title: 'Manutenção de Infraestrutura e Banco de Dados',
+        description: 'Janela de atualização preventiva e sincronização de servidores.',
+        status: 'Concluída',
+        impactLevel: 'Indisponibilidade Total',
+        createdAt: '2026-10-24T12:00:00Z',
+        createdBy: 'Suporte Técnico'
+      }
+    ];
+  });
+  const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
+  const [editingMaintenance, setEditingMaintenance] = useState<Partial<MaintenancePeriod> | null>(null);
+
+  const saveMaintenancePeriods = (updated: MaintenancePeriod[]) => {
+    setMaintenancePeriods(updated);
+    try {
+      localStorage.setItem('ctvacinas_maintenance_periods', JSON.stringify(updated));
+    } catch (e) {}
+  };
+
+  const getMaintenanceForDate = (dateStr: string) => {
+    return maintenancePeriods.filter(m => dateStr >= m.startDate && dateStr <= m.endDate);
+  };
 
   // Filtros avançados do histórico completo
   const [searchTerm, setSearchTerm] = useState('');
@@ -537,8 +577,8 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                     </button>
                   </div>
 
-                  {/* Setas de navegação */}
-                  <div className="flex items-center gap-1">
+                  {/* Setas de navegação & Botão de Manutenção */}
+                  <div className="flex items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => {
@@ -572,6 +612,26 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                     >
                       <ChevronRight size={14} />
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingMaintenance({
+                          startDate: today.toISOString().split('T')[0],
+                          endDate: today.toISOString().split('T')[0],
+                          title: '',
+                          description: '',
+                          status: 'Programada',
+                          impactLevel: 'Indisponibilidade Total'
+                        });
+                        setIsMaintenanceModalOpen(true);
+                      }}
+                      className="ml-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition shadow-2xs"
+                      title="Gerenciar períodos de manutenção do sistema"
+                    >
+                      <Wrench size={12} className="text-amber-600" />
+                      <span>Manutenção</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -600,6 +660,8 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                         const count = userTasks.filter(t => t.completionDate === dateStr).length;
                         const isSelected = selectedCalendarDateStr === dateStr;
                         const isToday = today.toISOString().split('T')[0] === dateStr;
+                        const dayMaintenances = getMaintenanceForDate(dateStr);
+                        const isUnderMaintenance = dayMaintenances.length > 0;
 
                         cells.push(
                           <button
@@ -609,14 +671,27 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                             className={`h-9 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center relative ${
                               isSelected
                                 ? 'bg-teal-600 text-white border-teal-600 shadow-2xs font-black'
+                                : isUnderMaintenance
+                                ? 'bg-amber-50/90 border-amber-300 text-amber-950 font-black hover:bg-amber-100'
                                 : isToday
                                 ? 'bg-teal-50 border-teal-300 text-teal-900'
                                 : 'bg-slate-50/80 border-slate-200/80 hover:bg-slate-100 text-slate-700'
                             }`}
+                            title={isUnderMaintenance ? `Período em Manutenção: ${dayMaintenances.map(m => m.title).join(' | ')}` : undefined}
                           >
                             <span>{d}</span>
-                            {count > 0 && (
-                              <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-teal-500'}`} />
+                            <div className="flex items-center gap-0.5 mt-0.5">
+                              {count > 0 && (
+                                <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-teal-500'}`} />
+                              )}
+                              {isUnderMaintenance && (
+                                <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-amber-300' : 'bg-amber-600'}`} />
+                              )}
+                            </div>
+                            {isUnderMaintenance && !isSelected && (
+                              <span className="absolute top-0.5 right-1 text-[8px] text-amber-600 font-black">
+                                🔧
+                              </span>
                             )}
                           </button>
                         );
@@ -624,6 +699,95 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                       return cells;
                     })()}
                   </div>
+
+                  {/* Informativo de Manutenção abaixo do grid do calendário */}
+                  {maintenancePeriods.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-slate-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-1.5 text-[11px] font-black uppercase text-amber-900 tracking-wider">
+                          <Wrench size={13} className="text-amber-600" />
+                          <span>Períodos de Manutenção do Sistema ({maintenancePeriods.length})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingMaintenance({
+                              startDate: today.toISOString().split('T')[0],
+                              endDate: today.toISOString().split('T')[0],
+                              title: '',
+                              description: '',
+                              status: 'Programada',
+                              impactLevel: 'Indisponibilidade Total'
+                            });
+                            setIsMaintenanceModalOpen(true);
+                          }}
+                          className="text-[10px] font-black uppercase text-amber-700 hover:text-amber-900 flex items-center gap-1"
+                        >
+                          <Plus size={12} /> Adicionar Período
+                        </button>
+                      </div>
+
+                      <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                        {maintenancePeriods.map(mp => {
+                          const startFormatted = mp.startDate.split('-').reverse().join('/');
+                          const endFormatted = mp.endDate.split('-').reverse().join('/');
+                          return (
+                            <div 
+                              key={mp.id}
+                              className="p-2.5 bg-amber-50/70 hover:bg-amber-100/60 border border-amber-200/80 rounded-xl text-xs flex items-center justify-between gap-3 transition"
+                            >
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-extrabold text-amber-950">{mp.title}</span>
+                                  <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
+                                    mp.status === 'Em Andamento' ? 'bg-amber-200 text-amber-900' :
+                                    mp.status === 'Concluída' ? 'bg-emerald-100 text-emerald-800' :
+                                    'bg-slate-200 text-slate-700'
+                                  }`}>
+                                    {mp.status}
+                                  </span>
+                                  {mp.impactLevel && (
+                                    <span className="text-[10px] text-amber-800/80 font-bold">
+                                      • {mp.impactLevel}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-amber-900/70 font-semibold">
+                                  Período: <strong>{startFormatted}</strong> até <strong>{endFormatted}</strong>
+                                  {mp.description && ` — ${mp.description}`}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingMaintenance(mp);
+                                    setIsMaintenanceModalOpen(true);
+                                  }}
+                                  className="p-1 text-amber-700 hover:text-amber-900 hover:bg-amber-200/60 rounded-lg transition"
+                                  title="Editar período"
+                                >
+                                  <Edit3 size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (window.confirm(`Deseja remover o registro de manutenção "${mp.title}"?`)) {
+                                      saveMaintenancePeriods(maintenancePeriods.filter(item => item.id !== mp.id));
+                                    }
+                                  }}
+                                  className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-100 rounded-lg transition"
+                                  title="Excluir período"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1535,6 +1699,188 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
             }
           }}
         />
+      )}
+
+      {/* MODAL DE CADASTRO E GERENCIAMENTO DE PERÍODOS DE MANUTENÇÃO */}
+      {isMaintenanceModalOpen && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in"
+          onClick={() => { setIsMaintenanceModalOpen(false); setEditingMaintenance(null); }}
+        >
+          <div 
+            onClick={e => e.stopPropagation()}
+            className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg p-5 sm:p-6 space-y-4 my-auto animate-in zoom-in-95"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                  <Wrench size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase text-slate-900 tracking-tight">
+                    {editingMaintenance?.id ? 'Editar Período de Manutenção' : 'Registrar Período de Manutenção'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Acompanhamento visual de indisponibilidade e manutenção no calendário
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setIsMaintenanceModalOpen(false); setEditingMaintenance(null); }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                if (!editingMaintenance?.title?.trim()) {
+                  alert('Por favor, informe o título ou motivo da manutenção.');
+                  return;
+                }
+                if (!editingMaintenance.startDate || !editingMaintenance.endDate) {
+                  alert('Por favor, informe a data de início e de término do período.');
+                  return;
+                }
+                if (editingMaintenance.startDate > editingMaintenance.endDate) {
+                  alert('A data de início não pode ser posterior à data de término.');
+                  return;
+                }
+
+                if (editingMaintenance.id) {
+                  const updated = maintenancePeriods.map(mp => 
+                    mp.id === editingMaintenance.id ? (editingMaintenance as MaintenancePeriod) : mp
+                  );
+                  saveMaintenancePeriods(updated);
+                } else {
+                  const newPeriod: MaintenancePeriod = {
+                    id: `maint_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+                    startDate: editingMaintenance.startDate,
+                    endDate: editingMaintenance.endDate,
+                    title: editingMaintenance.title.trim(),
+                    description: editingMaintenance.description?.trim() || '',
+                    status: editingMaintenance.status || 'Programada',
+                    impactLevel: editingMaintenance.impactLevel || 'Indisponibilidade Total',
+                    createdAt: new Date().toISOString(),
+                    createdBy: currentUser && currentUser !== 'Todos' ? currentUser : 'Usuário'
+                  };
+                  saveMaintenancePeriods([newPeriod, ...maintenancePeriods]);
+                }
+
+                setIsMaintenanceModalOpen(false);
+                setEditingMaintenance(null);
+              }}
+              className="space-y-3.5 text-xs"
+            >
+              <div>
+                <label className="text-[11px] font-black uppercase text-slate-600 block mb-1">
+                  Motivo / Título da Manutenção *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editingMaintenance?.title || ''}
+                  onChange={e => setEditingMaintenance(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="Ex: Manutenção de Servidores e Banco de Dados"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-amber-500 focus:bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-black uppercase text-slate-600 block mb-1">
+                    Data Início *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={editingMaintenance?.startDate || ''}
+                    onChange={e => setEditingMaintenance(prev => ({ ...prev, startDate: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-amber-500 focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-black uppercase text-slate-600 block mb-1">
+                    Data Término *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={editingMaintenance?.endDate || ''}
+                    onChange={e => setEditingMaintenance(prev => ({ ...prev, endDate: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-amber-500 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-black uppercase text-slate-600 block mb-1">
+                    Status
+                  </label>
+                  <select
+                    value={editingMaintenance?.status || 'Programada'}
+                    onChange={e => setEditingMaintenance(prev => ({ ...prev, status: e.target.value as any }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-amber-500"
+                  >
+                    <option value="Programada">Programada</option>
+                    <option value="Em Andamento">Em Andamento</option>
+                    <option value="Concluída">Concluída</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-black uppercase text-slate-600 block mb-1">
+                    Nível de Impacto
+                  </label>
+                  <select
+                    value={editingMaintenance?.impactLevel || 'Indisponibilidade Total'}
+                    onChange={e => setEditingMaintenance(prev => ({ ...prev, impactLevel: e.target.value as any }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-amber-500"
+                  >
+                    <option value="Indisponibilidade Total">Indisponibilidade Total</option>
+                    <option value="Alto">Alto</option>
+                    <option value="Médio">Médio</option>
+                    <option value="Baixo">Baixo</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-black uppercase text-slate-600 block mb-1">
+                  Detalhes / Observações
+                </label>
+                <textarea
+                  rows={2}
+                  value={editingMaintenance?.description || ''}
+                  onChange={e => setEditingMaintenance(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Descreva as ações realizadas ou o motivo da parada..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 outline-none focus:border-amber-500 focus:bg-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => { setIsMaintenanceModalOpen(false); setEditingMaintenance(null); }}
+                  className="px-4 py-2 text-slate-500 hover:text-slate-800 font-bold transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black uppercase tracking-wider transition shadow-sm flex items-center gap-1.5"
+                >
+                  <Check size={14} />
+                  <span>Salvar Período</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
     </div>

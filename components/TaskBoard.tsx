@@ -161,13 +161,16 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   });
 
   const groups = useMemo(() => {
-    return (groupsProp && groupsProp.length > 0) ? groupsProp : internalGroups;
+    if (groupsProp !== undefined) return groupsProp;
+    return internalGroups;
   }, [groupsProp, internalGroups]);
 
   // Salvar grupos localmente e sincronizar com o banco de dados Supabase
   const saveGroupsToStorage = (newGroups: TaskGroup[]) => {
     setInternalGroups(newGroups);
+    const profileKey = (currentUser || 'bruna').trim().toLowerCase();
     try {
+      localStorage.setItem(`ctvacinas_task_groups_${profileKey}`, JSON.stringify(newGroups));
       localStorage.setItem('ctvacinas_task_groups', JSON.stringify(newGroups));
     } catch (e) {
       console.error('Erro ao salvar grupos:', e);
@@ -271,19 +274,28 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   const handleConfirmDeleteGroup = () => {
     if (!deletingGroup) return;
 
-    // Se existirem atividades associadas, transferi-las para o grupo de destino
+    // Se existirem atividades associadas, transferir ou desvincular do grupo SEM alterar o projeto original de nenhuma atividade
     if (tasksInDeletingGroup.length > 0) {
-      const targetGroup = groups.find(g => g.id === transferTargetGroupId && g.id !== deletingGroup.id)
-        || groups.find(g => g.id !== deletingGroup.id)
-        || { id: 'group_geral', name: 'Geral', projectName: undefined };
+      const targetGroup = transferTargetGroupId 
+        ? groups.find(g => g.id === transferTargetGroupId && g.id !== deletingGroup.id)
+        : null;
 
       tasksInDeletingGroup.forEach(t => {
-        onSaveTask({
-          ...t,
-          groupId: targetGroup.id,
-          group: targetGroup.name,
-          project: t.project || targetGroup.projectName || 'Geral'
-        });
+        if (targetGroup) {
+          onSaveTask({
+            ...t,
+            groupId: targetGroup.id,
+            group: targetGroup.name
+            // Mantém t.project original intacto! Se apagar de um projeto/grupo não afeta o projeto de outro
+          });
+        } else {
+          onSaveTask({
+            ...t,
+            groupId: undefined,
+            group: undefined
+            // Mantém t.project original intacto!
+          });
+        }
       });
     }
 
@@ -487,19 +499,27 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     destination: 'project' | 'task' | 'meeting_only'
   ) => {
     if (!actionText.trim()) return;
+    const cleanAction = actionText.trim();
+    const actionId = 'act_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    const deterministicTaskId = `task_enc_${actionId}`;
+
     const newAct: MeetingActionItem = {
-      id: 'act_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-      action: actionText.trim(),
+      id: actionId,
+      action: cleanAction,
       responsible: resp.trim() || currentUser || 'Responsável',
       dueDate: dueDate || quickMeetingDate || new Date().toISOString().split('T')[0],
       status: 'Pendente',
       actionDestination: destination,
       convertedToTask: destination === 'task',
-      convertedToActivity: destination === 'project'
+      convertedToActivity: destination === 'project',
+      convertedTaskId: destination === 'task' ? deterministicTaskId : undefined,
+      taskId: destination === 'task' ? deterministicTaskId : undefined
     };
 
     setQuickMeetingPautas(prev => prev.map(p => {
       if (p.id === pautaId) {
+        const alreadyExists = (p.actionItems || []).some(a => a.action.trim().toLowerCase() === cleanAction.toLowerCase());
+        if (alreadyExists) return p;
         return {
           ...p,
           actionItems: [...p.actionItems, newAct]
@@ -515,10 +535,17 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         ? (quickMeetingCustomProject.trim() || 'Outros Projetos')
         : (projects.find(p => p.id === quickMeetingProjectId)?.name || targetGroup.projectName || 'Geral');
 
+      // Prevenir duplicidade se já houver uma tarefa idêntica
+      const alreadyInTasks = tasks.some(t => 
+        !t.deleted && 
+        (t.id === deterministicTaskId || (t.activity.trim().toLowerCase() === cleanAction.toLowerCase() && t.project === projectAssociated))
+      );
+      if (alreadyInTasks) return;
+
       const newTaskFromAction: Task = {
-        id: `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        activity: actionText.trim(),
-        description: `Encaminhamento de reunião: "${actionText.trim()}"`,
+        id: deterministicTaskId,
+        activity: cleanAction,
+        description: `Encaminhamento de reunião: "${cleanAction}"`,
         project: projectAssociated,
         group: targetGroup.name,
         groupId: targetGroup.id,
@@ -605,11 +632,28 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     quickMeetingPautas.forEach(p => {
       (p.actionItems || []).forEach(ai => {
         if (ai.actionDestination === 'project' && onConvertToActivity && finalProjectId && finalProjectId !== 'outros') {
-          onConvertToActivity(finalProjectId, '', ai, undefined, undefined, ai.responsible, ai.dueDate);
+          if (!ai.convertedToActivity) {
+            onConvertToActivity(finalProjectId, '', ai, undefined, undefined, ai.responsible, ai.dueDate);
+            ai.convertedToActivity = true;
+          }
         } else if (ai.actionDestination === 'task') {
+          // Se já foi convertido na criação do item pelo botão "Adicionar nas Atividades", NÃO DUPLICAR!
+          if (ai.convertedToTask) {
+            return;
+          }
+          const taskDeterministicId = `task_enc_${ai.id}`;
+          const alreadyExists = tasks.some(t => 
+            !t.deleted && 
+            (t.id === taskDeterministicId || (t.activity.trim().toLowerCase() === ai.action.trim().toLowerCase() && t.project === finalProjectName))
+          );
+          if (alreadyExists) {
+            ai.convertedToTask = true;
+            return;
+          }
+
           const newTaskFromAction: Task = {
-            id: `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-            activity: ai.action,
+            id: taskDeterministicId,
+            activity: ai.action.trim(),
             description: `Encaminhamento da pauta: ${p.title} (${title})`,
             project: finalProjectName,
             group: targetGroup.name,
@@ -617,50 +661,60 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
             activityType: 'general',
             isReport: false,
             priority: 'Sem prioridade',
-            status: 'Planejada',
+            status: 'Em Andamento',
             requestDate: todayStr,
             plannedStartDate: todayStr,
-            completionDate: ai.dueDate || quickMeetingDate,
+            completionDate: ai.dueDate || quickMeetingDate || '',
             progress: 0,
             nextStep: '',
             projectLead: ai.responsible || (currentUser !== 'Todos' ? currentUser : 'Responsável'),
             collaborators: [],
-            updates: [],
+            updates: [
+              {
+                id: `note_${Date.now()}`,
+                date: new Date().toISOString(),
+                user: currentUser || 'Usuário',
+                note: 'Encaminhamento registrado via Notas Rápidas / Reunião.'
+              }
+            ],
             isRegulatoryContribution: false
           };
+          ai.convertedToTask = true;
           onSaveTask(newTaskFromAction);
         }
       });
     });
 
+    // Sempre registrar na central de reuniões com status Concluída (publicada)
+    if (onAddMeeting) {
+      onAddMeeting({
+        id: `meet_${Date.now()}`,
+        title,
+        date: quickMeetingDate || todayStr,
+        time: quickMeetingTime || '10:00',
+        location: quickMeetingCallLink || 'MS Teams / Sala',
+        type: 'Alinhamento',
+        status: 'Concluída',
+        projectId: finalProjectId,
+        projectName: finalProjectName,
+        moderator: quickMeetingResponsible || currentUser || 'Responsável',
+        participants: quickMeetingParticipants,
+        agendaItems: quickMeetingPautas.map(p => ({
+          id: p.id,
+          title: p.title,
+          objective: '',
+          context: '',
+          discussions: p.discussions || '',
+          decisions: p.decisions || '',
+          actionItems: p.actionItems || []
+        })),
+        minutesDocument: quickMeetingFreeNotes,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+    }
+
     if (meetingStartMode && onNavigateTab) {
-      if (onAddMeeting) {
-        onAddMeeting({
-          id: `meet_${Date.now()}`,
-          title,
-          date: quickMeetingDate,
-          time: quickMeetingTime,
-          location: quickMeetingCallLink || 'MS Teams / Sala',
-          type: 'Alinhamento',
-          status: 'Agendada',
-          projectId: finalProjectId,
-          projectName: finalProjectName,
-          moderator: quickMeetingResponsible || currentUser || 'Responsável',
-          participants: quickMeetingParticipants,
-          agendaItems: quickMeetingPautas.map(p => ({
-            id: p.id,
-            title: p.title,
-            objective: '',
-            context: '',
-            discussions: p.discussions || '',
-            decisions: p.decisions || '',
-            actionItems: p.actionItems || []
-          })),
-          minutesDocument: quickMeetingFreeNotes,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        });
-      }
       onNavigateTab('meetings');
     }
 
@@ -768,7 +822,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         time: quickMeetingTime || '10:00',
         location: quickMeetingCallLink.trim() || 'MS Teams / CTVacinas',
         type: 'Alinhamento',
-        status: 'Agendada',
+        status: 'Concluída',
         moderator: moderatorName,
         participants: participantsList,
         presentParticipants: [],

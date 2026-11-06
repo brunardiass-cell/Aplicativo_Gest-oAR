@@ -314,6 +314,19 @@ export const SupabaseService = {
 
       const effectiveTaskGroups = [...storedGroups, ...discoveredGroups];
 
+      // Mapeamento de grupos independentes por perfil
+      const profileTaskGroups: Record<string, any[]> = {};
+      Object.keys(configMap).forEach(key => {
+        if (key.startsWith('task_groups_') && Array.isArray(configMap[key])) {
+          const pKey = key.replace('task_groups_', '').toLowerCase().trim();
+          profileTaskGroups[pKey] = configMap[key];
+        }
+      });
+      if (effectiveTaskGroups.length > 0) {
+        profileTaskGroups['bruna'] = profileTaskGroups['bruna'] || effectiveTaskGroups;
+        profileTaskGroups['bruna dias'] = profileTaskGroups['bruna dias'] || effectiveTaskGroups;
+      }
+
       const fullData = {
         projects: projects || [],
         tasks: tasks || [],
@@ -337,6 +350,7 @@ export const SupabaseService = {
         notifications: notifications || [],
         logs: logs || [],
         taskGroups: effectiveTaskGroups.length > 0 ? effectiveTaskGroups : undefined,
+        profileTaskGroups,
         managerEmail: configMap.managerEmail || 'brunadias@ctvacinas.org'
       };
 
@@ -677,6 +691,27 @@ export const SupabaseService = {
       return !error;
     } catch (e) {
       console.warn('Erro ao salvar grupos no Supabase:', e);
+      return false;
+    }
+  },
+
+  async saveTaskGroupsForProfile(profileKey: string, taskGroups: any[], user: string = 'Sistema'): Promise<boolean> {
+    const client = this.getClient();
+    if (!client) return false;
+    try {
+      const timestamp = new Date().toISOString();
+      const cleanKey = `task_groups_${profileKey.toLowerCase().trim()}`;
+      const { error } = await client
+        .from('app_config')
+        .upsert({
+          key: cleanKey,
+          value: taskGroups,
+          updated_at: timestamp,
+          updated_by: user
+        }, { onConflict: 'key' });
+      return !error;
+    } catch (e) {
+      console.warn(`Erro ao salvar grupos do perfil ${profileKey} no Supabase:`, e);
       return false;
     }
   },

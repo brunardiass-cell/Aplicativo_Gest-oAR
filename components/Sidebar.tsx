@@ -39,8 +39,8 @@ interface SidebarProps {
   onSwitchModule?: () => void;
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
-  vaccineTab?: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog' | 'impurities';
-  onVaccineTabChange?: (tab: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'import_pdf' | 'explorer' | 'catalog' | 'impurities') => void;
+  vaccineTab?: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'explorer' | 'catalog' | 'impurities';
+  onVaccineTabChange?: (tab: 'dashboard' | 'manual_inclusion' | 'import_spreadsheet' | 'explorer' | 'catalog' | 'impurities') => void;
   onGoHome: () => void;
   onLogout: () => void;
   onSwitchProfile: () => void;
@@ -210,13 +210,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => { onVaccineTabChange?.('import_spreadsheet'); onClose?.(); }} 
                 icon={<FileSpreadsheet size={16} />} 
                 label="Catálogo & Bancos" 
-                isVaccine
-              />
-              <SidebarButton 
-                active={vaccineTab === 'import_pdf'} 
-                onClick={() => { onVaccineTabChange?.('import_pdf'); onClose?.(); }} 
-                icon={<FileUp size={16} />} 
-                label="Documentos" 
                 isVaccine
               />
             </nav>

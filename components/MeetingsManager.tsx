@@ -7,7 +7,7 @@ import { MeetingMinutesModal } from './MeetingMinutesModal';
 import { MeetingFullDetailView } from './MeetingFullDetailView';
 import { 
   Users, Plus, Search, Calendar, FileText, ShieldCheck, 
-  Settings, Clock, ArrowRight, Layers, Trash2, Edit, CheckCircle2, AlertCircle, Filter, RefreshCw, X, Folder, BookOpen, ExternalLink, MoreVertical, Play
+  Settings, Clock, ArrowRight, Layers, Trash2, Edit, CheckCircle2, AlertCircle, Filter, RefreshCw, X, Folder, BookOpen, ExternalLink, MoreVertical, Play, LayoutGrid, List
 } from 'lucide-react';
 
 interface MeetingsManagerProps {
@@ -52,6 +52,7 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
   const [projectFilter, setProjectFilter] = useState('Todos');
   const [typeFilter, setTypeFilter] = useState('Todos');
   const [statusFilter, setStatusFilter] = useState('Todos');
+  const [completedViewMode, setCompletedViewMode] = useState<'project' | 'grid'>('project');
   const [openMenuMeetingId, setOpenMenuMeetingId] = useState<string | null>(null);
 
   // Modals and Full View state
@@ -761,7 +762,7 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
               />
             </div>
 
-            {/* Select Filters */}
+            {/* Select Filters & View Mode Toggle */}
             <div className="flex flex-wrap items-center gap-3 text-xs font-bold">
               <select
                 value={projectFilter}
@@ -793,127 +794,435 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
                 onChange={e => setStatusFilter(e.target.value)}
                 className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 outline-none cursor-pointer"
               >
-                <option value="Todos">Todos os Status</option>
+                <option value="Todos">Todos os Status (Concluídas)</option>
+                <option value="Concluída">Concluída</option>
                 <option value="Agendada">Agendada</option>
                 <option value="Em Andamento">Em Andamento</option>
-                <option value="Concluída">Concluída</option>
                 <option value="Cancelada">Cancelada</option>
               </select>
+
+              {/* View Mode Toggle: Por Projeto vs Grade */}
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setCompletedViewMode('project')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                    completedViewMode === 'project'
+                      ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                  title="Organizar reuniões concluídas agrupadas por projeto"
+                >
+                  <Folder size={13} />
+                  <span>Por Projeto</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCompletedViewMode('grid')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                    completedViewMode === 'grid'
+                      ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                  title="Visualizar em grade de cards"
+                >
+                  <LayoutGrid size={13} />
+                  <span>Grade</span>
+                </button>
+              </div>
             </div>
 
           </div>
 
-          {/* Meetings Cards Grid */}
-          {filteredMeetings.length === 0 ? (
-            <div className="bg-white p-12 text-center rounded-3xl border border-dashed border-slate-200 space-y-3">
-              <Calendar size={40} className="mx-auto text-slate-300" />
-              <h4 className="text-slate-700 font-black text-sm uppercase">Nenhuma Reunião Encontrada</h4>
-              <p className="text-slate-400 text-xs font-medium max-w-sm mx-auto">
-                Clique no botão "Nova Reunião" para cadastrar o primeiro alinhamento ou ajuste seus filtros.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredMeetings.map(mtg => {
-                const proj = projects.find(p => p.id === mtg.projectId);
-                const projName = proj ? proj.name : (mtg.projectName || 'Projeto Geral');
-                const dateFormatted = mtg.date ? mtg.date.split('-').reverse().join('/') : 'Data N/I';
-                const hasRegulatoryImpact = mtg.agendaItems.some(a => a.hasRegulatoryImpact);
-                const actionCount = mtg.agendaItems.reduce((acc, ag) => acc + (ag.actionItems?.length || 0), 0);
+          {/* VIEW MODE 1: ORGANIZADA POR PROJETO (Padrão) */}
+          {completedViewMode === 'project' ? (
+            <div className="space-y-6">
+              {(() => {
+                const targetProjects = projectFilter !== 'Todos'
+                  ? accessibleProjects.filter(p => p.id === projectFilter)
+                  : accessibleProjects;
+
+                const accessibleProjectIds = new Set(accessibleProjects.map(p => p.id));
+                const otherCompletedMeetings = accessibleMeetings.filter(m => {
+                  const matchStatus = statusFilter === 'Todos' ? m.status === 'Concluída' : m.status === statusFilter;
+                  if (!matchStatus) return false;
+                  if (typeFilter !== 'Todos' && m.type !== typeFilter) return false;
+                  if (accessibleProjectIds.has(m.projectId)) return false;
+                  if (searchTerm.trim()) {
+                    const q = searchTerm.toLowerCase();
+                    const inTitle = m.title.toLowerCase().includes(q);
+                    const inProj = (m.projectName || '').toLowerCase().includes(q);
+                    const inMod = (m.moderator || '').toLowerCase().includes(q);
+                    if (!inTitle && !inProj && !inMod) return false;
+                  }
+                  return true;
+                });
+
+                if (targetProjects.length === 0 && otherCompletedMeetings.length === 0) {
+                  return (
+                    <div className="bg-white p-12 text-center rounded-3xl border border-dashed border-slate-200 space-y-3">
+                      <Calendar size={40} className="mx-auto text-slate-300" />
+                      <h4 className="text-slate-700 font-black text-sm uppercase">Nenhuma Reunião Concluída Encontrada</h4>
+                      <p className="text-slate-400 text-xs font-medium max-w-sm mx-auto">
+                        Nenhuma reunião concluída corresponde aos filtros selecionados.
+                      </p>
+                    </div>
+                  );
+                }
 
                 return (
-                  <div 
-                    key={mtg.id}
-                    className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-5"
-                  >
-                    
-                    {/* Card Top Header */}
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="px-3 py-1 bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-xl text-[10px] font-black uppercase tracking-wider">
-                          {projName}
-                        </span>
+                  <>
+                    {targetProjects.map(proj => {
+                      const projCompletedMeetings = accessibleMeetings.filter(m => {
+                        if (m.projectId !== proj.id) return false;
+                        const matchStatus = statusFilter === 'Todos' ? m.status === 'Concluída' : m.status === statusFilter;
+                        if (!matchStatus) return false;
+                        if (typeFilter !== 'Todos' && m.type !== typeFilter) return false;
+                        if (searchTerm.trim()) {
+                          const q = searchTerm.toLowerCase();
+                          const inTitle = m.title.toLowerCase().includes(q);
+                          const inMod = (m.moderator || '').toLowerCase().includes(q);
+                          if (!inTitle && !inMod) return false;
+                        }
+                        return true;
+                      }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-                        <span className={`px-2.5 py-1 rounded-xl text-[10px] font-bold uppercase ${
-                          mtg.status === 'Concluída' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
-                          mtg.status === 'Em Andamento' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
-                          'bg-slate-100 text-slate-700 border border-slate-200'
-                        }`}>
-                          {mtg.status}
-                        </span>
-                      </div>
+                      return (
+                        <div key={proj.id} className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-5">
+                          {/* Project Header */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                            <div className="flex items-center gap-3">
+                              <div className="w-11 h-11 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                                <Folder size={20} />
+                              </div>
+                              <div>
+                                <h4 className="text-base font-black text-slate-900 uppercase tracking-tight">{proj.name}</h4>
+                                <p className="text-xs text-slate-500 font-bold">
+                                  Líder: {proj.responsible || 'Não definido'} • {proj.macroActivities?.length || 0} Macroatividades
+                                </p>
+                              </div>
+                            </div>
 
-                      <h3 className="text-base font-black text-slate-900 leading-snug">
-                        {mtg.title}
-                      </h3>
+                            <div className="flex items-center gap-2 text-xs font-bold self-start sm:self-center">
+                              <span className="px-3.5 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-2xl font-black">
+                                {projCompletedMeetings.length} {projCompletedMeetings.length === 1 ? 'Reunião Concluída' : 'Reuniões Concluídas'}
+                              </span>
+                            </div>
+                          </div>
 
-                      <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
-                        <span className="flex items-center gap-1 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/60">
-                          <Calendar size={13} className="text-slate-400" /> {dateFormatted} {mtg.time ? `às ${mtg.time}` : ''}
-                        </span>
-                        <span className="flex items-center gap-1 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/60">
-                          <Users size={13} className="text-slate-400" /> Moderador: {mtg.moderator || 'N/I'}
-                        </span>
-                      </div>
-                    </div>
+                          {/* List of Concluded Meetings for this Project */}
+                          {projCompletedMeetings.length === 0 ? (
+                            <div className="py-6 px-4 text-center bg-slate-50/50 rounded-2xl border border-slate-100 text-xs font-medium text-slate-400 italic">
+                              Nenhuma reunião concluída registrada neste projeto.
+                            </div>
+                          ) : (
+                            <div className="space-y-3 pt-1">
+                              {projCompletedMeetings.map(mtg => {
+                                const dateFormatted = mtg.date ? mtg.date.split('-').reverse().join('/') : 'Data N/I';
+                                const isMenuOpen = openMenuMeetingId === mtg.id;
+                                const actionCount = mtg.agendaItems.reduce((acc, ag) => acc + (ag.actionItems?.length || 0), 0);
 
-                    {/* Middle Info Stats */}
-                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-[9px] font-black uppercase text-slate-400 block">Pautas Tratadas</span>
-                        <span className="font-extrabold text-slate-800">{mtg.agendaItems.length} Pautas</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] font-black uppercase text-slate-400 block">Encaminhamentos</span>
-                        <span className="font-extrabold text-slate-800">{actionCount} Ações</span>
-                      </div>
-                    </div>
+                                return (
+                                  <div
+                                    key={mtg.id}
+                                    onClick={() => setActiveFullMeeting(mtg)}
+                                    className="p-4 bg-white rounded-2xl border border-slate-200/80 hover:border-emerald-300 hover:shadow-xs transition flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer"
+                                  >
+                                    <div className="flex items-center gap-3.5">
+                                      <div className="w-10 h-10 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0">
+                                        <CheckCircle2 size={18} />
+                                      </div>
+                                      <div className="space-y-0.5">
+                                        <div className="flex items-center gap-2">
+                                          <h5 className="text-sm font-bold text-slate-900 leading-snug">{mtg.title}</h5>
+                                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md text-[10px] font-bold uppercase">
+                                            {mtg.status}
+                                          </span>
+                                        </div>
+                                        <p className="text-xs text-slate-500 font-medium">
+                                          {dateFormatted} {mtg.time ? `às ${mtg.time}` : ''} • {mtg.location || 'Online'} • Moderador: {mtg.moderator || 'Não informado'} • {mtg.agendaItems.length} pautas • {actionCount} encaminhamentos
+                                        </p>
+                                      </div>
+                                    </div>
 
-                    {/* Regulatory Impact Badge */}
-                    {hasRegulatoryImpact && (
-                      <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-xs text-amber-900 font-bold">
-                        <ShieldCheck size={16} className="text-amber-600 shrink-0" />
-                        <span>Contém pauta com Impacto Regulatório Direto</span>
+                                    <div className="flex items-center gap-2 self-end sm:self-center" onClick={e => e.stopPropagation()}>
+                                      {(mtg.presentationLink || mtg.presentationUrl) && (
+                                        <a
+                                          href={mtg.presentationLink || mtg.presentationUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                                          title="Abrir Link da Apresentação"
+                                        >
+                                          <ExternalLink size={13} />
+                                          <span className="hidden sm:inline">Apresentação</span>
+                                        </a>
+                                      )}
+
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedMeetingForMinutes(mtg);
+                                          setIsMinutesModalOpen(true);
+                                        }}
+                                        className="px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl text-xs font-bold transition flex items-center gap-1"
+                                        title="Ver / Gerar Ata da Reunião"
+                                      >
+                                        <FileText size={14} />
+                                        <span>Ata</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveFullMeeting(mtg)}
+                                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1 shadow-sm transition"
+                                      >
+                                        <ExternalLink size={13} />
+                                        <span>Acessar</span>
+                                      </button>
+
+                                      <div className="relative">
+                                        <button
+                                          type="button"
+                                          onClick={() => setOpenMenuMeetingId(isMenuOpen ? null : mtg.id)}
+                                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+                                          title="Opções"
+                                        >
+                                          <MoreVertical size={16} />
+                                        </button>
+
+                                        {isMenuOpen && (
+                                          <>
+                                            <div 
+                                              className="fixed inset-0 z-40" 
+                                              onClick={() => setOpenMenuMeetingId(null)}
+                                            />
+                                            <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-50 text-xs font-bold text-slate-700 animate-in fade-in-50 zoom-in-95 duration-150">
+                                              <button
+                                                onClick={() => {
+                                                  setOpenMenuMeetingId(null);
+                                                  setSelectedMeetingForEdit(mtg);
+                                                  setIsMeetingModalOpen(true);
+                                                }}
+                                                className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-2 transition"
+                                              >
+                                                <Edit size={14} />
+                                                <span>Editar Dados</span>
+                                              </button>
+                                              <button
+                                                onClick={() => {
+                                                  setOpenMenuMeetingId(null);
+                                                  handleDeleteMeeting(mtg.id);
+                                                }}
+                                                className="w-full px-4 py-2 text-left hover:bg-rose-50 text-rose-600 flex items-center gap-2 transition"
+                                              >
+                                                <Trash2 size={14} />
+                                                <span>Excluir Reunião</span>
+                                              </button>
+                                            </div>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Card de Outros Projetos & Atividades Externas */}
+                    {(projectFilter === 'Todos' || projectFilter === 'outros') && otherCompletedMeetings.length > 0 && (
+                      <div key="outros_projetos_concluidos_card" className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center shrink-0">
+                              <Folder size={20} />
+                            </div>
+                            <div>
+                              <h4 className="text-base font-black uppercase text-slate-900 tracking-tight">
+                                Outros Projetos & Atividades Externas
+                              </h4>
+                              <p className="text-xs text-slate-500 font-medium">
+                                Reuniões concluídas de outros projetos, parcerias ou temas gerais
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="px-3.5 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-2xl font-black text-xs">
+                              {otherCompletedMeetings.length} Concluídas
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3 pt-1">
+                          {otherCompletedMeetings.map(mtg => {
+                            const dateFormatted = mtg.date ? mtg.date.split('-').reverse().join('/') : 'Data N/I';
+                            const isMenuOpen = openMenuMeetingId === mtg.id;
+                            const actionCount = mtg.agendaItems.reduce((acc, ag) => acc + (ag.actionItems?.length || 0), 0);
+
+                            return (
+                              <div
+                                key={mtg.id}
+                                onClick={() => setActiveFullMeeting(mtg)}
+                                className="p-4 bg-white rounded-2xl border border-slate-200/80 hover:border-amber-300 hover:shadow-xs transition flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer"
+                              >
+                                <div className="flex items-center gap-3.5">
+                                  <div className="w-10 h-10 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-700 flex items-center justify-center shrink-0">
+                                    <CheckCircle2 size={18} />
+                                  </div>
+                                  <div className="space-y-0.5">
+                                    <div className="flex items-center gap-2">
+                                      <h5 className="text-sm font-bold text-slate-900 leading-snug">{mtg.title}</h5>
+                                      <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md text-[10px] font-bold">
+                                        {mtg.projectName || 'Outro Projeto'}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 font-medium">
+                                      {dateFormatted} {mtg.time ? `às ${mtg.time}` : ''} • Moderador: {mtg.moderator || 'Não informado'} • {mtg.agendaItems.length} pautas • {actionCount} encaminhamentos
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 self-end sm:self-center" onClick={e => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedMeetingForMinutes(mtg);
+                                      setIsMinutesModalOpen(true);
+                                    }}
+                                    className="px-3 py-1.5 bg-slate-100 hover:bg-amber-50 text-slate-700 hover:text-amber-800 rounded-xl text-xs font-bold transition flex items-center gap-1"
+                                    title="Ver / Gerar Ata"
+                                  >
+                                    <FileText size={14} />
+                                    <span>Ata</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveFullMeeting(mtg)}
+                                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1 shadow-sm transition"
+                                  >
+                                    <ExternalLink size={13} />
+                                    <span>Acessar</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
+                  </>
+                );
+              })()}
+            </div>
+          ) : (
+            /* VIEW MODE 2: GRADE DE CARDS (Se o usuário preferir) */
+            filteredMeetings.length === 0 ? (
+              <div className="bg-white p-12 text-center rounded-3xl border border-dashed border-slate-200 space-y-3">
+                <Calendar size={40} className="mx-auto text-slate-300" />
+                <h4 className="text-slate-700 font-black text-sm uppercase">Nenhuma Reunião Encontrada</h4>
+                <p className="text-slate-400 text-xs font-medium max-w-sm mx-auto">
+                  Ajuste os filtros para encontrar as reuniões concluídas desejadas.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredMeetings.map(mtg => {
+                  const proj = projects.find(p => p.id === mtg.projectId);
+                  const projName = proj ? proj.name : (mtg.projectName || 'Projeto Geral');
+                  const dateFormatted = mtg.date ? mtg.date.split('-').reverse().join('/') : 'Data N/I';
+                  const hasRegulatoryImpact = mtg.agendaItems.some(a => a.hasRegulatoryImpact);
+                  const actionCount = mtg.agendaItems.reduce((acc, ag) => acc + (ag.actionItems?.length || 0), 0);
 
-                    {/* Footer Actions */}
-                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => {
-                            setSelectedMeetingForMinutes(mtg);
-                            setIsMinutesModalOpen(true);
-                          }}
-                          className="px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 rounded-xl text-xs font-bold transition flex items-center gap-1"
-                          title="Ver / Gerar Ata de Reunião"
-                        >
-                          <FileText size={14} />
-                          <span>Ata</span>
-                        </button>
+                  return (
+                    <div 
+                      key={mtg.id}
+                      className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-5"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="px-3 py-1 bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                            {projName}
+                          </span>
 
-                        <button
-                          onClick={() => handleDeleteMeeting(mtg.id)}
-                          className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
-                          title="Excluir Reunião"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                          <span className="px-2.5 py-1 rounded-xl text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            {mtg.status}
+                          </span>
+                        </div>
+
+                        <h3 className="text-base font-black text-slate-900 leading-snug">
+                          {mtg.title}
+                        </h3>
+
+                        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+                          <span className="flex items-center gap-1 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/60">
+                            <Calendar size={13} className="text-slate-400" /> {dateFormatted} {mtg.time ? `às ${mtg.time}` : ''}
+                          </span>
+                          <span className="flex items-center gap-1 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/60">
+                            <Users size={13} className="text-slate-400" /> Moderador: {mtg.moderator || 'N/I'}
+                          </span>
+                        </div>
                       </div>
 
-                      <button
-                        onClick={() => setActiveFullMeeting(mtg)}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition flex items-center gap-1 shadow-sm"
-                      >
-                        <ExternalLink size={14} />
-                        <span>Acessar Reunião</span>
-                      </button>
-                    </div>
+                      <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-[9px] font-black uppercase text-slate-400 block">Pautas Tratadas</span>
+                          <span className="font-extrabold text-slate-800">{mtg.agendaItems.length} Pautas</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-black uppercase text-slate-400 block">Encaminhamentos</span>
+                          <span className="font-extrabold text-slate-800">{actionCount} Ações</span>
+                        </div>
+                      </div>
 
-                  </div>
-                );
-              })}
-            </div>
+                      {hasRegulatoryImpact && (
+                        <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-xs text-amber-900 font-bold">
+                          <ShieldCheck size={16} className="text-amber-600 shrink-0" />
+                          <span>Impacto Regulatório Direto</span>
+                        </div>
+                      )}
+
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              setSelectedMeetingForMinutes(mtg);
+                              setIsMinutesModalOpen(true);
+                            }}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 rounded-xl text-xs font-bold transition flex items-center gap-1"
+                            title="Ver / Gerar Ata de Reunião"
+                          >
+                            <FileText size={14} />
+                            <span>Ata</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteMeeting(mtg.id)}
+                            className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
+                            title="Excluir Reunião"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={() => setActiveFullMeeting(mtg)}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition flex items-center gap-1 shadow-sm"
+                        >
+                          <ExternalLink size={14} />
+                          <span>Acessar Reunião</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
           )}
 
         </div>

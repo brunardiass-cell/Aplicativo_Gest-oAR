@@ -834,12 +834,19 @@ async function startServer() {
     }
   });
 
-  // 10. Task Groups Management & Synchronization between Notebook & Mobile
+  // 10. Task Groups Management & Synchronization between Notebook & Mobile (Per-profile independent groups)
   app.get("/api/task-groups", (req, res) => {
     try {
+      const userParam = (req.query.user || "").toString().trim().toLowerCase();
       if (fs.existsSync(DB_FILE)) {
         const fileContent = fs.readFileSync(DB_FILE, "utf-8");
         const data = JSON.parse(fileContent);
+        if (userParam && data.profileTaskGroups && Array.isArray(data.profileTaskGroups[userParam])) {
+          return res.json({ success: true, groups: data.profileTaskGroups[userParam] });
+        }
+        if (data.profileTaskGroups) {
+          return res.json({ success: true, profileGroups: data.profileTaskGroups, groups: data.taskGroups || [] });
+        }
         if (Array.isArray(data.taskGroups)) {
           return res.json({ success: true, groups: data.taskGroups });
         }
@@ -852,7 +859,8 @@ async function startServer() {
 
   app.post("/api/task-groups", (req, res) => {
     try {
-      const { groups, user } = req.body;
+      const { groups, user, profileKey } = req.body;
+      const targetKey = (profileKey || req.query.user || user || "bruna").toString().trim().toLowerCase();
       if (!Array.isArray(groups)) {
         return res.status(400).json({ success: false, error: "groups deve ser um array." });
       }
@@ -863,18 +871,29 @@ async function startServer() {
           storedData = JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
         } catch {}
       }
-      storedData.taskGroups = groups;
+      if (!storedData.profileTaskGroups) {
+        storedData.profileTaskGroups = {};
+      }
+      storedData.profileTaskGroups[targetKey] = groups;
+      if (targetKey.includes("bruna")) {
+        storedData.taskGroups = groups;
+      }
       storedData.lastGroupsUpdate = new Date().toISOString();
       fs.writeFileSync(DB_FILE, JSON.stringify(storedData, null, 2), "utf-8");
 
       // Broadcast para os outros navegadores conectados (notebooks e celulares)
       wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify({ type: "DATA_UPDATED", user: user || "Sistema", entity: "task_groups" }));
+          client.send(JSON.stringify({ 
+            type: "DATA_UPDATED", 
+            user: user || "Sistema", 
+            entity: "task_groups",
+            profileKey: targetKey
+          }));
         }
       });
 
-      return res.json({ success: true, count: groups.length });
+      return res.json({ success: true, count: groups.length, profileKey: targetKey });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
     }
