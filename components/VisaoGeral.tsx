@@ -601,124 +601,130 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
             
             {/* Calendário Compacto (lg:col-span-7) */}
-            <div className="lg:col-span-7 bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <CalendarIcon size={18} className="text-teal-600" />
-                  <h3 className="text-sm font-black uppercase text-slate-900 tracking-tight">
-                    Calendário de Acompanhamento
-                  </h3>
-                  <span className="text-xs text-slate-500 font-bold">
-                    {calendarDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-                  </span>
+            <div className="lg:col-span-7 min-w-0 bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
+              <div className="space-y-2.5">
+                {/* Linha 1: Título + Mês/Ano + Dia/Mês/Ano + Navegação */}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CalendarIcon size={18} className="text-teal-600 shrink-0" />
+                    <h3 className="text-sm font-black uppercase text-slate-900 tracking-tight truncate">
+                      Calendário de Acompanhamento
+                    </h3>
+                    <span className="text-xs text-slate-500 font-bold capitalize whitespace-nowrap">
+                      {calendarDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Seletor Dia / Mês / Ano */}
+                    <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setCalendarViewMode('day')}
+                        className={`px-2 py-1 rounded-lg transition ${
+                          calendarViewMode === 'day' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500'
+                        }`}
+                      >
+                        Dia
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCalendarViewMode('month')}
+                        className={`px-2 py-1 rounded-lg transition ${
+                          calendarViewMode === 'month' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500'
+                        }`}
+                      >
+                        Mês
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCalendarViewMode('year')}
+                        className={`px-2 py-1 rounded-lg transition ${
+                          calendarViewMode === 'year' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500'
+                        }`}
+                      >
+                        Ano
+                      </button>
+                    </div>
+
+                    {/* Setas de navegação */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date(calendarDate);
+                          if (calendarViewMode === 'day') d.setDate(d.getDate() - 1);
+                          else if (calendarViewMode === 'month') d.setMonth(d.getMonth() - 1);
+                          else d.setFullYear(d.getFullYear() - 1);
+                          setCalendarDate(d);
+                        }}
+                        className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600"
+                      >
+                        <ChevronLeft size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCalendarDate(new Date())}
+                        className="px-2 py-1 text-[10px] font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-lg whitespace-nowrap"
+                      >
+                        Hoje
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date(calendarDate);
+                          if (calendarViewMode === 'day') d.setDate(d.getDate() + 1);
+                          else if (calendarViewMode === 'month') d.setMonth(d.getMonth() + 1);
+                          else d.setFullYear(d.getFullYear() + 1);
+                          setCalendarDate(d);
+                        }}
+                        className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600"
+                      >
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {/* Seletor Dia / Mês / Ano */}
-                  <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold">
-                    <button
-                      type="button"
-                      onClick={() => setCalendarViewMode('day')}
-                      className={`px-2 py-1 rounded-lg transition ${
-                        calendarViewMode === 'day' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500'
-                      }`}
-                    >
-                      Dia
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCalendarViewMode('month')}
-                      className={`px-2 py-1 rounded-lg transition ${
-                        calendarViewMode === 'month' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500'
-                      }`}
-                    >
-                      Mês
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCalendarViewMode('year')}
-                      className={`px-2 py-1 rounded-lg transition ${
-                        calendarViewMode === 'year' ? 'bg-white text-slate-900 shadow-2xs font-black' : 'text-slate-500'
-                      }`}
-                    >
-                      Ano
-                    </button>
-                  </div>
+                {/* Linha 2: Botões de Início Real e Manutenção alinhados dentro do card */}
+                <div className="flex flex-wrap items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTempSystemStartDate(systemRealStartDate || today.toISOString().split('T')[0]);
+                      setTempSystemStartNote(systemRealStartNote || 'Criada antes do aplicativo estar 100% funcionando');
+                      setIsSystemStartModalOpen(true);
+                    }}
+                    className={`px-3 py-1.5 border rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition shadow-2xs whitespace-nowrap ${
+                      systemRealStartDate
+                        ? 'bg-orange-100 hover:bg-orange-200 text-orange-900 border-orange-300'
+                        : 'bg-orange-50 hover:bg-orange-100 text-orange-800 border-orange-200'
+                    }`}
+                    title="Definir a data de início real do sistema (atividades anteriores ficam em laranja e fora dos indicadores)"
+                  >
+                    <Flag size={12} className="text-orange-600 shrink-0" />
+                    <span>{systemRealStartDate ? `Início Real: ${formatDateBR(systemRealStartDate)}` : 'Início Real'}</span>
+                  </button>
 
-                  {/* Setas de navegação & Botão de Manutenção */}
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const d = new Date(calendarDate);
-                        if (calendarViewMode === 'day') d.setDate(d.getDate() - 1);
-                        else if (calendarViewMode === 'month') d.setMonth(d.getMonth() - 1);
-                        else d.setFullYear(d.getFullYear() - 1);
-                        setCalendarDate(d);
-                      }}
-                      className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600"
-                    >
-                      <ChevronLeft size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCalendarDate(new Date())}
-                      className="px-2 py-1 text-[10px] font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-lg"
-                    >
-                      Hoje
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const d = new Date(calendarDate);
-                        if (calendarViewMode === 'day') d.setDate(d.getDate() + 1);
-                        else if (calendarViewMode === 'month') d.setMonth(d.getMonth() + 1);
-                        else d.setFullYear(d.getFullYear() + 1);
-                        setCalendarDate(d);
-                      }}
-                      className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600"
-                    >
-                      <ChevronRight size={14} />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTempSystemStartDate(systemRealStartDate || today.toISOString().split('T')[0]);
-                        setTempSystemStartNote(systemRealStartNote || 'Criada antes do aplicativo estar 100% funcionando');
-                        setIsSystemStartModalOpen(true);
-                      }}
-                      className={`ml-1 px-2.5 py-1 border rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition shadow-2xs ${
-                        systemRealStartDate
-                          ? 'bg-orange-100 hover:bg-orange-200 text-orange-900 border-orange-300'
-                          : 'bg-orange-50 hover:bg-orange-100 text-orange-800 border-orange-200'
-                      }`}
-                      title="Definir a data de início real do sistema (atividades anteriores ficam em laranja e fora dos indicadores)"
-                    >
-                      <Flag size={12} className="text-orange-600" />
-                      <span>{systemRealStartDate ? `Início: ${formatDateBR(systemRealStartDate)}` : 'Início Real'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingMaintenance({
-                          startDate: today.toISOString().split('T')[0],
-                          endDate: today.toISOString().split('T')[0],
-                          title: '',
-                          description: '',
-                          status: 'Programada',
-                          impactLevel: 'Indisponibilidade Total'
-                        });
-                        setIsMaintenanceModalOpen(true);
-                      }}
-                      className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition shadow-2xs"
-                      title="Gerenciar períodos de manutenção do sistema"
-                    >
-                      <Wrench size={12} className="text-amber-600" />
-                      <span>Manutenção</span>
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingMaintenance({
+                        startDate: today.toISOString().split('T')[0],
+                        endDate: today.toISOString().split('T')[0],
+                        title: '',
+                        description: '',
+                        status: 'Programada',
+                        impactLevel: 'Indisponibilidade Total'
+                      });
+                      setIsMaintenanceModalOpen(true);
+                    }}
+                    className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition shadow-2xs whitespace-nowrap"
+                    title="Gerenciar períodos de manutenção do sistema"
+                  >
+                    <Wrench size={12} className="text-amber-600 shrink-0" />
+                    <span>Manutenção</span>
+                  </button>
                 </div>
               </div>
 
@@ -993,7 +999,7 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
             </div>
 
             {/* Alertas de Vencimento e Atraso (lg:col-span-5) */}
-            <div className="lg:col-span-5 bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
+            <div className="lg:col-span-5 min-w-0 bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/90 shadow-2xs space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <AlertTriangle size={18} className="text-rose-600" />
@@ -1228,19 +1234,20 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
               </div>
             </div>
 
-            {/* Tabela / Lista de Atividades */}
-            <div className="overflow-x-auto custom-scrollbar pt-2">
-              <table className="w-full text-left border-collapse text-xs">
+            {/* Tabela / Lista de Atividades (100% visível sem rolagem horizontal) */}
+            <div className="pt-2">
+              {/* Versão Desktop / Tablet: tabela 100% ajustada à largura da tela */}
+              <table className="hidden md:table w-full table-fixed text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                    <th className="py-2.5 px-3">Atividade</th>
-                    <th className="py-2.5 px-2">Tipo</th>
-                    <th className="py-2.5 px-2">Projeto / Grupo</th>
-                    <th className="py-2.5 px-2">Responsável</th>
-                    <th className="py-2.5 px-2">Prazo</th>
-                    <th className="py-2.5 px-2">Prioridade</th>
-                    <th className="py-2.5 px-2">Status</th>
-                    <th className="py-2.5 px-3 text-right">Ação</th>
+                    <th className="py-2.5 px-2.5 w-[31%]">Atividade</th>
+                    <th className="py-2.5 px-1.5 w-[9%]">Tipo</th>
+                    <th className="py-2.5 px-1.5 w-[13%]">Projeto / Grupo</th>
+                    <th className="py-2.5 px-1.5 w-[10%]">Responsável</th>
+                    <th className="py-2.5 px-1.5 w-[9%]">Prazo</th>
+                    <th className="py-2.5 px-1.5 w-[9%]">Prioridade</th>
+                    <th className="py-2.5 px-1.5 w-[10%]">Status</th>
+                    <th className="py-2.5 px-2 w-[9%] text-right">Ação</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1259,9 +1266,9 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                             : 'hover:bg-slate-50/80'
                         }`}
                       >
-                        <td className="py-3 px-3 min-w-[220px]">
+                        <td className="py-3 px-2.5 align-top">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className={`font-black text-xs leading-snug ${
+                            <span className={`font-black text-xs leading-snug break-words ${
                               isPreStart
                                 ? isDone ? 'line-through text-orange-900/80' : 'text-orange-950'
                                 : isDone ? 'line-through text-emerald-900' : 'text-slate-900'
@@ -1278,21 +1285,21 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                             )}
                           </div>
                           {task.description && (
-                            <span className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+                            <span className="text-[10px] text-slate-400 line-clamp-1 mt-0.5 block break-words">
                               {task.description}
                             </span>
                           )}
                         </td>
 
-                        <td className="py-3 px-2">
+                        <td className="py-3 px-1.5 align-top">
                           <div className="space-y-1">
-                            <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase bg-slate-100 text-slate-700">
+                            <span className="inline-block px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase bg-slate-100 text-slate-700">
                               {task.activityType === 'meeting' ? 'Reunião' :
                                task.activityType === 'report' || task.isReport ? 'Relatório' :
                                task.activityType === 'note' ? 'Nota' : 'Geral'}
                             </span>
                             {(task.activityType === 'report' || task.isReport) && (
-                              <span className="block text-[10px] font-bold text-purple-700 whitespace-nowrap">
+                              <span className="block text-[10px] font-bold text-purple-700 truncate">
                                 {task.reportReviewer || task.currentReviewer 
                                   ? `Rev: ${task.reportReviewer || task.currentReviewer}` 
                                   : `Com: ${task.projectLead || 'A definir'}`}
@@ -1301,44 +1308,44 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                           </div>
                         </td>
 
-                        <td className="py-3 px-2">
-                          <span className="font-bold text-slate-700 text-xs block truncate max-w-[130px]">{task.project}</span>
+                        <td className="py-3 px-1.5 align-top">
+                          <span className="font-bold text-slate-700 text-[11px] block truncate" title={task.project}>{task.project}</span>
                           {task.group && (
-                            <span className="text-[10px] text-teal-700 font-bold block">{task.group}</span>
+                            <span className="text-[10px] text-teal-700 font-bold block truncate" title={task.group}>{task.group}</span>
                           )}
                         </td>
 
-                        <td className="py-3 px-2">
-                          <span className="font-semibold text-slate-700 text-xs">{task.projectLead}</span>
+                        <td className="py-3 px-1.5 align-top">
+                          <span className="font-semibold text-slate-700 text-[11px] block truncate" title={task.projectLead}>{task.projectLead}</span>
                         </td>
 
-                        <td className="py-3 px-2">
-                          <span className="font-semibold text-slate-600 text-xs">{formatDateBR(task.completionDate)}</span>
+                        <td className="py-3 px-1.5 align-top">
+                          <span className="font-semibold text-slate-600 text-[11px] whitespace-nowrap">{formatDateBR(task.completionDate)}</span>
                         </td>
 
-                        <td className="py-3 px-2">
-                          <span className="text-[10px] font-bold text-slate-600">
+                        <td className="py-3 px-1.5 align-top">
+                          <span className="text-[10px] font-bold text-slate-600 block truncate" title={task.priority || 'Sem prioridade'}>
                             {task.priority || 'Sem prioridade'}
                           </span>
                         </td>
 
-                        <td className="py-3 px-2">
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                        <td className="py-3 px-1.5 align-top">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black uppercase leading-tight ${
                             isDone ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
                           }`}>
                             {task.status}
                           </span>
                         </td>
 
-                        <td className="py-3 px-3 text-right">
-                          <div className="flex items-center justify-end gap-1">
+                        <td className="py-3 px-2 text-right align-top">
+                          <div className="flex items-center justify-end gap-0.5">
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setNotesModalTask(task);
                               }}
-                              className="p-1.5 text-slate-400 hover:text-teal-700 rounded-lg hover:bg-teal-50 transition flex items-center gap-1"
+                              className="p-1 text-slate-400 hover:text-teal-700 rounded-lg hover:bg-teal-50 transition flex items-center gap-0.5"
                               title="Visualizar e adicionar notas de atualização"
                             >
                               <MessageSquare size={13} />
@@ -1352,7 +1359,7 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                                 e.stopPropagation();
                                 handleOpenDrawer(task);
                               }}
-                              className="p-1.5 text-slate-400 hover:text-teal-700 rounded-lg hover:bg-teal-50 transition"
+                              className="p-1 text-slate-400 hover:text-teal-700 rounded-lg hover:bg-teal-50 transition"
                               title="Consultar e editar detalhes"
                             >
                               <Eye size={14} />
@@ -1372,6 +1379,97 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                   )}
                 </tbody>
               </table>
+
+              {/* Versão Mobile: cards responsivos sem rolagem lateral */}
+              <div className="md:hidden space-y-2.5">
+                {filteredTasks.map(task => {
+                  const isDone = task.status === 'Concluída';
+                  const isPreStart = isTaskBeforeSystemStart(task);
+                  return (
+                    <div
+                      key={task.id}
+                      onClick={() => handleOpenDrawer(task)}
+                      className={`p-3.5 rounded-2xl border transition cursor-pointer space-y-2 ${
+                        isPreStart
+                          ? 'bg-orange-50/75 border-orange-200 border-l-4 border-l-orange-400'
+                          : isDone
+                          ? 'bg-emerald-50/40 border-emerald-200/80'
+                          : 'bg-slate-50/60 border-slate-200/80'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                            <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase bg-slate-100 text-slate-700">
+                              {task.activityType === 'meeting' ? 'Reunião' :
+                               task.activityType === 'report' || task.isReport ? 'Relatório' :
+                               task.activityType === 'note' ? 'Nota' : 'Geral'}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                              isDone ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                            }`}>
+                              {task.status}
+                            </span>
+                            {isPreStart && (
+                              <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase bg-orange-200/90 text-orange-900 border border-orange-300">
+                                Pré-início
+                              </span>
+                            )}
+                          </div>
+                          <h4 className={`font-black text-xs leading-snug break-words ${
+                            isPreStart
+                              ? isDone ? 'line-through text-orange-900/80' : 'text-orange-950'
+                              : isDone ? 'line-through text-emerald-900' : 'text-slate-900'
+                          }`}>
+                            {task.activity}
+                          </h4>
+                          {task.description && (
+                            <p className="text-[10px] text-slate-500 line-clamp-2 mt-0.5">{task.description}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNotesModalTask(task);
+                            }}
+                            className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-teal-700 rounded-lg flex items-center gap-1"
+                            title="Notas de atualização"
+                          >
+                            <MessageSquare size={13} />
+                            {task.updates && task.updates.length > 0 && (
+                              <span className="text-[10px] font-bold text-teal-700">{task.updates.length}</span>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenDrawer(task);
+                            }}
+                            className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-teal-700 rounded-lg"
+                            title="Consultar detalhes"
+                          >
+                            <Eye size={14} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold text-slate-600 pt-1 border-t border-slate-200/60">
+                        <span><strong>Projeto:</strong> {task.project}{task.group ? ` (${task.group})` : ''}</span>
+                        <span><strong>Resp:</strong> {task.projectLead}</span>
+                        <span><strong>Prazo:</strong> {formatDateBR(task.completionDate)}</span>
+                        <span><strong>Prioridade:</strong> {task.priority || 'Sem prioridade'}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {filteredTasks.length === 0 && (
+                  <div className="py-10 text-center text-slate-400 font-semibold text-xs">
+                    Nenhuma atividade encontrada com os filtros selecionados.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
