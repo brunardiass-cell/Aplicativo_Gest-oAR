@@ -9,27 +9,43 @@ interface TaskDetailsModalProps {
 }
 
 const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) => {
+  const sortedUpdates = task.updates && task.updates.length > 0
+    ? [...task.updates].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    : [];
+
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-white rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+    <div
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[140] flex items-center justify-center p-2 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        className="bg-white rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-300"
+      >
         <div className="p-6 sm:p-8 border-b border-slate-100 relative bg-gradient-to-br from-teal-50/50 to-white">
           <button 
             onClick={onClose} 
             className="absolute top-4 sm:top-6 right-4 sm:right-6 p-2 hover:bg-slate-200 rounded-full transition"
+            title="Fechar visualização"
           >
             <X size={20} className="text-slate-400" />
           </button>
           
-          <div className="flex flex-wrap items-center gap-2 mb-3 sm:mb-4">
+          <div className="flex flex-wrap items-center gap-2 mb-3 sm:mb-4 pr-8">
             <span className="px-3 py-1 bg-brand-primary text-white rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest shadow-sm">
-              {task.project}
+              {task.project || 'Geral'}
             </span>
+            {task.group && (
+              <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border border-slate-200">
+                {task.group}
+              </span>
+            )}
             <span className={`px-3 py-1 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border ${
               task.status === 'Concluída' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-amber-100 text-amber-700 border-amber-200'
             }`}>
               {task.status}
             </span>
-            <span className={`px-3 py-1 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border border-slate-200 text-slate-600 bg-white`}>
+            <span className="px-3 py-1 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border border-slate-200 text-slate-600 bg-white">
               Prioridade {task.priority || 'Sem prioridade'}
             </span>
             <span className={`px-3 py-1 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border ${
@@ -47,19 +63,29 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
           <h2 className="text-xl sm:text-3xl font-black text-slate-900 mb-2 leading-tight tracking-tighter uppercase">
             {task.activity}
           </h2>
-          
-          {task.description && (
-            <p className="text-slate-600 text-sm sm:text-base leading-relaxed font-medium">
-              {task.description}
-            </p>
-          )}
         </div>
 
         <div className="p-6 sm:p-10 space-y-6 sm:space-y-8 flex-1 overflow-y-auto custom-scrollbar">
+          {/* Bloco dedicado de Descrição */}
+          <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
+            <span className="text-[10px] font-black text-teal-700 uppercase tracking-widest flex items-center gap-1.5">
+              <Tag size={12} /> Descrição da Atividade
+            </span>
+            {task.description && task.description.trim() ? (
+              <p className="text-slate-700 text-sm leading-relaxed font-medium whitespace-pre-wrap">
+                {task.description}
+              </p>
+            ) : (
+              <p className="text-slate-400 text-xs font-semibold italic">
+                Nenhuma descrição detalhada cadastrada para esta atividade.
+              </p>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
             <InfoBlock label="Solicitação" value={task.requestDate} icon={<Calendar size={14}/>} />
             <InfoBlock label="Prazo Final" value={task.completionDate || 'Sem prazo'} icon={<Clock size={14}/>} highlight />
-            <InfoBlock label="Responsável" value={task.projectLead} icon={<User size={14}/>} />
+            <InfoBlock label="Responsável" value={task.projectLead || 'Não informado'} icon={<User size={14}/>} />
             {task.activityType !== 'note' ? (
               <div className="space-y-1">
                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Progresso</span>
@@ -165,24 +191,26 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
             </div>
           )}
 
-          <div className="space-y-4">
-             <span className="text-[10px] font-black text-brand-primary uppercase tracking-widest flex items-center gap-1">
+          {task.nextStep && task.nextStep.trim() && (
+            <div className="space-y-3">
+              <span className="text-[10px] font-black text-brand-primary uppercase tracking-widest flex items-center gap-1">
                 <ArrowRight size={12} /> Próximo Passo Estratégico
               </span>
-              <div className="p-6 bg-slate-900 text-white rounded-3xl font-bold shadow-xl shadow-slate-200 text-sm italic">
-                "{task.nextStep || 'Não definido'}"
+              <div className="p-5 bg-slate-900 text-white rounded-3xl font-bold shadow-xl shadow-slate-200 text-sm italic">
+                "{task.nextStep}"
               </div>
-          </div>
+            </div>
+          )}
 
-          <div className="space-y-6">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-2">
-              <History size={14} className="text-brand-primary" /> Linha do Tempo de Atualizações
+          <div className="space-y-5">
+            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 border-b border-slate-100 pb-2">
+              <MessageCircle size={14} className="text-brand-primary" /> Anotações e Atualizações ({sortedUpdates.length})
             </h3>
-            <div className="relative pl-8 space-y-8 before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-100">
-              {task.updates && task.updates.length > 0 ? [...task.updates].reverse().map((update, idx) => (
+            <div className="relative pl-8 space-y-6 before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-100">
+              {sortedUpdates.length > 0 ? sortedUpdates.map((update, idx) => (
                 <div key={update.id} className="relative">
                   <div className={`absolute -left-[33px] top-1 w-5 h-5 rounded-full border-4 border-white shadow-sm ${
-                    update.isImportant ? 'bg-amber-500 ring-2 ring-amber-300' : idx === 0 ? 'bg-brand-primary animate-pulse' : 'bg-slate-300'
+                    update.isImportant ? 'bg-amber-500 ring-2 ring-amber-300' : idx === 0 ? 'bg-brand-primary' : 'bg-slate-300'
                   }`}></div>
                   <div className={`p-5 rounded-2xl border transition shadow-sm ${
                     update.isImportant ? 'bg-amber-50/60 border-amber-300 ring-1 ring-amber-300/30' : 'bg-slate-50 border-slate-100 hover:border-teal-100'
@@ -190,7 +218,7 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
                     <div className="flex justify-between items-center mb-2">
                       <div className="flex items-center gap-2">
                         <span className={`text-[10px] font-black uppercase tracking-widest ${update.isImportant ? 'text-amber-700 font-black' : 'text-brand-primary'}`}>
-                          {new Date(update.date).toLocaleDateString('pt-BR')}
+                          {new Date(update.date).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </span>
                         {update.isImportant && (
                           <span className="px-2 py-0.5 bg-amber-500 text-white rounded-full text-[8px] font-black uppercase tracking-wider">
@@ -209,18 +237,18 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
                   </div>
                 </div>
               )) : (
-                <div className="text-center py-10 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-                  <p className="text-slate-400 text-xs font-bold uppercase tracking-widest italic">Sem registros no histórico</p>
+                <div className="text-center py-8 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                  <p className="text-slate-400 text-xs font-bold uppercase tracking-widest italic">Sem anotações registradas</p>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-center">
+        <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-center">
            <button 
             onClick={onClose}
-            className="px-16 py-4 bg-slate-900 text-white rounded-2xl shadow-xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition active:scale-95"
+            className="px-14 py-3.5 bg-slate-900 text-white rounded-2xl shadow-xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition active:scale-95"
           >
             Fechar Visualização
           </button>
@@ -230,15 +258,27 @@ const TaskDetailsModal: React.FC<TaskDetailsModalProps> = ({ task, onClose }) =>
   );
 };
 
-const InfoBlock: React.FC<{ label: string; value: string; icon: React.ReactNode; highlight?: boolean }> = ({ label, value, icon, highlight }) => (
-  <div className="space-y-1">
-    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-      {icon} {label}
-    </span>
-    <p className={`font-bold text-sm ${highlight ? 'text-brand-primary' : 'text-slate-900'}`}>
-      {label.includes('Data') || label.includes('Prazo') || label.includes('Solicitação') ? (value ? new Date(value + 'T00:00:00').toLocaleDateString('pt-BR') : '-') : value}
-    </p>
-  </div>
-);
+const InfoBlock: React.FC<{ label: string; value: string; icon: React.ReactNode; highlight?: boolean }> = ({ label, value, icon, highlight }) => {
+  const isDateLabel = label.includes('Data') || label.includes('Prazo') || label.includes('Solicitação');
+  let displayVal = value || '-';
+  if (isDateLabel && value) {
+    if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+      const parsed = new Date(value.slice(0, 10) + 'T00:00:00');
+      displayVal = isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString('pt-BR');
+    } else {
+      displayVal = value;
+    }
+  }
+  return (
+    <div className="space-y-1">
+      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+        {icon} {label}
+      </span>
+      <p className={`font-bold text-sm ${highlight ? 'text-brand-primary' : 'text-slate-900'}`}>
+        {displayVal}
+      </p>
+    </div>
+  );
+};
 
 export default TaskDetailsModal;

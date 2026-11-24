@@ -61,7 +61,8 @@ import {
   Folder,
   ExternalLink,
   ListOrdered,
-  CheckSquare
+  CheckSquare,
+  Eye
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -687,6 +688,22 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
     // Sempre registrar na central de reuniões com status Concluída (publicada)
     if (onAddMeeting) {
+      const cleanFreeNotes = quickMeetingFreeNotes.trim();
+      const mappedPautas: MeetingAgendaItem[] = quickMeetingPautas.map((p, idx) => ({
+        id: p.id || `agenda_${Date.now()}_${idx}`,
+        title: p.title || title,
+        discussions: p.discussions || '',
+        decisions: p.decisions || '',
+        linkedRegulatoryStandardIds: p.linkedRegulatoryStandardIds && p.linkedRegulatoryStandardIds.length > 0
+          ? p.linkedRegulatoryStandardIds
+          : quickMeetingLinkedStandards,
+        actionItems: p.actionItems || [],
+        attachedFiles: quickMeetingAttachedFiles,
+        fileLinks: quickMeetingFileLinks,
+        presentationLink: quickMeetingFileLinks[0]?.url || undefined,
+        presentationUrl: quickMeetingFileLinks[0]?.url || undefined
+      }));
+
       onAddMeeting({
         id: `meet_${Date.now()}`,
         title,
@@ -699,16 +716,14 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         projectName: finalProjectName,
         moderator: quickMeetingResponsible || currentUser || 'Responsável',
         participants: quickMeetingParticipants,
-        agendaItems: quickMeetingPautas.map(p => ({
-          id: p.id,
-          title: p.title,
-          objective: '',
-          context: '',
-          discussions: p.discussions || '',
-          decisions: p.decisions || '',
-          actionItems: p.actionItems || []
-        })),
-        minutesDocument: quickMeetingFreeNotes,
+        presentationLink: quickMeetingFileLinks[0]?.url || undefined,
+        presentationUrl: quickMeetingFileLinks[0]?.url || undefined,
+        linkedRegulatoryStandardIds: quickMeetingLinkedStandards,
+        attachedFiles: quickMeetingAttachedFiles,
+        fileLinks: quickMeetingFileLinks,
+        agendaItems: mappedPautas,
+        freeNotes: cleanFreeNotes || undefined,
+        generalConclusions: cleanFreeNotes || undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
@@ -721,6 +736,19 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
     setQuickMeetingTitle('');
     setQuickMeetingFreeNotes('');
     setQuickText('');
+    setQuickMeetingFileLinks([]);
+    setQuickMeetingAttachedFiles([]);
+    setQuickMeetingLinkedStandards([]);
+    setQuickMeetingParticipants([]);
+    setQuickMeetingCallLink('');
+    setQuickMeetingPautas([
+      {
+        id: 'pauta_init_1',
+        title: 'Pauta Principal',
+        linkedRegulatoryStandardIds: [],
+        actionItems: []
+      }
+    ]);
     setIsSimpleMeetingModalOpen(false);
   };
 
@@ -833,6 +861,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         attachedFiles: quickMeetingAttachedFiles,
         fileLinks: quickMeetingFileLinks,
         agendaItems: mappedAgendaItems,
+        freeNotes: quickMeetingFreeNotes.trim() || undefined,
+        generalConclusions: quickMeetingFreeNotes.trim() || undefined,
         createdAt: now.toISOString(),
         updatedAt: now.toISOString()
       };
@@ -1769,6 +1799,14 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onView(t)}
+                        className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-200 transition"
+                        title="Visualizar atividade, descrição e notas"
+                      >
+                        <Eye size={14} />
+                      </button>
                       {t.updates && t.updates.length > 0 && (
                         <button
                           type="button"
@@ -2580,6 +2618,16 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                       <span>{task.updates?.length || 0}</span>
                     </button>
 
+                    {/* 4.5 VISUALIZAR ATIVIDADE, DESCRIÇÃO E NOTAS (OLHINHO) */}
+                    <button
+                      type="button"
+                      onClick={() => onView(task)}
+                      className="w-8 h-8 rounded-xl border border-slate-200 bg-slate-50 hover:bg-teal-50 hover:border-teal-200 text-slate-500 hover:text-teal-700 flex items-center justify-center transition"
+                      title="Visualizar atividade, descrição e notas"
+                    >
+                      <Eye size={15} />
+                    </button>
+
                     {/* 5. MENU 3 PONTOS DA LINHA (Com Auto-flip) */}
                     <div className="relative">
                       <button
@@ -2602,6 +2650,17 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                             popoverPlacement[`row_${task.id}`] === 'up' ? 'bottom-full mb-2' : 'top-9'
                           }`}
                         >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveRowMenuTaskId(null);
+                              onView(task);
+                            }}
+                            className="w-full px-3.5 py-2 text-left hover:bg-teal-50 text-teal-800 transition flex items-center gap-2.5"
+                          >
+                            <Eye size={13} className="text-teal-600" /> Visualizar Detalhes
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => {

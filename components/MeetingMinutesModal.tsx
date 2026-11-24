@@ -67,7 +67,26 @@ export const generateMinutesText = (meeting: Meeting, templateText: string = DEF
   output = output.replace(/\[PAUTAS_E_DECISOES\]/g, pautasDecisoesText.trim());
   output = output.replace(/\[IMPACTOS_REGULATORIOS\]/g, impactosRegulatoriosText.trim());
   output = output.replace(/\[ENCAMINHAMENTOS\]/g, encaminhamentosText.trim());
-  output = output.replace(/\[CONCLUSOES_GERAIS\]/g, meeting.generalConclusions || 'Reunião finalizada sem observações adicionais.');
+  const legacyFreeNotes = !meeting.freeNotes && meeting.minutesDocument &&
+    !meeting.minutesDocument.includes('ATA DE REUNIÃO') &&
+    !meeting.minutesDocument.includes('ATA OFICIAL')
+    ? meeting.minutesDocument.trim()
+    : '';
+  const effectiveFreeNotes = (meeting.freeNotes || legacyFreeNotes || '').trim();
+  const effectiveConclusions = (meeting.generalConclusions || '').trim();
+
+  let combinedConclusions = '';
+  if (effectiveFreeNotes && effectiveConclusions && effectiveFreeNotes !== effectiveConclusions) {
+    combinedConclusions = `ANOTAÇÕES LIVRES DA REUNIÃO:\n${effectiveFreeNotes}\n\nCONCLUSÕES GERAIS:\n${effectiveConclusions}`;
+  } else if (effectiveFreeNotes) {
+    combinedConclusions = effectiveFreeNotes;
+  } else if (effectiveConclusions) {
+    combinedConclusions = effectiveConclusions;
+  } else {
+    combinedConclusions = 'Reunião finalizada sem observações adicionais.';
+  }
+
+  output = output.replace(/\[CONCLUSOES_GERAIS\]/g, combinedConclusions);
 
   return output;
 };
@@ -108,7 +127,14 @@ export const MeetingMinutesModal: React.FC<MeetingMinutesModalProps> = ({ meetin
   }, []);
 
   useEffect(() => {
-    if (meeting.minutesDocument && meeting.minutesDocument.trim().length > 0) {
+    const hasFormattedMinutes = !!(
+      meeting.minutesDocument &&
+      meeting.minutesDocument.trim().length > 0 &&
+      (meeting.minutesDocument.includes('ATA DE REUNIÃO') ||
+        meeting.minutesDocument.includes('ATA OFICIAL') ||
+        meeting.minutesDocument.includes('PAUTA'))
+    );
+    if (hasFormattedMinutes && meeting.minutesDocument) {
       setMinutesText(meeting.minutesDocument);
     } else {
       setMinutesText(generateMinutesText(meeting));

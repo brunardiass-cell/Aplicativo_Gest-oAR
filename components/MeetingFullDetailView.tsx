@@ -699,6 +699,11 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
       promptText += `Decisão Tomada: ${ag.decisions || 'Pendente'}\n`;
     });
 
+    const freeNotesVal = getMeetingFreeNotes(meetingState);
+    if (freeNotesVal) {
+      promptText += `\nANOTAÇÕES LIVRES DA REUNIÃO:\n${freeNotesVal}\n`;
+    }
+
     navigator.clipboard.writeText(promptText);
     alert('Prompt e dados da reunião copiados para a área de transferência! Cole diretamente no ChatGPT.');
   };
@@ -844,6 +849,20 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
     }
   };
 
+  function getMeetingFreeNotes(m: Meeting): string {
+    if (m.freeNotes && m.freeNotes.trim()) return m.freeNotes.trim();
+    if (m.generalConclusions && m.generalConclusions.trim()) return m.generalConclusions.trim();
+    if (
+      m.minutesDocument &&
+      m.minutesDocument.trim() &&
+      !m.minutesDocument.includes('ATA OFICIAL') &&
+      !m.minutesDocument.includes('ATA DE REUNIÃO')
+    ) {
+      return m.minutesDocument.trim();
+    }
+    return '';
+  }
+
   // Helper to build formatted HTML version with Calibri font, bold titles/subtitles, and colons ':'
   function buildOfficialAtaHtml(
     m: Meeting,
@@ -958,14 +977,31 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
       `;
     }
 
+    const freeNotesVal = getMeetingFreeNotes(m);
+    let freeNotesHtml = '';
+    if (freeNotesVal) {
+      const escapedNotes = freeNotesVal
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      freeNotesHtml = `
+        <div style="margin-top: 20px; margin-bottom: 16px;">
+          <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase; color: #0f172a; border-bottom: 2px solid #0f172a; padding-bottom: 3px; margin-bottom: 8px; letter-spacing: 0.5px;">
+            ANOTAÇÕES LIVRES DA REUNIÃO:
+          </div>
+          <div style="text-align: justify; line-height: 1.5; white-space: pre-wrap;">${escapedNotes}</div>
+        </div>
+      `;
+    }
+
     let conclusionsHtml = '';
-    if (m.generalConclusions) {
+    if (m.generalConclusions && m.generalConclusions.trim() !== freeNotesVal) {
       conclusionsHtml = `
         <div style="margin-top: 20px; margin-bottom: 16px;">
           <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase; color: #0f172a; margin-bottom: 4px;">
             CONCLUSÕES GERAIS E PRÓXIMOS PASSOS:
           </div>
-          <div style="text-align: justify; line-height: 1.5;">${m.generalConclusions}</div>
+          <div style="text-align: justify; line-height: 1.5; white-space: pre-wrap;">${m.generalConclusions}</div>
         </div>
       `;
     }
@@ -1000,6 +1036,8 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
           </div>
           ${pautasHtml}
         </div>
+
+        ${freeNotesHtml}
 
         ${conclusionsHtml}
 
@@ -1075,7 +1113,12 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
       body += `\n`;
     });
 
-    if (m.generalConclusions) {
+    const freeNotesVal = getMeetingFreeNotes(m);
+    if (freeNotesVal) {
+      body += `ANOTAÇÕES LIVRES DA REUNIÃO:\n${freeNotesVal}\n\n`;
+    }
+
+    if (m.generalConclusions && m.generalConclusions.trim() !== freeNotesVal) {
       body += `CONCLUSÕES GERAIS E PRÓXIMOS PASSOS:\n${m.generalConclusions}\n\n`;
     }
 
@@ -1943,6 +1986,39 @@ export const MeetingFullDetailView: React.FC<MeetingFullDetailViewProps> = ({
                   </div>
                 );
               })}
+            </div>
+
+            {/* ANOTAÇÕES LIVRES DA REUNIÃO (sincronizadas com Notas Rápidas e incluídas na Ata) */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-600"></span>
+                    Anotações Livres da Reunião
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                    Registros livres inseridos nas Notas Rápidas ou durante a reunião — incluídos automaticamente na geração da Ata.
+                  </p>
+                </div>
+              </div>
+              <textarea
+                rows={5}
+                value={
+                  meetingState.freeNotes !== undefined
+                    ? meetingState.freeNotes
+                    : getMeetingFreeNotes(meetingState)
+                }
+                onChange={e => {
+                  const val = e.target.value;
+                  setMeetingState(prev => ({
+                    ...prev,
+                    freeNotes: val,
+                    generalConclusions: val
+                  }));
+                }}
+                placeholder="Digite ou edite aqui as anotações livres da reunião que deverão constar na Ata..."
+                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs sm:text-sm font-medium text-slate-800 outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white leading-relaxed resize-y"
+              />
             </div>
 
           </div>

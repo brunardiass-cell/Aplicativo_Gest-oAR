@@ -30,7 +30,8 @@ import {
   Star,
   UserCheck,
   Wrench,
-  Trash2
+  Trash2,
+  Flag
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -91,25 +92,84 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
       const saved = localStorage.getItem('ctvacinas_maintenance_periods');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {}
-    return [
-      {
-        id: 'maint_init_1',
-        startDate: '2026-10-25',
-        endDate: '2026-10-27',
-        title: 'Manutenção de Infraestrutura e Banco de Dados',
-        description: 'Janela de atualização preventiva e sincronização de servidores.',
-        status: 'Concluída',
-        impactLevel: 'Indisponibilidade Total',
-        createdAt: '2026-10-24T12:00:00Z',
-        createdBy: 'Suporte Técnico'
-      }
-    ];
+    return [];
   });
   const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
   const [editingMaintenance, setEditingMaintenance] = useState<Partial<MaintenancePeriod> | null>(null);
+
+  // Período de Início Real do Sistema (atividades anteriores ficam em laranja e fora dos indicadores)
+  const [systemRealStartDate, setSystemRealStartDate] = useState<string>(() => {
+    try {
+      return localStorage.getItem('ctvacinas_system_real_start_date') || '';
+    } catch (e) {
+      return '';
+    }
+  });
+  const [systemRealStartNote, setSystemRealStartNote] = useState<string>(() => {
+    try {
+      return (
+        localStorage.getItem('ctvacinas_system_real_start_note') ||
+        'Criada antes do aplicativo estar 100% funcionando'
+      );
+    } catch (e) {
+      return 'Criada antes do aplicativo estar 100% funcionando';
+    }
+  });
+  const [isSystemStartModalOpen, setIsSystemStartModalOpen] = useState(false);
+  const [tempSystemStartDate, setTempSystemStartDate] = useState('');
+  const [tempSystemStartNote, setTempSystemStartNote] = useState('');
+  const [showPreStartInTable, setShowPreStartInTable] = useState(true);
+
+  const saveSystemRealStart = (dateVal: string, noteVal?: string) => {
+    const cleanDate = dateVal.trim();
+    const cleanNote = (noteVal ?? systemRealStartNote).trim() || 'Criada antes do aplicativo estar 100% funcionando';
+    setSystemRealStartDate(cleanDate);
+    setSystemRealStartNote(cleanNote);
+    try {
+      if (cleanDate) {
+        localStorage.setItem('ctvacinas_system_real_start_date', cleanDate);
+      } else {
+        localStorage.removeItem('ctvacinas_system_real_start_date');
+      }
+      localStorage.setItem('ctvacinas_system_real_start_note', cleanNote);
+    } catch (e) {}
+  };
+
+  const getTaskOriginDateStr = (task: Task): string => {
+    const candidates = [
+      task.requestDate,
+      task.plannedStartDate,
+      task.completedAt ? task.completedAt.slice(0, 10) : '',
+      task.completionDate
+    ];
+    for (const c of candidates) {
+      if (c && /^\d{4}-\d{2}-\d{2}/.test(c)) {
+        return c.slice(0, 10);
+      }
+    }
+    return '';
+  };
+
+  const isTaskBeforeSystemStart = (task: Task): boolean => {
+    if (!systemRealStartDate) return false;
+    const originDate = getTaskOriginDateStr(task);
+    if (!originDate) return false;
+    return originDate < systemRealStartDate;
+  };
+
+  // Atividades consideradas nos indicadores e alertas (apenas a partir do início real do sistema, quando configurado)
+  const effectiveUserTasks = useMemo(() => {
+    if (!systemRealStartDate) return userTasks;
+    return userTasks.filter(t => !isTaskBeforeSystemStart(t));
+  }, [userTasks, systemRealStartDate]);
+
+  const preStartTasksCount = useMemo(() => {
+    if (!systemRealStartDate) return 0;
+    return userTasks.filter(t => isTaskBeforeSystemStart(t)).length;
+  }, [userTasks, systemRealStartDate]);
 
   const saveMaintenancePeriods = (updated: MaintenancePeriod[]) => {
     setMaintenancePeriods(updated);
@@ -162,42 +222,46 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
     return d;
   }, []);
 
-  // 1. Indicadores por status (Visão Geral)
+  // 1. Indicadores por status (Visão Geral — considerando apenas a partir do início real do sistema)
   const statusStats = useMemo(() => {
-    const total = userTasks.length;
-    const completed = userTasks.filter(t => t.status === 'Concluída').length;
-    const ongoing = userTasks.filter(t => t.status === 'Em Andamento').length;
-    const planned = userTasks.filter(t => t.status === 'Planejada').length;
-    const overdue = userTasks.filter(t => {
+    const total = effectiveUserTasks.length;
+    const completed = effectiveUserTasks.filter(t => t.status === 'Concluída').length;
+    const ongoing = effectiveUserTasks.filter(t => t.status === 'Em Andamento').length;
+    const planned = effectiveUserTasks.filter(t => t.status === 'Planejada').length;
+    const overdue = effectiveUserTasks.filter(t => {
       if (t.status === 'Concluída' || !t.completionDate) return false;
       return new Date(t.completionDate + 'T00:00:00') < today;
     }).length;
 
     return { total, completed, ongoing, planned, overdue };
-  }, [userTasks, today]);
+  }, [effectiveUserTasks, today]);
 
-  // 2. Alertas: Atividades próximas do vencimento e atrasadas
+  // 2. Alertas: Atividades próximas do vencimento e atrasadas (apenas a partir do início real do sistema)
   const alerts = useMemo(() => {
     const sevenDays = new Date(today);
     sevenDays.setDate(today.getDate() + 7);
 
-    const overdueTasks = userTasks.filter(t => {
+    const overdueTasks = effectiveUserTasks.filter(t => {
       if (t.status === 'Concluída' || !t.completionDate) return false;
       return new Date(t.completionDate + 'T00:00:00') < today;
     });
 
-    const dueSoonTasks = userTasks.filter(t => {
+    const dueSoonTasks = effectiveUserTasks.filter(t => {
       if (t.status === 'Concluída' || !t.completionDate) return false;
       const d = new Date(t.completionDate + 'T00:00:00');
       return d >= today && d <= sevenDays;
     });
 
     return { overdueTasks, dueSoonTasks };
-  }, [userTasks, today]);
+  }, [effectiveUserTasks, today]);
 
   // 3. Filtragem da lista do histórico / calendário
   const filteredTasks = useMemo(() => {
     return userTasks.filter(t => {
+      // Se o filtro de ocultar pré-início estiver ativo (e não houver uma data específica selecionada no calendário)
+      if (!showPreStartInTable && !selectedCalendarDateStr && isTaskBeforeSystemStart(t)) {
+        return false;
+      }
       // Busca textual
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
@@ -307,7 +371,7 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
       const compB = getCompletionTimestamp(b);
       return compB - compA; // Da mais recente para a mais antiga
     });
-  }, [userTasks, searchTerm, statusFilter, typeFilter, priorityFilter, projectFilter, groupFilter, selectedCalendarDateStr, dateRangeFilter, today]);
+  }, [userTasks, searchTerm, statusFilter, typeFilter, priorityFilter, projectFilter, groupFilter, selectedCalendarDateStr, dateRangeFilter, today, showPreStartInTable, systemRealStartDate]);
 
   // Handlers do Drawer Lateral
   const handleOpenDrawer = (task: Task) => {
@@ -483,7 +547,11 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                 </span>
               </div>
               <span className="text-2xl sm:text-3xl font-black text-slate-900 mt-2 block">{statusStats.total}</span>
-              <span className="text-[10px] font-bold text-slate-400 mt-1">Todas as demandas no escopo</span>
+              <span className="text-[10px] font-bold text-slate-400 mt-1">
+                {systemRealStartDate
+                  ? `A partir de ${formatDateBR(systemRealStartDate)}`
+                  : 'Todas as demandas no escopo'}
+              </span>
               <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-300" />
             </div>
 
@@ -616,6 +684,24 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                     <button
                       type="button"
                       onClick={() => {
+                        setTempSystemStartDate(systemRealStartDate || today.toISOString().split('T')[0]);
+                        setTempSystemStartNote(systemRealStartNote || 'Criada antes do aplicativo estar 100% funcionando');
+                        setIsSystemStartModalOpen(true);
+                      }}
+                      className={`ml-1 px-2.5 py-1 border rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition shadow-2xs ${
+                        systemRealStartDate
+                          ? 'bg-orange-100 hover:bg-orange-200 text-orange-900 border-orange-300'
+                          : 'bg-orange-50 hover:bg-orange-100 text-orange-800 border-orange-200'
+                      }`}
+                      title="Definir a data de início real do sistema (atividades anteriores ficam em laranja e fora dos indicadores)"
+                    >
+                      <Flag size={12} className="text-orange-600" />
+                      <span>{systemRealStartDate ? `Início: ${formatDateBR(systemRealStartDate)}` : 'Início Real'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
                         setEditingMaintenance({
                           startDate: today.toISOString().split('T')[0],
                           endDate: today.toISOString().split('T')[0],
@@ -626,7 +712,7 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                         });
                         setIsMaintenanceModalOpen(true);
                       }}
-                      className="ml-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition shadow-2xs"
+                      className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition shadow-2xs"
                       title="Gerenciar períodos de manutenção do sistema"
                     >
                       <Wrench size={12} className="text-amber-600" />
@@ -662,6 +748,15 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                         const isToday = today.toISOString().split('T')[0] === dateStr;
                         const dayMaintenances = getMaintenanceForDate(dateStr);
                         const isUnderMaintenance = dayMaintenances.length > 0;
+                        const isPreSystemStart = !!(systemRealStartDate && dateStr < systemRealStartDate);
+
+                        const tooltipParts: string[] = [];
+                        if (isPreSystemStart) {
+                          tooltipParts.push(`Anterior ao início real do sistema (${formatDateBR(systemRealStartDate)}) — ${systemRealStartNote}`);
+                        }
+                        if (isUnderMaintenance) {
+                          tooltipParts.push(`Manutenção: ${dayMaintenances.map(m => m.title).join(' | ')}`);
+                        }
 
                         cells.push(
                           <button
@@ -671,20 +766,25 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                             className={`h-9 rounded-xl border text-xs font-bold transition flex flex-col items-center justify-center relative ${
                               isSelected
                                 ? 'bg-teal-600 text-white border-teal-600 shadow-2xs font-black'
+                                : isPreSystemStart
+                                ? 'bg-orange-50/90 border-orange-300 text-orange-950 font-black hover:bg-orange-100'
                                 : isUnderMaintenance
                                 ? 'bg-amber-50/90 border-amber-300 text-amber-950 font-black hover:bg-amber-100'
                                 : isToday
                                 ? 'bg-teal-50 border-teal-300 text-teal-900'
                                 : 'bg-slate-50/80 border-slate-200/80 hover:bg-slate-100 text-slate-700'
                             }`}
-                            title={isUnderMaintenance ? `Período em Manutenção: ${dayMaintenances.map(m => m.title).join(' | ')}` : undefined}
+                            title={tooltipParts.length > 0 ? tooltipParts.join(' • ') : undefined}
                           >
                             <span>{d}</span>
                             <div className="flex items-center gap-0.5 mt-0.5">
                               {count > 0 && (
                                 <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-teal-500'}`} />
                               )}
-                              {isUnderMaintenance && (
+                              {isPreSystemStart && (
+                                <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-orange-200' : 'bg-orange-500'}`} />
+                              )}
+                              {isUnderMaintenance && !isPreSystemStart && (
                                 <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-amber-300' : 'bg-amber-600'}`} />
                               )}
                             </div>
@@ -700,9 +800,75 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                     })()}
                   </div>
 
+                  {/* Legenda do Calendário */}
+                  <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10px] font-bold text-slate-500">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-teal-500 inline-block" />
+                      <span>Atividade registrada</span>
+                    </span>
+                    <span className="flex items-center gap-1.5 text-orange-800">
+                      <span className="w-3 h-3 rounded-sm bg-orange-50 border border-orange-300 inline-flex items-center justify-center">
+                        <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                      </span>
+                      <span>Anterior ao início real do sistema (antes do app estar 100% funcionando)</span>
+                    </span>
+                    <span className="flex items-center gap-1.5 text-amber-800">
+                      <span className="w-3 h-3 rounded-sm bg-amber-50 border border-amber-300 inline-flex items-center justify-center text-[7px]">
+                        🔧
+                      </span>
+                      <span>Período de manutenção</span>
+                    </span>
+                  </div>
+
+                  {/* Banner de Início Real do Sistema */}
+                  {systemRealStartDate && (
+                    <div className="mt-3 p-2.5 bg-orange-50/80 border border-orange-200 rounded-xl text-xs flex items-center justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Flag size={13} className="text-orange-600 shrink-0" />
+                          <span className="font-extrabold text-orange-950">
+                            Início Real do Sistema: {formatDateBR(systemRealStartDate)}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase bg-orange-200/80 text-orange-900">
+                            {preStartTasksCount} atividade(s) pré-início em laranja
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-orange-900/80 font-semibold">
+                          {systemRealStartNote}. Indicadores acima consideram apenas atividades a partir de <strong>{formatDateBR(systemRealStartDate)}</strong>.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTempSystemStartDate(systemRealStartDate);
+                            setTempSystemStartNote(systemRealStartNote);
+                            setIsSystemStartModalOpen(true);
+                          }}
+                          className="p-1 text-orange-700 hover:text-orange-950 hover:bg-orange-200/60 rounded-lg transition"
+                          title="Editar data de início real"
+                        >
+                          <Edit3 size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm('Deseja remover a marcação de início real do sistema?')) {
+                              saveSystemRealStart('');
+                            }
+                          }}
+                          className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-100 rounded-lg transition"
+                          title="Remover início real"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Informativo de Manutenção abaixo do grid do calendário */}
                   {maintenancePeriods.length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-slate-100">
+                    <div className="mt-3 pt-3 border-t border-slate-100">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-1.5 text-[11px] font-black uppercase text-amber-900 tracking-wider">
                           <Wrench size={13} className="text-amber-600" />
@@ -926,11 +1092,30 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                 </h3>
                 <p className="text-xs text-slate-400 font-bold">
                   {filteredTasks.length} atividade(s) encontrada(s)
+                  {systemRealStartDate && (
+                    <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-bold text-orange-700">
+                      • <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" /> Em laranja: criadas antes de {formatDateBR(systemRealStartDate)} ({systemRealStartNote})
+                    </span>
+                  )}
                 </p>
               </div>
 
               {/* Botões rápidos de período */}
               <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold">
+                {systemRealStartDate && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPreStartInTable(prev => !prev)}
+                    className={`px-2.5 py-1 rounded-xl border transition ${
+                      showPreStartInTable
+                        ? 'bg-orange-50 border-orange-300 text-orange-800 hover:bg-orange-100'
+                        : 'bg-teal-50 border-teal-300 text-teal-800 hover:bg-teal-100'
+                    }`}
+                    title="Alternar exibição de atividades registradas antes do início real do sistema"
+                  >
+                    {showPreStartInTable ? 'Exibindo pré-início (laranja)' : `Apenas a partir de ${formatDateBR(systemRealStartDate)}`}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setDateRangeFilter('all')}
@@ -1061,18 +1246,37 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                 <tbody className="divide-y divide-slate-100">
                   {filteredTasks.map(task => {
                     const isDone = task.status === 'Concluída';
+                    const isPreStart = isTaskBeforeSystemStart(task);
                     return (
                       <tr
                         key={task.id}
                         onClick={() => handleOpenDrawer(task)}
-                        className={`hover:bg-slate-50/80 transition cursor-pointer group ${
-                          isDone ? 'bg-emerald-50/40 text-emerald-950' : ''
+                        className={`transition cursor-pointer group ${
+                          isPreStart
+                            ? 'bg-orange-50/75 hover:bg-orange-100/70 border-l-4 border-l-orange-400'
+                            : isDone
+                            ? 'bg-emerald-50/40 text-emerald-950 hover:bg-emerald-50/80'
+                            : 'hover:bg-slate-50/80'
                         }`}
                       >
                         <td className="py-3 px-3 min-w-[220px]">
-                          <span className={`font-black text-xs block leading-snug ${isDone ? 'line-through text-emerald-900' : 'text-slate-900'}`}>
-                            {task.activity}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className={`font-black text-xs leading-snug ${
+                              isPreStart
+                                ? isDone ? 'line-through text-orange-900/80' : 'text-orange-950'
+                                : isDone ? 'line-through text-emerald-900' : 'text-slate-900'
+                            }`}>
+                              {task.activity}
+                            </span>
+                            {isPreStart && (
+                              <span
+                                className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase bg-orange-200/90 text-orange-900 border border-orange-300 shrink-0"
+                                title={`${systemRealStartNote} (antes de ${formatDateBR(systemRealStartDate)})`}
+                              >
+                                Pré-início
+                              </span>
+                            )}
+                          </div>
                           {task.description && (
                             <span className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
                               {task.description}
@@ -1877,6 +2081,119 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                   <Check size={14} />
                   <span>Salvar Período</span>
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIGURAÇÃO DO INÍCIO REAL DO SISTEMA */}
+      {isSystemStartModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in"
+          onClick={() => setIsSystemStartModalOpen(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg p-5 sm:p-6 space-y-4 my-auto animate-in zoom-in-95"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-800 flex items-center justify-center shrink-0">
+                  <Flag size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase text-slate-900 tracking-tight">
+                    Início Real do Sistema
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Defina a partir de qual data o aplicativo passou a operar 100%
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSystemStartModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                if (!tempSystemStartDate) {
+                  alert('Por favor, informe a data de início real do sistema.');
+                  return;
+                }
+                saveSystemRealStart(tempSystemStartDate, tempSystemStartNote);
+                setIsSystemStartModalOpen(false);
+              }}
+              className="space-y-3.5 text-xs"
+            >
+              <div className="p-3 bg-orange-50 border border-orange-200 rounded-2xl text-[11px] text-orange-900 font-semibold leading-relaxed">
+                Todas as atividades registradas <strong>antes</strong> desta data serão mantidas no histórico e destacadas em <strong>laranja</strong> (com legenda), mas os indicadores da Visão Geral (Total, Concluídas, Em Andamento e Atrasadas) considerarão apenas as atividades a partir desta data.
+              </div>
+
+              <div>
+                <label className="text-[11px] font-black uppercase text-slate-600 block mb-1">
+                  Data de Início Real do Sistema *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={tempSystemStartDate}
+                  onChange={e => setTempSystemStartDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-orange-500 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-black uppercase text-slate-600 block mb-1">
+                  Texto da Legenda para Atividades Anteriores
+                </label>
+                <input
+                  type="text"
+                  value={tempSystemStartNote}
+                  onChange={e => setTempSystemStartNote(e.target.value)}
+                  placeholder="Ex: Criada antes do aplicativo estar 100% funcionando"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 outline-none focus:border-orange-500 focus:bg-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                {systemRealStartDate ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      saveSystemRealStart('');
+                      setIsSystemStartModalOpen(false);
+                    }}
+                    className="px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-xl font-bold transition"
+                  >
+                    Remover Data
+                  </button>
+                ) : (
+                  <span />
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsSystemStartModalOpen(false)}
+                    className="px-4 py-2 text-slate-500 hover:text-slate-800 font-bold transition"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-black uppercase tracking-wider transition shadow-sm flex items-center gap-1.5"
+                  >
+                    <Check size={14} />
+                    <span>Salvar Início Real</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>

@@ -280,6 +280,7 @@ export interface Meeting {
   attachedFiles?: MeetingAgendaFile[];
   fileLinks?: MeetingFileLink[];
   agendaItems: MeetingAgendaItem[];
+  freeNotes?: string;
   generalConclusions?: string;
   minutesTemplate?: string;
   minutesDocument?: string;
