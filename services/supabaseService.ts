@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { normalizeProfileGroupKey } from '../constants';
 
 const DEFAULT_SUPABASE_URL = 'https://ytjhipjsigaalboztcdz.supabase.co';
 const SCHEMA_NAME = 'ctvacinas';
@@ -278,54 +279,52 @@ export const SupabaseService = {
         fetchTable('app_config')
       ]);
 
-      // Mapeia app_config key-value
+      // Mapeia app_config key-value preservando updated_at para resolver aliases com segurança
       const configMap: Record<string, any> = {};
+      const configUpdatedAt: Record<string, string> = {};
       appConfigRows.forEach((row: any) => {
         if (row.key && row.value !== undefined) {
           configMap[row.key] = row.value;
+          configUpdatedAt[row.key] = row.updated_at || '';
         }
       });
 
-      // Extrai grupos de atividades salvos em app_config
-      let storedGroups: any[] = [];
-      if (Array.isArray(configMap.task_groups) && configMap.task_groups.length > 0) {
-        storedGroups = configMap.task_groups;
-      } else if (Array.isArray(configMap.activity_groups) && configMap.activity_groups.length > 0) {
-        storedGroups = configMap.activity_groups;
-      }
-
-      // Auto-descoberta: detecta grupos presentes em tarefas para garantir que nenhum grupo seja perdido
-      const knownGroupNames = new Set(storedGroups.map(g => (g.name || '').trim().toLowerCase()));
-      const discoveredGroups: any[] = [];
-      (tasks || []).forEach((t: any) => {
-        const groupName = (t.group || '').trim();
-        if (groupName && !knownGroupNames.has(groupName.toLowerCase())) {
-          knownGroupNames.add(groupName.toLowerCase());
-          discoveredGroups.push({
-            id: t.groupId || `group_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-            name: groupName,
-            projectName: t.project || undefined,
-            color: '#0d9488',
-            createdAt: new Date().toISOString(),
-            createdBy: 'Sistema'
-          });
-        }
-      });
-
-      const effectiveTaskGroups = [...storedGroups, ...discoveredGroups];
-
-      // Mapeamento de grupos independentes por perfil
+      // Mapeamento autoritativo de grupos independentes por perfil (SEM auto-descoberta de tarefas antigas)
       const profileTaskGroups: Record<string, any[]> = {};
+      const profileUpdatedAt: Record<string, string> = {};
+
       Object.keys(configMap).forEach(key => {
         if (key.startsWith('task_groups_') && Array.isArray(configMap[key])) {
-          const pKey = key.replace('task_groups_', '').toLowerCase().trim();
-          profileTaskGroups[pKey] = configMap[key];
+          const rawProfile = key.slice('task_groups_'.length);
+          const canonicalKey = normalizeProfileGroupKey(rawProfile);
+          const rowTs = configUpdatedAt[key] || '';
+          const existingTs = profileUpdatedAt[canonicalKey];
+          if (existingTs === undefined || rowTs >= existingTs) {
+            profileTaskGroups[canonicalKey] = configMap[key];
+            profileUpdatedAt[canonicalKey] = rowTs;
+          }
         }
       });
-      if (effectiveTaskGroups.length > 0) {
-        profileTaskGroups['bruna'] = profileTaskGroups['bruna'] || effectiveTaskGroups;
-        profileTaskGroups['bruna dias'] = profileTaskGroups['bruna dias'] || effectiveTaskGroups;
+
+      // Compatibilidade com a chave legada 'task_groups' (ou 'activity_groups')
+      const legacyKey = Array.isArray(configMap.task_groups)
+        ? 'task_groups'
+        : Array.isArray(configMap.activity_groups)
+          ? 'activity_groups'
+          : null;
+
+      if (legacyKey) {
+        const legacyTs = configUpdatedAt[legacyKey] || '';
+        const brunaTs = profileUpdatedAt['bruna'];
+        if (brunaTs === undefined || legacyTs > brunaTs) {
+          profileTaskGroups['bruna'] = configMap[legacyKey];
+          profileUpdatedAt['bruna'] = legacyTs;
+        }
       }
+
+      const effectiveTaskGroups = Array.isArray(profileTaskGroups['bruna'])
+        ? profileTaskGroups['bruna']
+        : [];
 
       const fullData = {
         projects: projects || [],
@@ -349,8 +348,11 @@ export const SupabaseService = {
         meetings: meetings.length > 0 ? meetings : undefined,
         notifications: notifications || [],
         logs: logs || [],
-        taskGroups: effectiveTaskGroups.length > 0 ? effectiveTaskGroups : undefined,
+        taskGroups: effectiveTaskGroups,
         profileTaskGroups,
+        maintenancePeriods: Array.isArray(configMap.maintenance_periods) ? configMap.maintenance_periods : undefined,
+        systemRealStartDate: typeof configMap.system_real_start_date === 'string' ? configMap.system_real_start_date : undefined,
+        systemRealStartNote: typeof configMap.system_real_start_note === 'string' ? configMap.system_real_start_note : undefined,
         managerEmail: configMap.managerEmail || 'brunadias@ctvacinas.org'
       };
 
@@ -635,27 +637,78 @@ export const SupabaseService = {
         updated_at: timestamp
       }));
 
-      // 20. App Config (managerEmail, task_groups e configurações gerais)
+      // 20. App Config (managerEmail, task_groups por perfil e configurações gerais)
+      const configRowsToUpsert: Array<{ key: string; value: any; updated_at: string; updated_by: string }> = [];
+
       if (fullData.managerEmail) {
-        await client
-          .from('app_config')
-          .upsert({
-            key: 'managerEmail',
-            value: fullData.managerEmail,
-            updated_at: timestamp,
-            updated_by: user
-          }, { onConflict: 'key' });
+        configRowsToUpsert.push({
+          key: 'managerEmail',
+          value: fullData.managerEmail,
+          updated_at: timestamp,
+          updated_by: user
+        });
       }
 
-      if (Array.isArray(fullData.taskGroups)) {
-        await client
-          .from('app_config')
-          .upsert({
+      if (fullData.profileTaskGroups && typeof fullData.profileTaskGroups === 'object') {
+        const seenKeys = new Set<string>();
+        Object.entries(fullData.profileTaskGroups).forEach(([rawKey, groupsVal]) => {
+          if (!Array.isArray(groupsVal)) return;
+          const canonicalKey = normalizeProfileGroupKey(rawKey);
+          if (seenKeys.has(canonicalKey)) return;
+          seenKeys.add(canonicalKey);
+          configRowsToUpsert.push({
+            key: `task_groups_${canonicalKey}`,
+            value: groupsVal,
+            updated_at: timestamp,
+            updated_by: user
+          });
+          if (canonicalKey === 'bruna') {
+            configRowsToUpsert.push({
+              key: 'task_groups',
+              value: groupsVal,
+              updated_at: timestamp,
+              updated_by: user
+            });
+            configRowsToUpsert.push({
+              key: 'task_groups_bruna dias',
+              value: groupsVal,
+              updated_at: timestamp,
+              updated_by: user
+            });
+          }
+        });
+      } else if (Array.isArray(fullData.taskGroups)) {
+        const activeCanonical = normalizeProfileGroupKey(user);
+        configRowsToUpsert.push({
+          key: `task_groups_${activeCanonical}`,
+          value: fullData.taskGroups,
+          updated_at: timestamp,
+          updated_by: user
+        });
+        if (activeCanonical === 'bruna') {
+          configRowsToUpsert.push({
             key: 'task_groups',
             value: fullData.taskGroups,
             updated_at: timestamp,
             updated_by: user
-          }, { onConflict: 'key' });
+          });
+          configRowsToUpsert.push({
+            key: 'task_groups_bruna dias',
+            value: fullData.taskGroups,
+            updated_at: timestamp,
+            updated_by: user
+          });
+        }
+      }
+
+      if (configRowsToUpsert.length > 0) {
+        const { error: cfgErr } = await client
+          .from('app_config')
+          .upsert(configRowsToUpsert, { onConflict: 'key' });
+        if (cfgErr) {
+          console.error('Erro ao salvar app_config no Supabase:', cfgErr);
+          throw cfgErr;
+        }
       }
 
       console.log('[Supabase] Todos os metadados foram salvos com sucesso no schema ctvacinas!');
@@ -676,23 +729,7 @@ export const SupabaseService = {
   },
 
   async saveTaskGroups(taskGroups: any[], user: string = 'Sistema'): Promise<boolean> {
-    const client = this.getClient();
-    if (!client) return false;
-    try {
-      const timestamp = new Date().toISOString();
-      const { error } = await client
-        .from('app_config')
-        .upsert({
-          key: 'task_groups',
-          value: taskGroups,
-          updated_at: timestamp,
-          updated_by: user
-        }, { onConflict: 'key' });
-      return !error;
-    } catch (e) {
-      console.warn('Erro ao salvar grupos no Supabase:', e);
-      return false;
-    }
+    return this.saveTaskGroupsForProfile(user || 'bruna', taskGroups, user);
   },
 
   async saveTaskGroupsForProfile(profileKey: string, taskGroups: any[], user: string = 'Sistema'): Promise<boolean> {
@@ -700,18 +737,75 @@ export const SupabaseService = {
     if (!client) return false;
     try {
       const timestamp = new Date().toISOString();
-      const cleanKey = `task_groups_${profileKey.toLowerCase().trim()}`;
-      const { error } = await client
-        .from('app_config')
-        .upsert({
-          key: cleanKey,
+      const canonicalKey = normalizeProfileGroupKey(profileKey);
+      const rows: Array<{ key: string; value: any; updated_at: string; updated_by: string }> = [
+        {
+          key: `task_groups_${canonicalKey}`,
           value: taskGroups,
           updated_at: timestamp,
           updated_by: user
-        }, { onConflict: 'key' });
-      return !error;
+        }
+      ];
+      if (canonicalKey === 'bruna') {
+        rows.push(
+          {
+            key: 'task_groups',
+            value: taskGroups,
+            updated_at: timestamp,
+            updated_by: user
+          },
+          {
+            key: 'task_groups_bruna dias',
+            value: taskGroups,
+            updated_at: timestamp,
+            updated_by: user
+          }
+        );
+      }
+      const { error } = await client
+        .from('app_config')
+        .upsert(rows, { onConflict: 'key' });
+      if (error) {
+        console.warn(`Erro ao salvar grupos do perfil ${canonicalKey} no Supabase:`, error);
+        return false;
+      }
+      return true;
     } catch (e) {
       console.warn(`Erro ao salvar grupos do perfil ${profileKey} no Supabase:`, e);
+      return false;
+    }
+  },
+
+  async getAppConfig(key: string): Promise<{ found: boolean; value: any }> {
+    const client = this.getClient();
+    if (!client) return { found: false, value: undefined };
+    try {
+      const { data, error } = await client
+        .from('app_config')
+        .select('value')
+        .eq('key', key)
+        .maybeSingle();
+      if (error || !data) return { found: false, value: undefined };
+      return { found: true, value: data.value };
+    } catch {
+      return { found: false, value: undefined };
+    }
+  },
+
+  async saveAppConfig(key: string, value: any, user: string = 'Sistema'): Promise<boolean> {
+    const client = this.getClient();
+    if (!client) return false;
+    try {
+      const { error } = await client
+        .from('app_config')
+        .upsert({
+          key,
+          value,
+          updated_at: new Date().toISOString(),
+          updated_by: user
+        }, { onConflict: 'key' });
+      return !error;
+    } catch {
       return false;
     }
   },

@@ -246,6 +246,17 @@ export const normalizeName = (name?: string): string => {
     .trim();
 };
 
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+export const normalizeProfileGroupKey = (name?: string): string => {
+  const normalized = normalizeName(name).replace(/\s+/g, ' ');
+  if (!normalized || FORBIDDEN_KEYS.has(normalized)) return 'geral';
+  if (normalized === 'bruna' || normalized.startsWith('bruna ')) {
+    return 'bruna';
+  }
+  return normalized;
+};
+
 export const isNameMatch = (targetName?: string, currentUserName?: string): boolean => {
   if (!targetName || !currentUserName) return false;
   const t = normalizeName(targetName);

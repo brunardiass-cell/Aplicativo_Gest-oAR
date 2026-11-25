@@ -18,7 +18,7 @@ import {
   MeetingAgendaFile,
   MeetingFileLink
 } from '../types';
-import { DEFAULT_TASK_GROUPS } from '../constants';
+import { normalizeProfileGroupKey } from '../constants';
 import { TaskNotesModal } from './TaskNotesModal';
 import { RetroactiveImportModal } from './RetroactiveImportModal';
 import { TaskCompletionModal } from './TaskCompletionModal';
@@ -148,17 +148,20 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   // 1. GERENCIAMENTO DE GRUPOS (Sincronizado via Supabase e Servidor)
   // ---------------------------------------------------------------------------
   const [internalGroups, setInternalGroups] = useState<TaskGroup[]>(() => {
-    if (groupsProp && groupsProp.length > 0) return groupsProp;
+    if (groupsProp !== undefined) return groupsProp;
     try {
-      const saved = localStorage.getItem('ctvacinas_task_groups');
+      const profileKey = normalizeProfileGroupKey(currentUser || 'bruna');
+      const saved =
+        localStorage.getItem(`ctvacinas_task_groups_${profileKey}`) ||
+        localStorage.getItem('ctvacinas_task_groups');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {
       console.error('Erro ao carregar grupos:', e);
     }
-    return DEFAULT_TASK_GROUPS;
+    return [];
   });
 
   const groups = useMemo(() => {
@@ -169,10 +172,12 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   // Salvar grupos localmente e sincronizar com o banco de dados Supabase
   const saveGroupsToStorage = (newGroups: TaskGroup[]) => {
     setInternalGroups(newGroups);
-    const profileKey = (currentUser || 'bruna').trim().toLowerCase();
+    const profileKey = normalizeProfileGroupKey(currentUser || 'bruna');
     try {
       localStorage.setItem(`ctvacinas_task_groups_${profileKey}`, JSON.stringify(newGroups));
-      localStorage.setItem('ctvacinas_task_groups', JSON.stringify(newGroups));
+      if (profileKey === 'bruna') {
+        localStorage.setItem('ctvacinas_task_groups', JSON.stringify(newGroups));
+      }
     } catch (e) {
       console.error('Erro ao salvar grupos:', e);
     }

@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { AccountInfo } from "@azure/msal-browser";
 import { Task, ViewMode, AppNotification, ActivityLog, Project, ActivityPlanTemplate, TeamMember, AppUser, SyncInfo, TaskNote, Status, MicroActivity, MicroActivityStatus, Prerequisite, RegulatoryStandard, RegulatoryStandardStatus, RegulatorySubject, VaccineCandidate, VaccineComponent, FormulationBatch, VaccineImpurity, RegulatoryEvidence, MacroActivityConfig, RegulatoryInfoItem, RepeatableRecord, RegulatoryNarrative, RegulatoryDocument, Meeting, DossierContribution, ProjectContributionItem, MeetingActionItem, TaskGroup } from './types';
-import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES, DEFAULT_MEETINGS, DEFAULT_ACTIVITY_PLANS, DEFAULT_TASK_GROUPS, INITIAL_BRUNA_TASK_GROUPS, isNameMatch, getAccountEmails } from './constants';
+import { DEFAULT_TEAM_MEMBERS, DEFAULT_APP_USERS, DEFAULT_REGULATORY_SUBJECTS, DEFAULT_REGULATORY_STANDARDS, DEFAULT_VACCINE_CANDIDATES, DEFAULT_VACCINE_COMPONENTS, DEFAULT_FORMULATION_BATCHES, DEFAULT_VACCINE_IMPURITIES, DEFAULT_MEETINGS, DEFAULT_ACTIVITY_PLANS, isNameMatch, getAccountEmails, normalizeProfileGroupKey } from './constants';
 import { MeetingsManager } from './components/MeetingsManager';
 import UserSelectionView from './components/UserSelectionView';
 import PasswordModal from './components/PasswordModal';
@@ -106,36 +106,27 @@ const App: React.FC = () => {
   const [regulatoryDocs, setRegulatoryDocs] = useState<RegulatoryDocument[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>(DEFAULT_MEETINGS);
   const [dossierContributions, setDossierContributions] = useState<DossierContribution[]>([]);
-  // Grupos de atividades independentes por perfil
+  // Grupos de atividades independentes por perfil (fonte primária: Supabase; localStorage apenas como cache)
   const [profileTaskGroupsMap, setProfileTaskGroupsMap] = useState<Record<string, TaskGroup[]>>(() => {
     try {
       const saved = localStorage.getItem('ctvacinas_profile_task_groups');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object') return parsed;
+        if (parsed && typeof parsed === 'object') {
+          const normalized: Record<string, TaskGroup[]> = {};
+          Object.entries(parsed).forEach(([k, v]) => {
+            if (Array.isArray(v)) {
+              normalized[normalizeProfileGroupKey(k)] = v as TaskGroup[];
+            }
+          });
+          return normalized;
+        }
       }
     } catch (e) {}
-
-    const brunaSaved = (() => {
-      try {
-        const b = localStorage.getItem('ctvacinas_task_groups_bruna') || localStorage.getItem('ctvacinas_task_groups');
-        if (b) {
-          const parsed = JSON.parse(b);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch (e) {}
-      return INITIAL_BRUNA_TASK_GROUPS;
-    })();
-
-    return {
-      'bruna': brunaSaved,
-      'bruna dias': brunaSaved
-    };
+    return {};
   });
 
-  const [taskGroups, setTaskGroups] = useState<TaskGroup[]>(() => {
-    return INITIAL_BRUNA_TASK_GROUPS;
-  });
+  const [taskGroups, setTaskGroups] = useState<TaskGroup[]>([]);
   const [lastSync, setLastSync] = useState<SyncInfo | null>(null);
   const [dataVersion, setDataVersion] = useState<string | null>(null);
   const [isDataDirty, setIsDataDirty] = useState(false);
@@ -213,6 +204,18 @@ const App: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const spMetadataMapRef = useRef<SPMetadataMap>({});
+  const clientIdRef = useRef<string>(`tab_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+  const selectedProfileRef = useRef<TeamMember | null>(selectedProfile);
+  const isDataDirtyRef = useRef<boolean>(isDataDirty);
+  const isAuthorizedRef = useRef<boolean | null>(isAuthorized);
+  const isMsalAuthenticatedRef = useRef<boolean>(isMsalAuthenticated);
+  const syncDataAutomaticallyRef = useRef<() => Promise<void>>(async () => {});
+  const lastAutoSyncAtRef = useRef<number>(0);
+
+  selectedProfileRef.current = selectedProfile;
+  isDataDirtyRef.current = isDataDirty;
+  isAuthorizedRef.current = isAuthorized;
+  isMsalAuthenticatedRef.current = isMsalAuthenticated;
   const criticalTasksCount = useMemo(() => {
     return tasks.filter(t => Boolean(t.isCritical) && t.status !== 'Concluída' && t.status !== 'Não Aplicável').length;
   }, [tasks]);
@@ -251,8 +254,20 @@ const App: React.FC = () => {
     }
   }, [tasks]);
 
+  // Sincronização automática ao retornar foco/aba (garante consistência imediata entre aba normal, anônima e celular via Supabase)
   useEffect(() => {
+    const triggerFocusSync = () => {
+      if (isInitialLoad.current || isDataDirtyRef.current) return;
+      if (document.visibilityState === 'hidden') return;
+      const now = Date.now();
+      if (now - lastAutoSyncAtRef.current < 3000) return;
+      lastAutoSyncAtRef.current = now;
+      syncDataAutomaticallyRef.current();
+    };
+
     const handleGlobalClick = async (e: MouseEvent) => {
+      // Quando o Supabase é o banco primário, NÃO sobrescreve com SharePoint Lists a cada clique!
+      if (SupabaseService.isConfigured()) return;
       if (!isMsalAuthenticated || !isAuthorized || !dataVersion) return;
 
       const target = e.target as HTMLElement;
@@ -261,7 +276,7 @@ const App: React.FC = () => {
           const cloudVersion = await MicrosoftGraphService.getCloudVersion();
           if (cloudVersion && cloudVersion !== dataVersion) {
             console.log('Remote update detected on click, syncing...');
-            syncDataAutomatically();
+            syncDataAutomaticallyRef.current();
           }
         } catch (err) {
           console.error("Error checking version on click:", err);
@@ -269,8 +284,14 @@ const App: React.FC = () => {
       }
     };
 
+    window.addEventListener('focus', triggerFocusSync);
+    document.addEventListener('visibilitychange', triggerFocusSync);
     document.addEventListener('click', handleGlobalClick);
-    return () => document.removeEventListener('click', handleGlobalClick);
+    return () => {
+      window.removeEventListener('focus', triggerFocusSync);
+      document.removeEventListener('visibilitychange', triggerFocusSync);
+      document.removeEventListener('click', handleGlobalClick);
+    };
   }, [isMsalAuthenticated, isAuthorized, dataVersion]);
 
   useEffect(() => {
@@ -299,8 +320,9 @@ const App: React.FC = () => {
 
       socket.onopen = () => {
         console.log('WebSocket connected successfully');
-        if (selectedProfile?.name && selectedProfile.name !== 'Visão Geral da Equipe') {
-          socket.send(JSON.stringify({ type: 'USER_JOINED', user: selectedProfile.name }));
+        const activeName = selectedProfileRef.current?.name;
+        if (activeName && activeName !== 'Visão Geral da Equipe') {
+          socket.send(JSON.stringify({ type: 'USER_JOINED', user: activeName }));
         }
       };
 
@@ -308,11 +330,13 @@ const App: React.FC = () => {
         console.log('WebSocket message received:', event.data);
         try {
           const data = JSON.parse(event.data);
-          if (data.type === 'RELOAD_REQUIRED') {
-            if (data.user !== selectedProfile?.name) {
-              console.log('Remote update detected from user:', data.user, '. Syncing automatically...');
-              syncDataAutomatically();
+          if (data.type === 'RELOAD_REQUIRED' || data.type === 'DATA_UPDATED') {
+            // Ignora apenas o evento originado pela própria aba; outras abas (normal, anônima ou celular) do mesmo usuário DEVEM sincronizar
+            if (data.clientId && data.clientId === clientIdRef.current) {
+              return;
             }
+            console.log('Remote update detected via WebSocket:', data.entity || 'all', '. Syncing from Supabase...');
+            syncDataAutomaticallyRef.current();
           } else if (data.type === 'PRESENCE_UPDATE') {
             setActiveUsers(data.users);
           } else if (data.type === 'PUSH_ALERT') {
@@ -322,7 +346,7 @@ const App: React.FC = () => {
             });
             setNotifications(prev => [{
               id: `notif_${Date.now()}`,
-              userId: selectedProfile?.name || 'Sistema',
+              userId: selectedProfileRef.current?.name || 'Sistema',
               message: `${data.title || 'Alerta Crítico'}: ${data.body || ''}`,
               timestamp: new Date().toISOString(),
               read: false,
@@ -444,6 +468,24 @@ const App: React.FC = () => {
         return m;
       });
 
+    // Hidrata mapa autoritativo de grupos por perfil (sem nunca ressuscitar DEFAULT_TASK_GROUPS)
+    const normalizedProfileGroups: Record<string, TaskGroup[]> = {};
+    if (cloudData.profileTaskGroups && typeof cloudData.profileTaskGroups === 'object') {
+      Object.entries(cloudData.profileTaskGroups).forEach(([rawKey, val]) => {
+        if (Array.isArray(val)) {
+          normalizedProfileGroups[normalizeProfileGroupKey(rawKey)] = val as TaskGroup[];
+        }
+      });
+    }
+    if (Array.isArray(cloudData.taskGroups) && normalizedProfileGroups['bruna'] === undefined) {
+      normalizedProfileGroups['bruna'] = cloudData.taskGroups;
+    }
+
+    const activeProfileKey = normalizeProfileGroupKey(selectedProfileRef.current?.name || 'bruna');
+    const finalGroups: TaskGroup[] = Array.isArray(normalizedProfileGroups[activeProfileKey])
+      ? normalizedProfileGroups[activeProfileKey]
+      : [];
+
     const fullData = {
       tasks: cloudData.tasks || [],
       projects: cloudData.projects || [],
@@ -467,10 +509,9 @@ const App: React.FC = () => {
       regulatoryDocs: cloudData.regulatoryDocs || [],
       meetings: (cloudData.meetings && cloudData.meetings.length > 0) ? cloudData.meetings : DEFAULT_MEETINGS,
       dossierContributions: cloudData.dossierContributions || [],
-      taskGroups: Array.isArray(cloudData.taskGroups) ? cloudData.taskGroups : DEFAULT_TASK_GROUPS,
+      taskGroups: finalGroups,
+      profileTaskGroups: normalizedProfileGroups,
     };
-
-    const finalGroups = fullData.taskGroups;
 
     setTasks(fullData.tasks);
     setProjects(fullData.projects);
@@ -494,15 +535,45 @@ const App: React.FC = () => {
     setRegulatoryDocs(fullData.regulatoryDocs);
     setMeetings(fullData.meetings);
     setDossierContributions(fullData.dossierContributions);
+    setProfileTaskGroupsMap(normalizedProfileGroups);
     setTaskGroups(finalGroups);
     try {
-      localStorage.setItem('ctvacinas_task_groups', JSON.stringify(finalGroups));
+      localStorage.setItem('ctvacinas_profile_task_groups', JSON.stringify(normalizedProfileGroups));
+      localStorage.setItem(`ctvacinas_task_groups_${activeProfileKey}`, JSON.stringify(finalGroups));
+      if (activeProfileKey === 'bruna') {
+        localStorage.setItem('ctvacinas_task_groups', JSON.stringify(finalGroups));
+      }
+      if (Array.isArray(cloudData.maintenancePeriods)) {
+        localStorage.setItem('ctvacinas_maintenance_periods', JSON.stringify(cloudData.maintenancePeriods));
+      }
+      if (typeof cloudData.systemRealStartDate === 'string') {
+        if (cloudData.systemRealStartDate) {
+          localStorage.setItem('ctvacinas_system_real_start_date', cloudData.systemRealStartDate);
+        } else {
+          localStorage.removeItem('ctvacinas_system_real_start_date');
+        }
+      }
+      if (typeof cloudData.systemRealStartNote === 'string' && cloudData.systemRealStartNote.trim()) {
+        localStorage.setItem('ctvacinas_system_real_start_note', cloudData.systemRealStartNote);
+      }
     } catch (e) {}
     setBaseData(JSON.parse(JSON.stringify(fullData)));
     persistDataLocally(fullData);
     setDataVersion(version);
     setIsDataDirty(false);
   };
+
+  // Mantém os grupos exibidos sempre alinhados com o perfil ativo a partir do mapa autoritativo do Supabase
+  useEffect(() => {
+    if (!selectedProfile?.name) return;
+    const canonicalKey = normalizeProfileGroupKey(selectedProfile.name);
+    if (Object.prototype.hasOwnProperty.call(profileTaskGroupsMap, canonicalKey)) {
+      const profileGroups = profileTaskGroupsMap[canonicalKey] || [];
+      setTaskGroups(prev => (isEqual(prev, profileGroups) ? prev : profileGroups));
+    } else if (Object.keys(profileTaskGroupsMap).length > 0) {
+      setTaskGroups([]);
+    }
+  }, [selectedProfile, profileTaskGroupsMap]);
 
   const loadDataFromSharePoint = async () => {
     setIsLoading(true);
@@ -576,18 +647,57 @@ const App: React.FC = () => {
   };
 
   const syncDataAutomatically = async () => {
-    if (!isMsalAuthenticated || !isAuthorized) return;
-    
     try {
+      // 1. Banco primário: Supabase (sincroniza imediatamente entre janela normal, anônima e celular)
+      if (SupabaseService.isConfigured()) {
+        const supaRes = await SupabaseService.loadAllData();
+        if (supaRes.success && supaRes.data) {
+          const cloudData = supaRes.data;
+          if (!isDataDirtyRef.current) {
+            console.log('[Supabase Auto-Sync] Atualizando estado local a partir do Supabase.');
+            applyData(cloudData, 'supabase_sync');
+          } else {
+            console.log('[Supabase Auto-Sync] Alterações locais pendentes: atualizando grupos e fazendo merge seguro.');
+            if (cloudData.profileTaskGroups && typeof cloudData.profileTaskGroups === 'object') {
+              const normalizedMap: Record<string, TaskGroup[]> = {};
+              Object.entries(cloudData.profileTaskGroups).forEach(([k, v]) => {
+                if (Array.isArray(v)) {
+                  normalizedMap[normalizeProfileGroupKey(k)] = v as TaskGroup[];
+                }
+              });
+              const activeKey = normalizeProfileGroupKey(selectedProfileRef.current?.name || 'bruna');
+              setProfileTaskGroupsMap(normalizedMap);
+              if (Array.isArray(normalizedMap[activeKey])) {
+                setTaskGroups(normalizedMap[activeKey]);
+              }
+            }
+          }
+          const now = new Date();
+          const dateStr = now.toLocaleDateString('pt-BR');
+          const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          setLastSync({
+            status: 'synced',
+            isCloud: true,
+            timestamp: now.toISOString(),
+            user: 'Supabase',
+            message: `Dados sincronizados com o Supabase em ${dateStr} às ${timeStr}`
+          });
+          return;
+        }
+      }
+
+      // 2. Fallback SharePoint apenas se o Supabase não estiver configurado
+      if (!isMsalAuthenticatedRef.current || !isAuthorizedRef.current) return;
+
       const result = await MicrosoftGraphService.loadFromSharePointLists();
       if (!result || !result.data) return;
-      
+
       const { data: cloudData, spMetadataMap } = result;
       if (spMetadataMap) {
         spMetadataMapRef.current = spMetadataMap;
       }
 
-      if (!isDataDirty) {
+      if (!isDataDirtyRef.current) {
         console.log('Auto-sync: No local changes, updating state from SharePoint Lists.');
         applyData(cloudData, null);
       } else {
@@ -628,7 +738,7 @@ const App: React.FC = () => {
         setAppUsers(merged.appUsers);
         setRegulatoryStandards(merged.regulatoryStandards);
         setRegulatorySubjects(merged.regulatorySubjects);
-        
+
         if (cloudData.managerEmail && cloudData.managerEmail !== managerEmail) {
           setManagerEmail(cloudData.managerEmail);
         }
@@ -648,6 +758,8 @@ const App: React.FC = () => {
       console.error('Auto-sync failed:', err);
     }
   };
+
+  syncDataAutomaticallyRef.current = syncDataAutomatically;
 
   const verifyAndAuthorize = useCallback(async (
     currentAccount: AccountInfo | null,
@@ -870,6 +982,8 @@ const App: React.FC = () => {
           regulatoryDocs,
           meetings,
           dossierContributions,
+          taskGroups,
+          profileTaskGroups: profileTaskGroupsMap,
           managerEmail
         };
 
@@ -907,36 +1021,87 @@ const App: React.FC = () => {
   };
 
   const handleUpdateGroups = useCallback(async (newGroups: TaskGroup[]) => {
+    const currentUser = selectedProfile?.name || 'Sistema';
+    const canonicalKey = normalizeProfileGroupKey(selectedProfile?.name || 'bruna');
+    const nextProfileMap: Record<string, TaskGroup[]> = {
+      ...profileTaskGroupsMap,
+      [canonicalKey]: newGroups
+    };
+
     setTaskGroups(newGroups);
-    const profileKey = (selectedProfile?.name || 'geral').trim().toLowerCase();
+    setProfileTaskGroupsMap(nextProfileMap);
+
     try {
-      localStorage.setItem(`ctvacinas_task_groups_${profileKey}`, JSON.stringify(newGroups));
-      localStorage.setItem('ctvacinas_task_groups', JSON.stringify(newGroups));
+      localStorage.setItem('ctvacinas_profile_task_groups', JSON.stringify(nextProfileMap));
+      localStorage.setItem(`ctvacinas_task_groups_${canonicalKey}`, JSON.stringify(newGroups));
+      if (canonicalKey === 'bruna') {
+        localStorage.setItem('ctvacinas_task_groups', JSON.stringify(newGroups));
+      }
+      const cachedRaw = localStorage.getItem(LOCAL_STORAGE_DATA_KEY);
+      if (cachedRaw) {
+        const cachedData = JSON.parse(cachedRaw);
+        if (cachedData && typeof cachedData === 'object') {
+          cachedData.profileTaskGroups = nextProfileMap;
+          cachedData.taskGroups = newGroups;
+          localStorage.setItem(LOCAL_STORAGE_DATA_KEY, JSON.stringify(cachedData));
+        }
+      }
     } catch (e) {}
 
-    // Sincroniza imediatamente com o Supabase
+    // 1. Armazenamento primário: aguarda confirmação no Supabase ANTES de notificar outras abas/dispositivos
+    let savedToSupabase = false;
     if (SupabaseService.isConfigured()) {
-      SupabaseService.saveTaskGroups(newGroups, selectedProfile?.name || 'Sistema').catch(() => {});
+      savedToSupabase = await SupabaseService.saveTaskGroupsForProfile(canonicalKey, newGroups, currentUser);
+      if (savedToSupabase) {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('pt-BR');
+        const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        setLastSync({
+          status: 'synced',
+          isCloud: true,
+          timestamp: now.toISOString(),
+          user: currentUser,
+          message: `Dados sincronizados com o Supabase em ${dateStr} às ${timeStr}`
+        });
+      }
     }
 
-    // Persiste no servidor backend para sincronização entre notebook e celular
-    fetch(`/api/task-groups?user=${encodeURIComponent(profileKey)}`, {
+    // 2. Atualiza cache no servidor backend e notifica todas as outras abas (normal, anônima e celular)
+    fetch(`/api/task-groups?user=${encodeURIComponent(canonicalKey)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ groups: newGroups, user: selectedProfile?.name || 'Sistema' })
+      body: JSON.stringify({
+        groups: newGroups,
+        user: currentUser,
+        profileKey: canonicalKey,
+        clientId: clientIdRef.current
+      })
     }).catch(() => {});
 
-    // Notifica outros clientes conectados via WebSocket
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: selectedProfile?.name || 'Sistema' }));
+      wsRef.current.send(JSON.stringify({
+        type: 'DATA_UPDATED',
+        user: currentUser,
+        clientId: clientIdRef.current,
+        entity: 'task_groups',
+        profileKey: canonicalKey
+      }));
     }
 
-    setDataDirty();
-  }, [selectedProfile]);
+    // Só marca dirty para salvamento completo em fallback caso o Supabase não tenha persistido diretamente
+    if (!savedToSupabase) {
+      setDataDirty();
+    }
+  }, [selectedProfile, profileTaskGroupsMap]);
 
   const handleSaveChanges = async () => {
     if (!isDataDirty) return;
     const currentUser = selectedProfile?.name || 'Sistema';
+    const activeCanonicalKey = normalizeProfileGroupKey(selectedProfile?.name || 'bruna');
+    const syncedProfileGroups: Record<string, TaskGroup[]> = {
+      ...profileTaskGroupsMap,
+      [activeCanonicalKey]: taskGroups
+    };
     const currentState = { 
       tasks, 
       projects, 
@@ -960,6 +1125,7 @@ const App: React.FC = () => {
       meetings,
       dossierContributions,
       taskGroups,
+      profileTaskGroups: syncedProfileGroups,
       managerEmail,
       lastEditor: currentUser
     };
@@ -986,7 +1152,7 @@ const App: React.FC = () => {
             message: `Dados sincronizados com o Supabase em ${dateStr} às ${timeStr}` 
           });
           if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: currentUser }));
+            wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: currentUser, clientId: clientIdRef.current }));
           }
           return;
         } else {
@@ -1034,7 +1200,7 @@ const App: React.FC = () => {
           message: 'Sincronizado com SharePoint' 
         });
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: currentUser }));
+          wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: currentUser, clientId: clientIdRef.current }));
         }
       } else {
         const errorMsg = modularRes.errors?.join(', ') || granularRes.error || 'Falha ao salvar no SharePoint';
@@ -1095,6 +1261,8 @@ const App: React.FC = () => {
         regulatoryDocs,
         meetings,
         dossierContributions,
+        taskGroups,
+        profileTaskGroups: profileTaskGroupsMap,
         managerEmail,
         lastEditor: currentUser
       };
@@ -1200,7 +1368,7 @@ const App: React.FC = () => {
 
     saveDataTimeout.current = window.setTimeout(handleSaveChanges, 2000);
 
-  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, regulatoryStandards, regulatorySubjects, vaccineCandidates, vaccineComponents, formulationBatches, managerEmail, dataVersion, isDataDirty]);
+  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, regulatoryStandards, regulatorySubjects, vaccineCandidates, vaccineComponents, formulationBatches, meetings, taskGroups, profileTaskGroupsMap, managerEmail, dataVersion, isDataDirty]);
 
   // Agendador de Backup Diário às 00:00 no SharePoint
   useEffect(() => {
@@ -1233,7 +1401,9 @@ const App: React.FC = () => {
           vaccineComponents,
           formulationBatches,
           vaccineImpurities,
-          meetings
+          meetings,
+          taskGroups,
+          profileTaskGroups: profileTaskGroupsMap
         };
 
         const res = await MicrosoftGraphService.saveDailyBackupToSharePoint(fullData);
@@ -1349,6 +1519,8 @@ const App: React.FC = () => {
       regulatoryDocs,
       meetings,
       dossierContributions,
+      taskGroups,
+      profileTaskGroups: profileTaskGroupsMap,
       exportDate: new Date().toISOString()
     };
     const blob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: 'application/json' });
@@ -1398,19 +1570,22 @@ const App: React.FC = () => {
     // Usuários ativos autenticados no SharePoint / sistema acessam sem requisição de senha
     setIsPasswordAuthenticated(true);
 
-    // Carregar grupos deste perfil específico (ou iniciar zerado se for novo perfil)
-    const profileKey = (user.name || '').trim().toLowerCase();
-    try {
-      const saved = localStorage.getItem(`ctvacinas_task_groups_${profileKey}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setTaskGroups(Array.isArray(parsed) ? parsed : []);
-      } else {
-        // Novo perfil começa com grupos zerados
+    // Carregar grupos deste perfil específico a partir do mapa do Supabase (ou iniciar zerado se for novo perfil)
+    const canonicalKey = normalizeProfileGroupKey(user.name);
+    if (Object.prototype.hasOwnProperty.call(profileTaskGroupsMap, canonicalKey)) {
+      setTaskGroups(profileTaskGroupsMap[canonicalKey] || []);
+    } else {
+      try {
+        const saved = localStorage.getItem(`ctvacinas_task_groups_${canonicalKey}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setTaskGroups(Array.isArray(parsed) ? parsed : []);
+        } else {
+          setTaskGroups([]);
+        }
+      } catch {
         setTaskGroups([]);
       }
-    } catch {
-      setTaskGroups([]);
     }
 
     if (user.isComiteGestor) {
@@ -2878,6 +3053,7 @@ const App: React.FC = () => {
           meetings,
           dossierContributions,
           taskGroups,
+          profileTaskGroups: profileTaskGroupsMap,
           managerEmail
         }}
         currentUser={selectedProfile?.name || 'Sistema'}

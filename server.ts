@@ -373,7 +373,13 @@ async function startServer() {
           console.log(`Data updated by user: ${data.user}. Broadcasting to other clients...`);
           wss.clients.forEach((client) => {
             if (client !== ws && client.readyState === WebSocket.OPEN) {
-              client.send(JSON.stringify({ type: "RELOAD_REQUIRED", user: data.user }));
+              client.send(JSON.stringify({
+                type: "RELOAD_REQUIRED",
+                user: data.user,
+                clientId: data.clientId || null,
+                entity: data.entity || "all",
+                profileKey: data.profileKey || null
+              }));
             }
           });
         }
@@ -835,17 +841,36 @@ async function startServer() {
   });
 
   // 10. Task Groups Management & Synchronization between Notebook & Mobile (Per-profile independent groups)
+  const normalizeServerProfileKey = (raw: unknown): string => {
+    const cleaned = String(raw || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!cleaned || cleaned === "__proto__" || cleaned === "constructor" || cleaned === "prototype") {
+      return "geral";
+    }
+    if (cleaned === "bruna" || cleaned.startsWith("bruna ")) {
+      return "bruna";
+    }
+    return cleaned;
+  };
+
   app.get("/api/task-groups", (req, res) => {
     try {
-      const userParam = (req.query.user || "").toString().trim().toLowerCase();
+      const userParam = req.query.user ? normalizeServerProfileKey(req.query.user) : "";
       if (fs.existsSync(DB_FILE)) {
         const fileContent = fs.readFileSync(DB_FILE, "utf-8");
         const data = JSON.parse(fileContent);
-        if (userParam && data.profileTaskGroups && Array.isArray(data.profileTaskGroups[userParam])) {
-          return res.json({ success: true, groups: data.profileTaskGroups[userParam] });
+        const profileMap = data.profileTaskGroups && typeof data.profileTaskGroups === "object"
+          ? data.profileTaskGroups
+          : null;
+        if (userParam && profileMap && Object.prototype.hasOwnProperty.call(profileMap, userParam) && Array.isArray(profileMap[userParam])) {
+          return res.json({ success: true, groups: profileMap[userParam] });
         }
-        if (data.profileTaskGroups) {
-          return res.json({ success: true, profileGroups: data.profileTaskGroups, groups: data.taskGroups || [] });
+        if (profileMap) {
+          return res.json({ success: true, profileGroups: profileMap, groups: Array.isArray(data.taskGroups) ? data.taskGroups : [] });
         }
         if (Array.isArray(data.taskGroups)) {
           return res.json({ success: true, groups: data.taskGroups });
@@ -859,11 +884,21 @@ async function startServer() {
 
   app.post("/api/task-groups", (req, res) => {
     try {
-      const { groups, user, profileKey } = req.body;
-      const targetKey = (profileKey || req.query.user || user || "bruna").toString().trim().toLowerCase();
+      const { groups, user, profileKey, clientId } = req.body || {};
+      const targetKey = normalizeServerProfileKey(profileKey || req.query.user || user || "bruna");
       if (!Array.isArray(groups)) {
         return res.status(400).json({ success: false, error: "groups deve ser um array." });
       }
+      const sanitizedGroups = groups
+        .filter((g: any) => g && typeof g === "object" && typeof g.id === "string" && typeof g.name === "string")
+        .map((g: any) => ({
+          id: String(g.id).slice(0, 120),
+          name: String(g.name).trim().slice(0, 150),
+          projectName: typeof g.projectName === "string" ? g.projectName.trim().slice(0, 200) : undefined,
+          color: typeof g.color === "string" ? g.color.slice(0, 32) : "#0d9488",
+          createdAt: typeof g.createdAt === "string" ? g.createdAt : new Date().toISOString(),
+          createdBy: typeof g.createdBy === "string" ? g.createdBy.slice(0, 120) : "Sistema"
+        }));
 
       let storedData: any = {};
       if (fs.existsSync(DB_FILE)) {
@@ -871,29 +906,31 @@ async function startServer() {
           storedData = JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
         } catch {}
       }
-      if (!storedData.profileTaskGroups) {
+      if (!storedData.profileTaskGroups || typeof storedData.profileTaskGroups !== "object") {
         storedData.profileTaskGroups = {};
       }
-      storedData.profileTaskGroups[targetKey] = groups;
-      if (targetKey.includes("bruna")) {
-        storedData.taskGroups = groups;
+      storedData.profileTaskGroups[targetKey] = sanitizedGroups;
+      if (targetKey === "bruna") {
+        storedData.taskGroups = sanitizedGroups;
+        delete storedData.profileTaskGroups["bruna dias"];
       }
       storedData.lastGroupsUpdate = new Date().toISOString();
       fs.writeFileSync(DB_FILE, JSON.stringify(storedData, null, 2), "utf-8");
 
-      // Broadcast para os outros navegadores conectados (notebooks e celulares)
+      // Broadcast RELOAD_REQUIRED para os outros navegadores conectados (abas normais, anônimas e celulares)
       wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify({ 
-            type: "DATA_UPDATED", 
-            user: user || "Sistema", 
+          client.send(JSON.stringify({
+            type: "RELOAD_REQUIRED",
+            user: typeof user === "string" ? user : "Sistema",
+            clientId: typeof clientId === "string" ? clientId : null,
             entity: "task_groups",
             profileKey: targetKey
           }));
         }
       });
 
-      return res.json({ success: true, count: groups.length, profileKey: targetKey });
+      return res.json({ success: true, count: sanitizedGroups.length, profileKey: targetKey });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
     }

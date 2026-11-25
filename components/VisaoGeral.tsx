@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Task, Project, TeamMember, Priority, Status, ActivityType, TaskNote, MaintenancePeriod } from '../types';
 import { TaskNotesModal } from './TaskNotesModal';
+import { SupabaseService } from '../services/supabaseService';
 import { 
   Calendar as CalendarIcon, 
   Clock, 
@@ -123,6 +124,69 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
   const [tempSystemStartNote, setTempSystemStartNote] = useState('');
   const [showPreStartInTable, setShowPreStartInTable] = useState(true);
 
+  // Sincroniza configurações do calendário (início real e manutenção) com o Supabase app_config
+  useEffect(() => {
+    let active = true;
+    const syncCalendarConfigFromSupabase = async () => {
+      if (!SupabaseService.isConfigured()) return;
+      try {
+        const [maintRes, startRes, noteRes] = await Promise.all([
+          SupabaseService.getAppConfig('maintenance_periods'),
+          SupabaseService.getAppConfig('system_real_start_date'),
+          SupabaseService.getAppConfig('system_real_start_note')
+        ]);
+        if (!active) return;
+
+        if (maintRes.found && Array.isArray(maintRes.value)) {
+          setMaintenancePeriods(maintRes.value);
+          try {
+            localStorage.setItem('ctvacinas_maintenance_periods', JSON.stringify(maintRes.value));
+          } catch {}
+        } else {
+          // Migra dados já salvos localmente no navegador caso o Supabase ainda não tenha a chave
+          try {
+            const localMaint = localStorage.getItem('ctvacinas_maintenance_periods');
+            if (localMaint) {
+              const parsed = JSON.parse(localMaint);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                SupabaseService.saveAppConfig('maintenance_periods', parsed, currentUser || 'Sistema').catch(() => {});
+              }
+            }
+          } catch {}
+        }
+
+        if (startRes.found && typeof startRes.value === 'string') {
+          setSystemRealStartDate(startRes.value);
+          try {
+            if (startRes.value) {
+              localStorage.setItem('ctvacinas_system_real_start_date', startRes.value);
+            } else {
+              localStorage.removeItem('ctvacinas_system_real_start_date');
+            }
+          } catch {}
+        } else {
+          try {
+            const localStart = localStorage.getItem('ctvacinas_system_real_start_date');
+            if (localStart) {
+              SupabaseService.saveAppConfig('system_real_start_date', localStart, currentUser || 'Sistema').catch(() => {});
+            }
+          } catch {}
+        }
+
+        if (noteRes.found && typeof noteRes.value === 'string' && noteRes.value.trim()) {
+          setSystemRealStartNote(noteRes.value);
+          try {
+            localStorage.setItem('ctvacinas_system_real_start_note', noteRes.value);
+          } catch {}
+        }
+      } catch (e) {
+        console.warn('Aviso ao sincronizar configurações do calendário com Supabase:', e);
+      }
+    };
+    syncCalendarConfigFromSupabase();
+    return () => { active = false; };
+  }, [currentUser]);
+
   const saveSystemRealStart = (dateVal: string, noteVal?: string) => {
     const cleanDate = dateVal.trim();
     const cleanNote = (noteVal ?? systemRealStartNote).trim() || 'Criada antes do aplicativo estar 100% funcionando';
@@ -136,6 +200,10 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
       }
       localStorage.setItem('ctvacinas_system_real_start_note', cleanNote);
     } catch (e) {}
+    if (SupabaseService.isConfigured()) {
+      SupabaseService.saveAppConfig('system_real_start_date', cleanDate, currentUser || 'Sistema').catch(() => {});
+      SupabaseService.saveAppConfig('system_real_start_note', cleanNote, currentUser || 'Sistema').catch(() => {});
+    }
   };
 
   const getTaskOriginDateStr = (task: Task): string => {
@@ -176,6 +244,9 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
     try {
       localStorage.setItem('ctvacinas_maintenance_periods', JSON.stringify(updated));
     } catch (e) {}
+    if (SupabaseService.isConfigured()) {
+      SupabaseService.saveAppConfig('maintenance_periods', updated, currentUser || 'Sistema').catch(() => {});
+    }
   };
 
   const getMaintenanceForDate = (dateStr: string) => {
