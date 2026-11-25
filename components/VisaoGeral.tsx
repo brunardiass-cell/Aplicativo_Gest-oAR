@@ -825,141 +825,6 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                       <span>Período de manutenção</span>
                     </span>
                   </div>
-
-                  {/* Banner de Início Real do Sistema */}
-                  {systemRealStartDate && (
-                    <div className="mt-3 p-2.5 bg-orange-50/80 border border-orange-200 rounded-xl text-xs flex items-center justify-between gap-3">
-                      <div className="space-y-0.5">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <Flag size={13} className="text-orange-600 shrink-0" />
-                          <span className="font-extrabold text-orange-950">
-                            Início Real do Sistema: {formatDateBR(systemRealStartDate)}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase bg-orange-200/80 text-orange-900">
-                            {preStartTasksCount} atividade(s) pré-início em laranja
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-orange-900/80 font-semibold">
-                          {systemRealStartNote}. Indicadores acima consideram apenas atividades a partir de <strong>{formatDateBR(systemRealStartDate)}</strong>.
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTempSystemStartDate(systemRealStartDate);
-                            setTempSystemStartNote(systemRealStartNote);
-                            setIsSystemStartModalOpen(true);
-                          }}
-                          className="p-1 text-orange-700 hover:text-orange-950 hover:bg-orange-200/60 rounded-lg transition"
-                          title="Editar data de início real"
-                        >
-                          <Edit3 size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (window.confirm('Deseja remover a marcação de início real do sistema?')) {
-                              saveSystemRealStart('');
-                            }
-                          }}
-                          className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-100 rounded-lg transition"
-                          title="Remover início real"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Informativo de Manutenção abaixo do grid do calendário */}
-                  {maintenancePeriods.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-slate-100">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-1.5 text-[11px] font-black uppercase text-amber-900 tracking-wider">
-                          <Wrench size={13} className="text-amber-600" />
-                          <span>Períodos de Manutenção do Sistema ({maintenancePeriods.length})</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingMaintenance({
-                              startDate: today.toISOString().split('T')[0],
-                              endDate: today.toISOString().split('T')[0],
-                              title: '',
-                              description: '',
-                              status: 'Programada',
-                              impactLevel: 'Indisponibilidade Total'
-                            });
-                            setIsMaintenanceModalOpen(true);
-                          }}
-                          className="text-[10px] font-black uppercase text-amber-700 hover:text-amber-900 flex items-center gap-1"
-                        >
-                          <Plus size={12} /> Adicionar Período
-                        </button>
-                      </div>
-
-                      <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                        {maintenancePeriods.map(mp => {
-                          const startFormatted = mp.startDate.split('-').reverse().join('/');
-                          const endFormatted = mp.endDate.split('-').reverse().join('/');
-                          return (
-                            <div 
-                              key={mp.id}
-                              className="p-2.5 bg-amber-50/70 hover:bg-amber-100/60 border border-amber-200/80 rounded-xl text-xs flex items-center justify-between gap-3 transition"
-                            >
-                              <div className="space-y-0.5">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-extrabold text-amber-950">{mp.title}</span>
-                                  <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
-                                    mp.status === 'Em Andamento' ? 'bg-amber-200 text-amber-900' :
-                                    mp.status === 'Concluída' ? 'bg-emerald-100 text-emerald-800' :
-                                    'bg-slate-200 text-slate-700'
-                                  }`}>
-                                    {mp.status}
-                                  </span>
-                                  {mp.impactLevel && (
-                                    <span className="text-[10px] text-amber-800/80 font-bold">
-                                      • {mp.impactLevel}
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-[10px] text-amber-900/70 font-semibold">
-                                  Período: <strong>{startFormatted}</strong> até <strong>{endFormatted}</strong>
-                                  {mp.description && ` — ${mp.description}`}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingMaintenance(mp);
-                                    setIsMaintenanceModalOpen(true);
-                                  }}
-                                  className="p-1 text-amber-700 hover:text-amber-900 hover:bg-amber-200/60 rounded-lg transition"
-                                  title="Editar período"
-                                >
-                                  <Edit3 size={13} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (window.confirm(`Deseja remover o registro de manutenção "${mp.title}"?`)) {
-                                      saveMaintenancePeriods(maintenancePeriods.filter(item => item.id !== mp.id));
-                                    }
-                                  }}
-                                  className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-100 rounded-lg transition"
-                                  title="Excluir período"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -2181,6 +2046,65 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
                 </button>
               </div>
             </form>
+
+            {maintenancePeriods.length > 0 && (
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <span className="text-[10px] font-black uppercase text-amber-900 tracking-wider block">
+                  Períodos Cadastrados ({maintenancePeriods.length})
+                </span>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  {maintenancePeriods.map(mp => {
+                    const startFormatted = mp.startDate.split('-').reverse().join('/');
+                    const endFormatted = mp.endDate.split('-').reverse().join('/');
+                    return (
+                      <div
+                        key={mp.id}
+                        className="p-2.5 bg-amber-50/70 border border-amber-200/80 rounded-xl text-xs flex items-center justify-between gap-2"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-extrabold text-amber-950 truncate">{mp.title}</div>
+                          <div className="text-[10px] text-amber-900/75 font-semibold">
+                            {startFormatted} até {endFormatted} • {mp.status}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setEditingMaintenance(mp)}
+                            className="p-1 text-amber-700 hover:bg-amber-200/60 rounded-lg transition"
+                            title="Editar período"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Deseja remover o registro de manutenção "${mp.title}"?`)) {
+                                saveMaintenancePeriods(maintenancePeriods.filter(item => item.id !== mp.id));
+                                if (editingMaintenance?.id === mp.id) {
+                                  setEditingMaintenance({
+                                    startDate: today.toISOString().split('T')[0],
+                                    endDate: today.toISOString().split('T')[0],
+                                    title: '',
+                                    description: '',
+                                    status: 'Programada',
+                                    impactLevel: 'Indisponibilidade Total'
+                                  });
+                                }
+                              }
+                            }}
+                            className="p-1 text-rose-500 hover:bg-rose-100 rounded-lg transition"
+                            title="Excluir período"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
