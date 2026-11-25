@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Meeting, Project, TeamMember, RegulatoryStandard, RegulatorySubject, MeetingActionItem, DossierContribution, Task } from '../types';
 import { DEFAULT_MINUTES_TEMPLATE, isNameMatch } from '../constants';
 import { DecisionsHistoryView } from './DecisionsHistoryView';
@@ -31,6 +31,9 @@ interface MeetingsManagerProps {
   onSaveTask?: (task: Task) => void;
   currentUser?: TeamMember | null;
   currentUserRole?: string | null;
+  initialMeetingId?: string | null;
+  initialTab?: 'previstas' | 'list' | 'decisions' | null;
+  onConsumeInitialSelection?: () => void;
 }
 
 export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
@@ -45,7 +48,10 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
   onConvertToActivity,
   onSaveTask,
   currentUser,
-  currentUserRole
+  currentUserRole,
+  initialMeetingId,
+  initialTab,
+  onConsumeInitialSelection
 }) => {
   const [activeTab, setActiveTab] = useState<'previstas' | 'list' | 'decisions'>('previstas');
   const [searchTerm, setSearchTerm] = useState('');
@@ -65,6 +71,20 @@ export const MeetingsManager: React.FC<MeetingsManagerProps> = ({
 
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [customMinutesTemplate, setCustomMinutesTemplate] = useState<string>(DEFAULT_MINUTES_TEMPLATE);
+
+  useEffect(() => {
+    if (!initialMeetingId && !initialTab) return;
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+    if (initialMeetingId) {
+      const target = meetings.find(m => m.id === initialMeetingId);
+      if (target) {
+        setActiveFullMeeting(target);
+      }
+    }
+    onConsumeInitialSelection?.();
+  }, [initialMeetingId, initialTab, meetings, onConsumeInitialSelection]);
 
   // Only Comitê Gestor / Visão Geral can see all projects and all meetings
   const isComiteGestor = useMemo(() => {

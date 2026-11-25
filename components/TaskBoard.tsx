@@ -121,6 +121,8 @@ interface TaskBoardProps {
   onAssignReview?: (taskId: string, reviewer: string) => void;
   groups?: TaskGroup[];
   onUpdateGroups?: (newGroups: TaskGroup[]) => void;
+  initialQuickFilter?: 'open' | 'week' | 'month' | 'pending' | 'completed' | null;
+  onConsumeInitialQuickFilter?: () => void;
 }
 
 export const TaskBoard: React.FC<TaskBoardProps> = ({
@@ -142,7 +144,9 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   hasFullAccess = true,
   isLeader = true,
   groups: groupsProp,
-  onUpdateGroups
+  onUpdateGroups,
+  initialQuickFilter,
+  onConsumeInitialQuickFilter
 }) => {
   // ---------------------------------------------------------------------------
   // 1. GERENCIAMENTO DE GRUPOS (Sincronizado via Supabase e Servidor)
@@ -902,56 +906,162 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   };
 
   // ---------------------------------------------------------------------------
-  // 3. FILTROS E LISTA PRINCIPAL (Somente em aberto na tela principal)
+  // 3. FILTROS RÁPIDOS, RESUMO DA AGENDA E LISTA PRINCIPAL
   // ---------------------------------------------------------------------------
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | ActivityType>('all');
   const [priorityFilter, setPriorityFilter] = useState<'all' | Priority>('all');
+  const [boardProjectFilter, setBoardProjectFilter] = useState<string>('Todos');
+  const [quickFilterTab, setQuickFilterTab] = useState<'open' | 'week' | 'month' | 'pending' | 'completed'>('open');
 
-  // Atividades em aberto (e notas/reuniões/concluídas mantidas por até 7 dias)
+  useEffect(() => {
+    if (initialQuickFilter) {
+      setQuickFilterTab(initialQuickFilter);
+      onConsumeInitialQuickFilter?.();
+    }
+  }, [initialQuickFilter, onConsumeInitialQuickFilter]);
+
+  const dateBoundaries = useMemo(() => {
+    const now = new Date();
+    const toLocalISO = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const today = toLocalISO(now);
+    const monthPrefix = today.slice(0, 7);
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    return {
+      today,
+      monthPrefix,
+      weekStartStr: toLocalISO(weekStart),
+      weekEndStr: toLocalISO(weekEnd)
+    };
+  }, []);
+
+  const getTaskDateForFilter = (t: Task): string => {
+    const candidates = [t.completionDate, t.plannedStartDate, t.requestDate, t.completedAt ? t.completedAt.slice(0, 10) : ''];
+    for (const c of candidates) {
+      if (c && /^\d{4}-\d{2}-\d{2}/.test(c)) return c.slice(0, 10);
+    }
+    return '';
+  };
+
+  const matchesSelectedGroup = (t: Task) => {
+    if (selectedGroupId === 'all') return true;
+    const grp = groups.find(g => g.id === selectedGroupId);
+    if (!grp) return true;
+    const grpNameLower = (grp.name || '').trim().toLowerCase();
+    const taskGroupLower = (t.group || '').trim().toLowerCase();
+    const matchId = Boolean(t.groupId && t.groupId === grp.id);
+    const matchName = Boolean(taskGroupLower && taskGroupLower === grpNameLower);
+
+    if (taskGroupLower && !matchName && !matchId) return false;
+    if (!taskGroupLower && !t.groupId) {
+      const matchProject = Boolean(
+        grp.projectName &&
+        grp.projectName.trim().toLowerCase() !== 'geral' &&
+        t.project === grp.projectName
+      );
+      return matchProject;
+    }
+    return matchName || matchId;
+  };
+
+  const boardProjectOptions = useMemo(() => {
+    const names = new Set<string>();
+    projects.forEach(p => { if (p.name) names.add(p.name); });
+    tasks.forEach(t => { if (!t.deleted && t.project) names.add(t.project); });
+    return Array.from(names).sort();
+  }, [projects, tasks]);
+
+  // Resumo da agenda (lateral esquerda) e contadores das abas de filtro rápido
+  const agendaQuickStats = useMemo(() => {
+    const nonDeleted = tasks.filter(t => !t.deleted);
+    const inGroup = nonDeleted.filter(matchesSelectedGroup);
+
+    const isOpenItem = (t: Task) => t.status !== 'Concluída' && t.status !== 'Não Aplicável';
+    const isCriticalOrOverdue = (t: Task) =>
+      isOpenItem(t) &&
+      (Boolean(t.isCritical) ||
+        t.priority === 'Urgente' ||
+        Boolean(t.completionDate && t.completionDate.slice(0, 10) < dateBoundaries.today));
+    const isThisWeek = (t: Task) => {
+      if (!isOpenItem(t)) return false;
+      const d = getTaskDateForFilter(t);
+      return Boolean(d && d >= dateBoundaries.weekStartStr && d <= dateBoundaries.weekEndStr);
+    };
+    const isThisMonth = (t: Task) => {
+      if (!isOpenItem(t)) return false;
+      const d = getTaskDateForFilter(t);
+      const req = (t.requestDate || '').slice(0, 10);
+      return d.startsWith(dateBoundaries.monthPrefix) || req.startsWith(dateBoundaries.monthPrefix);
+    };
+
+    // Resumo geral da agenda do usuário (mês, semana, críticas)
+    const monthAllTotal = nonDeleted.filter(t => {
+      if (t.status === 'Não Aplicável') return false;
+      const d = getTaskDateForFilter(t);
+      const req = (t.requestDate || '').slice(0, 10);
+      return d.startsWith(dateBoundaries.monthPrefix) || req.startsWith(dateBoundaries.monthPrefix);
+    }).length;
+    const weekOpenTotal = nonDeleted.filter(isThisWeek).length;
+    const criticalTotal = nonDeleted.filter(isCriticalOrOverdue).length;
+
+    // Contadores para os filtros rápidos dentro do grupo ativo
+    const groupOpen = inGroup.filter(isOpenItem).length;
+    const groupWeek = inGroup.filter(isThisWeek).length;
+    const groupMonth = inGroup.filter(isThisMonth).length;
+    const groupPending = inGroup.filter(isCriticalOrOverdue).length;
+    const groupCompleted = inGroup.filter(t => t.status === 'Concluída').length;
+
+    return {
+      monthAllTotal,
+      weekOpenTotal,
+      criticalTotal,
+      groupOpen,
+      groupWeek,
+      groupMonth,
+      groupPending,
+      groupCompleted
+    };
+  }, [tasks, selectedGroupId, groups, dateBoundaries]);
+
+  // Lista filtrada conforme aba rápida (Abertas | Esta semana | Este mês | Pendências | Finalizadas)
   const openTasks = useMemo(() => {
-    const nowMs = Date.now();
     return tasks.filter(t => {
       if (t.deleted) return false;
+      if (!matchesSelectedGroup(t)) return false;
 
-      // Regra de exibição:
-      // Se tiver showInActivitiesUntil definido (notas, reuniões ou tarefas mantidas por 7 dias):
-      if (t.showInActivitiesUntil) {
-        const untilMs = new Date(t.showInActivitiesUntil).getTime();
-        if (!isNaN(untilMs) && untilMs <= nowMs) return false;
-      } else if (t.status === 'Concluída') {
-        // Tarefas concluídas normais sem regra de 7 dias não aparecem em Atividades
-        return false;
+      const isDone = t.status === 'Concluída';
+      const isNA = t.status === 'Não Aplicável';
+
+      // Separação limpa entre pendentes/abertas e finalizadas (sem misturar)
+      if (quickFilterTab === 'completed') {
+        if (!isDone) return false;
+      } else {
+        if (isDone || isNA) return false;
+        if (quickFilterTab === 'week') {
+          const d = getTaskDateForFilter(t);
+          if (!d || d < dateBoundaries.weekStartStr || d > dateBoundaries.weekEndStr) return false;
+        } else if (quickFilterTab === 'month') {
+          const d = getTaskDateForFilter(t);
+          const req = (t.requestDate || '').slice(0, 10);
+          if (!d.startsWith(dateBoundaries.monthPrefix) && !req.startsWith(dateBoundaries.monthPrefix)) return false;
+        } else if (quickFilterTab === 'pending') {
+          const isOverdue = Boolean(t.completionDate && t.completionDate.slice(0, 10) < dateBoundaries.today);
+          if (!t.isCritical && t.priority !== 'Urgente' && !isOverdue) return false;
+        }
       }
 
-      // Filtro de Grupo com isolamento estrito
-      if (selectedGroupId !== 'all') {
-        const grp = groups.find(g => g.id === selectedGroupId);
-        if (grp) {
-          const grpNameLower = (grp.name || '').trim().toLowerCase();
-          const taskGroupLower = (t.group || '').trim().toLowerCase();
-          const matchId = Boolean(t.groupId && t.groupId === grp.id);
-          const matchName = Boolean(taskGroupLower && taskGroupLower === grpNameLower);
-
-          // Se a tarefa possui um grupo atribuído diferente deste, NUNCA exibir
-          if (taskGroupLower && !matchName && !matchId) {
-            return false;
-          }
-
-          // Se a tarefa não possui grupo explicitamente informado, aceita apenas se o projeto for específico e coincidir
-          if (!taskGroupLower && !t.groupId) {
-            const matchProject = Boolean(grp.projectName && grp.projectName.trim().toLowerCase() !== 'geral' && t.project === grp.projectName);
-            if (!matchProject) return false;
-          } else if (!matchName && !matchId) {
-            return false;
-          }
-        }
+      // Filtro de Projeto
+      if (boardProjectFilter !== 'Todos') {
+        if ((t.project || 'Geral') !== boardProjectFilter) return false;
       }
 
       // Filtro de Busca
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
-        const match = 
+        const match =
           t.activity.toLowerCase().includes(term) ||
           t.description?.toLowerCase().includes(term) ||
           t.project?.toLowerCase().includes(term) ||
@@ -974,18 +1084,17 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
       return true;
     }).sort((a, b) => {
-      // 1. Registros em aberto primeiro, concluídos (mantidos por 7 dias) por último
-      if (a.status !== 'Concluída' && b.status === 'Concluída') return -1;
-      if (a.status === 'Concluída' && b.status !== 'Concluída') return 1;
-
-      // 2. Se ambos forem concluídos mantidos por 7 dias: mais recentemente concluídos primeiro
-      if (a.status === 'Concluída' && b.status === 'Concluída') {
-        const timeA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
-        const timeB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+      if (quickFilterTab === 'completed') {
+        const timeA = new Date(a.completedAt || a.completionDate || 0).getTime();
+        const timeB = new Date(b.completedAt || b.completionDate || 0).getTime();
         return timeB - timeA;
       }
 
-      // 3. Se ambos em aberto: Ordenação por Alta prioridade primeiro, depois por prazo mais próximo
+      // Críticas/atrasadas primeiro, depois por prioridade e prazo mais próximo
+      const critA = a.isCritical || a.priority === 'Urgente' ? 0 : 1;
+      const critB = b.isCritical || b.priority === 'Urgente' ? 0 : 1;
+      if (critA !== critB) return critA - critB;
+
       const priorityWeight: Record<Priority, number> = {
         'Alta': 1,
         'Urgente': 1,
@@ -996,10 +1105,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
       const pA = priorityWeight[a.priority || 'Sem prioridade'] || 4;
       const pB = priorityWeight[b.priority || 'Sem prioridade'] || 4;
-
       if (pA !== pB) return pA - pB;
 
-      // Prazo mais próximo
       if (a.completionDate && b.completionDate) {
         return new Date(a.completionDate).getTime() - new Date(b.completionDate).getTime();
       }
@@ -1008,7 +1115,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
 
       return 0;
     });
-  }, [tasks, selectedGroupId, groups, searchTerm, typeFilter, priorityFilter]);
+  }, [tasks, selectedGroupId, groups, searchTerm, typeFilter, priorityFilter, boardProjectFilter, quickFilterTab, dateBoundaries]);
 
   // Contagem de abertas por grupo
   const openCountByGroup = useMemo(() => {
@@ -1851,8 +1958,99 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
           ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         
-        {/* LATERAL INTERNA: GRUPOS (Ordem 2 no Celular, Coluna 3 no Desktop) */}
-        <div className="order-2 lg:order-1 lg:col-span-3 bg-white rounded-3xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 space-y-4">
+        {/* LATERAL INTERNA: RESUMO DA AGENDA + GRUPOS (Ordem 2 no Celular, Coluna 3 no Desktop) */}
+        <div className="order-2 lg:order-1 lg:col-span-3 space-y-4">
+          {/* RESUMO DA MINHA AGENDA (Mês | Semana | Críticas) */}
+          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Layers size={15} className="text-teal-600 shrink-0" />
+                <h3 className="text-xs font-bold text-slate-900 truncate">
+                  Resumo da minha agenda
+                </h3>
+              </div>
+              <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">
+                Este mês
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedGroupId('all');
+                  setQuickFilterTab('month');
+                }}
+                className={`p-2.5 rounded-2xl border text-center transition ${
+                  quickFilterTab === 'month'
+                    ? 'bg-emerald-50 border-emerald-300 ring-1 ring-emerald-200'
+                    : 'bg-emerald-50/60 border-emerald-100 hover:border-emerald-200'
+                }`}
+                title="Filtrar atividades deste mês"
+              >
+                <div className="flex items-center justify-center gap-1 text-emerald-700">
+                  <CheckCircle size={12} />
+                  <span className="text-base font-bold tabular-nums leading-none">
+                    {agendaQuickStats.monthAllTotal}
+                  </span>
+                </div>
+                <span className="text-[10px] font-semibold text-emerald-700/80 block mt-1">
+                  Mês
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedGroupId('all');
+                  setQuickFilterTab('week');
+                }}
+                className={`p-2.5 rounded-2xl border text-center transition ${
+                  quickFilterTab === 'week'
+                    ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-200'
+                    : 'bg-blue-50/60 border-blue-100 hover:border-blue-200'
+                }`}
+                title="Filtrar atividades desta semana"
+              >
+                <div className="flex items-center justify-center gap-1 text-blue-700">
+                  <CalendarIcon size={12} />
+                  <span className="text-base font-bold tabular-nums leading-none">
+                    {agendaQuickStats.weekOpenTotal}
+                  </span>
+                </div>
+                <span className="text-[10px] font-semibold text-blue-700/80 block mt-1">
+                  Semana
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedGroupId('all');
+                  setQuickFilterTab('pending');
+                }}
+                className={`p-2.5 rounded-2xl border text-center transition ${
+                  quickFilterTab === 'pending'
+                    ? 'bg-rose-50 border-rose-300 ring-1 ring-rose-200'
+                    : 'bg-rose-50/60 border-rose-100 hover:border-rose-200'
+                }`}
+                title="Filtrar pendências críticas ou atrasadas"
+              >
+                <div className="flex items-center justify-center gap-1 text-rose-700">
+                  <AlertTriangle size={12} />
+                  <span className="text-base font-bold tabular-nums leading-none">
+                    {agendaQuickStats.criticalTotal}
+                  </span>
+                </div>
+                <span className="text-[10px] font-semibold text-rose-700/80 block mt-1">
+                  Críticas
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* GRUPOS DE ATIVIDADES */}
+          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Layers size={16} className="text-teal-600" />
@@ -1997,6 +2195,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
           >
             <Plus size={14} /> Novo Grupo
           </button>
+          </div>
         </div>
 
         {/* ÁREA PRINCIPAL: BLOCO DE NOTAS RÁPIDAS & REGISTROS EM ABERTO (Ordem 1 no Celular: Primeiro elemento visível) */}
@@ -2041,8 +2240,18 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                 <h2 className="text-base sm:text-lg font-black text-slate-900 uppercase tracking-tight">
                   Atividades
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[10px] font-black uppercase">
-                  {openTasks.length} Abertas
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                  quickFilterTab === 'completed'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : quickFilterTab === 'pending'
+                      ? 'bg-rose-100 text-rose-800'
+                      : 'bg-teal-100 text-teal-800'
+                }`}>
+                  {quickFilterTab === 'completed'
+                    ? `${openTasks.length} Finalizadas`
+                    : quickFilterTab === 'pending'
+                      ? `${openTasks.length} Pendências`
+                      : `${agendaQuickStats.groupOpen} Abertas`}
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-semibold mt-0.5">
@@ -2303,47 +2512,122 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
             </form>
           </div>
 
-          {/* BARRA DE PESQUISA E FILTROS RÁPIDOS DA LISTA */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-3 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                placeholder="Pesquisar registros abertos..."
-                className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-teal-500"
-              />
+          {/* BARRA DE FILTROS RÁPIDOS (Abertas | Esta semana | Este mês | Pendências | Finalizadas) + PESQUISA */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-3 shadow-2xs space-y-2.5 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
+              {/* Abas de filtro rápido */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setQuickFilterTab('open')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition whitespace-nowrap tabular-nums ${
+                    quickFilterTab === 'open'
+                      ? 'bg-teal-600 text-white shadow-2xs'
+                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+                  }`}
+                >
+                  Abertas ({agendaQuickStats.groupOpen})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuickFilterTab('week')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition whitespace-nowrap tabular-nums ${
+                    quickFilterTab === 'week'
+                      ? 'bg-teal-600 text-white shadow-2xs'
+                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+                  }`}
+                >
+                  Esta semana ({agendaQuickStats.groupWeek})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuickFilterTab('month')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition whitespace-nowrap tabular-nums ${
+                    quickFilterTab === 'month'
+                      ? 'bg-teal-600 text-white shadow-2xs'
+                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+                  }`}
+                >
+                  Este mês ({agendaQuickStats.groupMonth})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuickFilterTab('pending')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition whitespace-nowrap tabular-nums inline-flex items-center gap-1 ${
+                    quickFilterTab === 'pending'
+                      ? 'bg-rose-600 text-white shadow-2xs'
+                      : 'bg-rose-50/70 text-rose-700 hover:bg-rose-100 border border-rose-200/80'
+                  }`}
+                >
+                  <AlertTriangle size={12} />
+                  Pendências ({agendaQuickStats.groupPending})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuickFilterTab('completed')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition whitespace-nowrap tabular-nums ${
+                    quickFilterTab === 'completed'
+                      ? 'bg-slate-800 text-white shadow-2xs'
+                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+                  }`}
+                >
+                  Finalizadas ({agendaQuickStats.groupCompleted})
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <select
-                value={typeFilter}
-                onChange={e => setTypeFilter(e.target.value as any)}
-                className="py-1.5 px-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none cursor-pointer"
-              >
-                <option value="all">Tipos: Todos</option>
-                <option value="general">Tarefa</option>
-                <option value="note">Nota</option>
-                <option value="meeting">Reunião</option>
-                <option value="report">Relatório</option>
-              </select>
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="Pesquisar atividades..."
+                  className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:ring-1 focus:ring-teal-500"
+                />
+              </div>
 
-              <select
-                value={priorityFilter}
-                onChange={e => setPriorityFilter(e.target.value as any)}
-                className="py-1.5 px-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none cursor-pointer"
-              >
-                <option value="all">Prioridade: Todas</option>
-                <option value="Alta">Alta prioridade</option>
-                <option value="Média">Média prioridade</option>
-                <option value="Baixa">Baixa prioridade</option>
-                <option value="Sem prioridade">Sem prioridade</option>
-              </select>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={boardProjectFilter}
+                  onChange={e => setBoardProjectFilter(e.target.value)}
+                  className="py-1.5 px-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none cursor-pointer max-w-[190px]"
+                >
+                  <option value="Todos">Projeto: Todos</option>
+                  {boardProjectOptions.map(pName => (
+                    <option key={pName} value={pName}>{pName}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={typeFilter}
+                  onChange={e => setTypeFilter(e.target.value as any)}
+                  className="py-1.5 px-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none cursor-pointer"
+                >
+                  <option value="all">Tipos: Todos</option>
+                  <option value="general">Tarefa</option>
+                  <option value="note">Nota</option>
+                  <option value="meeting">Reunião</option>
+                  <option value="report">Relatório</option>
+                </select>
+
+                <select
+                  value={priorityFilter}
+                  onChange={e => setPriorityFilter(e.target.value as any)}
+                  className="py-1.5 px-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none cursor-pointer"
+                >
+                  <option value="all">Prioridade: Todas</option>
+                  <option value="Alta">Alta prioridade</option>
+                  <option value="Média">Média prioridade</option>
+                  <option value="Baixa">Baixa prioridade</option>
+                  <option value="Sem prioridade">Sem prioridade</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          {/* LISTA DE REGISTROS EM ABERTO (Linhas de Atividades Rápidas) */}
+          {/* LISTA DE REGISTROS (Abertos ou Finalizados conforme filtro rápido) */}
           <div className="space-y-2.5">
             {openTasks.map(task => {
               const typeInfo = getTypeBadge(task.activityType, task.isReport);
@@ -2356,8 +2640,10 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                   key={task.id}
                   className={`rounded-2xl border shadow-2xs transition p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 group relative ${
                     task.status === 'Concluída'
-                      ? 'bg-emerald-50/40 border-emerald-200/70 hover:bg-emerald-50/60'
-                      : 'bg-white border-slate-200/90 hover:shadow-xs hover:border-teal-200'
+                      ? 'bg-emerald-50/35 border-emerald-200/70 hover:bg-emerald-50/55'
+                      : isRegulatory
+                        ? 'bg-teal-50/25 border-teal-200/80 hover:shadow-xs hover:border-teal-300'
+                        : 'bg-white border-slate-200/90 hover:shadow-xs hover:border-teal-200'
                   }`}
                 >
                   {/* LADO ESQUERDO: CHECKBOX + TIPO + TÍTULO */}
@@ -2391,9 +2677,19 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                           </span>
                         )}
 
-                        {/* Tag de Grupo / Projeto */}
-                        <span className="text-[10px] font-bold text-slate-400 truncate">
-                          {task.group || 'Geral'} {task.project && task.project !== 'Geral' ? `• ${task.project}` : ''}
+                        {/* Vínculo visível com Grupo e Projeto + destaque discreto regulatório */}
+                        <span className="text-[11px] font-semibold text-slate-500 truncate inline-flex items-center gap-1.5">
+                          <span>{task.group || 'Geral'}</span>
+                          <span aria-hidden="true">·</span>
+                          <span className="text-slate-700">{task.project || 'Geral'}</span>
+                          {isRegulatory && (
+                            <span
+                              className="inline-flex items-center gap-0.5 text-teal-700 font-semibold"
+                              title="Atividade com impacto regulatório"
+                            >
+                              <ShieldCheck size={12} className="text-teal-600 shrink-0" />
+                            </span>
+                          )}
                         </span>
 
                         {/* Tag de Relatório - Com quem está / Em revisão por */}
@@ -2725,9 +3021,19 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
             {openTasks.length === 0 && (
               <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center space-y-2">
                 <CheckCircle size={36} className="mx-auto text-emerald-500" />
-                <h4 className="text-sm font-black uppercase text-slate-800">Tudo em dia!</h4>
+                <h4 className="text-sm font-black uppercase text-slate-800">
+                  {quickFilterTab === 'completed'
+                    ? 'Nenhuma atividade finalizada neste filtro'
+                    : quickFilterTab === 'pending'
+                      ? 'Sem pendências críticas!'
+                      : 'Tudo em dia!'}
+                </h4>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Nenhum registro em aberto neste grupo. Escreva uma nota rápida acima para adicionar uma nova demanda.
+                  {quickFilterTab === 'completed'
+                    ? 'As atividades concluídas aparecerão aqui assim que forem finalizadas.'
+                    : quickFilterTab === 'pending'
+                      ? 'Não há atividades atrasadas ou críticas neste recorte.'
+                      : 'Nenhum registro encontrado com os filtros atuais. Escreva uma nota rápida acima para adicionar uma nova demanda.'}
                 </p>
               </div>
             )}

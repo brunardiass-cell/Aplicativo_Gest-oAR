@@ -11,7 +11,7 @@ import PasswordModal from './components/PasswordModal';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import ProjectsDashboard from './components/ProjectsDashboard';
-import { VisaoGeral } from './components/VisaoGeral';
+import { VisaoGeral, TaskBoardQuickFilterPreset } from './components/VisaoGeral';
 import TaskBoard from './components/TaskBoard';
 import ProjectTaskBoard from './components/ProjectTaskBoard';
 import TaskModal from './components/TaskModal';
@@ -191,6 +191,10 @@ const App: React.FC = () => {
   const [projTask_dateFilterType, setProjTask_dateFilterType] = useState<'all' | 'dueDate'>('all');
   const [projTask_startDateFilter, setProjTask_startDateFilter] = useState('');
   const [projTask_endDateFilter, setProjTask_endDateFilter] = useState('');
+
+  // Navegação contextual a partir da Visão Geral Regulatória (somente estado de UI)
+  const [pendingMeetingNav, setPendingMeetingNav] = useState<{ id?: string; tab?: 'previstas' | 'list' | 'decisions' } | null>(null);
+  const [pendingTaskBoardQuickFilter, setPendingTaskBoardQuickFilter] = useState<TaskBoardQuickFilterPreset | null>(null);
 
 
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -2695,12 +2699,24 @@ const App: React.FC = () => {
             <VisaoGeral 
               tasks={tasks}
               projects={activeProjects}
+              meetings={meetings}
               currentUser={selectedProfile?.name || 'Todos'}
               selectedProfile={selectedProfile}
               onEditTask={(task) => { setSelectedTask(task); setIsModalOpen(true); }}
               onViewTask={(task) => { setSelectedTask(task); setIsDetailsOpen(true); }}
               onSaveTask={handleSaveTask}
               onNavigateToProject={handleNavigateToProject}
+              onNavigateToView={(targetView) => setView(targetView)}
+              onOpenMeeting={(meetingId, tab) => {
+                setPendingMeetingNav({ id: meetingId, tab });
+                setView('meetings');
+              }}
+              onNewTask={canCreate ? () => { setSelectedTask(null); setIsModalOpen(true); } : undefined}
+              onOpenTasksWithFilter={(preset) => {
+                setPendingTaskBoardQuickFilter(preset);
+                setTaskViewTab('sector');
+                setView('tasks');
+              }}
             />
           )
         )}
@@ -2766,6 +2782,8 @@ const App: React.FC = () => {
                 onConvertToActivity={handleConvertToActivity}
                 groups={taskGroups}
                 onUpdateGroups={handleUpdateGroups}
+                initialQuickFilter={pendingTaskBoardQuickFilter}
+                onConsumeInitialQuickFilter={() => setPendingTaskBoardQuickFilter(null)}
               />
             ) : (
               <ProjectTaskBoard 
@@ -2901,6 +2919,9 @@ const App: React.FC = () => {
             teamMembers={teamMembers}
             regulatoryStandards={regulatoryStandards}
             regulatorySubjects={regulatorySubjects}
+            initialMeetingId={pendingMeetingNav?.id || null}
+            initialTab={pendingMeetingNav?.tab || null}
+            onConsumeInitialSelection={() => setPendingMeetingNav(null)}
             onUpdateMeetings={(mList) => { 
               setMeetings(mList); 
               setDataDirty(); 
