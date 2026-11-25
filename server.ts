@@ -457,11 +457,25 @@ async function startServer() {
 
   app.post("/api/supabase-config", (req, res) => {
     try {
-      const { url, anonKey, schema } = req.body;
+      const { url, anonKey, schema } = req.body || {};
+      const candidateUrl = typeof url === "string" && url.trim() ? url.trim() : "https://ytjhipjsigaalboztcdz.supabase.co";
+      let validatedUrl = "https://ytjhipjsigaalboztcdz.supabase.co";
+      try {
+        const parsed = new URL(candidateUrl);
+        if (parsed.protocol === "https:") {
+          validatedUrl = parsed.origin;
+        }
+      } catch {
+        return res.status(400).json({ success: false, error: "URL do Supabase inválida." });
+      }
+      const cleanSchema = typeof schema === "string" && /^[a-z_][a-z0-9_]{0,62}$/.test(schema.trim())
+        ? schema.trim()
+        : "ctvacinas";
+      const cleanKey = typeof anonKey === "string" ? anonKey.trim().slice(0, 1024) : "";
       const config = {
-        url: url ? url.trim() : "https://ytjhipjsigaalboztcdz.supabase.co",
-        anonKey: anonKey ? anonKey.trim() : "",
-        schema: schema ? schema.trim() : "ctvacinas"
+        url: validatedUrl,
+        anonKey: cleanKey,
+        schema: cleanSchema
       };
       fs.writeFileSync(SUPABASE_CONFIG_FILE, JSON.stringify(config, null, 2), "utf-8");
       return res.json({ success: true, config });

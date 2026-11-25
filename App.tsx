@@ -205,6 +205,7 @@ const App: React.FC = () => {
 
   const isInitialLoad = useRef(true);
   const saveDataTimeout = useRef<number | null>(null);
+  const retrySaveTimeoutRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const spMetadataMapRef = useRef<SPMetadataMap>({});
@@ -214,12 +215,47 @@ const App: React.FC = () => {
   const isAuthorizedRef = useRef<boolean | null>(isAuthorized);
   const isMsalAuthenticatedRef = useRef<boolean>(isMsalAuthenticated);
   const syncDataAutomaticallyRef = useRef<() => Promise<void>>(async () => {});
+  const handleSaveChangesRef = useRef<() => Promise<boolean>>(async () => false);
   const lastAutoSyncAtRef = useRef<number>(0);
+  const saveInFlightRef = useRef<boolean>(false);
+  const pendingResaveRef = useRef<boolean>(false);
+  const dirtyRevisionRef = useRef<number>(0);
+  const baseDataRef = useRef<any>(null);
+  const lastRemoteStampRef = useRef<string | null>(null);
+  const [supabaseReadyTick, setSupabaseReadyTick] = useState<number>(0);
 
   selectedProfileRef.current = selectedProfile;
   isDataDirtyRef.current = isDataDirty;
   isAuthorizedRef.current = isAuthorized;
   isMsalAuthenticatedRef.current = isMsalAuthenticated;
+
+  const latestStateRef = useRef<any>(null);
+  latestStateRef.current = {
+    tasks,
+    projects,
+    teamMembers,
+    activityPlans,
+    notifications,
+    logs,
+    appUsers,
+    regulatoryStandards,
+    regulatorySubjects,
+    vaccineCandidates,
+    vaccineComponents,
+    formulationBatches,
+    vaccineImpurities,
+    regulatoryEvidence,
+    macroActivityConfigs,
+    regulatoryInfoItems,
+    repeatableRecords,
+    regulatoryNarratives,
+    regulatoryDocs,
+    meetings,
+    dossierContributions,
+    taskGroups,
+    profileTaskGroups: profileTaskGroupsMap,
+    managerEmail
+  };
   const criticalTasksCount = useMemo(() => {
     return tasks.filter(t => Boolean(t.isCritical) && t.status !== 'Concluída' && t.status !== 'Não Aplicável').length;
   }, [tasks]);
@@ -258,10 +294,10 @@ const App: React.FC = () => {
     }
   }, [tasks]);
 
-  // Sincronização automática ao retornar foco/aba (garante consistência imediata entre aba normal, anônima e celular via Supabase)
+  // Sincronização multiusuário contínua (foco da aba + Supabase Realtime + verificação leve a cada 12s + proteção contra perda ao recarregar)
   useEffect(() => {
     const triggerFocusSync = () => {
-      if (isInitialLoad.current || isDataDirtyRef.current) return;
+      if (isInitialLoad.current || saveInFlightRef.current) return;
       if (document.visibilityState === 'hidden') return;
       const now = Date.now();
       if (now - lastAutoSyncAtRef.current < 3000) return;
@@ -269,8 +305,21 @@ const App: React.FC = () => {
       syncDataAutomaticallyRef.current();
     };
 
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDataDirtyRef.current || saveInFlightRef.current) {
+        // Dispara salvamento imediato se houver debounce pendente
+        if (saveDataTimeout.current) {
+          clearTimeout(saveDataTimeout.current);
+          saveDataTimeout.current = null;
+          handleSaveChangesRef.current();
+        }
+        e.preventDefault();
+        e.returnValue = 'Ainda há alterações sendo salvas no Supabase. Aguarde um instante antes de recarregar.';
+        return e.returnValue;
+      }
+    };
+
     const handleGlobalClick = async (e: MouseEvent) => {
-      // Quando o Supabase é o banco primário, NÃO sobrescreve com SharePoint Lists a cada clique!
       if (SupabaseService.isConfigured()) return;
       if (!isMsalAuthenticated || !isAuthorized || !dataVersion) return;
 
@@ -288,15 +337,47 @@ const App: React.FC = () => {
       }
     };
 
+    // Assinatura Supabase Realtime (propaga alterações de qualquer usuário imediatamente quando habilitado)
+    let unsubscribeRealtime: () => void = () => {};
+    if (SupabaseService.isConfigured()) {
+      unsubscribeRealtime = SupabaseService.subscribeToChanges((tableName) => {
+        if (isInitialLoad.current || saveInFlightRef.current) return;
+        console.log(`[Supabase Realtime] Alteração remota detectada em "${tableName}". Sincronizando...`);
+        syncDataAutomaticallyRef.current();
+      });
+    }
+
+    // Verificação leve multiusuário a cada 12s (garante sincronização mesmo sem WebSocket ou Realtime habilitado)
+    const pollInterval = window.setInterval(async () => {
+      if (isInitialLoad.current || saveInFlightRef.current) return;
+      if (document.visibilityState === 'hidden') return;
+      if (!SupabaseService.isConfigured()) return;
+      try {
+        const remoteStamp = await SupabaseService.getRemoteVersionStamp();
+        if (!remoteStamp) return;
+        if (lastRemoteStampRef.current && remoteStamp !== lastRemoteStampRef.current) {
+          console.log('[Supabase Multi-User Sync] Nova atualização de outro usuário detectada. Sincronizando...');
+          lastRemoteStampRef.current = remoteStamp;
+          await syncDataAutomaticallyRef.current();
+        } else if (!lastRemoteStampRef.current) {
+          lastRemoteStampRef.current = remoteStamp;
+        }
+      } catch {}
+    }, 12000);
+
     window.addEventListener('focus', triggerFocusSync);
+    window.addEventListener('beforeunload', handleBeforeUnload);
     document.addEventListener('visibilitychange', triggerFocusSync);
     document.addEventListener('click', handleGlobalClick);
     return () => {
+      unsubscribeRealtime();
+      clearInterval(pollInterval);
       window.removeEventListener('focus', triggerFocusSync);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', triggerFocusSync);
       document.removeEventListener('click', handleGlobalClick);
     };
-  }, [isMsalAuthenticated, isAuthorized, dataVersion]);
+  }, [isMsalAuthenticated, isAuthorized, dataVersion, supabaseReadyTick]);
 
   useEffect(() => {
     const sendJoinMessage = () => {
@@ -416,9 +497,20 @@ const App: React.FC = () => {
   const isDesktop = windowWidth > 1024;
 
   const setDataDirty = () => {
-    if (!isDataDirty) {
+    dirtyRevisionRef.current += 1;
+    isDataDirtyRef.current = true;
+    queueMicrotask(() => {
       setIsDataDirty(true);
-    }
+      if (SupabaseService.isConfigured()) {
+        setLastSync({
+          status: 'syncing',
+          isCloud: true,
+          timestamp: new Date().toISOString(),
+          user: selectedProfileRef.current?.name || 'Sistema',
+          message: 'Salvando alterações no Supabase...'
+        });
+      }
+    });
   };
 
   const applyData = (cloudData: any, version: string | null) => {
@@ -511,7 +603,7 @@ const App: React.FC = () => {
       repeatableRecords: cloudData.repeatableRecords || [],
       regulatoryNarratives: cloudData.regulatoryNarratives || [],
       regulatoryDocs: cloudData.regulatoryDocs || [],
-      meetings: (cloudData.meetings && cloudData.meetings.length > 0) ? cloudData.meetings : DEFAULT_MEETINGS,
+      meetings: Array.isArray(cloudData.meetings) ? cloudData.meetings : DEFAULT_MEETINGS,
       dossierContributions: cloudData.dossierContributions || [],
       taskGroups: finalGroups,
       profileTaskGroups: normalizedProfileGroups,
@@ -560,10 +652,14 @@ const App: React.FC = () => {
       if (typeof cloudData.systemRealStartNote === 'string' && cloudData.systemRealStartNote.trim()) {
         localStorage.setItem('ctvacinas_system_real_start_note', cloudData.systemRealStartNote);
       }
+      window.dispatchEvent(new CustomEvent('ctvacinas_app_config_updated'));
     } catch (e) {}
-    setBaseData(JSON.parse(JSON.stringify(fullData)));
+    const clonedBase = JSON.parse(JSON.stringify(fullData));
+    baseDataRef.current = clonedBase;
+    setBaseData(clonedBase);
     persistDataLocally(fullData);
     setDataVersion(version);
+    isDataDirtyRef.current = false;
     setIsDataDirty(false);
   };
 
@@ -586,8 +682,11 @@ const App: React.FC = () => {
       if (SupabaseService.isConfigured()) {
         console.log('[Supabase] Carregando metadados do banco de dados (schema ctvacinas)...');
         const supaRes = await SupabaseService.loadAllData();
-        if (supaRes.success && supaRes.data && (supaRes.data.projects?.length > 0 || supaRes.data.tasks?.length > 0)) {
+        if (supaRes.success && supaRes.data && supaRes.hasRemoteRecords) {
           applyData(supaRes.data, 'supabase');
+          SupabaseService.getRemoteVersionStamp().then(stamp => {
+            if (stamp) lastRemoteStampRef.current = stamp;
+          }).catch(() => {});
           const now = new Date();
           const dateStr = now.toLocaleDateString('pt-BR');
           const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -596,7 +695,7 @@ const App: React.FC = () => {
             isCloud: true, 
             timestamp: now.toISOString(), 
             user: 'Supabase', 
-            message: `Dados sincronizados com o Supabase em ${dateStr} às ${timeStr}` 
+            message: `Sincronizado com Supabase em ${dateStr} às ${timeStr}` 
           });
           setIsLoading(false);
           isInitialLoad.current = false;
@@ -632,7 +731,7 @@ const App: React.FC = () => {
         }
         applyData(result.data, result.version || null);
       } else {
-        if (!baseData) {
+        if (!baseDataRef.current) {
           setTeamMembers(prev => prev.length > 0 ? prev : DEFAULT_TEAM_MEMBERS);
           setAppUsers(prev => prev.length > 0 ? prev : DEFAULT_APP_USERS);
         }
@@ -651,17 +750,80 @@ const App: React.FC = () => {
   };
 
   const syncDataAutomatically = async () => {
+    if (saveInFlightRef.current) return;
     try {
-      // 1. Banco primário: Supabase (sincroniza imediatamente entre janela normal, anônima e celular)
+      // 1. Banco primário: Supabase (sincronização multiusuário entre todos os usuários, abas e dispositivos)
       if (SupabaseService.isConfigured()) {
         const supaRes = await SupabaseService.loadAllData();
         if (supaRes.success && supaRes.data) {
           const cloudData = supaRes.data;
+          SupabaseService.getRemoteVersionStamp().then(stamp => {
+            if (stamp) lastRemoteStampRef.current = stamp;
+          }).catch(() => {});
+
           if (!isDataDirtyRef.current) {
             console.log('[Supabase Auto-Sync] Atualizando estado local a partir do Supabase.');
             applyData(cloudData, 'supabase_sync');
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('pt-BR');
+            const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            setLastSync({
+              status: 'synced',
+              isCloud: true,
+              timestamp: now.toISOString(),
+              user: 'Supabase',
+              message: `Sincronizado com Supabase em ${dateStr} às ${timeStr}`
+            });
           } else {
-            console.log('[Supabase Auto-Sync] Alterações locais pendentes: atualizando grupos e fazendo merge seguro.');
+            // Merge de 3 vias: preserva edições locais pendentes enquanto incorpora alterações de outros usuários!
+            console.log('[Supabase Auto-Sync] Alterações locais pendentes: realizando merge seguro de 3 vias.');
+            const localSnap = latestStateRef.current || {};
+            const baseSnap = baseDataRef.current || {};
+
+            const mergedTasks = mergeArrays(cloudData.tasks || [], localSnap.tasks || [], baseSnap.tasks || []);
+            const mergedProjects = mergeArrays(cloudData.projects || [], localSnap.projects || [], baseSnap.projects || []);
+            const mergedMeetings = mergeArrays(Array.isArray(cloudData.meetings) ? cloudData.meetings : [], localSnap.meetings || [], baseSnap.meetings || []);
+            const mergedTeamMembers = mergeArrays(cloudData.teamMembers || DEFAULT_TEAM_MEMBERS, localSnap.teamMembers || [], baseSnap.teamMembers || []);
+            const mergedAppUsers = mergeArrays(cloudData.appUsers || DEFAULT_APP_USERS, localSnap.appUsers || [], baseSnap.appUsers || []);
+            const mergedPlans = mergeArrays(cloudData.activityPlans || [], localSnap.activityPlans || [], baseSnap.activityPlans || []);
+            const mergedNotifications = mergeArrays(cloudData.notifications || [], localSnap.notifications || [], baseSnap.notifications || []);
+            const mergedLogs = mergeArrays(cloudData.logs || [], localSnap.logs || [], baseSnap.logs || []);
+            const mergedStandards = mergeArrays(cloudData.regulatoryStandards || DEFAULT_REGULATORY_STANDARDS, localSnap.regulatoryStandards || [], baseSnap.regulatoryStandards || []);
+            const mergedSubjects = mergeArrays(cloudData.regulatorySubjects || DEFAULT_REGULATORY_SUBJECTS, localSnap.regulatorySubjects || [], baseSnap.regulatorySubjects || []);
+            const mergedEvidence = mergeArrays(cloudData.regulatoryEvidence || [], localSnap.regulatoryEvidence || [], baseSnap.regulatoryEvidence || []);
+            const mergedMacroConfigs = mergeArrays(cloudData.macroActivityConfigs || [], localSnap.macroActivityConfigs || [], baseSnap.macroActivityConfigs || []);
+            const mergedInfoItems = mergeArrays(cloudData.regulatoryInfoItems || [], localSnap.regulatoryInfoItems || [], baseSnap.regulatoryInfoItems || []);
+            const mergedRepeatable = mergeArrays(cloudData.repeatableRecords || [], localSnap.repeatableRecords || [], baseSnap.repeatableRecords || []);
+            const mergedNarratives = mergeArrays(cloudData.regulatoryNarratives || [], localSnap.regulatoryNarratives || [], baseSnap.regulatoryNarratives || []);
+            const mergedDocs = mergeArrays(cloudData.regulatoryDocs || [], localSnap.regulatoryDocs || [], baseSnap.regulatoryDocs || []);
+            const mergedContributions = mergeArrays(cloudData.dossierContributions || [], localSnap.dossierContributions || [], baseSnap.dossierContributions || []);
+            const mergedCandidates = mergeArrays(cloudData.vaccineCandidates || DEFAULT_VACCINE_CANDIDATES, localSnap.vaccineCandidates || [], baseSnap.vaccineCandidates || []);
+            const mergedComponents = mergeArrays(cloudData.vaccineComponents || DEFAULT_VACCINE_COMPONENTS, localSnap.vaccineComponents || [], baseSnap.vaccineComponents || []);
+            const mergedBatches = mergeArrays(cloudData.formulationBatches || DEFAULT_FORMULATION_BATCHES, localSnap.formulationBatches || [], baseSnap.formulationBatches || []);
+            const mergedImpurities = mergeArrays(cloudData.vaccineImpurities || DEFAULT_VACCINE_IMPURITIES, localSnap.vaccineImpurities || [], baseSnap.vaccineImpurities || []);
+
+            setTasks(mergedTasks);
+            setProjects(mergedProjects);
+            setMeetings(mergedMeetings);
+            setTeamMembers(mergedTeamMembers);
+            setAppUsers(mergedAppUsers);
+            setActivityPlans(mergedPlans);
+            setNotifications(mergedNotifications);
+            setLogs(mergedLogs);
+            setRegulatoryStandards(mergedStandards);
+            setRegulatorySubjects(mergedSubjects);
+            setRegulatoryEvidence(mergedEvidence);
+            setMacroActivityConfigs(mergedMacroConfigs);
+            setRegulatoryInfoItems(mergedInfoItems);
+            setRepeatableRecords(mergedRepeatable);
+            setRegulatoryNarratives(mergedNarratives);
+            setRegulatoryDocs(mergedDocs);
+            setDossierContributions(mergedContributions);
+            setVaccineCandidates(mergedCandidates);
+            setVaccineComponents(mergedComponents);
+            setFormulationBatches(mergedBatches);
+            setVaccineImpurities(mergedImpurities);
+
             if (cloudData.profileTaskGroups && typeof cloudData.profileTaskGroups === 'object') {
               const normalizedMap: Record<string, TaskGroup[]> = {};
               Object.entries(cloudData.profileTaskGroups).forEach(([k, v]) => {
@@ -675,17 +837,23 @@ const App: React.FC = () => {
                 setTaskGroups(normalizedMap[activeKey]);
               }
             }
+
+            // Atualiza a base para o novo estado do servidor para que o próximo delta envie apenas o que este usuário alterou
+            const nextBase = JSON.parse(JSON.stringify({
+              ...cloudData,
+              teamMembers: cloudData.teamMembers || DEFAULT_TEAM_MEMBERS,
+              appUsers: cloudData.appUsers || DEFAULT_APP_USERS,
+              regulatoryStandards: cloudData.regulatoryStandards || DEFAULT_REGULATORY_STANDARDS,
+              regulatorySubjects: cloudData.regulatorySubjects || DEFAULT_REGULATORY_SUBJECTS,
+              vaccineCandidates: cloudData.vaccineCandidates || DEFAULT_VACCINE_CANDIDATES,
+              vaccineComponents: cloudData.vaccineComponents || DEFAULT_VACCINE_COMPONENTS,
+              formulationBatches: cloudData.formulationBatches || DEFAULT_FORMULATION_BATCHES,
+              vaccineImpurities: cloudData.vaccineImpurities || DEFAULT_VACCINE_IMPURITIES,
+              meetings: Array.isArray(cloudData.meetings) ? cloudData.meetings : DEFAULT_MEETINGS
+            }));
+            baseDataRef.current = nextBase;
+            setBaseData(nextBase);
           }
-          const now = new Date();
-          const dateStr = now.toLocaleDateString('pt-BR');
-          const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-          setLastSync({
-            status: 'synced',
-            isCloud: true,
-            timestamp: now.toISOString(),
-            user: 'Supabase',
-            message: `Dados sincronizados com o Supabase em ${dateStr} às ${timeStr}`
-          });
           return;
         }
       }
@@ -895,11 +1063,25 @@ const App: React.FC = () => {
 
       // 1.5 Carregar do Supabase imediatamente se configurado (metadados sempre disponíveis em todo acesso)
       if (SupabaseService.isConfigured()) {
+        setSupabaseReadyTick(t => t + 1);
         try {
           console.log('[Supabase] Inicializando metadados do Supabase (Schema ctvacinas)...');
           const supaRes = await SupabaseService.loadAllData();
-          if (supaRes.success && supaRes.data && (supaRes.data.projects?.length > 0 || supaRes.data.tasks?.length > 0)) {
+          if (supaRes.success && supaRes.data && supaRes.hasRemoteRecords) {
             applyData(supaRes.data, 'supabase_init');
+            SupabaseService.getRemoteVersionStamp().then(stamp => {
+              if (stamp) lastRemoteStampRef.current = stamp;
+            }).catch(() => {});
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('pt-BR');
+            const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            setLastSync({
+              status: 'synced',
+              isCloud: true,
+              timestamp: now.toISOString(),
+              user: 'Supabase',
+              message: `Sincronizado com Supabase em ${dateStr} às ${timeStr}`
+            });
             if (supaRes.data.appUsers && supaRes.data.appUsers.length > 0) {
               currentAppUsers = supaRes.data.appUsers;
             }
@@ -939,6 +1121,10 @@ const App: React.FC = () => {
       } catch (err) {
         console.error('Erro na verificação de autenticação Microsoft:', err);
         setIsLoading(false);
+      } finally {
+        // CRÍTICO: garante que o salvamento automático seja SEMPRE habilitado após o boot,
+        // independentemente de haver sessão MSAL silenciosa ou acesso direto.
+        isInitialLoad.current = false;
       }
     };
 
@@ -1098,176 +1284,235 @@ const App: React.FC = () => {
     }
   }, [selectedProfile, profileTaskGroupsMap]);
 
-  const handleSaveChanges = async () => {
-    if (!isDataDirty) return;
-    const currentUser = selectedProfile?.name || 'Sistema';
-    const activeCanonicalKey = normalizeProfileGroupKey(selectedProfile?.name || 'bruna');
+  const handleSaveChanges = async (forceFullSave: boolean = false): Promise<boolean> => {
+    if (!isDataDirtyRef.current && !forceFullSave) return true;
+
+    if (saveInFlightRef.current) {
+      pendingResaveRef.current = true;
+      return false;
+    }
+
+    if (retrySaveTimeoutRef.current) {
+      clearTimeout(retrySaveTimeoutRef.current);
+      retrySaveTimeoutRef.current = null;
+    }
+
+    saveInFlightRef.current = true;
+    const saveStartRevision = dirtyRevisionRef.current;
+
+    const currentUser = selectedProfileRef.current?.name || 'Sistema';
+    const activeCanonicalKey = normalizeProfileGroupKey(selectedProfileRef.current?.name || 'bruna');
+    const snap = latestStateRef.current || {};
     const syncedProfileGroups: Record<string, TaskGroup[]> = {
-      ...profileTaskGroupsMap,
-      [activeCanonicalKey]: taskGroups
+      ...(snap.profileTaskGroups || {}),
+      [activeCanonicalKey]: snap.taskGroups || []
     };
-    const currentState = { 
-      tasks, 
-      projects, 
-      teamMembers, 
-      activityPlans, 
-      notifications, 
-      logs, 
-      appUsers,
-      regulatoryStandards,
-      regulatorySubjects,
-      vaccineCandidates,
-      vaccineComponents,
-      formulationBatches,
-      vaccineImpurities,
-      regulatoryEvidence,
-      macroActivityConfigs,
-      regulatoryInfoItems,
-      repeatableRecords,
-      regulatoryNarratives,
-      regulatoryDocs,
-      meetings,
-      dossierContributions,
-      taskGroups,
+    const currentState = {
+      ...snap,
       profileTaskGroups: syncedProfileGroups,
-      managerEmail,
       lastEditor: currentUser
     };
 
-    // 1. Sempre persiste localmente no navegador e servidor primeiro
+    // 1. Sempre atualiza cache local imediatamente
     persistDataLocally(currentState);
-    const updatedBase = JSON.parse(JSON.stringify(currentState));
-    setBaseData(updatedBase);
-    setIsDataDirty(false);
 
-    // 2. Armazenamento primário de metadados: Supabase (Schema ctvacinas)
-    if (SupabaseService.isConfigured()) {
-      try {
-        const supaRes = await SupabaseService.saveAllData(currentState, currentUser);
+    try {
+      // 2. Armazenamento primário multiusuário: Supabase (Delta Upsert + Delete real)
+      if (SupabaseService.isConfigured()) {
+        setLastSync({
+          status: 'syncing',
+          isCloud: true,
+          timestamp: new Date().toISOString(),
+          user: currentUser,
+          message: 'Salvando no Supabase...'
+        });
+
+        const supaRes = forceFullSave || !baseDataRef.current
+          ? await SupabaseService.saveAllData(currentState, currentUser)
+          : await SupabaseService.saveDeltaData(baseDataRef.current, currentState, currentUser);
+
         if (supaRes.success) {
-          const now = new Date();
-          const dateStr = now.toLocaleDateString('pt-BR');
-          const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-          setLastSync({ 
-            status: 'synced', 
-            isCloud: true, 
-            timestamp: now.toISOString(), 
+          const updatedBase = JSON.parse(JSON.stringify(currentState));
+          baseDataRef.current = updatedBase;
+          setBaseData(updatedBase);
+
+          // Atualiza o stamp remoto para evitar auto-sync redundante da própria escrita
+          SupabaseService.getRemoteVersionStamp().then(stamp => {
+            if (stamp) lastRemoteStampRef.current = stamp;
+          }).catch(() => {});
+
+          if (dirtyRevisionRef.current === saveStartRevision) {
+            isDataDirtyRef.current = false;
+            setIsDataDirty(false);
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('pt-BR');
+            const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            setLastSync({
+              status: 'synced',
+              isCloud: true,
+              timestamp: now.toISOString(),
+              user: currentUser,
+              message: `Salvo no Supabase em ${dateStr} às ${timeStr}`
+            });
+          }
+
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: currentUser, clientId: clientIdRef.current }));
+          }
+          return true;
+        } else {
+          // CRÍTICO: mantém isDataDirty = true e exibe erro real para o usuário!
+          const errMsg = supaRes.error || 'Falha ao salvar alterações no Supabase';
+          console.error('[Supabase] Falha ao salvar no banco:', errMsg);
+          setLastSync({
+            status: 'error',
+            isCloud: false,
+            timestamp: new Date().toISOString(),
             user: currentUser,
-            message: `Dados sincronizados com o Supabase em ${dateStr} às ${timeStr}` 
+            error: errMsg,
+            message: 'Falha ao salvar no Supabase (tentando novamente...)'
+          });
+          retrySaveTimeoutRef.current = window.setTimeout(() => {
+            if (isDataDirtyRef.current) {
+              handleSaveChangesRef.current();
+            }
+          }, 5000);
+          return false;
+        }
+      }
+
+      // 3. Fallback de persistência no SharePoint apenas se o Supabase NÃO estiver configurado
+      if (!isMsalAuthenticatedRef.current || !isAuthorizedRef.current) {
+        setLastSync({
+          status: 'disconnected',
+          isCloud: false,
+          timestamp: new Date().toISOString(),
+          user: currentUser,
+          message: 'Salvo apenas localmente (Supabase não configurado)'
+        });
+        return false;
+      }
+
+      setIsSyncingSharePoint(true);
+      setLastSync({ status: 'syncing', isCloud: true, timestamp: new Date().toISOString(), user: 'SharePoint' });
+      try {
+        const modularRes = await MicrosoftGraphService.saveModularToSharePoint(currentState);
+        const effectiveBase = baseDataRef.current || currentState;
+        const granularRes = await MicrosoftGraphService.saveGranularToSharePoint(
+          effectiveBase,
+          currentState,
+          spMetadataMapRef.current,
+          currentUser
+        );
+
+        if (granularRes.spMetadataMap) {
+          spMetadataMapRef.current = granularRes.spMetadataMap;
+        }
+
+        if (modularRes.success || granularRes.success) {
+          const updatedBase = JSON.parse(JSON.stringify(currentState));
+          baseDataRef.current = updatedBase;
+          setBaseData(updatedBase);
+          if (dirtyRevisionRef.current === saveStartRevision) {
+            isDataDirtyRef.current = false;
+            setIsDataDirty(false);
+          }
+          setLastSync({
+            status: 'synced',
+            isCloud: true,
+            timestamp: new Date().toISOString(),
+            user: currentUser,
+            message: 'Sincronizado com SharePoint'
           });
           if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: currentUser, clientId: clientIdRef.current }));
           }
-          return;
+          return true;
         } else {
-          console.warn('[Supabase] Falha ao salvar no banco:', supaRes.error);
+          const errorMsg = modularRes.errors?.join(', ') || granularRes.error || 'Falha ao salvar no SharePoint';
+          console.warn('Aviso no salvamento SharePoint:', errorMsg);
+          setLastSync({
+            status: 'error',
+            isCloud: false,
+            timestamp: new Date().toISOString(),
+            user: currentUser,
+            error: errorMsg
+          });
+          return false;
         }
-      } catch (err: any) {
-        console.error('[Supabase] Exceção ao salvar:', err);
-      }
-    }
-
-    // 3. Fallback de persistência no SharePoint caso o Supabase não esteja configurado
-    if (!isMsalAuthenticated || !isAuthorized) {
-      setLastSync({ 
-        status: 'disconnected', 
-        isCloud: false, 
-        timestamp: new Date().toISOString(), 
-        user: currentUser,
-        message: 'Salvo localmente (Supabase ou SharePoint pendente)' 
-      });
-      return;
-    }
-
-    setIsSyncingSharePoint(true);
-    setLastSync({ status: 'syncing', isCloud: true, timestamp: new Date().toISOString(), user: 'SharePoint' });
-    try {
-      const modularRes = await MicrosoftGraphService.saveModularToSharePoint(currentState);
-      const effectiveBase = baseData || currentState;
-      const granularRes = await MicrosoftGraphService.saveGranularToSharePoint(
-        effectiveBase,
-        currentState,
-        spMetadataMapRef.current,
-        currentUser
-      );
-
-      if (granularRes.spMetadataMap) {
-        spMetadataMapRef.current = granularRes.spMetadataMap;
-      }
-
-      if (modularRes.success || granularRes.success) {
-        setLastSync({ 
-          status: 'synced', 
-          isCloud: true, 
-          timestamp: new Date().toISOString(), 
+      } catch (spErr: any) {
+        console.error('Erro na sincronização SharePoint:', spErr);
+        setLastSync({
+          status: 'error',
+          isCloud: false,
+          timestamp: new Date().toISOString(),
           user: currentUser,
-          message: 'Sincronizado com SharePoint' 
+          error: spErr.message || 'Falha de conexão com SharePoint'
         });
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATED', user: currentUser, clientId: clientIdRef.current }));
-        }
-      } else {
-        const errorMsg = modularRes.errors?.join(', ') || granularRes.error || 'Falha ao salvar no SharePoint';
-        console.warn('Aviso no salvamento SharePoint:', errorMsg);
-        setLastSync({ 
-          status: 'error', 
-          isCloud: false, 
-          timestamp: new Date().toISOString(), 
-          user: currentUser,
-          error: errorMsg 
-        });
+        return false;
+      } finally {
+        setIsSyncingSharePoint(false);
       }
-    } catch (spErr: any) {
-      console.error('Erro na sincronização SharePoint:', spErr);
-      setLastSync({ 
-        status: 'error', 
-        isCloud: false, 
-        timestamp: new Date().toISOString(), 
-        user: currentUser,
-        error: spErr.message || 'Falha de conexão com SharePoint' 
-      });
     } finally {
-      setIsSyncingSharePoint(false);
+      saveInFlightRef.current = false;
+      const hasNewerEdits = pendingResaveRef.current || dirtyRevisionRef.current > saveStartRevision;
+      pendingResaveRef.current = false;
+      if (hasNewerEdits && isDataDirtyRef.current) {
+        window.setTimeout(() => {
+          handleSaveChangesRef.current();
+        }, 120);
+      }
     }
   };
 
+  handleSaveChangesRef.current = () => handleSaveChanges(false);
+
   const handleForceCloudSync = async () => {
+    const currentUser = selectedProfileRef.current?.name || 'Sistema';
+
+    // 1. Se o Supabase estiver configurado: salva alterações pendentes e busca atualizações de outros usuários
+    if (SupabaseService.isConfigured()) {
+      setIsSyncingSharePoint(true);
+      setSyncToastMessage('Sincronizando dados com o Supabase...');
+      try {
+        if (isDataDirtyRef.current) {
+          const ok = await handleSaveChanges(false);
+          if (!ok) {
+            setSyncToastMessage('Erro ao enviar alterações para o Supabase. Verifique a conexão.');
+            setTimeout(() => setSyncToastMessage(null), 5000);
+            return;
+          }
+        }
+        await syncDataAutomatically();
+        setSyncToastMessage('Dados sincronizados com sucesso no Supabase!');
+        setTimeout(() => setSyncToastMessage(null), 3500);
+      } catch (e: any) {
+        setSyncToastMessage(`Erro na sincronização Supabase: ${e?.message || 'falha desconhecida'}`);
+        setTimeout(() => setSyncToastMessage(null), 5000);
+      } finally {
+        setIsSyncingSharePoint(false);
+      }
+
+      // Se também estiver conectado ao Microsoft 365, atualiza o backup modular no SharePoint em segundo plano
+      if (isMsalAuthenticatedRef.current && isAuthorizedRef.current) {
+        MicrosoftGraphService.saveModularToSharePoint(latestStateRef.current).catch(() => {});
+      }
+      return;
+    }
+
+    // 2. Fallback SharePoint caso Supabase não esteja configurado
     if (!isMsalAuthenticated) {
       await handleLogin();
       return;
     }
 
     setIsSyncingSharePoint(true);
-    const currentUser = selectedProfile?.name || 'Sistema';
     setLastSync({ status: 'syncing', isCloud: true, timestamp: new Date().toISOString(), user: 'SharePoint' });
     setSyncToastMessage('Enviando arquivos JSON ao SharePoint...');
 
     try {
-      const currentState = { 
-        tasks, 
-        projects, 
-        teamMembers, 
-        activityPlans, 
-        notifications, 
-        logs, 
-        appUsers,
-        regulatoryStandards,
-        regulatorySubjects,
-        vaccineCandidates,
-        vaccineComponents,
-        formulationBatches,
-        vaccineImpurities,
-        regulatoryEvidence,
-        macroActivityConfigs,
-        regulatoryInfoItems,
-        repeatableRecords,
-        regulatoryNarratives,
-        regulatoryDocs,
-        meetings,
-        dossierContributions,
-        taskGroups,
-        profileTaskGroups: profileTaskGroupsMap,
-        managerEmail,
+      const currentState = {
+        ...(latestStateRef.current || {}),
         lastEditor: currentUser
       };
 
@@ -1370,9 +1615,44 @@ const App: React.FC = () => {
     if (isInitialLoad.current || !isDataDirty) return;
     if (saveDataTimeout.current) clearTimeout(saveDataTimeout.current);
 
-    saveDataTimeout.current = window.setTimeout(handleSaveChanges, 2000);
+    saveDataTimeout.current = window.setTimeout(() => {
+      saveDataTimeout.current = null;
+      handleSaveChangesRef.current();
+    }, 400);
 
-  }, [tasks, projects, teamMembers, activityPlans, notifications, logs, appUsers, regulatoryStandards, regulatorySubjects, vaccineCandidates, vaccineComponents, formulationBatches, meetings, taskGroups, profileTaskGroupsMap, managerEmail, dataVersion, isDataDirty]);
+    return () => {
+      if (saveDataTimeout.current) {
+        clearTimeout(saveDataTimeout.current);
+      }
+    };
+  }, [
+    tasks,
+    projects,
+    teamMembers,
+    activityPlans,
+    notifications,
+    logs,
+    appUsers,
+    regulatoryStandards,
+    regulatorySubjects,
+    vaccineCandidates,
+    vaccineComponents,
+    formulationBatches,
+    vaccineImpurities,
+    regulatoryEvidence,
+    macroActivityConfigs,
+    regulatoryInfoItems,
+    repeatableRecords,
+    regulatoryNarratives,
+    regulatoryDocs,
+    dossierContributions,
+    meetings,
+    taskGroups,
+    profileTaskGroupsMap,
+    managerEmail,
+    dataVersion,
+    isDataDirty
+  ]);
 
   // Agendador de Backup Diário às 00:00 no SharePoint
   useEffect(() => {
@@ -1551,8 +1831,8 @@ const App: React.FC = () => {
             persistDataLocally(data);
             setDataDirty();
             setTimeout(() => {
-              handleSaveChanges();
-            }, 100);
+              handleSaveChanges(true);
+            }, 150);
             alert("Backup local carregado com sucesso! Todas as informações e projetos foram restaurados e salvos.");
           }
         } catch (error) {
@@ -1651,35 +1931,58 @@ const App: React.FC = () => {
   };
 
   const mergeArrays = (serverArr: any[], localArr: any[], baseArr: any[]) => {
-    if (!serverArr || !localArr || !baseArr) return localArr;
-    
-    // Start with server array
-    const merged = [...serverArr];
-    
-    // Find items changed locally
-    localArr.forEach(lItem => {
-      const bItem = baseArr.find(b => b.id === lItem.id);
-      const sItemIdx = merged.findIndex(s => s.id === lItem.id);
-      
+    if (!Array.isArray(serverArr)) return Array.isArray(localArr) ? localArr : [];
+    if (!Array.isArray(localArr)) return serverArr;
+    if (!Array.isArray(baseArr)) return localArr;
+
+    const getKey = (item: any) => String(item?.id || item?.email || item?.name || '');
+    const serverMap = new Map<string, any>();
+    const localMap = new Map<string, any>();
+    const baseMap = new Map<string, any>();
+
+    serverArr.forEach(item => { const k = getKey(item); if (k) serverMap.set(k, item); });
+    localArr.forEach(item => { const k = getKey(item); if (k) localMap.set(k, item); });
+    baseArr.forEach(item => { const k = getKey(item); if (k) baseMap.set(k, item); });
+
+    const orderedKeys = new Set<string>([
+      ...localArr.map(getKey).filter(Boolean),
+      ...serverArr.map(getKey).filter(Boolean)
+    ]);
+
+    const merged: any[] = [];
+
+    orderedKeys.forEach((key) => {
+      const sItem = serverMap.get(key);
+      const lItem = localMap.get(key);
+      const bItem = baseMap.get(key);
+
       if (!bItem) {
-        // New item locally
-        if (sItemIdx === -1) {
-          merged.push(lItem);
-        } else {
-          // Conflict: item with same ID exists on server. Take local for now.
-          merged[sItemIdx] = lItem;
-        }
-      } else if (JSON.stringify(lItem) !== JSON.stringify(bItem)) {
-        // Item changed locally
-        if (sItemIdx !== -1) {
-          merged[sItemIdx] = lItem;
-        } else {
-          // Item was deleted on server but changed locally. Restore it.
-          merged.push(lItem);
-        }
+        // Criado localmente ou por outro usuário
+        if (lItem) merged.push(lItem);
+        else if (sItem) merged.push(sItem);
+        return;
+      }
+
+      if (lItem && sItem) {
+        const localChanged = JSON.stringify(lItem) !== JSON.stringify(bItem);
+        merged.push(localChanged ? lItem : sItem);
+        return;
+      }
+
+      if (!lItem && sItem) {
+        // Excluído localmente: só mantém se outro usuário editou no servidor
+        const serverChanged = JSON.stringify(sItem) !== JSON.stringify(bItem);
+        if (serverChanged) merged.push(sItem);
+        return;
+      }
+
+      if (lItem && !sItem) {
+        // Excluído no servidor por outro usuário: só restaura se este usuário alterou localmente
+        const localChanged = JSON.stringify(lItem) !== JSON.stringify(bItem);
+        if (localChanged) merged.push(lItem);
       }
     });
-    
+
     return merged;
   };
 
@@ -2439,7 +2742,7 @@ const App: React.FC = () => {
           onClose={() => setIsSupabaseMigrationOpen(false)}
           fullData={{
             tasks,
-            projects: activeProjects,
+            projects,
             teamMembers,
             activityPlans,
             notifications,
@@ -2907,7 +3210,13 @@ const App: React.FC = () => {
             onUpdateRepeatableRecords={(rep) => { setRepeatableRecords(rep); setDataDirty(); }}
             onUpdateNarratives={(nar) => { setRegulatoryNarratives(nar); setDataDirty(); }}
             onUpdateDocs={(docs) => { setRegulatoryDocs(docs); setDataDirty(); }}
-            onUpdateProjects={(p) => { setProjects(p); setDataDirty(); }}
+            onUpdateProjects={(p) => {
+              setProjects(prev => {
+                const deletedProjects = prev.filter(old => old.deleted && !p.some(updated => updated.id === old.id));
+                return [...p, ...deletedProjects];
+              });
+              setDataDirty();
+            }}
             currentUser={selectedProfile?.name || 'Usuário'}
             hasAdminAccess={hasFullAccess}
           />
@@ -2998,7 +3307,13 @@ const App: React.FC = () => {
                 return anyProjectChanged ? nextProjects : prevProjects;
               });
             }}
-            onUpdateProjects={(p) => { setProjects(p); setDataDirty(); }}
+            onUpdateProjects={(p) => {
+              setProjects(prev => {
+                const deletedProjects = prev.filter(old => old.deleted && !p.some(updated => updated.id === old.id));
+                return [...p, ...deletedProjects];
+              });
+              setDataDirty();
+            }}
             onAddDossierContribution={(contrib) => {
               setDossierContributions(prev => [contrib, ...prev]);
               setDataDirty();
@@ -3053,7 +3368,7 @@ const App: React.FC = () => {
         onClose={() => setIsSupabaseMigrationOpen(false)}
         fullData={{
           tasks,
-          projects: activeProjects,
+          projects,
           teamMembers,
           activityPlans,
           notifications,
@@ -3081,6 +3396,11 @@ const App: React.FC = () => {
         isAdmin={hasFullAccess}
         lastSync={lastSync}
         onDataMigrated={() => {
+          setSupabaseReadyTick(t => t + 1);
+          const updatedBase = JSON.parse(JSON.stringify(latestStateRef.current || {}));
+          baseDataRef.current = updatedBase;
+          setBaseData(updatedBase);
+          isDataDirtyRef.current = false;
           setIsDataDirty(false);
           const now = new Date();
           const dateStr = now.toLocaleDateString('pt-BR');
@@ -3090,7 +3410,7 @@ const App: React.FC = () => {
             isCloud: true, 
             timestamp: now.toISOString(), 
             user: selectedProfile?.name || 'Sistema', 
-            message: `Dados sincronizados com o Supabase em ${dateStr} às ${timeStr}` 
+            message: `Salvo no Supabase em ${dateStr} às ${timeStr}` 
           });
         }}
       />

@@ -343,8 +343,23 @@ export const VisaoGeral: React.FC<VisaoGeralProps> = ({
       }
     };
     syncCalendarConfigFromSupabase();
+    const handleRemoteConfigUpdate = () => {
+      try {
+        const savedMaint = localStorage.getItem('ctvacinas_maintenance_periods');
+        if (savedMaint) {
+          const parsed = JSON.parse(savedMaint);
+          if (Array.isArray(parsed)) setMaintenancePeriods(parsed);
+        }
+        const savedStart = localStorage.getItem('ctvacinas_system_real_start_date') || '';
+        setSystemRealStartDate(savedStart);
+        const savedNote = localStorage.getItem('ctvacinas_system_real_start_note');
+        if (savedNote && savedNote.trim()) setSystemRealStartNote(savedNote);
+      } catch {}
+    };
+    window.addEventListener('ctvacinas_app_config_updated', handleRemoteConfigUpdate);
     return () => {
       active = false;
+      window.removeEventListener('ctvacinas_app_config_updated', handleRemoteConfigUpdate);
     };
   }, [currentUser]);
 

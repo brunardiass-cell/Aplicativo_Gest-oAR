@@ -305,108 +305,117 @@ const Sidebar: React.FC<SidebarProps> = ({
         </button>
         
         {/* SharePoint / Supabase Cloud Sync Indicator & Action Widget */}
-        <div className={`p-3 rounded-xl border transition-all ${
-          !isMsalAuthenticated || lastSync?.status === 'disconnected'
-            ? 'bg-amber-950/40 border-amber-500/40 text-amber-100'
-            : (lastSync?.status === 'syncing' || isSyncingSharePoint)
-            ? 'bg-sky-950/50 border-sky-500/50 text-sky-100'
-            : lastSync?.status === 'error'
-            ? 'bg-red-950/50 border-red-500/40 text-red-100'
-            : (isVaccinesModule ? 'bg-emerald-950/60 border-emerald-600/70 text-emerald-100' : 'bg-slate-900/80 border-teal-500/40 text-slate-100')
-        }`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {!isMsalAuthenticated || lastSync?.status === 'disconnected' ? (
-                <CloudOff size={13} className="text-amber-400 shrink-0" />
-              ) : (lastSync?.status === 'syncing' || isSyncingSharePoint) ? (
-                <RefreshCw size={13} className="text-sky-400 animate-spin shrink-0" />
-              ) : lastSync?.status === 'error' ? (
-                <AlertTriangle size={13} className="text-red-400 shrink-0" />
-              ) : (
-                <Cloud size={13} className="text-emerald-400 shrink-0" />
-              )}
-              
-              <div className="text-left leading-tight">
-                <span className="text-[9px] font-black uppercase tracking-wider block">
-                  {lastSync?.status === 'synced'
-                    ? 'Nuvem Conectada'
-                    : (!isMsalAuthenticated || lastSync?.status === 'disconnected')
-                    ? 'Nuvem Desconectada'
-                    : (lastSync?.status === 'syncing' || isSyncingSharePoint)
-                    ? 'Sincronizando...'
-                    : lastSync?.status === 'error'
-                    ? 'Erro de Sincronização'
-                    : 'Nuvem OK'}
-                </span>
-                <span className="text-[8px] opacity-90 block">
-                  {lastSync?.message 
-                    ? `✅ ${lastSync.message}`
-                    : (!isMsalAuthenticated || lastSync?.status === 'disconnected')
-                    ? 'Salvo apenas no navegador'
-                    : (lastSync?.status === 'syncing' || isSyncingSharePoint)
-                    ? 'Atualizando...'
-                    : lastSync?.status === 'error'
-                    ? (lastSync.error || 'Falha ao sincronizar')
-                    : `Sincronizado • ${formatSyncTime(lastSync?.timestamp)}`}
-                </span>
-              </div>
-            </div>
+        {(() => {
+          const isSyncingNow = lastSync?.status === 'syncing' || isSyncingSharePoint;
+          const isSyncError = lastSync?.status === 'error';
+          const isCloudSynced = lastSync?.status === 'synced' && Boolean(lastSync?.isCloud);
+          const isDisconnected = !isSyncingNow && !isSyncError && !isCloudSynced && (!isMsalAuthenticated || lastSync?.status === 'disconnected');
 
-            <div className="flex items-center gap-1">
-              {isMsalAuthenticated && onForceCloudSync && (
-                <button 
-                  onClick={onForceCloudSync} 
-                  disabled={lastSync?.status === 'syncing' || isSyncingSharePoint}
-                  title="Sincronizar com SharePoint agora"
-                  className="p-1 rounded bg-black/20 hover:bg-black/40 text-slate-300 hover:text-white transition disabled:opacity-50"
+          return (
+            <div className={`p-3 rounded-xl border transition-all ${
+              isSyncError
+                ? 'bg-red-950/50 border-red-500/40 text-red-100'
+                : isSyncingNow
+                ? 'bg-sky-950/50 border-sky-500/50 text-sky-100'
+                : isDisconnected
+                ? 'bg-amber-950/40 border-amber-500/40 text-amber-100'
+                : (isVaccinesModule ? 'bg-emerald-950/60 border-emerald-600/70 text-emerald-100' : 'bg-slate-900/80 border-teal-500/40 text-slate-100')
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  {isSyncError ? (
+                    <AlertTriangle size={13} className="text-red-400 shrink-0" />
+                  ) : isSyncingNow ? (
+                    <RefreshCw size={13} className="text-sky-400 animate-spin shrink-0" />
+                  ) : isDisconnected ? (
+                    <CloudOff size={13} className="text-amber-400 shrink-0" />
+                  ) : (
+                    <Cloud size={13} className="text-emerald-400 shrink-0" />
+                  )}
+                  
+                  <div className="text-left leading-tight min-w-0">
+                    <span className="text-[9px] font-black uppercase tracking-wider block">
+                      {isSyncError
+                        ? 'Erro de Sincronização'
+                        : isSyncingNow
+                        ? 'Sincronizando...'
+                        : isCloudSynced
+                        ? 'Nuvem Conectada'
+                        : isDisconnected
+                        ? 'Nuvem Desconectada'
+                        : 'Nuvem OK'}
+                    </span>
+                    <span className="text-[8px] opacity-90 block break-words">
+                      {isSyncError
+                        ? (lastSync?.error || lastSync?.message || 'Falha ao salvar no Supabase')
+                        : isSyncingNow
+                        ? (lastSync?.message || 'Salvando alterações...')
+                        : lastSync?.message
+                        ? `✅ ${lastSync.message}`
+                        : isDisconnected
+                        ? 'Salvo apenas no navegador'
+                        : `Sincronizado • ${formatSyncTime(lastSync?.timestamp)}`}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  {(isCloudSynced || isMsalAuthenticated) && onForceCloudSync && (
+                    <button 
+                      onClick={onForceCloudSync} 
+                      disabled={isSyncingNow}
+                      title="Sincronizar agora com Supabase e nuvem"
+                      className="p-1 rounded bg-black/20 hover:bg-black/40 text-slate-300 hover:text-white transition disabled:opacity-50"
+                    >
+                      <RefreshCw size={10} className={isSyncingNow ? 'animate-spin' : ''} />
+                    </button>
+                  )}
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${
+                    isSyncError
+                      ? 'bg-red-500'
+                      : isSyncingNow
+                      ? 'bg-sky-400 animate-pulse'
+                      : isDisconnected
+                      ? 'bg-amber-400'
+                      : 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.7)]'
+                  }`} />
+                </div>
+              </div>
+
+              {/* Link para abrir pasta no SharePoint quando conectado */}
+              {isMsalAuthenticated && lastSync?.status === 'synced' && (
+                <a
+                  href={localStorage.getItem('ct_sharepoint_sistema_url') || "https://ctvacinas974.sharepoint.com/sites/regulatorios/Documentos%20Compartilhados/Sistema"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 w-full py-1 px-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[8px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition"
                 >
-                  <RefreshCw size={10} className={(lastSync?.status === 'syncing' || isSyncingSharePoint) ? 'animate-spin' : ''} />
+                  <ExternalLink size={9} /> Abrir Pasta no SharePoint
+                </a>
+              )}
+
+              {/* Botão de conexão rápida caso desconectado do Microsoft 365 */}
+              {!isMsalAuthenticated && !isSyncError && onConnectMsal && (
+                <button
+                  onClick={onConnectMsal}
+                  className="mt-2 w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-sm"
+                >
+                  <LogIn size={11} /> Conectar Microsoft 365
                 </button>
               )}
-              <div className={`w-2 h-2 rounded-full shrink-0 ${
-                !isMsalAuthenticated || lastSync?.status === 'disconnected'
-                  ? 'bg-amber-400'
-                  : (lastSync?.status === 'syncing' || isSyncingSharePoint)
-                  ? 'bg-sky-400 animate-pulse'
-                  : lastSync?.status === 'error'
-                  ? 'bg-red-500'
-                  : 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.7)]'
-              }`} />
+
+              {/* Botão de tentar novamente em caso de erro (funciona tanto para Supabase quanto SharePoint) */}
+              {isSyncError && onForceCloudSync && (
+                <button
+                  onClick={onForceCloudSync}
+                  className="mt-2 w-full py-1 px-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-[8px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition"
+                >
+                  <RefreshCw size={10} /> Tentar Novamente
+                </button>
+              )}
             </div>
-          </div>
-
-          {/* Link para abrir pasta no SharePoint quando conectado */}
-          {isMsalAuthenticated && lastSync?.status === 'synced' && (
-            <a
-              href={localStorage.getItem('ct_sharepoint_sistema_url') || "https://ctvacinas974.sharepoint.com/sites/regulatorios/Documentos%20Compartilhados/Sistema"}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 w-full py-1 px-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[8px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition"
-            >
-              <ExternalLink size={9} /> Abrir Pasta no SharePoint
-            </a>
-          )}
-
-          {/* Botão de conexão rápida caso desconectado */}
-          {(!isMsalAuthenticated || lastSync?.status === 'disconnected') && onConnectMsal && (
-            <button
-              onClick={onConnectMsal}
-              className="mt-2 w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-sm"
-            >
-              <LogIn size={11} /> Conectar Microsoft 365
-            </button>
-          )}
-
-          {/* Botão de tentar novamente em caso de erro */}
-          {isMsalAuthenticated && lastSync?.status === 'error' && onForceCloudSync && (
-            <button
-              onClick={onForceCloudSync}
-              className="mt-2 w-full py-1 px-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-[8px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition"
-            >
-              <RefreshCw size={10} /> Tentar Novamente
-            </button>
-          )}
-        </div>
+          );
+        })()}
 
         {/* User Profile Bar at Bottom as in Reference Image */}
         <div className="pt-2 flex items-center justify-between">
