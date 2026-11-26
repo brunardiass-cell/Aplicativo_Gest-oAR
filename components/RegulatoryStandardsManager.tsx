@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { RegulatoryStandard, RegulatoryStandardStatus, ActivityPlanTemplate, Project, RegulatorySubject, RegulatoryBlock, KnowledgeConcept, ConceptStandardLink } from '../types';
+import { RegulatoryStandard, RegulatoryStandardStatus, RegulatoryStandardUpdateEntry, ActivityPlanTemplate, Project, RegulatorySubject, RegulatoryBlock, KnowledgeConcept, ConceptStandardLink } from '../types';
 import { 
   ShieldCheck, 
   Plus, 
@@ -36,7 +36,11 @@ import {
   ChevronRight,
   ChevronLeft,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  BellRing,
+  RefreshCw,
+  History,
+  AlertTriangle
 } from 'lucide-react';
 
 interface RegulatoryStandardsManagerProps {
@@ -49,7 +53,67 @@ interface RegulatoryStandardsManagerProps {
   subjects?: RegulatorySubject[];
   onUpdateSubjects?: (subjects: RegulatorySubject[]) => void;
   onSwitchModule?: () => void;
+  currentUserName?: string;
 }
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+
+const normalizeUserKey = (name?: string): string =>
+  (name || 'usuario')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+const isWithinSevenDays = (isoDate?: string): boolean => {
+  if (!isoDate) return false;
+  const ts = new Date(isoDate).getTime();
+  if (Number.isNaN(ts)) return false;
+  const diff = Date.now() - ts;
+  return diff >= -24 * 60 * 60 * 1000 && diff <= SEVEN_DAYS_MS;
+};
+
+const getDaysRemainingSevenDays = (isoDate?: string): number => {
+  if (!isoDate) return 0;
+  const ts = new Date(isoDate).getTime();
+  if (Number.isNaN(ts)) return 0;
+  const remaining = SEVEN_DAYS_MS - (Date.now() - ts);
+  return Math.max(1, Math.min(7, Math.ceil(remaining / (24 * 60 * 60 * 1000))));
+};
+
+const isHighlightedOneYear = (isoDate?: string): boolean => {
+  if (!isoDate) return false;
+  const ts = new Date(isoDate).getTime();
+  if (Number.isNaN(ts)) return false;
+  const diff = Date.now() - ts;
+  return diff >= -24 * 60 * 60 * 1000 && diff <= ONE_YEAR_MS;
+};
+
+const formatDateBr = (isoDate?: string): string => {
+  if (!isoDate) return '—';
+  const d = new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('pt-BR');
+};
+
+const getHighlightExpiryBr = (isoDate?: string): string => {
+  if (!isoDate) return '—';
+  const d = new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return '—';
+  const expiry = new Date(d.getTime() + ONE_YEAR_MS);
+  return expiry.toLocaleDateString('pt-BR');
+};
+
+const isRevokedStatus = (status?: string): boolean => {
+  const st = (status || '').toLowerCase();
+  return st.includes('revogad') || st.includes('obsoleto');
+};
+
+const isAlteredStatus = (status?: string): boolean => {
+  const st = (status || '').toLowerCase();
+  return st.includes('altera') || st.includes('revis');
+};
 
 const matchCategory = (s: RegulatoryStandard, category: string): boolean => {
   if (category === 'todas') return true;
@@ -167,10 +231,10 @@ const getPostItColorClasses = (color?: string) => {
 const getStatusBadge = (status: string) => {
   const st = (status || '').toLowerCase();
   if (st.includes('obsoleto') || st.includes('revogada') || st.includes('revogado')) {
-    return { label: 'REVOGADA', className: 'bg-amber-100 text-amber-800 border-amber-200' };
+    return { label: 'REVOGADO', className: 'bg-rose-100 text-rose-800 border-rose-200' };
   }
-  if (st.includes('vigente com alteração') || st.includes('em revisão')) {
-    return { label: 'EM REVISÃO', className: 'bg-sky-100 text-sky-800 border-sky-200' };
+  if (st.includes('vigente com altera') || st.includes('em revisão')) {
+    return { label: 'VIGENTE COM ALTERAÇÕES', className: 'bg-amber-100 text-amber-900 border-amber-300' };
   }
   return { label: 'VIGENTE', className: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
 };
@@ -192,14 +256,17 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   projects,
   subjects = [],
   onUpdateSubjects = () => {},
-  onSwitchModule
+  onSwitchModule,
+  currentUserName = 'Usuário'
 }) => {
   // Navigation State
-  const [activeNav, setActiveNav] = useState<'post_its' | 'acervo' | 'favoritos'>('acervo');
+  const [activeNav, setActiveNav] = useState<'post_its' | 'acervo' | 'favoritos' | 'atualizacoes'>('acervo');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('todas');
   const [viewLayout, setViewLayout] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'recentes' | 'nome' | 'status'>('recentes');
+  const [updatesFilter, setUpdatesFilter] = useState<'todas' | 'destaque_1_ano' | 'vigente_alteracoes' | 'revogado'>('todas');
+  const [quickUpdateTargetId, setQuickUpdateTargetId] = useState<string>('');
 
   // Favorites
   const [favoriteIds, setFavoriteIds] = useState<string[]>(() => [
@@ -212,6 +279,9 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   // Original list and form states
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [registerAsUpdate, setRegisterAsUpdate] = useState(false);
+  const [updateSummaryInput, setUpdateSummaryInput] = useState('');
+  const [updateDateInput, setUpdateDateInput] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('todos');
@@ -296,9 +366,18 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
     setActivityInput('');
     setKeywordInput('');
     setLinkedStandardInput('');
+    setRegisterAsUpdate(false);
+    setUpdateSummaryInput('');
+    setUpdateDateInput(new Date().toISOString().split('T')[0]);
   };
 
-  const startEdit = (standard: RegulatoryStandard) => {
+  const currentUserKey = useMemo(() => normalizeUserKey(currentUserName), [currentUserName]);
+
+  const startEdit = (standard: RegulatoryStandard, asUpdate: boolean = false) => {
+    const normalizedInitialStatus: RegulatoryStandardStatus = asUpdate
+      ? (isRevokedStatus(standard.status) ? 'revogado' : 'vigente com alterações')
+      : standard.status;
+
     setFormData({
       name: standard.name,
       type: standard.type,
@@ -306,7 +385,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       phase: standard.phase,
       relatedActivities: standard.relatedActivities || [],
       version: standard.version,
-      status: standard.status,
+      status: normalizedInitialStatus,
       summary: standard.summary,
       documentLink: standard.documentLink || '',
       notebookLMLink: standard.notebookLMLink || '',
@@ -316,30 +395,173 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       keyNotes: standard.keyNotes || ''
     });
     setEditingId(standard.id);
+    setRegisterAsUpdate(asUpdate);
+    setUpdateSummaryInput(asUpdate ? '' : (standard.updateSummary || ''));
+    setUpdateDateInput(new Date().toISOString().split('T')[0]);
     setIsAdding(true);
+  };
+
+  const handleDismissUpdateNotification = (standard: RegulatoryStandard, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const existingDismissed = standard.dismissedNotificationUsers || [];
+    if (existingDismissed.includes(currentUserKey)) return;
+    onUpdateStandard({
+      ...standard,
+      dismissedNotificationUsers: [...existingDismissed, currentUserKey]
+    });
+  };
+
+  const handleDismissAllUpdateNotifications = () => {
+    activeUpdateNotifications.forEach(std => {
+      const existingDismissed = std.dismissedNotificationUsers || [];
+      if (!existingDismissed.includes(currentUserKey)) {
+        onUpdateStandard({
+          ...std,
+          dismissedNotificationUsers: [...existingDismissed, currentUserKey]
+        });
+      }
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingId) {
-      onUpdateStandard({
-        ...formData,
-        id: editingId
-      });
+      const existing = standards.find(s => s.id === editingId);
+      const statusChanged = existing ? existing.status !== formData.status : false;
+      const isMarkedUpdateStatus = isRevokedStatus(formData.status) || isAlteredStatus(formData.status);
+      const shouldRecordUpdate = registerAsUpdate || (statusChanged && isMarkedUpdateStatus);
+
+      if (shouldRecordUpdate) {
+        const finalStatus: RegulatoryStandardStatus = isRevokedStatus(formData.status)
+          ? 'revogado'
+          : 'vigente com alterações';
+
+        const todayYmd = new Date().toISOString().split('T')[0];
+        const updateIso =
+          updateDateInput && updateDateInput !== todayYmd
+            ? new Date(`${updateDateInput}T12:00:00.000Z`).toISOString()
+            : new Date().toISOString();
+
+        const historyEntry: RegulatoryStandardUpdateEntry = {
+          id: `upd_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          date: updateIso,
+          updatedBy: currentUserName,
+          previousStatus: existing?.status,
+          newStatus: finalStatus,
+          summary: updateSummaryInput.trim() || undefined
+        };
+
+        const updatedStandard: RegulatoryStandard = {
+          ...existing,
+          ...formData,
+          id: editingId,
+          status: finalStatus,
+          lastUpdatedAt: updateIso,
+          updatedBy: currentUserName,
+          updateSummary: updateSummaryInput.trim() || existing?.updateSummary,
+          previousStatus: existing?.status,
+          updateHistory: [historyEntry, ...(existing?.updateHistory || [])],
+          dismissedNotificationUsers: [] // Nova atualização gera notificação de 7 dias para todos
+        };
+
+        onUpdateStandard(updatedStandard);
+        if (detailedStandard?.id === editingId) {
+          setDetailedStandard(updatedStandard);
+        }
+      } else {
+        const updatedStandard: RegulatoryStandard = {
+          ...existing,
+          ...formData,
+          id: editingId
+        };
+        onUpdateStandard(updatedStandard);
+        if (detailedStandard?.id === editingId) {
+          setDetailedStandard(updatedStandard);
+        }
+      }
       setEditingId(null);
     } else {
+      const isInitialUpdateStatus = isRevokedStatus(formData.status) || isAlteredStatus(formData.status);
+      const nowIso = new Date().toISOString();
       onAddStandard({
         ...formData,
-        id: `std_${Date.now()}`
+        id: `std_${Date.now()}`,
+        ...(isInitialUpdateStatus
+          ? {
+              status: isRevokedStatus(formData.status) ? 'revogado' : 'vigente com alterações',
+              lastUpdatedAt: nowIso,
+              updatedBy: currentUserName,
+              updateSummary: updateSummaryInput.trim() || undefined,
+              updateHistory: [
+                {
+                  id: `upd_${Date.now()}`,
+                  date: nowIso,
+                  updatedBy: currentUserName,
+                  newStatus: isRevokedStatus(formData.status) ? 'revogado' : 'vigente com alterações',
+                  summary: updateSummaryInput.trim() || 'Cadastro inicial com status atualizado'
+                }
+              ],
+              dismissedNotificationUsers: []
+            }
+          : {})
       });
     }
     setIsAdding(false);
     resetForm();
   };
 
+  // Normas atualizadas (para aba "Atualizações de Normas", notificações 7d e destaque 1 ano)
+  const updatedStandardsList = useMemo(() => {
+    return standards
+      .filter(s => Boolean(s.lastUpdatedAt) || isRevokedStatus(s.status) || isAlteredStatus(s.status))
+      .sort((a, b) => {
+        const ta = a.lastUpdatedAt ? new Date(a.lastUpdatedAt).getTime() : 0;
+        const tb = b.lastUpdatedAt ? new Date(b.lastUpdatedAt).getTime() : 0;
+        return tb - ta;
+      });
+  }, [standards]);
+
+  // Notificações ativas nos últimos 7 dias (que o usuário ainda não apagou)
+  const activeUpdateNotifications = useMemo(() => {
+    return standards
+      .filter(
+        s =>
+          isWithinSevenDays(s.lastUpdatedAt) &&
+          !(s.dismissedNotificationUsers || []).includes(currentUserKey)
+      )
+      .sort((a, b) => {
+        const ta = a.lastUpdatedAt ? new Date(a.lastUpdatedAt).getTime() : 0;
+        const tb = b.lastUpdatedAt ? new Date(b.lastUpdatedAt).getTime() : 0;
+        return tb - ta;
+      });
+  }, [standards, currentUserKey]);
+
+  const highlightedOneYearCount = useMemo(
+    () => standards.filter(s => isHighlightedOneYear(s.lastUpdatedAt)).length,
+    [standards]
+  );
+
+  const filteredUpdatedStandards = useMemo(() => {
+    return updatedStandardsList.filter(s => {
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase();
+        const matches =
+          s.name.toLowerCase().includes(term) ||
+          s.theme.toLowerCase().includes(term) ||
+          s.summary.toLowerCase().includes(term) ||
+          (s.updateSummary || '').toLowerCase().includes(term);
+        if (!matches) return false;
+      }
+      if (updatesFilter === 'destaque_1_ano') return isHighlightedOneYear(s.lastUpdatedAt);
+      if (updatesFilter === 'vigente_alteracoes') return isAlteredStatus(s.status);
+      if (updatesFilter === 'revogado') return isRevokedStatus(s.status);
+      return true;
+    });
+  }, [updatedStandardsList, searchTerm, updatesFilter]);
+
   // Filtered standards calculation
   const filteredStandards = useMemo(() => {
-    return standards.filter(s => {
+    const list = standards.filter(s => {
       // Search
       if (searchTerm.trim()) {
         const term = searchTerm.toLowerCase();
@@ -367,7 +589,23 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
 
       return true;
     });
-  }, [standards, searchTerm, selectedType, activeNav, favoriteIds, selectedCategory]);
+
+    if (sortBy === 'nome') {
+      return [...list].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    if (sortBy === 'status') {
+      return [...list].sort((a, b) => (a.status || '').localeCompare(b.status || ''));
+    }
+    // Mais recentes: prioriza normas atualizadas no último ano no topo
+    return [...list].sort((a, b) => {
+      const aHl = isHighlightedOneYear(a.lastUpdatedAt) ? 1 : 0;
+      const bHl = isHighlightedOneYear(b.lastUpdatedAt) ? 1 : 0;
+      if (aHl !== bHl) return bHl - aHl;
+      const ta = a.lastUpdatedAt ? new Date(a.lastUpdatedAt).getTime() : 0;
+      const tb = b.lastUpdatedAt ? new Date(b.lastUpdatedAt).getTime() : 0;
+      return tb - ta;
+    });
+  }, [standards, searchTerm, selectedType, activeNav, favoriteIds, selectedCategory, sortBy]);
 
   const favoritesList = useMemo(() => {
     return standards.filter(s => favoriteIds.includes(s.id));
@@ -659,6 +897,37 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
               </div>
               {!isSidebarCollapsed && <span className="text-left flex-1 leading-tight">Favoritos</span>}
             </button>
+
+            <button
+              onClick={() => { setActiveNav('atualizacoes'); setIsAdding(false); }}
+              title="Atualizações de Normas"
+              className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3.5 py-2.5'} rounded-2xl text-xs font-extrabold transition-all text-left relative ${
+                activeNav === 'atualizacoes'
+                  ? 'bg-amber-50 text-amber-900 border border-amber-200 shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              <div className={`p-1.5 rounded-xl ${activeNav === 'atualizacoes' ? 'bg-amber-100 text-amber-700' : activeUpdateNotifications.length > 0 ? 'bg-amber-50 text-amber-600' : 'text-slate-400'} flex-shrink-0`}>
+                <RefreshCw size={16} />
+              </div>
+              {!isSidebarCollapsed && (
+                <>
+                  <span className="text-left flex-1 leading-tight">Atualizações de Normas</span>
+                  {activeUpdateNotifications.length > 0 ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white shadow-2xs flex-shrink-0">
+                      {activeUpdateNotifications.length}
+                    </span>
+                  ) : highlightedOneYearCount > 0 ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200 flex-shrink-0">
+                      {highlightedOneYearCount}
+                    </span>
+                  ) : null}
+                </>
+              )}
+              {isSidebarCollapsed && activeUpdateNotifications.length > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-white" />
+              )}
+            </button>
           </div>
 
           {/* Section 2: Categorias Sidebar Links */}
@@ -759,8 +1028,103 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
 
 
 
+        {/* NOTIFICAÇÕES DE ATUALIZAÇÕES DE NORMAS (7 DIAS OU ATÉ O USUÁRIO APAGAR) */}
+        {!isAdding && activeUpdateNotifications.length > 0 && (
+          <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 shadow-xs space-y-3 animate-in fade-in duration-200">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-100 text-amber-700 border border-amber-200/80 shrink-0">
+                  <BellRing size={16} />
+                </div>
+                <div>
+                  <h2 className="text-xs font-black uppercase tracking-wider text-amber-950">
+                    {activeUpdateNotifications.length === 1
+                      ? '1 Norma Regulatória Atualizada Recentemente'
+                      : `${activeUpdateNotifications.length} Normas Regulatórias Atualizadas Recentemente`}
+                  </h2>
+                  <p className="text-[11px] font-medium text-amber-800/90">
+                    Aviso exibido por 7 dias após a atualização ou até você apagar a notificação.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {activeNav !== 'atualizacoes' && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveNav('atualizacoes')}
+                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-amber-100/70 text-amber-900 border border-amber-200 text-[11px] font-bold transition"
+                  >
+                    Ver Atualizações
+                  </button>
+                )}
+                {activeUpdateNotifications.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleDismissAllUpdateNotifications}
+                    className="px-3 py-1.5 rounded-xl bg-white/80 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 text-[11px] font-bold transition flex items-center gap-1"
+                    title="Apagar todas as notificações de atualização"
+                  >
+                    <Trash2 size={12} /> Apagar todas
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {activeUpdateNotifications.map(std => {
+                const badge = getStatusBadge(std.status);
+                const daysLeft = getDaysRemainingSevenDays(std.lastUpdatedAt);
+                return (
+                  <div
+                    key={std.id}
+                    className="bg-white rounded-xl border border-amber-200/80 px-3.5 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                  >
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${badge.className}`}>
+                          {badge.label}
+                        </span>
+                        <span className="text-xs font-black text-slate-900 truncate">
+                          {std.name}
+                        </span>
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/70">
+                          Atualizada em {formatDateBr(std.lastUpdatedAt)} • Expira em {daysLeft} {daysLeft === 1 ? 'dia' : 'dias'}
+                        </span>
+                      </div>
+                      {std.updateSummary && (
+                        <p className="text-[11px] text-slate-600 font-medium line-clamp-2">
+                          {std.updateSummary}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setDetailedStandard(std)}
+                        className="px-2.5 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-100 text-[11px] font-bold transition flex items-center gap-1"
+                      >
+                        <Eye size={12} /> Ver
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDismissUpdateNotification(std, e)}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-rose-50 text-slate-500 hover:text-rose-700 border border-slate-200 hover:border-rose-200 text-[11px] font-bold transition flex items-center gap-1"
+                        title="Apagar esta notificação"
+                      >
+                        <X size={12} /> Apagar
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Search & Filter Bar */}
-        {!isAdding && activeNav !== 'post_its' && (
+        {!isAdding && activeNav !== 'post_its' && activeNav !== 'atualizacoes' && (
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -851,15 +1215,81 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Status da Norma</label>
                   <select 
                     value={formData.status}
-                    onChange={e => setFormData({...formData, status: e.target.value as any})}
+                    onChange={e => {
+                      const nextStatus = e.target.value as RegulatoryStandardStatus;
+                      setFormData({ ...formData, status: nextStatus });
+                      if (editingId && (isRevokedStatus(nextStatus) || isAlteredStatus(nextStatus))) {
+                        setRegisterAsUpdate(true);
+                      }
+                    }}
                     className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium bg-white"
                   >
-                    <option value="vigente">Vigente</option>
-                    <option value="vigente com alteração">Vigente com Alteração / Em Revisão</option>
-                    <option value="obsoleto">Obsoleto / Revogada</option>
+                    {!registerAsUpdate && <option value="vigente">Vigente</option>}
+                    <option value="vigente com alterações">Vigente com Alterações</option>
+                    <option value="revogado">Revogado</option>
                   </select>
                 </div>
               </div>
+
+              {editingId && (
+                <div className={`p-4 rounded-2xl border space-y-3 transition ${
+                  registerAsUpdate
+                    ? 'bg-amber-50/70 border-amber-300'
+                    : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={registerAsUpdate}
+                        onChange={e => {
+                          const checked = e.target.checked;
+                          setRegisterAsUpdate(checked);
+                          if (checked && !isRevokedStatus(formData.status) && !isAlteredStatus(formData.status)) {
+                            setFormData(prev => ({ ...prev, status: 'vigente com alterações' }));
+                          }
+                        }}
+                        className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
+                      />
+                      <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                        <RefreshCw size={14} className="text-amber-600" />
+                        Registrar como Atualização de Norma
+                      </span>
+                    </label>
+                    <span className="text-[10px] font-bold text-amber-800 bg-amber-100/80 px-2.5 py-0.5 rounded-full border border-amber-200">
+                      Notificação por 7 dias • Destaque por 1 ano
+                    </span>
+                  </div>
+
+                  {registerAsUpdate && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                          Data da Atualização
+                        </label>
+                        <input
+                          type="date"
+                          value={updateDateInput}
+                          onChange={e => setUpdateDateInput(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-amber-200 bg-white text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-amber-400/30"
+                        />
+                      </div>
+                      <div className="md:col-span-2 space-y-1">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                          Resumo da Atualização / Norma Substituta (opcional)
+                        </label>
+                        <input
+                          type="text"
+                          value={updateSummaryInput}
+                          onChange={e => setUpdateSummaryInput(e.target.value)}
+                          placeholder="Ex: Alterada pela RDC XXX/2026 ou revogada integralmente..."
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-amber-200 bg-white text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-amber-400/30"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Resumo das Diretrizes</label>
@@ -1135,6 +1565,226 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
               })}
             </div>
           </div>
+        ) : activeNav === 'atualizacoes' ? (
+          /* 4.5 ATUALIZAÇÕES DE NORMAS VIEW */
+          <div className="space-y-5 animate-in fade-in duration-200">
+            {/* Indicadores */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="bg-white rounded-2xl border border-amber-200/80 p-4 shadow-xs">
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Notificações (7 dias)</p>
+                <p className="text-2xl font-black text-slate-900 mt-1">{activeUpdateNotifications.length}</p>
+                <p className="text-[11px] text-slate-500 font-medium mt-0.5">Ativas para você</p>
+              </div>
+              <div className="bg-white rounded-2xl border border-teal-200/80 p-4 shadow-xs">
+                <p className="text-[10px] font-black uppercase tracking-widest text-teal-700">Em Destaque (1 ano)</p>
+                <p className="text-2xl font-black text-slate-900 mt-1">{highlightedOneYearCount}</p>
+                <p className="text-[11px] text-slate-500 font-medium mt-0.5">Destacadas no acervo</p>
+              </div>
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-800">Vigente c/ Alterações</p>
+                <p className="text-2xl font-black text-slate-900 mt-1">
+                  {updatedStandardsList.filter(s => isAlteredStatus(s.status)).length}
+                </p>
+                <p className="text-[11px] text-slate-500 font-medium mt-0.5">Normas revisadas</p>
+              </div>
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+                <p className="text-[10px] font-black uppercase tracking-widest text-rose-700">Revogadas</p>
+                <p className="text-2xl font-black text-slate-900 mt-1">
+                  {updatedStandardsList.filter(s => isRevokedStatus(s.status)).length}
+                </p>
+                <p className="text-[11px] text-slate-500 font-medium mt-0.5">Substituídas / encerradas</p>
+              </div>
+            </div>
+
+            {/* Ação rápida: registrar atualização em qualquer norma existente */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs flex flex-col md:flex-row items-stretch md:items-center gap-3">
+              <div className="flex-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5 shrink-0">
+                  <RefreshCw size={14} className="text-amber-600" />
+                  Registrar atualização:
+                </span>
+                <select
+                  value={quickUpdateTargetId}
+                  onChange={e => setQuickUpdateTargetId(e.target.value)}
+                  className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-teal-500/20"
+                >
+                  <option value="">Selecione uma norma do acervo para atualizar...</option>
+                  {standards.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                disabled={!quickUpdateTargetId}
+                onClick={() => {
+                  const target = standards.find(s => s.id === quickUpdateTargetId);
+                  if (target) {
+                    startEdit(target, true);
+                    setQuickUpdateTargetId('');
+                  }
+                }}
+                className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 shrink-0"
+              >
+                <RefreshCw size={14} /> Atualizar Norma
+              </button>
+            </div>
+
+            {/* Busca + Filtros da aba de atualizações */}
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[
+                  { id: 'todas', label: `Todas (${updatedStandardsList.length})` },
+                  { id: 'destaque_1_ano', label: `Em destaque 1 ano (${highlightedOneYearCount})` },
+                  { id: 'vigente_alteracoes', label: 'Vigente com Alterações' },
+                  { id: 'revogado', label: 'Revogado' }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setUpdatesFilter(tab.id as any)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
+                      updatesFilter === tab.id
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-full md:w-72">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+                <input
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="Filtrar normas atualizadas..."
+                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium outline-none focus:ring-2 focus:ring-teal-500/20"
+                />
+              </div>
+            </div>
+
+            {/* Lista de normas atualizadas */}
+            {filteredUpdatedStandards.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-slate-200/80 p-10 text-center space-y-2">
+                <RefreshCw size={32} className="text-slate-300 mx-auto" />
+                <p className="text-xs font-black uppercase tracking-wider text-slate-500">
+                  Nenhuma atualização de norma registrada neste filtro
+                </p>
+                <p className="text-xs text-slate-400">
+                  Selecione uma norma acima ou clique no ícone de atualização em qualquer norma do acervo.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredUpdatedStandards.map(std => {
+                  const statusBadge = getStatusBadge(std.status);
+                  const isHighlighted = isHighlightedOneYear(std.lastUpdatedAt);
+                  const isRevoked = isRevokedStatus(std.status);
+                  const hasActiveNotif =
+                    isWithinSevenDays(std.lastUpdatedAt) &&
+                    !(std.dismissedNotificationUsers || []).includes(currentUserKey);
+
+                  return (
+                    <div
+                      key={std.id}
+                      onClick={() => setDetailedStandard(std)}
+                      className={`p-5 rounded-3xl border shadow-xs hover:shadow-md transition cursor-pointer flex flex-col gap-3 ${
+                        isHighlighted
+                          ? isRevoked
+                            ? 'bg-gradient-to-br from-rose-50/50 via-white to-white border-rose-300 ring-1 ring-rose-200/70'
+                            : 'bg-gradient-to-br from-amber-50/60 via-white to-white border-amber-300 ring-1 ring-amber-200/70'
+                          : 'bg-white border-slate-200/80'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1.5 min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${statusBadge.className}`}>
+                              {statusBadge.label}
+                            </span>
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                              {std.type}
+                            </span>
+                            {isHighlighted && (
+                              <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500 text-white flex items-center gap-1">
+                                <Sparkles size={10} /> Atualizada • Destaque até {getHighlightExpiryBr(std.lastUpdatedAt)}
+                              </span>
+                            )}
+                          </div>
+
+                          <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">
+                            {std.name}
+                          </h4>
+                          <p className="text-xs text-slate-600 font-medium">
+                            {std.updateSummary || std.theme || std.summary}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                          {hasActiveNotif && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleDismissUpdateNotification(std, e)}
+                              className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 text-[11px] font-bold transition flex items-center gap-1"
+                              title="Apagar notificação de 7 dias"
+                            >
+                              <X size={12} /> Apagar aviso
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => startEdit(std, true)}
+                            className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-bold transition flex items-center gap-1"
+                          >
+                            <RefreshCw size={12} /> Atualizar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDetailedStandard(std)}
+                            className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-bold transition flex items-center gap-1"
+                          >
+                            <Eye size={12} /> Detalhes
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 font-semibold">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="flex items-center gap-1">
+                            <Calendar size={12} className="text-amber-600" />
+                            Atualizada em: <strong className="text-slate-700">{formatDateBr(std.lastUpdatedAt)}</strong>
+                          </span>
+                          {std.updatedBy && (
+                            <span>
+                              Por: <strong className="text-slate-700">{std.updatedBy}</strong>
+                            </span>
+                          )}
+                          {std.previousStatus && (
+                            <span>
+                              Status anterior: <strong className="text-slate-700">{getStatusBadge(std.previousStatus).label}</strong>
+                            </span>
+                          )}
+                        </div>
+                        {std.documentLink && (
+                          <a
+                            href={std.documentLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="text-teal-700 hover:underline flex items-center gap-1 text-[10px] font-black uppercase"
+                          >
+                            Documento <ExternalLink size={10} />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         ) : (
           
           /* 5. VISÃO GERAL & ACERVO LAYOUT (MATCHING MOCKUP IMAGE) */
@@ -1235,14 +1885,36 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                     const statusBadge = getStatusBadge(std.status);
                     const isFav = favoriteIds.includes(std.id);
                     const dateStr = extractDateFromName(std.name);
+                    const isHighlighted = isHighlightedOneYear(std.lastUpdatedAt);
+                    const isRevoked = isRevokedStatus(std.status);
 
                     return (
                       <div 
                         key={std.id}
                         onClick={() => setDetailedStandard(std)}
-                        className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group relative"
+                        className={`p-5 rounded-3xl border shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group relative ${
+                          isHighlighted
+                            ? isRevoked
+                              ? 'bg-gradient-to-br from-rose-50/50 via-white to-white border-rose-300 ring-1 ring-rose-200/80'
+                              : 'bg-gradient-to-br from-amber-50/60 via-white to-white border-amber-300 ring-1 ring-amber-200/80'
+                            : 'bg-white border-slate-200/80'
+                        }`}
                       >
                         <div>
+                          {/* Destaque de 1 ano para norma atualizada */}
+                          {isHighlighted && (
+                            <div className={`mb-2.5 px-2.5 py-1 rounded-xl border flex items-center justify-between gap-2 text-[10px] font-black uppercase tracking-wider ${
+                              isRevoked
+                                ? 'bg-rose-100/80 border-rose-200 text-rose-800'
+                                : 'bg-amber-100/80 border-amber-200 text-amber-900'
+                            }`}>
+                              <span className="flex items-center gap-1">
+                                <RefreshCw size={11} /> Norma Atualizada ({formatDateBr(std.lastUpdatedAt)})
+                              </span>
+                              <span className="text-[9px] opacity-80">até {getHighlightExpiryBr(std.lastUpdatedAt)}</span>
+                            </div>
+                          )}
+
                           {/* Top Badge Row */}
                           <div className="flex items-center justify-between gap-2 mb-3">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -1258,18 +1930,28 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                               <button 
                                 onClick={(e) => toggleFavorite(std.id, e)}
                                 className="p-1 text-slate-300 hover:text-amber-400 transition"
+                                title="Favoritar"
                               >
                                 <Star size={16} className={isFav ? "fill-amber-400 text-amber-400" : ""} />
                               </button>
                               <button 
-                                onClick={() => startEdit(std)}
+                                onClick={() => startEdit(std, true)}
+                                className="p-1 text-slate-300 hover:text-amber-600 transition"
+                                title="Registrar atualização da norma (Revogado ou Vigente com Alterações)"
+                              >
+                                <RefreshCw size={14} />
+                              </button>
+                              <button 
+                                onClick={() => startEdit(std, false)}
                                 className="p-1 text-slate-300 hover:text-teal-700 transition"
+                                title="Editar norma"
                               >
                                 <Edit2 size={14} />
                               </button>
                               <button 
                                 onClick={() => onDeleteStandard(std.id)}
                                 className="p-1 text-slate-300 hover:text-red-500 transition"
+                                title="Excluir norma"
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -1283,7 +1965,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
 
                           {/* Summary */}
                           <p className="text-xs text-slate-500 font-medium leading-relaxed line-clamp-2 mb-4">
-                            {std.theme || std.summary}
+                            {std.updateSummary && isHighlighted ? std.updateSummary : (std.theme || std.summary)}
                           </p>
                         </div>
 
@@ -1479,10 +2161,15 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
           <div className="w-full max-w-2xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="min-w-0">
-                <span className="text-[10px] font-black uppercase text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-100">
-                  {detailedStandard.type}
-                </span>
-                <h3 className="text-base font-black text-slate-900 uppercase tracking-tight mt-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${getStatusBadge(detailedStandard.status).className}`}>
+                    {getStatusBadge(detailedStandard.status).label}
+                  </span>
+                  <span className="text-[10px] font-black uppercase text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-100">
+                    {detailedStandard.type}
+                  </span>
+                </div>
+                <h3 className="text-base font-black text-slate-900 uppercase tracking-tight mt-1.5">
                   {detailedStandard.name}
                 </h3>
               </div>
@@ -1492,6 +2179,29 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
             </div>
 
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              {isHighlightedOneYear(detailedStandard.lastUpdatedAt) && (
+                <div className={`p-4 rounded-2xl border space-y-1.5 ${
+                  isRevokedStatus(detailedStandard.status)
+                    ? 'bg-rose-50/80 border-rose-200 text-rose-900'
+                    : 'bg-amber-50/80 border-amber-200 text-amber-950'
+                }`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                      <RefreshCw size={13} /> Norma Atualizada em {formatDateBr(detailedStandard.lastUpdatedAt)}
+                    </span>
+                    <span className="text-[10px] font-bold opacity-85">
+                      Em destaque por 1 ano (até {getHighlightExpiryBr(detailedStandard.lastUpdatedAt)})
+                    </span>
+                  </div>
+                  {detailedStandard.updateSummary && (
+                    <p className="text-xs font-medium">{detailedStandard.updateSummary}</p>
+                  )}
+                  {detailedStandard.updatedBy && (
+                    <p className="text-[11px] opacity-80">Registrado por: {detailedStandard.updatedBy}</p>
+                  )}
+                </div>
+              )}
+
               <div>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Tema / Assunto Geral:</span>
                 <p className="text-xs font-bold text-teal-800 uppercase">{detailedStandard.theme}</p>
@@ -1503,6 +2213,29 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                   {detailedStandard.summary}
                 </p>
               </div>
+
+              {detailedStandard.updateHistory && detailedStandard.updateHistory.length > 0 && (
+                <div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 flex items-center gap-1">
+                    <History size={12} /> Histórico de Atualizações
+                  </span>
+                  <div className="space-y-2">
+                    {detailedStandard.updateHistory.map(entry => (
+                      <div key={entry.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-xs space-y-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${getStatusBadge(entry.newStatus).className}`}>
+                            {getStatusBadge(entry.newStatus).label}
+                          </span>
+                          <span className="text-[11px] font-bold text-slate-500">
+                            {formatDateBr(entry.date)} • {entry.updatedBy}
+                          </span>
+                        </div>
+                        {entry.summary && <p className="text-slate-700 font-medium">{entry.summary}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {detailedStandard.documentLink && (
                 <div className="pt-2">
@@ -1518,7 +2251,18 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
               )}
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const target = detailedStandard;
+                  setDetailedStandard(null);
+                  startEdit(target, true);
+                }}
+                className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl font-bold uppercase text-xs tracking-wider transition flex items-center gap-1.5"
+              >
+                <RefreshCw size={13} /> Registrar Atualização
+              </button>
               <button 
                 onClick={() => setDetailedStandard(null)}
                 className="px-6 py-2 bg-slate-800 text-white rounded-xl font-bold uppercase text-xs tracking-widest hover:bg-slate-700 transition"

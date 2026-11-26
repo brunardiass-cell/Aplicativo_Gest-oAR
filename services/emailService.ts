@@ -306,3 +306,168 @@ export const cancelCriticalAlert = (activityId: string) => {
   console.log(`[Alerta Crítico] Alertas futuros cancelados para a atividade ${activityId} (atividade concluída).`);
   localStorage.setItem(`cancelled_critical_alert_${activityId}`, new Date().toISOString());
 };
+
+const normalizeNameForEmailMatch = (value?: string): string => {
+  return (value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+};
+
+/**
+ * Resolve o e-mail cadastrado pertencente ao dono do perfil selecionado.
+ */
+export const resolveProfileOwnerEmail = (
+  profileName?: string | null,
+  appUsers: Array<{ username?: string; email?: string }> = [],
+  fallbackAccountEmail?: string | null
+): string => {
+  const target = normalizeNameForEmailMatch(profileName || '');
+  if (target && appUsers.length > 0) {
+    // 1. Correspondência exata de nome
+    const exact = appUsers.find(
+      u => u.email && validateEmail(u.email) && normalizeNameForEmailMatch(u.username) === target
+    );
+    if (exact?.email) return exact.email.trim();
+
+    // 2. Correspondência por primeiro nome ou inclusão
+    const firstWord = target.split(/\s+/)[0];
+    const partial = appUsers.find(u => {
+      if (!u.email || !validateEmail(u.email)) return false;
+      const uName = normalizeNameForEmailMatch(u.username);
+      const uEmailPrefix = normalizeNameForEmailMatch(u.email.split('@')[0]);
+      return (
+        (uName && (uName.includes(target) || target.includes(uName) || uName.split(/\s+/)[0] === firstWord)) ||
+        (firstWord.length >= 3 && uEmailPrefix.includes(firstWord))
+      );
+    });
+    if (partial?.email) return partial.email.trim();
+  }
+
+  // 3. Fallback: conta autenticada atual se válida
+  if (fallbackAccountEmail && validateEmail(fallbackAccountEmail)) {
+    return fallbackAccountEmail.trim();
+  }
+
+  return '';
+};
+
+export interface ActivityNotificationOptions {
+  activityId: string;
+  activityTitle: string;
+  sourceType: 'task' | 'microactivity';
+  projectName?: string;
+  macroName?: string;
+  dueDate?: string;
+  status?: string;
+  recipientEmail: string;
+  recipientName: string;
+  mode: 'enabled' | 'reminder';
+  sender?: string;
+}
+
+/**
+ * Dispara notificação por e-mail para atividades selecionadas via ícone de sininho
+ * pelo dono do perfil.
+ */
+export const sendActivityNotificationEmail = async (
+  options: ActivityNotificationOptions
+): Promise<{ success: boolean; error?: string; sentAt?: string }> => {
+  const {
+    activityId,
+    activityTitle,
+    sourceType,
+    projectName,
+    macroName,
+    dueDate,
+    status,
+    recipientEmail,
+    recipientName,
+    mode,
+    sender = 'brunadias@ctvacinas.org'
+  } = options;
+
+  if (!recipientEmail || !validateEmail(recipientEmail)) {
+    const errorMsg = `Nenhum e-mail válido encontrado para o perfil "${recipientName || 'atual'}". Cadastre o e-mail em Controle de Acesso > Gestão de Usuários.`;
+    if (mode === 'enabled') {
+      showToast('E-mail do Perfil não Encontrado', errorMsg, true);
+    }
+    return { success: false, error: errorMsg };
+  }
+
+  const todayKey = new Date().toISOString().split('T')[0];
+  const dedupeKey = `activity_bell_${mode}_${activityId}_${recipientEmail.trim().toLowerCase()}_${todayKey}`;
+  if (mode === 'reminder' && localStorage.getItem(dedupeKey)) {
+    return { success: true, sentAt: localStorage.getItem(dedupeKey) || undefined };
+  }
+
+  const dueDateFormatted = dueDate
+    ? dueDate.split('-').reverse().join('/')
+    : 'Sem prazo definido';
+
+  const originLabel = sourceType === 'microactivity' ? 'Microatividade de Projeto' : 'Atividade (Notas Rápidas)';
+  const subject =
+    mode === 'enabled'
+      ? `[AR CTVacinas] Notificação ativada: ${activityTitle}`
+      : `[AR CTVacinas - Lembrete] Atividade acompanhada: ${activityTitle}`;
+
+  const bodyLines = [
+    `Prezado(a) ${recipientName || 'Usuário'},`,
+    '',
+    mode === 'enabled'
+      ? 'Você ativou as notificações por e-mail (sininho) para a seguinte atividade no sistema CTVacinas:'
+      : 'Este é um lembrete automático de uma atividade marcada por você com notificação ativa (sininho):',
+    '',
+    `• Origem: ${originLabel}`,
+    `• Atividade: ${activityTitle}`,
+    `• Projeto: ${projectName || 'Geral'}`,
+    ...(macroName ? [`• Macroatividade: ${macroName}`] : []),
+    `• Status atual: ${status || 'Em andamento'}`,
+    `• Prazo: ${dueDateFormatted}`,
+    '',
+    'Atenciosamente,',
+    'Gestão Regulatória - CTVacinas'
+  ];
+  const body = bodyLines.join('\n');
+
+  const nowIso = new Date().toISOString();
+  const messageId = `bell_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+  recordEmailAudit({
+    id: messageId,
+    type: 'ATIVIDADE_NOTIFICACAO',
+    sender,
+    recipientEmail: recipientEmail.trim(),
+    recipientName,
+    subject,
+    content: body,
+    timestamp: nowIso,
+    status: 'enviado',
+    refId: activityId,
+    refType: sourceType
+  });
+
+  try {
+    await MicrosoftGraphService.sendEmail(recipientEmail.trim(), subject, body);
+  } catch {
+    // continua para fallback do servidor
+  }
+
+  await callServerSendEmail({
+    to: recipientEmail.trim(),
+    sender,
+    subject,
+    body,
+    type: 'ATIVIDADE_NOTIFICACAO',
+    refId: activityId,
+    refType: sourceType,
+    recipientName
+  });
+
+  localStorage.setItem(dedupeKey, nowIso);
+  if (mode === 'enabled') {
+    showToast('Notificação Ativada', `Alertas desta atividade serão enviados para ${recipientEmail.trim()}`);
+  }
+  return { success: true, sentAt: nowIso };
+};

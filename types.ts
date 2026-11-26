@@ -155,11 +155,18 @@ export interface Task {
   criticalAlertSentAt?: string;
   criticalAlertStatus?: 'agendado' | 'enviado' | 'cancelado' | 'erro';
   criticalAlertError?: string;
+
+  // Notificação por e-mail ativada pelo sininho (perfil dono)
+  emailNotificationEnabled?: boolean;
+  emailNotificationRecipient?: string;
+  emailNotificationProfileName?: string;
+  emailNotificationEnabledAt?: string;
+  emailNotificationLastSentAt?: string;
 }
 
 export interface EmailAuditLog {
   id: string;
-  type: 'NOVO_PROJETO' | 'ATIVIDADE_CRITICA' | 'ALERTA_PRAZO';
+  type: 'NOVO_PROJETO' | 'ATIVIDADE_CRITICA' | 'ALERTA_PRAZO' | 'ATIVIDADE_NOTIFICACAO';
   sender: string;
   recipientEmail: string;
   recipientName?: string;
@@ -355,7 +362,23 @@ export interface DossierContribution {
   updatedAt: string;
 }
 
-export type RegulatoryStandardStatus = 'vigente' | 'vigente com alteração' | 'Alterador' | 'À Entrar em Vigor' | 'obsoleto';
+export type RegulatoryStandardStatus =
+  | 'vigente'
+  | 'vigente com alteração'
+  | 'vigente com alterações'
+  | 'revogado'
+  | 'Alterador'
+  | 'À Entrar em Vigor'
+  | 'obsoleto';
+
+export interface RegulatoryStandardUpdateEntry {
+  id: string;
+  date: string; // ISO string
+  updatedBy: string;
+  previousStatus?: RegulatoryStandardStatus;
+  newStatus: RegulatoryStandardStatus;
+  summary?: string;
+}
 
 export interface RegulatoryStandard {
   id: string;
@@ -377,6 +400,14 @@ export interface RegulatoryStandard {
   appliesTo?: string; // Se aplica a...
   linkedStandards?: string[]; // Outras normas e guias vinculadas
   keyNotes?: string; // Principais notas sobre a norma
+
+  // Rastreamento de atualizações (notificação de 7 dias e destaque de 1 ano)
+  lastUpdatedAt?: string; // ISO string da última atualização registrada
+  updatedBy?: string;
+  updateSummary?: string;
+  previousStatus?: RegulatoryStandardStatus;
+  updateHistory?: RegulatoryStandardUpdateEntry[];
+  dismissedNotificationUsers?: string[]; // Chaves normalizadas de usuários que apagaram a notificação de 7 dias
 }
 
 export interface ConceptStandardLink {
@@ -597,6 +628,13 @@ export interface MicroActivity {
   criticalAlertSentAt?: string;
   criticalAlertStatus?: 'agendado' | 'enviado' | 'cancelado' | 'erro';
   criticalAlertError?: string;
+
+  // Notificação por e-mail ativada pelo sininho (perfil dono)
+  emailNotificationEnabled?: boolean;
+  emailNotificationRecipient?: string;
+  emailNotificationProfileName?: string;
+  emailNotificationEnabledAt?: string;
+  emailNotificationLastSentAt?: string;
 }
 
 export interface MacroActivity {

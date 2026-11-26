@@ -40,7 +40,7 @@ import ProjectGanttView from './components/ProjectGanttView';
 import ProjectActivityMap from './components/ProjectActivityMap';
 import PreSaveConfirmationModal from './components/PreSaveConfirmationModal';
 import ComiteGestorView from './components/ComiteGestorView';
-import { sendNewProjectEmail } from './services/emailService';
+import { sendNewProjectEmail, resolveProfileOwnerEmail, sendActivityNotificationEmail } from './services/emailService';
 import { notificationService } from './services/notificationService';
 import { pushNotificationService, showLocalNotification } from './services/pushNotificationService';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
@@ -2579,6 +2579,137 @@ const App: React.FC = () => {
   const uniqueProjectsForMicroTasks = useMemo(() => ['Todos', ...Array.from(new Set(allMicroTasksForUser.map(m => m.projectName)))], [allMicroTasksForUser]);
   const uniqueAssigneesForMicroTasks = useMemo(() => ['Todos', ...Array.from(new Set(allMicroTasksForUser.map(m => m.assignee)))], [allMicroTasksForUser]);
 
+  const activeProfileOwnerName = selectedProfile?.name || account?.name || 'Usuário';
+  const activeProfileOwnerEmail = useMemo(
+    () => resolveProfileOwnerEmail(selectedProfile?.name, appUsers, account?.username),
+    [selectedProfile?.name, appUsers, account?.username]
+  );
+
+  const handleToggleMicroNotification = useCallback((projectId: string, macroId: string, microId: string) => {
+    const targetProject = projects.find(p => p.id === projectId);
+    const targetMacro = targetProject?.macroActivities?.find(m => m.id === macroId);
+    const targetMicro = targetMacro?.microActivities?.find(mic => mic.id === microId);
+    if (!targetProject || !targetMacro || !targetMicro) return;
+
+    const nextEnabled = !targetMicro.emailNotificationEnabled;
+    const recipient = activeProfileOwnerEmail || targetMicro.emailNotificationRecipient || '';
+
+    if (nextEnabled && !recipient) {
+      void sendActivityNotificationEmail({
+        activityId: targetMicro.id,
+        activityTitle: targetMicro.name,
+        sourceType: 'microactivity',
+        projectName: targetProject.name,
+        macroName: targetMacro.name,
+        dueDate: targetMicro.dueDate,
+        status: targetMicro.status,
+        recipientEmail: '',
+        recipientName: activeProfileOwnerName,
+        mode: 'enabled'
+      });
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    setProjects(prev =>
+      prev.map(p => {
+        if (p.id !== projectId) return p;
+        return {
+          ...p,
+          macroActivities: (p.macroActivities || []).map(macro => {
+            if (macro.id !== macroId) return macro;
+            return {
+              ...macro,
+              microActivities: (macro.microActivities || []).map(mic =>
+                mic.id === microId
+                  ? {
+                      ...mic,
+                      emailNotificationEnabled: nextEnabled,
+                      emailNotificationRecipient: nextEnabled ? recipient : mic.emailNotificationRecipient,
+                      emailNotificationProfileName: nextEnabled ? activeProfileOwnerName : mic.emailNotificationProfileName,
+                      emailNotificationEnabledAt: nextEnabled ? nowIso : undefined
+                    }
+                  : mic
+              )
+            };
+          })
+        };
+      })
+    );
+    setDataDirty();
+
+    if (nextEnabled) {
+      void sendActivityNotificationEmail({
+        activityId: targetMicro.id,
+        activityTitle: targetMicro.name,
+        sourceType: 'microactivity',
+        projectName: targetProject.name,
+        macroName: targetMacro.name,
+        dueDate: targetMicro.dueDate,
+        status: targetMicro.status,
+        recipientEmail: recipient,
+        recipientName: activeProfileOwnerName,
+        mode: 'enabled'
+      });
+    }
+  }, [projects, activeProfileOwnerEmail, activeProfileOwnerName]);
+
+  // Lembretes automáticos diários para atividades/microatividades marcadas com o sininho pelo dono do perfil
+  useEffect(() => {
+    if (!selectedProfile || !activeProfileOwnerEmail) return;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const twoDaysAhead = new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000);
+
+    tasks.forEach(t => {
+      if (t.deleted || !t.emailNotificationEnabled || t.status === 'Concluída' || t.status === 'Não Aplicável') return;
+      const recipient = t.emailNotificationRecipient || activeProfileOwnerEmail;
+      if (recipient.toLowerCase() !== activeProfileOwnerEmail.toLowerCase()) return;
+      if (!t.completionDate) return;
+      const due = new Date(t.completionDate + 'T00:00:00');
+      if (!Number.isNaN(due.getTime()) && due <= twoDaysAhead) {
+        void sendActivityNotificationEmail({
+          activityId: t.id,
+          activityTitle: t.activity,
+          sourceType: 'task',
+          projectName: t.project,
+          dueDate: t.completionDate,
+          status: t.status,
+          recipientEmail: recipient,
+          recipientName: t.emailNotificationProfileName || activeProfileOwnerName,
+          mode: 'reminder'
+        });
+      }
+    });
+
+    projects.forEach(p => {
+      if (p.deleted) return;
+      (p.macroActivities || []).forEach(macro => {
+        (macro.microActivities || []).forEach(mic => {
+          if (!mic.emailNotificationEnabled || mic.status === 'Concluído e aprovado') return;
+          const recipient = mic.emailNotificationRecipient || activeProfileOwnerEmail;
+          if (recipient.toLowerCase() !== activeProfileOwnerEmail.toLowerCase()) return;
+          if (!mic.dueDate) return;
+          const due = new Date(mic.dueDate + 'T00:00:00');
+          if (!Number.isNaN(due.getTime()) && due <= twoDaysAhead) {
+            void sendActivityNotificationEmail({
+              activityId: mic.id,
+              activityTitle: mic.name,
+              sourceType: 'microactivity',
+              projectName: p.name,
+              macroName: macro.name,
+              dueDate: mic.dueDate,
+              status: mic.status,
+              recipientEmail: recipient,
+              recipientName: mic.emailNotificationProfileName || activeProfileOwnerName,
+              mode: 'reminder'
+            });
+          }
+        });
+      });
+    });
+  }, [selectedProfile, activeProfileOwnerEmail, activeProfileOwnerName, tasks, projects]);
+
 
   if (isLoading) {
     return <div className="flex h-screen w-screen items-center justify-center bg-brand-light"><Loader2 size={48} className="animate-spin text-brand-primary" /></div>;
@@ -2912,6 +3043,7 @@ const App: React.FC = () => {
             subjects={regulatorySubjects}
             onUpdateSubjects={(newSubjects) => { setRegulatorySubjects(newSubjects); setDataDirty(); }}
             onSwitchModule={handleSwitchModule}
+            currentUserName={activeProfileOwnerName}
           />
         ) : (
           <>
@@ -3087,11 +3219,14 @@ const App: React.FC = () => {
                 onUpdateGroups={handleUpdateGroups}
                 initialQuickFilter={pendingTaskBoardQuickFilter}
                 onConsumeInitialQuickFilter={() => setPendingTaskBoardQuickFilter(null)}
+                activeUserEmail={activeProfileOwnerEmail}
               />
             ) : (
               <ProjectTaskBoard 
                 microTasks={microTasksForBoard} 
                 onNavigateToProject={handleNavigateToProject}
+                onToggleMicroNotification={handleToggleMicroNotification}
+                profileOwnerEmail={activeProfileOwnerEmail}
                 projectFilter={projTask_projectFilter}
                 onProjectFilterChange={setProjTask_projectFilter}
                 uniqueProjects={uniqueProjectsForMicroTasks}
@@ -3154,6 +3289,7 @@ const App: React.FC = () => {
               regulatoryStandards={regulatoryStandards}
               onOpenRegulatoryModal={openRegulatoryModal}
               currentUser={selectedProfile}
+              activeUserEmail={activeProfileOwnerEmail}
               meetings={meetings}
               tasks={tasks}
               regulatoryEvidence={regulatoryEvidence}
@@ -3192,6 +3328,7 @@ const App: React.FC = () => {
             projects={activeProjects}
             subjects={regulatorySubjects}
             onUpdateSubjects={(newSubjects) => { setRegulatorySubjects(newSubjects); setDataDirty(); }}
+            currentUserName={activeProfileOwnerName}
           />
         )}
         {(view === 'regulatory_docs' || view === 'dossier_assembler' || view === 'dossier_contributions') && (

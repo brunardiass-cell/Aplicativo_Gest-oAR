@@ -53,6 +53,7 @@ interface ProjectsManagerProps {
   regulatoryStandards: RegulatoryStandard[];
   onOpenRegulatoryModal: (activityName: string) => void;
   currentUser: TeamMember | null;
+  activeUserEmail?: string;
   meetings?: Meeting[];
 
   tasks?: Task[];
@@ -86,6 +87,7 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   regulatoryStandards,
   onOpenRegulatoryModal,
   currentUser,
+  activeUserEmail,
   meetings = [],
   tasks = [],
   regulatoryEvidence = [],
@@ -1460,6 +1462,8 @@ const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           onSwitchTab={(tab) => setProjectPhaseTab(tab)}
           meetings={meetings}
           tasks={tasks}
+          currentUser={currentUser}
+          activeUserEmail={activeUserEmail}
         />
       </div>
     );

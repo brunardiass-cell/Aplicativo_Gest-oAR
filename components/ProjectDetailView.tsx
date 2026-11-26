@@ -59,7 +59,9 @@ import {
   Workflow,
   Edit,
   ClipboardCheck,
-  Users2
+  Users2,
+  Bell,
+  BellRing
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { 
@@ -90,7 +92,13 @@ import {
 } from '../constants';
 import { CompleteActivityModal } from './CompleteActivityModal';
 import { CriticalAlertModal } from './CriticalAlertModal';
-import { sendCriticalActivityAlert, cancelCriticalAlert, calculateAlertDate } from '../services/emailService';
+import {
+  sendCriticalActivityAlert,
+  cancelCriticalAlert,
+  calculateAlertDate,
+  resolveProfileOwnerEmail,
+  sendActivityNotificationEmail
+} from '../services/emailService';
 import { AppUser } from '../types';
 
 interface ProjectDetailViewProps {
@@ -105,6 +113,8 @@ interface ProjectDetailViewProps {
   onSwitchTab?: (tab: 'overview' | 'map' | 'details' | 'regulatory_docs') => void;
   meetings?: Meeting[];
   tasks?: Task[];
+  currentUser?: TeamMember | null;
+  activeUserEmail?: string;
 }
 
 // Canonical phase normalizer: removes numeric prefixes ("FASE 1 —", "FASE 2:", etc.)
@@ -496,12 +506,20 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   onPrint,
   onSwitchTab,
   meetings = [],
-  tasks = []
+  tasks = [],
+  currentUser = null,
+  activeUserEmail
 }) => {
   // Critical Alert Modal State (Item 1)
   const [isCriticalModalOpen, setIsCriticalModalOpen] = useState(false);
   const [selectedMicroForCritical, setSelectedMicroForCritical] = useState<MicroActivity | null>(null);
   const [activeRowMenuMicroId, setActiveRowMenuMicroId] = useState<string | null>(null);
+
+  const profileOwnerName = currentUser?.name || project.responsible || teamMembers[0]?.name || 'Usuário';
+  const profileOwnerEmail = useMemo(
+    () => resolveProfileOwnerEmail(profileOwnerName, appUsers, activeUserEmail),
+    [profileOwnerName, appUsers, activeUserEmail]
+  );
 
   // Top view tab state: 6 Main Project Tabs matching Image 2
   // 1. Jornada e Atividades, 2. Próximas Ações e Prazos, 3. Documentos, 4. Validação Regulatória, 5. Base Regulatória e Termos, 6. Histórico e Reuniões
@@ -5395,6 +5413,110 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                                 {/* AÇÕES */}
                                 <td className="py-3 px-3 text-right whitespace-nowrap">
                                   <div className="inline-flex items-center gap-1.5">
+                                    {/* Notificação por e-mail (Sininho) */}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const nextEnabled = !micro.emailNotificationEnabled;
+                                        const recipient = profileOwnerEmail || micro.emailNotificationRecipient || '';
+                                        if (nextEnabled && !recipient) {
+                                          void sendActivityNotificationEmail({
+                                            activityId: micro.id,
+                                            activityTitle: micro.name,
+                                            sourceType: 'microactivity',
+                                            projectName: project.name,
+                                            macroName: activeGroup.name,
+                                            dueDate: micro.dueDate,
+                                            status: micro.status,
+                                            recipientEmail: '',
+                                            recipientName: profileOwnerName,
+                                            mode: 'enabled'
+                                          });
+                                          return;
+                                        }
+                                        const nowIso = new Date().toISOString();
+                                        let found = false;
+                                        let nextMacros = (project.macroActivities || []).map(macro => {
+                                          const hasMic = (macro.microActivities || []).some(m => m.id === micro.id);
+                                          if (!hasMic) return macro;
+                                          found = true;
+                                          return {
+                                            ...macro,
+                                            microActivities: (macro.microActivities || []).map(m =>
+                                              m.id === micro.id
+                                                ? {
+                                                    ...m,
+                                                    emailNotificationEnabled: nextEnabled,
+                                                    emailNotificationRecipient: nextEnabled ? recipient : m.emailNotificationRecipient,
+                                                    emailNotificationProfileName: nextEnabled ? profileOwnerName : m.emailNotificationProfileName,
+                                                    emailNotificationEnabledAt: nextEnabled ? nowIso : undefined
+                                                  }
+                                                : m
+                                            )
+                                          };
+                                        });
+                                        if (!found && activeGroup) {
+                                          const updatedMicros = activeGroup.microActivities.map(m =>
+                                            m.id === micro.id
+                                              ? {
+                                                  ...m,
+                                                  emailNotificationEnabled: nextEnabled,
+                                                  emailNotificationRecipient: nextEnabled ? recipient : m.emailNotificationRecipient,
+                                                  emailNotificationProfileName: nextEnabled ? profileOwnerName : m.emailNotificationProfileName,
+                                                  emailNotificationEnabledAt: nextEnabled ? nowIso : undefined
+                                                }
+                                              : m
+                                          );
+                                          const existsMacro = nextMacros.some(m => m.name.toLowerCase().trim() === activeGroup.name.toLowerCase().trim());
+                                          if (existsMacro) {
+                                            nextMacros = nextMacros.map(m =>
+                                              m.name.toLowerCase().trim() === activeGroup.name.toLowerCase().trim()
+                                                ? { ...m, microActivities: updatedMicros }
+                                                : m
+                                            );
+                                          } else {
+                                            nextMacros = [
+                                              ...nextMacros,
+                                              {
+                                                id: activeGroup.macroId,
+                                                name: activeGroup.name,
+                                                phase: selectedPhase,
+                                                microActivities: updatedMicros
+                                              }
+                                            ];
+                                          }
+                                        }
+                                        onUpdateProject({ ...project, macroActivities: nextMacros });
+                                        if (nextEnabled) {
+                                          void sendActivityNotificationEmail({
+                                            activityId: micro.id,
+                                            activityTitle: micro.name,
+                                            sourceType: 'microactivity',
+                                            projectName: project.name,
+                                            macroName: activeGroup.name,
+                                            dueDate: micro.dueDate,
+                                            status: micro.status,
+                                            recipientEmail: recipient,
+                                            recipientName: profileOwnerName,
+                                            mode: 'enabled'
+                                          });
+                                        }
+                                      }}
+                                      className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                                        micro.emailNotificationEnabled
+                                          ? 'bg-amber-50 border-amber-300 text-amber-600 hover:bg-amber-100'
+                                          : 'border-transparent text-slate-400 hover:text-amber-600 hover:bg-amber-50 hover:border-amber-200'
+                                      }`}
+                                      title={
+                                        micro.emailNotificationEnabled
+                                          ? `Notificação ativa para ${micro.emailNotificationRecipient || profileOwnerEmail || 'este perfil'}. Clique para desativar.`
+                                          : `Ativar notificação por e-mail (${profileOwnerEmail || 'e-mail do perfil'})`
+                                      }
+                                    >
+                                      {micro.emailNotificationEnabled ? <BellRing size={14} /> : <Bell size={14} />}
+                                    </button>
+
                                     <button
                                       onClick={() => handleOpenMicroDetails(micro)}
                                       className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition cursor-pointer"

@@ -2,13 +2,15 @@
 import React, { useMemo } from 'react';
 import { MicroActivityStatus } from '../types';
 import { AugmentedMicroActivity } from '../App';
-import { SlidersHorizontal, AlertTriangle, User, Clock, CheckCircle, ArrowRight, Eye, ListTodo, DollarSign, X, ShieldCheck } from 'lucide-react';
+import { SlidersHorizontal, AlertTriangle, User, Clock, CheckCircle, ArrowRight, Eye, ListTodo, DollarSign, X, ShieldCheck, Bell, BellRing } from 'lucide-react';
 import { useState } from 'react';
 import { RegulatoryStandard } from '../types';
 
 interface ProjectTaskBoardProps {
   microTasks: AugmentedMicroActivity[];
   onNavigateToProject: (projectId: string) => void;
+  onToggleMicroNotification?: (projectId: string, macroId: string, microId: string) => void;
+  profileOwnerEmail?: string;
   projectFilter: string;
   onProjectFilterChange: (project: string) => void;
   uniqueProjects: string[];
@@ -30,6 +32,8 @@ interface ProjectTaskBoardProps {
 const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
   microTasks,
   onNavigateToProject,
+  onToggleMicroNotification,
+  profileOwnerEmail,
   projectFilter,
   onProjectFilterChange,
   uniqueProjects,
@@ -136,6 +140,27 @@ const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
                   }`}>{micro.status}</span>
                 </div>
                 <div className="flex items-center gap-1">
+                  {onToggleMicroNotification && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleMicroNotification(micro.projectId, micro.macroId, micro.id);
+                      }}
+                      className={`p-1.5 rounded-lg border transition-colors ${
+                        micro.emailNotificationEnabled
+                          ? 'bg-amber-50 border-amber-300 text-amber-600 hover:bg-amber-100'
+                          : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-amber-600 hover:bg-amber-50 hover:border-amber-200'
+                      }`}
+                      title={
+                        micro.emailNotificationEnabled
+                          ? `Notificação ativa para ${micro.emailNotificationRecipient || profileOwnerEmail || 'este perfil'}. Clique para desativar.`
+                          : `Ativar notificação por e-mail (${profileOwnerEmail || 'e-mail do perfil'})`
+                      }
+                    >
+                      {micro.emailNotificationEnabled ? <BellRing size={15} /> : <Bell size={15} />}
+                    </button>
+                  )}
                   {regulatoryStandards.some(s => s.relatedActivities.some(a => a.toLowerCase() === micro.name.toLowerCase())) && (
                     <button 
                       onClick={(e) => { e.stopPropagation(); onOpenRegulatoryModal(micro.name); }}

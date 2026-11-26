@@ -24,7 +24,13 @@ import { RetroactiveImportModal } from './RetroactiveImportModal';
 import { TaskCompletionModal } from './TaskCompletionModal';
 import { CriticalAlertModal } from './CriticalAlertModal';
 import { RegisterActionAsActivityModal } from './RegisterActionAsActivityModal';
-import { sendCriticalActivityAlert, cancelCriticalAlert, calculateAlertDate } from '../services/emailService';
+import {
+  sendCriticalActivityAlert,
+  cancelCriticalAlert,
+  calculateAlertDate,
+  resolveProfileOwnerEmail,
+  sendActivityNotificationEmail
+} from '../services/emailService';
 import { 
   Check, 
   X, 
@@ -62,7 +68,9 @@ import {
   ExternalLink,
   ListOrdered,
   CheckSquare,
-  Eye
+  Eye,
+  Bell,
+  BellRing
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -123,6 +131,7 @@ interface TaskBoardProps {
   onUpdateGroups?: (newGroups: TaskGroup[]) => void;
   initialQuickFilter?: 'open' | 'week' | 'month' | 'pending' | 'completed' | null;
   onConsumeInitialQuickFilter?: () => void;
+  activeUserEmail?: string;
 }
 
 export const TaskBoard: React.FC<TaskBoardProps> = ({
@@ -146,7 +155,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   groups: groupsProp,
   onUpdateGroups,
   initialQuickFilter,
-  onConsumeInitialQuickFilter
+  onConsumeInitialQuickFilter,
+  activeUserEmail
 }) => {
   // ---------------------------------------------------------------------------
   // 1. GERENCIAMENTO DE GRUPOS (Sincronizado via Supabase e Servidor)
@@ -328,6 +338,57 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   // Campos específicos para Relatório no salvamento rápido
   const [quickReportReviewer, setQuickReportReviewer] = useState('');
   const [quickReportInReview, setQuickReportInReview] = useState(true);
+  const [quickNotifyEnabled, setQuickNotifyEnabled] = useState(false);
+
+  const profileOwnerName = selectedProfile?.name || (currentUser !== 'Todos' ? currentUser : 'Usuário');
+  const profileOwnerEmail = useMemo(
+    () => resolveProfileOwnerEmail(profileOwnerName, appUsers, activeUserEmail),
+    [profileOwnerName, appUsers, activeUserEmail]
+  );
+
+  const handleToggleTaskNotification = (task: Task) => {
+    const nextEnabled = !task.emailNotificationEnabled;
+    const recipient = profileOwnerEmail || task.emailNotificationRecipient || '';
+    if (nextEnabled && !recipient) {
+      void sendActivityNotificationEmail({
+        activityId: task.id,
+        activityTitle: task.activity,
+        sourceType: 'task',
+        projectName: task.project,
+        dueDate: task.completionDate,
+        status: task.status,
+        recipientEmail: '',
+        recipientName: profileOwnerName,
+        mode: 'enabled'
+      });
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    const updatedTask: Task = {
+      ...task,
+      emailNotificationEnabled: nextEnabled,
+      emailNotificationRecipient: nextEnabled ? recipient : task.emailNotificationRecipient,
+      emailNotificationProfileName: nextEnabled ? profileOwnerName : task.emailNotificationProfileName,
+      emailNotificationEnabledAt: nextEnabled ? nowIso : undefined
+    };
+
+    onSaveTask(updatedTask);
+
+    if (nextEnabled) {
+      void sendActivityNotificationEmail({
+        activityId: updatedTask.id,
+        activityTitle: updatedTask.activity,
+        sourceType: 'task',
+        projectName: updatedTask.project,
+        dueDate: updatedTask.completionDate,
+        status: updatedTask.status,
+        recipientEmail: recipient,
+        recipientName: profileOwnerName,
+        mode: 'enabled'
+      });
+    }
+  };
 
   // Campos específicos para Reunião no salvamento rápido (requisitos CTVacinas)
   const [quickMeetingRole, setQuickMeetingRole] = useState<'organizer' | 'participant' | 'recorder'>('organizer');
@@ -825,10 +886,28 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       updates: [],
       isRegulatoryContribution: isMeeting ? (quickMeetingLinkedStandards.length > 0) : false,
       fileLinks: isMeeting ? quickMeetingFileLinks : undefined,
-      linkedRegulatoryStandardIds: isMeeting ? quickMeetingLinkedStandards : undefined
+      linkedRegulatoryStandardIds: isMeeting ? quickMeetingLinkedStandards : undefined,
+      emailNotificationEnabled: quickNotifyEnabled && Boolean(profileOwnerEmail),
+      emailNotificationRecipient: quickNotifyEnabled && profileOwnerEmail ? profileOwnerEmail : undefined,
+      emailNotificationProfileName: quickNotifyEnabled && profileOwnerEmail ? profileOwnerName : undefined,
+      emailNotificationEnabledAt: quickNotifyEnabled && profileOwnerEmail ? now.toISOString() : undefined
     };
 
     onSaveTask(newTask);
+
+    if (quickNotifyEnabled) {
+      void sendActivityNotificationEmail({
+        activityId: newTask.id,
+        activityTitle: newTask.activity,
+        sourceType: 'task',
+        projectName: newTask.project,
+        dueDate: newTask.completionDate,
+        status: newTask.status,
+        recipientEmail: profileOwnerEmail,
+        recipientName: profileOwnerName,
+        mode: 'enabled'
+      });
+    }
 
     // Se for reunião: SEMPRE salvar na central de reuniões, independente de ser ou não participante/organizador!
     if (isMeeting) {
@@ -902,6 +981,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         actionItems: []
       }
     ]);
+    setQuickNotifyEnabled(false);
     setIsSavingQuick(false);
   };
 
@@ -2492,13 +2572,35 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                   </button>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={!quickText.trim() || isSavingQuick}
-                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-sm flex items-center gap-1.5"
-                >
-                  <Plus size={14} /> Salvar Imediatamente
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setQuickNotifyEnabled(prev => !prev)}
+                    title={
+                      profileOwnerEmail
+                        ? quickNotifyEnabled
+                          ? `Notificação por e-mail ativada para ${profileOwnerEmail}`
+                          : `Ativar notificação por e-mail para ${profileOwnerEmail}`
+                        : 'Cadastre um e-mail para este perfil em Controle de Acesso para receber notificações'
+                    }
+                    className={`px-3 py-2 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 ${
+                      quickNotifyEnabled
+                        ? 'bg-amber-50 border-amber-300 text-amber-700 shadow-2xs'
+                        : 'bg-white border-slate-200 text-slate-500 hover:bg-amber-50/60 hover:text-amber-700 hover:border-amber-200'
+                    }`}
+                  >
+                    {quickNotifyEnabled ? <BellRing size={14} className="text-amber-600" /> : <Bell size={14} />}
+                    <span className="hidden sm:inline">{quickNotifyEnabled ? 'Notificar: Sim' : 'Notificar'}</span>
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={!quickText.trim() || isSavingQuick}
+                    className="px-5 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-sm flex items-center gap-1.5"
+                  >
+                    <Plus size={14} /> Salvar Imediatamente
+                  </button>
+                </div>
               </div>
 
               <div className="flex items-center justify-between text-[10px] text-slate-400 px-1 pt-0.5">
@@ -2917,6 +3019,27 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                     >
                       <MessageSquare size={13} className="text-teal-600" />
                       <span>{task.updates?.length || 0}</span>
+                    </button>
+
+                    {/* 4.2 NOTIFICAÇÃO POR E-MAIL (SININHO) */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleTaskNotification(task);
+                      }}
+                      className={`w-8 h-8 rounded-xl border flex items-center justify-center transition ${
+                        task.emailNotificationEnabled
+                          ? 'bg-amber-50 border-amber-300 text-amber-600 hover:bg-amber-100 shadow-2xs'
+                          : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-600'
+                      }`}
+                      title={
+                        task.emailNotificationEnabled
+                          ? `Notificação ativa para ${task.emailNotificationRecipient || profileOwnerEmail || 'este perfil'}. Clique para desativar.`
+                          : `Ativar notificação por e-mail (${profileOwnerEmail || 'e-mail do perfil'})`
+                      }
+                    >
+                      {task.emailNotificationEnabled ? <BellRing size={15} /> : <Bell size={15} />}
                     </button>
 
                     {/* 4.5 VISUALIZAR ATIVIDADE, DESCRIÇÃO E NOTAS (OLHINHO) */}
