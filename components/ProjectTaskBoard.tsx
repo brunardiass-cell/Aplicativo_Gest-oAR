@@ -5,12 +5,15 @@ import { AugmentedMicroActivity } from '../App';
 import { SlidersHorizontal, AlertTriangle, User, Clock, CheckCircle, ArrowRight, Eye, ListTodo, DollarSign, X, ShieldCheck, Bell, BellRing } from 'lucide-react';
 import { useState } from 'react';
 import { RegulatoryStandard } from '../types';
+import { ActivityNotificationModal, ActivityNotificationConfig } from './ActivityNotificationModal';
 
 interface ProjectTaskBoardProps {
   microTasks: AugmentedMicroActivity[];
   onNavigateToProject: (projectId: string) => void;
-  onToggleMicroNotification?: (projectId: string, macroId: string, microId: string) => void;
+  onSaveMicroNotification?: (projectId: string, macroId: string, microId: string, config: ActivityNotificationConfig) => void;
   profileOwnerEmail?: string;
+  profileEmails?: string[];
+  allRegisteredEmails?: string[];
   projectFilter: string;
   onProjectFilterChange: (project: string) => void;
   uniqueProjects: string[];
@@ -32,8 +35,10 @@ interface ProjectTaskBoardProps {
 const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
   microTasks,
   onNavigateToProject,
-  onToggleMicroNotification,
+  onSaveMicroNotification,
   profileOwnerEmail,
+  profileEmails = [],
+  allRegisteredEmails = [],
   projectFilter,
   onProjectFilterChange,
   uniqueProjects,
@@ -53,6 +58,7 @@ const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
 }) => {
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [detailType, setDetailType] = useState<'prerequisites' | 'budget' | null>(null);
+  const [notifTargetMicro, setNotifTargetMicro] = useState<AugmentedMicroActivity | null>(null);
 
   const sortedMicroTasks = useMemo(() => {
     return [...microTasks].sort((a, b) => {
@@ -140,25 +146,32 @@ const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
                   }`}>{micro.status}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  {onToggleMicroNotification && (
+                  {onSaveMicroNotification && (
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onToggleMicroNotification(micro.projectId, micro.macroId, micro.id);
+                        setNotifTargetMicro(micro);
                       }}
-                      className={`p-1.5 rounded-lg border transition-colors ${
+                      className={`p-1.5 rounded-lg border transition-colors inline-flex items-center gap-1 ${
                         micro.emailNotificationEnabled
-                          ? 'bg-amber-50 border-amber-300 text-amber-600 hover:bg-amber-100'
+                          ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
                           : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-amber-600 hover:bg-amber-50 hover:border-amber-200'
                       }`}
                       title={
                         micro.emailNotificationEnabled
-                          ? `Notificação ativa para ${micro.emailNotificationRecipient || profileOwnerEmail || 'este perfil'}. Clique para desativar.`
-                          : `Ativar notificação por e-mail (${profileOwnerEmail || 'e-mail do perfil'})`
+                          ? `Notificação ativa (${micro.emailNotificationLeadDays ?? 1}d antes) para ${micro.emailNotificationRecipient || profileOwnerEmail || 'este perfil'}. Clique para configurar.`
+                          : 'Configurar notificação por e-mail (1 dia, 7 dias ou outro)'
                       }
                     >
-                      {micro.emailNotificationEnabled ? <BellRing size={15} /> : <Bell size={15} />}
+                      {micro.emailNotificationEnabled ? (
+                        <>
+                          <BellRing size={14} className="text-amber-600" />
+                          <span className="text-[10px] font-black">{micro.emailNotificationLeadDays ?? 1}d</span>
+                        </>
+                      ) : (
+                        <Bell size={15} />
+                      )}
                     </button>
                   )}
                   {regulatoryStandards.some(s => s.relatedActivities.some(a => a.toLowerCase() === micro.name.toLowerCase())) && (
@@ -312,6 +325,24 @@ const ProjectTaskBoard: React.FC<ProjectTaskBoardProps> = ({
           </div>
         )}
       </div>
+      <ActivityNotificationModal
+        isOpen={Boolean(notifTargetMicro)}
+        activityTitle={notifTargetMicro?.name || ''}
+        dueDate={notifTargetMicro?.dueDate}
+        initialEnabled={Boolean(notifTargetMicro?.emailNotificationEnabled)}
+        initialLeadDays={notifTargetMicro?.emailNotificationLeadDays ?? 1}
+        initialEmail={notifTargetMicro?.emailNotificationRecipient || ''}
+        suggestedEmail={profileOwnerEmail || ''}
+        profileEmails={profileEmails}
+        allRegisteredEmails={allRegisteredEmails}
+        onClose={() => setNotifTargetMicro(null)}
+        onSave={(config) => {
+          if (notifTargetMicro && onSaveMicroNotification) {
+            onSaveMicroNotification(notifTargetMicro.projectId, notifTargetMicro.macroId, notifTargetMicro.id, config);
+          }
+          setNotifTargetMicro(null);
+        }}
+      />
     </div>
   );
 };

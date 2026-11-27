@@ -92,11 +92,12 @@ import {
 } from '../constants';
 import { CompleteActivityModal } from './CompleteActivityModal';
 import { CriticalAlertModal } from './CriticalAlertModal';
+import { ActivityNotificationModal, ActivityNotificationConfig } from './ActivityNotificationModal';
 import {
   sendCriticalActivityAlert,
   cancelCriticalAlert,
   calculateAlertDate,
-  resolveProfileOwnerEmail,
+  resolveProfileCandidateEmails,
   sendActivityNotificationEmail
 } from '../services/emailService';
 import { AppUser } from '../types';
@@ -514,12 +515,14 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const [isCriticalModalOpen, setIsCriticalModalOpen] = useState(false);
   const [selectedMicroForCritical, setSelectedMicroForCritical] = useState<MicroActivity | null>(null);
   const [activeRowMenuMicroId, setActiveRowMenuMicroId] = useState<string | null>(null);
+  const [notifModalMicro, setNotifModalMicro] = useState<MicroActivity | null>(null);
 
   const profileOwnerName = currentUser?.name || project.responsible || teamMembers[0]?.name || 'Usuário';
-  const profileOwnerEmail = useMemo(
-    () => resolveProfileOwnerEmail(profileOwnerName, appUsers, activeUserEmail),
+  const candidateEmails = useMemo(
+    () => resolveProfileCandidateEmails(profileOwnerName, appUsers, activeUserEmail),
     [profileOwnerName, appUsers, activeUserEmail]
   );
+  const profileOwnerEmail = candidateEmails.suggestedEmail;
 
   // Top view tab state: 6 Main Project Tabs matching Image 2
   // 1. Jornada e Atividades, 2. Próximas Ações e Prazos, 3. Documentos, 4. Validação Regulatória, 5. Base Regulatória e Termos, 6. Histórico e Reuniões
@@ -5151,17 +5154,17 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                       </div>
                     </div>
 
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
+                    <div className="w-full overflow-x-visible">
+                      <table className="w-full text-left border-collapse table-auto">
                         <thead>
-                          <tr className="text-[11px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-150 pb-2">
-                            <th className="py-2 px-3 w-12">#</th>
-                            <th className="py-2 px-3">ATIVIDADE & OBSERVAÇÕES</th>
-                            <th className="py-2 px-3">STATUS</th>
-                            <th className="py-2 px-3">PRAZO</th>
-                            <th className="py-2 px-3">RESPONSÁVEL</th>
-                            <th className="py-2 px-3">REG.</th>
-                            <th className="py-2 px-3 text-right">AÇÕES</th>
+                          <tr className="text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-150 pb-2">
+                            <th className="py-2 px-1.5 w-11">#</th>
+                            <th className="py-2 px-1.5">ATIVIDADE & OBS.</th>
+                            <th className="py-2 px-1.5 w-[132px]">STATUS</th>
+                            <th className="py-2 px-1.5 w-[114px]">PRAZO</th>
+                            <th className="py-2 px-1.5 w-[84px]">RESP.</th>
+                            <th className="py-2 px-1.5 w-[82px]">REG.</th>
+                            <th className="py-2 px-1.5 w-[108px] text-right">AÇÕES</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-xs">
@@ -5184,24 +5187,24 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                                     : 'hover:bg-slate-50/70 border-l-4 border-l-slate-200'
                                 }`}
                               >
-                                <td className="py-3 px-3 font-bold text-slate-500 whitespace-nowrap">
-                                  <div className="flex items-center gap-1.5">
+                                <td className="py-2.5 px-1.5 font-bold text-slate-500 whitespace-nowrap align-middle">
+                                  <div className="flex items-center gap-1">
                                     {isDone && (
                                       <span title="Atividade operacionalmente concluída">
-                                        <CheckCircle2 size={16} className="text-emerald-600 fill-emerald-100 shrink-0" />
+                                        <CheckCircle2 size={14} className="text-emerald-600 fill-emerald-100 shrink-0" />
                                       </span>
                                     )}
-                                    <span className={isDone ? 'font-black text-emerald-900' : ''}>{code}</span>
+                                    <span className={`text-[11px] ${isDone ? 'font-black text-emerald-900' : ''}`}>{code}</span>
                                   </div>
                                   {isAllGroups && (micro as any).groupName && (
-                                    <span className="block text-[9px] text-indigo-600 font-extrabold truncate max-w-[70px]">
+                                    <span className="block text-[9px] text-indigo-600 font-extrabold truncate max-w-[54px]">
                                       {(micro as any).groupName}
                                     </span>
                                   )}
                                 </td>
                                 
-                                {/* ATIVIDADE & OBSERVAÇÕES (Item 1 & Item 3) */}
-                                <td className="py-3 px-3 min-w-[220px]">
+                                {/* ATIVIDADE & OBSERVAÇÕES */}
+                                <td className="py-2.5 px-1.5 min-w-0 align-middle">
                                   {inlineEditing?.id === micro.id && inlineEditing?.field === 'name' ? (
                                     <input
                                       type="text"
@@ -5226,14 +5229,14 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                                   ) : (
                                     <div 
                                       onClick={() => setInlineEditing({ id: micro.id, field: 'name' })}
-                                      className="cursor-pointer group/title flex items-center gap-1.5"
+                                      className="cursor-pointer group/title flex items-start gap-1 flex-wrap"
                                       title="Clique para editar o título diretamente"
                                     >
                                       {isDone && (
-                                        <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                                        <CheckCircle2 size={12} className="text-emerald-600 shrink-0 mt-0.5" />
                                       )}
-                                      <span className={`font-bold transition ${
-                                        isDone ? 'text-emerald-950 font-black' : 'text-slate-900 group-hover/title:text-blue-700'
+                                      <span className={`text-xs leading-snug break-words transition ${
+                                        isDone ? 'text-emerald-950 font-black' : 'text-slate-900 font-bold group-hover/title:text-blue-700'
                                       }`}>
                                         {micro.name}
                                       </span>
@@ -5244,14 +5247,14 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                                             setSelectedMicroForCritical(micro);
                                             setIsCriticalModalOpen(true);
                                           }}
-                                          className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shrink-0 cursor-pointer hover:bg-amber-200 transition"
+                                          className="px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-0.5 shrink-0 cursor-pointer hover:bg-amber-200 transition"
                                           title={`Atividade Crítica com alerta por e-mail (${micro.criticalAlertLeadDays || 2}d antes para ${micro.criticalAlertRecipientEmail || 'gestão regulatória'}). Clique para gerenciar.`}
                                         >
-                                          <AlertTriangle size={10} className="text-amber-600 fill-amber-500" />
+                                          <AlertTriangle size={9} className="text-amber-600 fill-amber-500" />
                                           <span>Crítica ({micro.criticalAlertLeadDays || 2}d)</span>
                                         </span>
                                       )}
-                                      <Pencil size={11} className="text-slate-400 opacity-0 group-hover/title:opacity-100 transition shrink-0" />
+                                      <Pencil size={10} className="text-slate-400 opacity-0 group-hover/title:opacity-100 transition shrink-0 mt-0.5" />
                                     </div>
                                   )}
 
@@ -5300,12 +5303,12 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                                   )}
                                 </td>
 
-                                {/* STATUS (Item 1 & Item 3: Destaque visual nítido para atividades concluídas) */}
-                                <td className="py-3 px-3 whitespace-nowrap">
+                                {/* STATUS */}
+                                <td className="py-2.5 px-1.5 whitespace-nowrap align-middle">
                                   <select
                                     value={micro.status}
                                     onChange={(e) => handleUpdateMicroField(micro.id, 'status', e.target.value as MicroActivityStatus)}
-                                    className={`text-[11px] font-black rounded-xl px-2.5 py-1 border cursor-pointer outline-hidden transition ${
+                                    className={`w-[126px] text-[10px] font-black rounded-xl px-2 py-1 border cursor-pointer outline-hidden transition truncate ${
                                       micro.status === 'Concluído e aprovado'
                                         ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
                                         : micro.status === 'Concluído com restrições'
@@ -5325,22 +5328,22 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                                 </td>
 
                                 {/* PRAZO */}
-                                <td className="py-3 px-3 whitespace-nowrap">
+                                <td className="py-2.5 px-1.5 whitespace-nowrap align-middle">
                                   <input
                                     type="date"
                                     value={micro.dueDate || ''}
                                     onChange={(e) => handleUpdateMicroField(micro.id, 'dueDate', e.target.value)}
-                                    className="text-xs font-semibold text-slate-700 bg-transparent hover:bg-slate-100 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-400 rounded-lg px-1.5 py-0.5 transition cursor-pointer"
+                                    className="w-[108px] text-[11px] font-semibold text-slate-700 bg-transparent hover:bg-slate-100 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-400 rounded-lg px-1 py-0.5 transition cursor-pointer"
                                     title="Clique para alterar o prazo"
                                   />
                                 </td>
 
                                 {/* RESPONSÁVEL */}
-                                <td className="py-3 px-3 whitespace-nowrap">
+                                <td className="py-2.5 px-1.5 whitespace-nowrap align-middle">
                                   <select
                                     value={micro.assignee || 'Bruna'}
                                     onChange={(e) => handleUpdateMicroField(micro.id, 'assignee', e.target.value)}
-                                    className="text-xs font-bold text-slate-800 bg-transparent hover:bg-slate-100 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-400 rounded-lg px-1.5 py-0.5 transition cursor-pointer"
+                                    className="w-[78px] text-[11px] font-bold text-slate-800 bg-transparent hover:bg-slate-100 focus:bg-white border border-transparent hover:border-slate-300 focus:border-blue-400 rounded-lg px-1 py-0.5 transition cursor-pointer truncate"
                                     title="Clique para atribuir responsável"
                                   >
                                     {teamMembers.map(m => (
@@ -5352,8 +5355,8 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                                   </select>
                                 </td>
 
-                                {/* STATUS REGULATÓRIO INDEPENDENTE (Item 1 & Item 3: Aprovado, Pendente, Em Ajustes ou Não Regulatório) */}
-                                <td className="py-3 px-3 whitespace-nowrap">
+                                {/* STATUS REGULATÓRIO INDEPENDENTE */}
+                                <td className="py-2.5 px-1.5 whitespace-nowrap align-middle">
                                   {isReg ? (
                                     <button
                                       type="button"
@@ -5382,156 +5385,80 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                                         setReviewJustification(micro.regulatoryJustification || '');
                                         setUnifiedValidationModalOpen(true);
                                       }}
-                                      className={`px-2.5 py-1 rounded-full text-[10px] font-black transition cursor-pointer flex items-center gap-1 ${
+                                      className={`px-2 py-0.5 rounded-full text-[10px] font-black transition cursor-pointer inline-flex items-center gap-1 ${
                                         isApprovedReg
                                           ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300'
                                           : isAdjustmentsReg
                                             ? 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200 border border-indigo-300'
                                             : isDiscardedReg
                                               ? 'bg-slate-200 text-slate-600 hover:bg-slate-300 border border-slate-300'
-                                              : 'bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300 animate-pulse'
+                                              : 'bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300'
                                       }`}
                                       title="Clique para abrir central de validação para esta atividade"
                                     >
-                                      {isApprovedReg && <CheckCircle2 size={12} className="text-emerald-700" />}
+                                      {isApprovedReg && <CheckCircle2 size={11} className="text-emerald-700" />}
                                       <span>
-                                        {isApprovedReg ? 'Validado ✓' : isAdjustmentsReg ? 'Em Ajustes ⚠️' : isDiscardedReg ? 'Descartada' : 'Pendente ⏳'}
+                                        {isApprovedReg ? 'Validado' : isAdjustmentsReg ? 'Ajustes' : isDiscardedReg ? 'Descartada' : 'Pendente'}
                                       </span>
                                     </button>
                                   ) : (
                                     <button
                                       type="button"
                                       onClick={() => handleUpdateMicroField(micro.id, 'generatesRegulatoryContent', true)}
-                                      className="px-2 py-0.5 rounded-full text-[10px] text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
+                                      className="px-1.5 py-0.5 rounded-full text-[10px] text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
                                       title="Clique para marcar como geradora de insumo regulatório"
                                     >
-                                      Não aplicável
+                                      N/A
                                     </button>
                                   )}
                                 </td>
 
                                 {/* AÇÕES */}
-                                <td className="py-3 px-3 text-right whitespace-nowrap">
-                                  <div className="inline-flex items-center gap-1.5">
+                                <td className="py-2.5 px-1.5 text-right whitespace-nowrap align-middle">
+                                  <div className="inline-flex items-center gap-0.5">
                                     {/* Notificação por e-mail (Sininho) */}
                                     <button
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        const nextEnabled = !micro.emailNotificationEnabled;
-                                        const recipient = profileOwnerEmail || micro.emailNotificationRecipient || '';
-                                        if (nextEnabled && !recipient) {
-                                          void sendActivityNotificationEmail({
-                                            activityId: micro.id,
-                                            activityTitle: micro.name,
-                                            sourceType: 'microactivity',
-                                            projectName: project.name,
-                                            macroName: activeGroup.name,
-                                            dueDate: micro.dueDate,
-                                            status: micro.status,
-                                            recipientEmail: '',
-                                            recipientName: profileOwnerName,
-                                            mode: 'enabled'
-                                          });
-                                          return;
-                                        }
-                                        const nowIso = new Date().toISOString();
-                                        let found = false;
-                                        let nextMacros = (project.macroActivities || []).map(macro => {
-                                          const hasMic = (macro.microActivities || []).some(m => m.id === micro.id);
-                                          if (!hasMic) return macro;
-                                          found = true;
-                                          return {
-                                            ...macro,
-                                            microActivities: (macro.microActivities || []).map(m =>
-                                              m.id === micro.id
-                                                ? {
-                                                    ...m,
-                                                    emailNotificationEnabled: nextEnabled,
-                                                    emailNotificationRecipient: nextEnabled ? recipient : m.emailNotificationRecipient,
-                                                    emailNotificationProfileName: nextEnabled ? profileOwnerName : m.emailNotificationProfileName,
-                                                    emailNotificationEnabledAt: nextEnabled ? nowIso : undefined
-                                                  }
-                                                : m
-                                            )
-                                          };
-                                        });
-                                        if (!found && activeGroup) {
-                                          const updatedMicros = activeGroup.microActivities.map(m =>
-                                            m.id === micro.id
-                                              ? {
-                                                  ...m,
-                                                  emailNotificationEnabled: nextEnabled,
-                                                  emailNotificationRecipient: nextEnabled ? recipient : m.emailNotificationRecipient,
-                                                  emailNotificationProfileName: nextEnabled ? profileOwnerName : m.emailNotificationProfileName,
-                                                  emailNotificationEnabledAt: nextEnabled ? nowIso : undefined
-                                                }
-                                              : m
-                                          );
-                                          const existsMacro = nextMacros.some(m => m.name.toLowerCase().trim() === activeGroup.name.toLowerCase().trim());
-                                          if (existsMacro) {
-                                            nextMacros = nextMacros.map(m =>
-                                              m.name.toLowerCase().trim() === activeGroup.name.toLowerCase().trim()
-                                                ? { ...m, microActivities: updatedMicros }
-                                                : m
-                                            );
-                                          } else {
-                                            nextMacros = [
-                                              ...nextMacros,
-                                              {
-                                                id: activeGroup.macroId,
-                                                name: activeGroup.name,
-                                                phase: selectedPhase,
-                                                microActivities: updatedMicros
-                                              }
-                                            ];
-                                          }
-                                        }
-                                        onUpdateProject({ ...project, macroActivities: nextMacros });
-                                        if (nextEnabled) {
-                                          void sendActivityNotificationEmail({
-                                            activityId: micro.id,
-                                            activityTitle: micro.name,
-                                            sourceType: 'microactivity',
-                                            projectName: project.name,
-                                            macroName: activeGroup.name,
-                                            dueDate: micro.dueDate,
-                                            status: micro.status,
-                                            recipientEmail: recipient,
-                                            recipientName: profileOwnerName,
-                                            mode: 'enabled'
-                                          });
-                                        }
+                                        setNotifModalMicro(micro);
                                       }}
-                                      className={`p-1.5 rounded-lg border transition cursor-pointer ${
+                                      className={`p-1 rounded-lg border transition cursor-pointer inline-flex items-center gap-0.5 ${
                                         micro.emailNotificationEnabled
-                                          ? 'bg-amber-50 border-amber-300 text-amber-600 hover:bg-amber-100'
+                                          ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'
                                           : 'border-transparent text-slate-400 hover:text-amber-600 hover:bg-amber-50 hover:border-amber-200'
                                       }`}
                                       title={
                                         micro.emailNotificationEnabled
-                                          ? `Notificação ativa para ${micro.emailNotificationRecipient || profileOwnerEmail || 'este perfil'}. Clique para desativar.`
-                                          : `Ativar notificação por e-mail (${profileOwnerEmail || 'e-mail do perfil'})`
+                                          ? `Notificação ativa (${micro.emailNotificationLeadDays ?? 1}d antes) para ${micro.emailNotificationRecipient || profileOwnerEmail || 'este perfil'}. Clique para configurar.`
+                                          : 'Configurar notificação por e-mail (1 dia, 7 dias ou outro)'
                                       }
                                     >
-                                      {micro.emailNotificationEnabled ? <BellRing size={14} /> : <Bell size={14} />}
+                                      {micro.emailNotificationEnabled ? (
+                                        <>
+                                          <BellRing size={13} className="text-amber-600" />
+                                          <span className="text-[9px] font-black">{micro.emailNotificationLeadDays ?? 1}d</span>
+                                        </>
+                                      ) : (
+                                        <Bell size={13} />
+                                      )}
                                     </button>
 
                                     <button
                                       onClick={() => handleOpenMicroDetails(micro)}
-                                      className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition cursor-pointer"
+                                      className="p-1 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition cursor-pointer"
                                       title="Abrir detalhes completos"
                                     >
-                                      <ExternalLink size={14} />
+                                      <ExternalLink size={13} />
                                     </button>
 
                                     {/* Discussion comments count */}
                                     <button
                                       onClick={() => handleOpenMicroDetails(micro)}
-                                      className="p-1 text-slate-400 hover:text-blue-600 rounded-lg inline-flex items-center gap-0.5 text-[11px] font-bold cursor-pointer"
+                                      className="p-1 text-slate-400 hover:text-blue-600 rounded-lg inline-flex items-center gap-0.5 text-[10px] font-bold cursor-pointer"
                                       title="Comentários"
                                     >
-                                      <MessageSquare size={13} />
+                                      <MessageSquare size={12} />
                                       <span>{mIdx === 0 ? 2 : mIdx === 1 || mIdx === 4 ? 1 : ''}</span>
                                     </button>
 
@@ -8419,6 +8346,94 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           onRemoveCritical={handleRemoveCriticalAlert}
         />
       )}
+
+      <ActivityNotificationModal
+        isOpen={Boolean(notifModalMicro)}
+        activityTitle={notifModalMicro?.name || ''}
+        dueDate={notifModalMicro?.dueDate}
+        initialEnabled={Boolean(notifModalMicro?.emailNotificationEnabled)}
+        initialLeadDays={notifModalMicro?.emailNotificationLeadDays ?? 1}
+        initialEmail={notifModalMicro?.emailNotificationRecipient || ''}
+        suggestedEmail={candidateEmails.suggestedEmail}
+        profileEmails={candidateEmails.profileEmails}
+        allRegisteredEmails={candidateEmails.allRegisteredEmails}
+        onClose={() => setNotifModalMicro(null)}
+        onSave={(config: ActivityNotificationConfig) => {
+          if (!notifModalMicro) return;
+          const micro = notifModalMicro;
+          const nowIso = new Date().toISOString();
+          let found = false;
+          let nextMacros = (project.macroActivities || []).map(macro => {
+            const hasMic = (macro.microActivities || []).some(m => m.id === micro.id);
+            if (!hasMic) return macro;
+            found = true;
+            return {
+              ...macro,
+              microActivities: (macro.microActivities || []).map(m =>
+                m.id === micro.id
+                  ? {
+                      ...m,
+                      emailNotificationEnabled: config.enabled,
+                      emailNotificationLeadDays: config.leadDays,
+                      emailNotificationRecipient: config.enabled ? config.recipientEmail : m.emailNotificationRecipient,
+                      emailNotificationProfileName: config.enabled ? profileOwnerName : m.emailNotificationProfileName,
+                      emailNotificationEnabledAt: config.enabled ? nowIso : undefined
+                    }
+                  : m
+              )
+            };
+          });
+          if (!found && activeGroup) {
+            const updatedMicros = activeGroup.microActivities.map(m =>
+              m.id === micro.id
+                ? {
+                    ...m,
+                    emailNotificationEnabled: config.enabled,
+                    emailNotificationLeadDays: config.leadDays,
+                    emailNotificationRecipient: config.enabled ? config.recipientEmail : m.emailNotificationRecipient,
+                    emailNotificationProfileName: config.enabled ? profileOwnerName : m.emailNotificationProfileName,
+                    emailNotificationEnabledAt: config.enabled ? nowIso : undefined
+                  }
+                : m
+            );
+            const existsMacro = nextMacros.some(m => m.name.toLowerCase().trim() === activeGroup.name.toLowerCase().trim());
+            if (existsMacro) {
+              nextMacros = nextMacros.map(m =>
+                m.name.toLowerCase().trim() === activeGroup.name.toLowerCase().trim()
+                  ? { ...m, microActivities: updatedMicros }
+                  : m
+              );
+            } else {
+              nextMacros = [
+                ...nextMacros,
+                {
+                  id: activeGroup.macroId,
+                  name: activeGroup.name,
+                  phase: selectedPhase,
+                  microActivities: updatedMicros
+                }
+              ];
+            }
+          }
+          onUpdateProject({ ...project, macroActivities: nextMacros });
+          if (config.enabled) {
+            void sendActivityNotificationEmail({
+              activityId: micro.id,
+              activityTitle: micro.name,
+              sourceType: 'microactivity',
+              projectName: project.name,
+              macroName: activeGroup?.name,
+              dueDate: micro.dueDate,
+              status: micro.status,
+              leadDays: config.leadDays,
+              recipientEmail: config.recipientEmail,
+              recipientName: profileOwnerName,
+              mode: 'enabled'
+            });
+          }
+          setNotifModalMicro(null);
+        }}
+      />
 
     </div>
   );

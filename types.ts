@@ -158,6 +158,7 @@ export interface Task {
 
   // Notificação por e-mail ativada pelo sininho (perfil dono)
   emailNotificationEnabled?: boolean;
+  emailNotificationLeadDays?: number;
   emailNotificationRecipient?: string;
   emailNotificationProfileName?: string;
   emailNotificationEnabledAt?: string;
@@ -378,6 +379,8 @@ export interface RegulatoryStandardUpdateEntry {
   previousStatus?: RegulatoryStandardStatus;
   newStatus: RegulatoryStandardStatus;
   summary?: string;
+  replacedByStandardId?: string;
+  replacedByStandardName?: string;
 }
 
 export interface RegulatoryStandard {
@@ -408,6 +411,10 @@ export interface RegulatoryStandard {
   previousStatus?: RegulatoryStandardStatus;
   updateHistory?: RegulatoryStandardUpdateEntry[];
   dismissedNotificationUsers?: string[]; // Chaves normalizadas de usuários que apagaram a notificação de 7 dias
+  replacedByStandardId?: string; // ID da nova norma criada ao atualizar esta
+  replacedByStandardName?: string; // Nome da nova norma criada ao atualizar esta
+  replacesStandardId?: string; // ID da norma anterior atualizada/substituída por esta
+  replacesStandardName?: string; // Nome da norma anterior atualizada/substituída por esta
 }
 
 export interface ConceptStandardLink {
@@ -631,6 +638,7 @@ export interface MicroActivity {
 
   // Notificação por e-mail ativada pelo sininho (perfil dono)
   emailNotificationEnabled?: boolean;
+  emailNotificationLeadDays?: number;
   emailNotificationRecipient?: string;
   emailNotificationProfileName?: string;
   emailNotificationEnabledAt?: string;

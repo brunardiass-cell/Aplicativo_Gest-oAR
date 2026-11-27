@@ -316,6 +316,75 @@ const normalizeNameForEmailMatch = (value?: string): string => {
 };
 
 /**
+ * Resolve todos os e-mails disponíveis/cadastrados associados ao dono do perfil,
+ * sugerindo um padrão mas permitindo escolher qualquer um deles.
+ */
+export const resolveProfileCandidateEmails = (
+  profileName?: string | null,
+  appUsers: Array<{ username?: string; email?: string }> = [],
+  fallbackAccountEmail?: string | null
+): {
+  suggestedEmail: string;
+  profileEmails: string[];
+  allRegisteredEmails: string[];
+} => {
+  const target = normalizeNameForEmailMatch(profileName || '');
+  const firstWord = target ? target.split(/\s+/)[0] : '';
+  const profileSet = new Map<string, string>();
+  const allSet = new Map<string, string>();
+
+  const addToMap = (map: Map<string, string>, raw?: string | null) => {
+    if (!raw || !validateEmail(raw)) return;
+    const trimmed = raw.trim();
+    const key = trimmed.toLowerCase();
+    if (!map.has(key)) map.set(key, trimmed);
+  };
+
+  // 1. Correspondências exatas no cadastro de usuários
+  if (target) {
+    appUsers.forEach(u => {
+      if (u.email && validateEmail(u.email)) {
+        addToMap(allSet, u.email);
+        const uName = normalizeNameForEmailMatch(u.username);
+        if (uName === target) {
+          addToMap(profileSet, u.email);
+        }
+      }
+    });
+
+    // 2. Correspondências parciais (primeiro nome ou prefixo do e-mail)
+    appUsers.forEach(u => {
+      if (!u.email || !validateEmail(u.email)) return;
+      const uName = normalizeNameForEmailMatch(u.username);
+      const uEmailPrefix = normalizeNameForEmailMatch(u.email.split('@')[0]);
+      if (
+        (uName && (uName.includes(target) || target.includes(uName) || uName.split(/\s+/)[0] === firstWord)) ||
+        (firstWord.length >= 3 && uEmailPrefix.includes(firstWord))
+      ) {
+        addToMap(profileSet, u.email);
+      }
+    });
+  } else {
+    appUsers.forEach(u => addToMap(allSet, u.email));
+  }
+
+  // 3. Conta Microsoft autenticada atual
+  if (fallbackAccountEmail && validateEmail(fallbackAccountEmail)) {
+    const fbPrefix = normalizeNameForEmailMatch(fallbackAccountEmail.split('@')[0]);
+    if (!target || (firstWord.length >= 3 && fbPrefix.includes(firstWord)) || profileSet.size === 0) {
+      addToMap(profileSet, fallbackAccountEmail);
+    }
+    addToMap(allSet, fallbackAccountEmail);
+  }
+
+  const profileEmails = Array.from(profileSet.values());
+  const allRegisteredEmails = Array.from(allSet.values());
+  const suggestedEmail = profileEmails[0] || allRegisteredEmails[0] || '';
+
+  return { suggestedEmail, profileEmails, allRegisteredEmails };
+};
+
+/**
  * Resolve o e-mail cadastrado pertencente ao dono do perfil selecionado.
  */
 export const resolveProfileOwnerEmail = (
@@ -323,34 +392,7 @@ export const resolveProfileOwnerEmail = (
   appUsers: Array<{ username?: string; email?: string }> = [],
   fallbackAccountEmail?: string | null
 ): string => {
-  const target = normalizeNameForEmailMatch(profileName || '');
-  if (target && appUsers.length > 0) {
-    // 1. Correspondência exata de nome
-    const exact = appUsers.find(
-      u => u.email && validateEmail(u.email) && normalizeNameForEmailMatch(u.username) === target
-    );
-    if (exact?.email) return exact.email.trim();
-
-    // 2. Correspondência por primeiro nome ou inclusão
-    const firstWord = target.split(/\s+/)[0];
-    const partial = appUsers.find(u => {
-      if (!u.email || !validateEmail(u.email)) return false;
-      const uName = normalizeNameForEmailMatch(u.username);
-      const uEmailPrefix = normalizeNameForEmailMatch(u.email.split('@')[0]);
-      return (
-        (uName && (uName.includes(target) || target.includes(uName) || uName.split(/\s+/)[0] === firstWord)) ||
-        (firstWord.length >= 3 && uEmailPrefix.includes(firstWord))
-      );
-    });
-    if (partial?.email) return partial.email.trim();
-  }
-
-  // 3. Fallback: conta autenticada atual se válida
-  if (fallbackAccountEmail && validateEmail(fallbackAccountEmail)) {
-    return fallbackAccountEmail.trim();
-  }
-
-  return '';
+  return resolveProfileCandidateEmails(profileName, appUsers, fallbackAccountEmail).suggestedEmail;
 };
 
 export interface ActivityNotificationOptions {
@@ -361,6 +403,7 @@ export interface ActivityNotificationOptions {
   macroName?: string;
   dueDate?: string;
   status?: string;
+  leadDays?: number;
   recipientEmail: string;
   recipientName: string;
   mode: 'enabled' | 'reminder';
@@ -382,6 +425,7 @@ export const sendActivityNotificationEmail = async (
     macroName,
     dueDate,
     status,
+    leadDays = 1,
     recipientEmail,
     recipientName,
     mode,
@@ -389,15 +433,15 @@ export const sendActivityNotificationEmail = async (
   } = options;
 
   if (!recipientEmail || !validateEmail(recipientEmail)) {
-    const errorMsg = `Nenhum e-mail válido encontrado para o perfil "${recipientName || 'atual'}". Cadastre o e-mail em Controle de Acesso > Gestão de Usuários.`;
+    const errorMsg = `Nenhum e-mail válido selecionado para o perfil "${recipientName || 'atual'}". Informe ou selecione um e-mail válido.`;
     if (mode === 'enabled') {
-      showToast('E-mail do Perfil não Encontrado', errorMsg, true);
+      showToast('E-mail Inválido', errorMsg, true);
     }
     return { success: false, error: errorMsg };
   }
 
   const todayKey = new Date().toISOString().split('T')[0];
-  const dedupeKey = `activity_bell_${mode}_${activityId}_${recipientEmail.trim().toLowerCase()}_${todayKey}`;
+  const dedupeKey = `activity_bell_${mode}_${activityId}_${recipientEmail.trim().toLowerCase()}_${leadDays}d_${todayKey}`;
   if (mode === 'reminder' && localStorage.getItem(dedupeKey)) {
     return { success: true, sentAt: localStorage.getItem(dedupeKey) || undefined };
   }
@@ -406,11 +450,18 @@ export const sendActivityNotificationEmail = async (
     ? dueDate.split('-').reverse().join('/')
     : 'Sem prazo definido';
 
+  const leadLabel =
+    leadDays <= 0
+      ? 'No dia do prazo'
+      : leadDays === 1
+        ? '1 dia antes do prazo'
+        : `${leadDays} dias antes do prazo`;
+
   const originLabel = sourceType === 'microactivity' ? 'Microatividade de Projeto' : 'Atividade (Notas Rápidas)';
   const subject =
     mode === 'enabled'
-      ? `[AR CTVacinas] Notificação ativada: ${activityTitle}`
-      : `[AR CTVacinas - Lembrete] Atividade acompanhada: ${activityTitle}`;
+      ? `[AR CTVacinas] Notificação ativada (${leadLabel}): ${activityTitle}`
+      : `[AR CTVacinas - Lembrete] Atividade acompanhada (${leadLabel}): ${activityTitle}`;
 
   const bodyLines = [
     `Prezado(a) ${recipientName || 'Usuário'},`,
@@ -425,6 +476,8 @@ export const sendActivityNotificationEmail = async (
     ...(macroName ? [`• Macroatividade: ${macroName}`] : []),
     `• Status atual: ${status || 'Em andamento'}`,
     `• Prazo: ${dueDateFormatted}`,
+    `• Antecedência escolhida: ${leadLabel}`,
+    `• E-mail destinatário: ${recipientEmail.trim()}`,
     '',
     'Atenciosamente,',
     'Gestão Regulatória - CTVacinas'
@@ -467,7 +520,7 @@ export const sendActivityNotificationEmail = async (
 
   localStorage.setItem(dedupeKey, nowIso);
   if (mode === 'enabled') {
-    showToast('Notificação Ativada', `Alertas desta atividade serão enviados para ${recipientEmail.trim()}`);
+    showToast('Notificação Configurada', `${leadLabel} • ${recipientEmail.trim()}`);
   }
   return { success: true, sentAt: nowIso };
 };

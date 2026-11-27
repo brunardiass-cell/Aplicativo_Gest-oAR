@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { RegulatoryStandard, RegulatoryStandardStatus, RegulatoryStandardUpdateEntry, ActivityPlanTemplate, Project, RegulatorySubject, RegulatoryBlock, KnowledgeConcept, ConceptStandardLink } from '../types';
 import { 
   ShieldCheck, 
@@ -40,7 +40,9 @@ import {
   BellRing,
   RefreshCw,
   History,
-  AlertTriangle
+  AlertTriangle,
+  ArrowRight,
+  Link2
 } from 'lucide-react';
 
 interface RegulatoryStandardsManagerProps {
@@ -266,7 +268,39 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   const [viewLayout, setViewLayout] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'recentes' | 'nome' | 'status'>('recentes');
   const [updatesFilter, setUpdatesFilter] = useState<'todas' | 'destaque_1_ano' | 'vigente_alteracoes' | 'revogado'>('todas');
-  const [quickUpdateTargetId, setQuickUpdateTargetId] = useState<string>('');
+  const [quickUpdateSearch, setQuickUpdateSearch] = useState<string>('');
+  const [isQuickUpdateDropdownOpen, setIsQuickUpdateDropdownOpen] = useState<boolean>(false);
+  const [selectedUpdateCandidate, setSelectedUpdateCandidate] = useState<RegulatoryStandard | null>(null);
+  const quickUpdatePickerRef = useRef<HTMLDivElement>(null);
+
+  // Fluxo dedicado de Atualização de Norma (mantém a antiga + cria nova norma vinculada)
+  const [updatingStandard, setUpdatingStandard] = useState<RegulatoryStandard | null>(null);
+  const [oldNormNewStatus, setOldNormNewStatus] = useState<'vigente com alterações' | 'revogado'>('vigente com alterações');
+  const [oldNormObservation, setOldNormObservation] = useState<string>('');
+  const [updateFormError, setUpdateFormError] = useState<string | null>(null);
+  const [newNormForm, setNewNormForm] = useState<{
+    name: string;
+    type: string;
+    theme: string;
+    phase: string;
+    version: string;
+    summary: string;
+    documentLink: string;
+    notebookLMLink: string;
+    appliesTo: string;
+    keyNotes: string;
+  }>({
+    name: '',
+    type: 'RDC',
+    theme: '',
+    phase: '',
+    version: '1.0',
+    summary: '',
+    documentLink: '',
+    notebookLMLink: '',
+    appliesTo: '',
+    keyNotes: ''
+  });
 
   // Favorites
   const [favoriteIds, setFavoriteIds] = useState<string[]>(() => [
@@ -373,11 +407,155 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
 
   const currentUserKey = useMemo(() => normalizeUserKey(currentUserName), [currentUserName]);
 
-  const startEdit = (standard: RegulatoryStandard, asUpdate: boolean = false) => {
-    const normalizedInitialStatus: RegulatoryStandardStatus = asUpdate
-      ? (isRevokedStatus(standard.status) ? 'revogado' : 'vigente com alterações')
-      : standard.status;
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        quickUpdatePickerRef.current &&
+        !quickUpdatePickerRef.current.contains(event.target as Node)
+      ) {
+        setIsQuickUpdateDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
+  const activeDetailedStandard = useMemo(() => {
+    if (!detailedStandard) return null;
+    return standards.find(s => s.id === detailedStandard.id) || detailedStandard;
+  }, [detailedStandard, standards]);
+
+  const openStandardById = (targetId?: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!targetId) return;
+    const found = standards.find(s => s.id === targetId);
+    if (found) {
+      setDetailedStandard(found);
+    }
+  };
+
+  const startUpdateNorm = (standard: RegulatoryStandard) => {
+    setIsAdding(false);
+    setEditingId(null);
+    setUpdatingStandard(standard);
+    setOldNormNewStatus(isRevokedStatus(standard.status) ? 'revogado' : 'vigente com alterações');
+    setOldNormObservation('');
+    setUpdateDateInput(new Date().toISOString().split('T')[0]);
+    setUpdateFormError(null);
+    setNewNormForm({
+      name: '',
+      type: standard.type || 'RDC',
+      theme: standard.theme || '',
+      phase: standard.phase || '',
+      version: '1.0',
+      summary: '',
+      documentLink: '',
+      notebookLMLink: '',
+      appliesTo: standard.appliesTo || '',
+      keyNotes: ''
+    });
+    setIsQuickUpdateDropdownOpen(false);
+  };
+
+  const closeUpdateNorm = () => {
+    setUpdatingStandard(null);
+    setUpdateFormError(null);
+  };
+
+  const handleConfirmUpdateNorm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!updatingStandard) return;
+
+    const newName = newNormForm.name.trim();
+    const newTheme = newNormForm.theme.trim() || updatingStandard.theme || 'Normativa Regulatória';
+    const newSummary = newNormForm.summary.trim();
+
+    if (!newName) {
+      setUpdateFormError('Informe o nome da nova norma que está sendo cadastrada.');
+      return;
+    }
+    if (!newSummary) {
+      setUpdateFormError('Informe o resumo/diretrizes da nova norma.');
+      return;
+    }
+
+    const todayYmd = new Date().toISOString().split('T')[0];
+    const updateIso =
+      updateDateInput && updateDateInput !== todayYmd
+        ? new Date(`${updateDateInput}T12:00:00.000Z`).toISOString()
+        : new Date().toISOString();
+
+    const newStdId = `std_${Date.now()}`;
+    const defaultObs =
+      oldNormNewStatus === 'revogado'
+        ? `Revogada e substituída pela norma ${newName}.`
+        : `Alterada pela norma ${newName}.`;
+    const finalObs = oldNormObservation.trim() || defaultObs;
+
+    // 1. Criar o cadastro da NOVA norma (sem apagar a antiga)
+    const newStandard: RegulatoryStandard = {
+      id: newStdId,
+      name: newName,
+      type: newNormForm.type || updatingStandard.type || 'RDC',
+      theme: newTheme,
+      phase: newNormForm.phase || updatingStandard.phase || '',
+      relatedActivities: updatingStandard.relatedActivities || [],
+      version: newNormForm.version.trim() || '1.0',
+      status: 'vigente',
+      summary: newSummary,
+      documentLink: newNormForm.documentLink.trim(),
+      notebookLMLink: newNormForm.notebookLMLink.trim(),
+      keywords: updatingStandard.keywords || [],
+      appliesTo: newNormForm.appliesTo.trim() || updatingStandard.appliesTo || '',
+      linkedStandards: Array.from(
+        new Set([...(updatingStandard.linkedStandards || []), updatingStandard.name])
+      ),
+      keyNotes: newNormForm.keyNotes.trim(),
+      replacesStandardId: updatingStandard.id,
+      replacesStandardName: updatingStandard.name
+    };
+
+    // 2. Preservar a norma ANTIGA mudando apenas a classificação, observação, histórico e link para a nova
+    const historyEntry: RegulatoryStandardUpdateEntry = {
+      id: `upd_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      date: updateIso,
+      updatedBy: currentUserName,
+      previousStatus: updatingStandard.status,
+      newStatus: oldNormNewStatus,
+      summary: finalObs,
+      replacedByStandardId: newStdId,
+      replacedByStandardName: newName
+    };
+
+    const updatedOldStandard: RegulatoryStandard = {
+      ...updatingStandard,
+      status: oldNormNewStatus,
+      lastUpdatedAt: updateIso,
+      updatedBy: currentUserName,
+      updateSummary: finalObs,
+      previousStatus: updatingStandard.status,
+      replacedByStandardId: newStdId,
+      replacedByStandardName: newName,
+      updateHistory: [historyEntry, ...(updatingStandard.updateHistory || [])],
+      dismissedNotificationUsers: [] // Gera notificação de 7 dias para todos os usuários + destaque de 1 ano
+    };
+
+    onAddStandard(newStandard);
+    onUpdateStandard(updatedOldStandard);
+
+    setUpdatingStandard(null);
+    setUpdateFormError(null);
+    setSelectedUpdateCandidate(null);
+    setQuickUpdateSearch('');
+  };
+
+  const startEdit = (standard: RegulatoryStandard, asUpdate: boolean = false) => {
+    if (asUpdate) {
+      startUpdateNorm(standard);
+      return;
+    }
+
+    setUpdatingStandard(null);
     setFormData({
       name: standard.name,
       type: standard.type,
@@ -385,7 +563,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       phase: standard.phase,
       relatedActivities: standard.relatedActivities || [],
       version: standard.version,
-      status: normalizedInitialStatus,
+      status: standard.status,
       summary: standard.summary,
       documentLink: standard.documentLink || '',
       notebookLMLink: standard.notebookLMLink || '',
@@ -395,8 +573,8 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       keyNotes: standard.keyNotes || ''
     });
     setEditingId(standard.id);
-    setRegisterAsUpdate(asUpdate);
-    setUpdateSummaryInput(asUpdate ? '' : (standard.updateSummary || ''));
+    setRegisterAsUpdate(false);
+    setUpdateSummaryInput(standard.updateSummary || '');
     setUpdateDateInput(new Date().toISOString().split('T')[0]);
     setIsAdding(true);
   };
@@ -549,7 +727,8 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
           s.name.toLowerCase().includes(term) ||
           s.theme.toLowerCase().includes(term) ||
           s.summary.toLowerCase().includes(term) ||
-          (s.updateSummary || '').toLowerCase().includes(term);
+          (s.updateSummary || '').toLowerCase().includes(term) ||
+          (s.replacedByStandardName || '').toLowerCase().includes(term);
         if (!matches) return false;
       }
       if (updatesFilter === 'destaque_1_ano') return isHighlightedOneYear(s.lastUpdatedAt);
@@ -558,6 +737,19 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       return true;
     });
   }, [updatedStandardsList, searchTerm, updatesFilter]);
+
+  const quickUpdateFilteredStandards = useMemo(() => {
+    const term = quickUpdateSearch.trim().toLowerCase();
+    const list = term
+      ? standards.filter(s =>
+          s.name.toLowerCase().includes(term) ||
+          (s.type || '').toLowerCase().includes(term) ||
+          (s.theme || '').toLowerCase().includes(term) ||
+          (s.summary || '').toLowerCase().includes(term)
+        )
+      : standards;
+    return [...list].sort((a, b) => a.name.localeCompare(b.name));
+  }, [standards, quickUpdateSearch]);
 
   // Filtered standards calculation
   const filteredStandards = useMemo(() => {
@@ -801,7 +993,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
   };
 
   return (
-    <div className="-m-4 sm:-m-10 bg-slate-50 min-h-screen flex flex-col lg:flex-row text-slate-800 font-sans">
+    <div className="-m-4 sm:-m-10 bg-slate-50 min-h-screen flex flex-col lg:flex-row text-slate-800 font-sans overflow-x-clip">
       
       {/* 1. LEFT SIDEBAR (COLLAPSIBLE DEDICATED NORMAS SIDEBAR) */}
       <aside className={`w-full ${isSidebarCollapsed ? 'lg:w-20 p-3' : 'lg:w-64 p-5'} bg-white border-r border-slate-200/90 flex-shrink-0 flex flex-col justify-between space-y-6 transition-all duration-300 relative`}>
@@ -854,7 +1046,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
             )}
 
             <button
-              onClick={() => { setActiveNav('post_its'); setIsAdding(false); }}
+              onClick={() => { setActiveNav('post_its'); setIsAdding(false); setUpdatingStandard(null); }}
               title="Post-its de Conhecimento"
               className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3.5 py-2.5'} rounded-2xl text-xs font-extrabold transition-all text-left ${
                 activeNav === 'post_its'
@@ -869,7 +1061,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
             </button>
 
             <button
-              onClick={() => { setActiveNav('acervo'); setSelectedCategory('todas'); setIsAdding(false); }}
+              onClick={() => { setActiveNav('acervo'); setSelectedCategory('todas'); setIsAdding(false); setUpdatingStandard(null); }}
               title="Acervo de Normas"
               className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3.5 py-2.5'} rounded-2xl text-xs font-extrabold transition-all text-left ${
                 activeNav === 'acervo'
@@ -884,7 +1076,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
             </button>
 
             <button
-              onClick={() => { setActiveNav('favoritos'); setIsAdding(false); }}
+              onClick={() => { setActiveNav('favoritos'); setIsAdding(false); setUpdatingStandard(null); }}
               title="Favoritos"
               className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3.5 py-2.5'} rounded-2xl text-xs font-extrabold transition-all text-left ${
                 activeNav === 'favoritos'
@@ -899,7 +1091,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
             </button>
 
             <button
-              onClick={() => { setActiveNav('atualizacoes'); setIsAdding(false); }}
+              onClick={() => { setActiveNav('atualizacoes'); setIsAdding(false); setUpdatingStandard(null); }}
               title="Atualizações de Normas"
               className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3.5 py-2.5'} rounded-2xl text-xs font-extrabold transition-all text-left relative ${
                 activeNav === 'atualizacoes'
@@ -954,8 +1146,9 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                   title={cat.label}
                   onClick={() => {
                     setSelectedCategory(isSelected ? 'todas' : cat.id);
-                    if (activeNav === 'post_its') setActiveNav('acervo');
+                    if (activeNav === 'post_its' || activeNav === 'atualizacoes') setActiveNav('acervo');
                     setIsAdding(false);
+                    setUpdatingStandard(null);
                   }}
                   className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2 py-2.5' : 'justify-between px-3.5 py-2'} rounded-2xl text-xs font-bold transition-all text-left ${
                     isSelected 
@@ -1000,15 +1193,15 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       </aside>
 
       {/* 2. MAIN CONTENT AREA */}
-      <main className="flex-1 p-4 sm:p-6 space-y-4 max-w-7xl">
+      <main className="flex-1 min-w-0 w-full p-4 sm:p-6 space-y-4 max-w-7xl">
         
         {/* Header Banner matching mockup image */}
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100 shadow-xs flex-shrink-0">
               <ShieldCheck size={22} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
                 Gestão de Normas Regulatórias
               </h1>
@@ -1019,7 +1212,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
           </div>
 
           <button
-            onClick={() => { setIsAdding(true); setEditingId(null); resetForm(); }}
+            onClick={() => { setUpdatingStandard(null); setIsAdding(true); setEditingId(null); resetForm(); }}
             className="flex items-center justify-center gap-2 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-md shadow-teal-900/10 active:scale-95 flex-shrink-0"
           >
             <Plus size={15} /> Nova Norma
@@ -1029,7 +1222,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
 
 
         {/* NOTIFICAÇÕES DE ATUALIZAÇÕES DE NORMAS (7 DIAS OU ATÉ O USUÁRIO APAGAR) */}
-        {!isAdding && activeUpdateNotifications.length > 0 && (
+        {!isAdding && !updatingStandard && activeUpdateNotifications.length > 0 && (
           <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 shadow-xs space-y-3 animate-in fade-in duration-200">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2.5">
@@ -1099,7 +1292,17 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                      {std.replacedByStandardId && (
+                        <button
+                          type="button"
+                          onClick={(e) => openStandardById(std.replacedByStandardId, e)}
+                          className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-bold transition flex items-center gap-1"
+                          title={`Abrir nova norma: ${std.replacedByStandardName || ''}`}
+                        >
+                          Nova norma <ArrowRight size={12} />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setDetailedStandard(std)}
@@ -1124,7 +1327,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
         )}
 
         {/* Search & Filter Bar */}
-        {!isAdding && activeNav !== 'post_its' && activeNav !== 'atualizacoes' && (
+        {!isAdding && !updatingStandard && activeNav !== 'post_its' && activeNav !== 'atualizacoes' && (
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -1159,8 +1362,255 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
           </div>
         )}
 
-        {/* 3. NEW / EDIT NORMA FORM */}
-        {isAdding ? (
+        {/* 2.5 DEDICATED UPDATE NORM FORM (PRESERVA NORMA ANTIGA + CRIA NOVA NORMA) */}
+        {updatingStandard ? (
+          <div className="bg-white rounded-3xl border border-amber-200 shadow-xl overflow-hidden animate-in fade-in duration-200">
+            <div className="p-5 sm:p-6 border-b border-amber-100 bg-amber-50/60 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-amber-100 text-amber-700 border border-amber-200/80 shrink-0">
+                    <RefreshCw size={16} />
+                  </div>
+                  <h2 className="font-black text-slate-900 uppercase tracking-tight text-sm sm:text-base">
+                    Registrar Atualização de Norma Regulatória
+                  </h2>
+                </div>
+                <p className="text-xs text-slate-600 font-medium mt-1.5">
+                  A norma antiga será <strong>mantida no acervo</strong> com a nova classificação, observação de alteração e link direto para a nova norma que será cadastrada abaixo.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeUpdateNorm}
+                className="p-2 text-slate-400 hover:bg-white rounded-full transition shrink-0"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmUpdateNorm} className="p-5 sm:p-6 space-y-6">
+              {updateFormError && (
+                <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
+                  <AlertTriangle size={15} className="shrink-0" />
+                  <span>{updateFormError}</span>
+                </div>
+              )}
+
+              {/* PARTE 1: NORMA ANTIGA (PRESERVADA) */}
+              <div className="p-4 sm:p-5 rounded-2xl border border-amber-200 bg-amber-50/40 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-amber-900 flex items-center gap-1.5">
+                    <History size={14} /> 1. Norma Antiga (será mantida no acervo)
+                  </span>
+                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-200">
+                    Notificação 7 dias • Destaque 1 ano
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-white border border-amber-200/70 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${getStatusBadge(updatingStandard.status).className}`}>
+                      Status atual: {getStatusBadge(updatingStandard.status).label}
+                    </span>
+                    <span className="text-[10px] font-black uppercase text-slate-500">{updatingStandard.type}</span>
+                  </div>
+                  <p className="text-xs sm:text-sm font-black text-slate-900 uppercase">{updatingStandard.name}</p>
+                  {updatingStandard.theme && (
+                    <p className="text-[11px] text-slate-500 font-medium">{updatingStandard.theme}</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2 space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                      Nova Classificação da Norma Antiga
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setOldNormNewStatus('vigente com alterações')}
+                        className={`px-3.5 py-2.5 rounded-xl border text-xs font-extrabold transition text-left flex items-center justify-between ${
+                          oldNormNewStatus === 'vigente com alterações'
+                            ? 'bg-amber-100 border-amber-400 text-amber-950 ring-2 ring-amber-400/30'
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span>Vigente com Alterações</span>
+                        {oldNormNewStatus === 'vigente com alterações' && <CheckCircle2 size={15} className="text-amber-700 shrink-0" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOldNormNewStatus('revogado')}
+                        className={`px-3.5 py-2.5 rounded-xl border text-xs font-extrabold transition text-left flex items-center justify-between ${
+                          oldNormNewStatus === 'revogado'
+                            ? 'bg-rose-100 border-rose-400 text-rose-900 ring-2 ring-rose-400/30'
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span>Revogado</span>
+                        {oldNormNewStatus === 'revogado' && <CheckCircle2 size={15} className="text-rose-700 shrink-0" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                      Data da Atualização
+                    </label>
+                    <input
+                      type="date"
+                      value={updateDateInput}
+                      onChange={e => setUpdateDateInput(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-amber-200 bg-white text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-amber-400/30"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                    Observação da Alteração (ficará registrada na norma antiga)
+                  </label>
+                  <input
+                    type="text"
+                    value={oldNormObservation}
+                    onChange={e => setOldNormObservation(e.target.value)}
+                    placeholder="Ex: Alterada nos artigos de estabilidade pela nova RDC (se vazio, será preenchido automaticamente)"
+                    className="w-full px-4 py-2.5 rounded-xl border border-amber-200 bg-white text-xs font-medium text-slate-800 outline-none focus:ring-2 focus:ring-amber-400/30"
+                  />
+                </div>
+              </div>
+
+              {/* PARTE 2: CADASTRO DA NOVA NORMA */}
+              <div className="p-4 sm:p-5 rounded-2xl border border-emerald-200 bg-emerald-50/30 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-emerald-900 flex items-center gap-1.5">
+                    <Plus size={14} /> 2. Cadastro da Nova Norma (será criada como Vigente)
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                    <Link2 size={11} /> Vinculada automaticamente à norma antiga
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                      Nome da Nova Norma *
+                    </label>
+                    <input
+                      required
+                      value={newNormForm.name}
+                      onChange={e => { setNewNormForm(prev => ({ ...prev, name: e.target.value })); setUpdateFormError(null); }}
+                      placeholder="Ex: RDC Nº 948, de 12 de dezembro de 2024"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                      Tipo da Nova Norma
+                    </label>
+                    <select
+                      value={newNormForm.type}
+                      onChange={e => setNewNormForm(prev => ({ ...prev, type: e.target.value }))}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
+                    >
+                      <option value="RDC">RDC</option>
+                      <option value="Guia">Guia</option>
+                      <option value="IN">Instrução Normativa (IN)</option>
+                      <option value="ICH">ICH</option>
+                      <option value="Farmacopeia">Farmacopeia</option>
+                      <option value="Manual">Manual / Outros</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                      Tema / Assunto Geral *
+                    </label>
+                    <input
+                      required
+                      value={newNormForm.theme}
+                      onChange={e => setNewNormForm(prev => ({ ...prev, theme: e.target.value }))}
+                      placeholder="Ex: Registro de Produtos Biológicos"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                      Versão / Edição
+                    </label>
+                    <input
+                      value={newNormForm.version}
+                      onChange={e => setNewNormForm(prev => ({ ...prev, version: e.target.value }))}
+                      placeholder="Ex: 1.0 ou 2026"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                    Resumo das Diretrizes da Nova Norma *
+                  </label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={newNormForm.summary}
+                    onChange={e => { setNewNormForm(prev => ({ ...prev, summary: e.target.value })); setUpdateFormError(null); }}
+                    placeholder="Descreva os principais requisitos e mudanças trazidas pela nova norma..."
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                      Link do Documento Oficial
+                    </label>
+                    <input
+                      type="url"
+                      value={newNormForm.documentLink}
+                      onChange={e => setNewNormForm(prev => ({ ...prev, documentLink: e.target.value }))}
+                      placeholder="https://..."
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                      Link do Caderno NotebookLM
+                    </label>
+                    <input
+                      type="url"
+                      value={newNormForm.notebookLMLink}
+                      onChange={e => setNewNormForm(prev => ({ ...prev, notebookLMLink: e.target.value }))}
+                      placeholder="https://notebooklm.google.com/..."
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition outline-none text-xs font-medium"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap justify-end gap-3 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={closeUpdateNorm}
+                  className="px-5 py-2.5 border border-slate-200 text-slate-600 rounded-2xl font-bold text-xs uppercase tracking-wider hover:bg-slate-50 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-teal-800 hover:bg-teal-900 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-md transition"
+                >
+                  <Save size={15} /> Salvar Atualização e Cadastrar Nova Norma
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : /* 3. NEW / EDIT NORMA FORM */
+        isAdding ? (
           <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xl overflow-hidden animate-in fade-in duration-300">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
               <h2 className="font-black text-slate-800 uppercase tracking-tight flex items-center gap-2 text-base">
@@ -1256,9 +1706,21 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                         Registrar como Atualização de Norma
                       </span>
                     </label>
-                    <span className="text-[10px] font-bold text-amber-800 bg-amber-100/80 px-2.5 py-0.5 rounded-full border border-amber-200">
-                      Notificação por 7 dias • Destaque por 1 ano
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const existing = standards.find(s => s.id === editingId);
+                          if (existing) startUpdateNorm(existing);
+                        }}
+                        className="px-3 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold transition flex items-center gap-1"
+                      >
+                        <Plus size={12} /> Cadastrar nova norma preservando esta
+                      </button>
+                      <span className="text-[10px] font-bold text-amber-800 bg-amber-100/80 px-2.5 py-0.5 rounded-full border border-amber-200">
+                        Notificação 7 dias • Destaque 1 ano
+                      </span>
+                    </div>
                   </div>
 
                   {registerAsUpdate && (
@@ -1596,38 +2058,112 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
               </div>
             </div>
 
-            {/* Ação rápida: registrar atualização em qualquer norma existente */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs flex flex-col md:flex-row items-stretch md:items-center gap-3">
-              <div className="flex-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5 shrink-0">
+            {/* Ação rápida: pesquisar e selecionar norma do acervo para atualizar (sem rolagem horizontal) */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs space-y-2.5 w-full min-w-0">
+              <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3 w-full min-w-0">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 flex items-center gap-1.5 shrink-0">
                   <RefreshCw size={14} className="text-amber-600" />
                   Registrar atualização:
                 </span>
-                <select
-                  value={quickUpdateTargetId}
-                  onChange={e => setQuickUpdateTargetId(e.target.value)}
-                  className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-teal-500/20"
+
+                <div ref={quickUpdatePickerRef} className="relative flex-1 min-w-0">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={15} />
+                  <input
+                    type="text"
+                    value={quickUpdateSearch}
+                    onFocus={() => setIsQuickUpdateDropdownOpen(true)}
+                    onChange={e => {
+                      setQuickUpdateSearch(e.target.value);
+                      setIsQuickUpdateDropdownOpen(true);
+                      if (selectedUpdateCandidate && e.target.value !== selectedUpdateCandidate.name) {
+                        setSelectedUpdateCandidate(null);
+                      }
+                    }}
+                    placeholder="Pesquisar norma do acervo por nome, número, tipo ou tema..."
+                    className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-amber-400/30 focus:border-amber-400 transition"
+                  />
+                  {(quickUpdateSearch || selectedUpdateCandidate) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickUpdateSearch('');
+                        setSelectedUpdateCandidate(null);
+                        setIsQuickUpdateDropdownOpen(true);
+                      }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 rounded-lg"
+                      title="Limpar busca"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+
+                  {isQuickUpdateDropdownOpen && (
+                    <div className="absolute left-0 right-0 top-full mt-1.5 z-30 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-64 overflow-y-auto divide-y divide-slate-100">
+                      {quickUpdateFilteredStandards.length === 0 ? (
+                        <div className="p-4 text-center text-xs text-slate-400 font-medium">
+                          Nenhuma norma encontrada para "{quickUpdateSearch}".
+                        </div>
+                      ) : (
+                        quickUpdateFilteredStandards.map(s => {
+                          const badge = getStatusBadge(s.status);
+                          const isSelected = selectedUpdateCandidate?.id === s.id;
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedUpdateCandidate(s);
+                                setQuickUpdateSearch(s.name);
+                                setIsQuickUpdateDropdownOpen(false);
+                              }}
+                              className={`w-full px-3.5 py-2.5 text-left transition flex items-center justify-between gap-2 ${
+                                isSelected ? 'bg-amber-50/80' : 'hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-slate-800 truncate">{s.name}</p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] font-black uppercase text-slate-400">{s.type}</span>
+                                  {s.theme && (
+                                    <span className="text-[10px] text-slate-500 truncate">• {s.theme}</span>
+                                  )}
+                                </div>
+                              </div>
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border shrink-0 ${badge.className}`}>
+                                {badge.label}
+                              </span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={!selectedUpdateCandidate}
+                  onClick={() => {
+                    if (selectedUpdateCandidate) {
+                      startUpdateNorm(selectedUpdateCandidate);
+                    }
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 shrink-0"
                 >
-                  <option value="">Selecione uma norma do acervo para atualizar...</option>
-                  {standards.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
+                  <RefreshCw size={14} /> Atualizar Norma
+                </button>
               </div>
-              <button
-                type="button"
-                disabled={!quickUpdateTargetId}
-                onClick={() => {
-                  const target = standards.find(s => s.id === quickUpdateTargetId);
-                  if (target) {
-                    startEdit(target, true);
-                    setQuickUpdateTargetId('');
-                  }
-                }}
-                className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-1.5 shrink-0"
-              >
-                <RefreshCw size={14} /> Atualizar Norma
-              </button>
+
+              {selectedUpdateCandidate && (
+                <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-amber-50/70 border border-amber-200/80 text-[11px]">
+                  <span className="text-amber-950 font-semibold truncate min-w-0">
+                    Norma selecionada: <strong className="font-black">{selectedUpdateCandidate.name}</strong>
+                  </span>
+                  <span className="text-amber-800 font-bold shrink-0">
+                    Clique em "Atualizar Norma" para manter esta e cadastrar a nova
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Busca + Filtros da aba de atualizações */}
@@ -1720,9 +2256,22 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                           <p className="text-xs text-slate-600 font-medium">
                             {std.updateSummary || std.theme || std.summary}
                           </p>
+                          {std.replacedByStandardId && (
+                            <div className="pt-1">
+                              <button
+                                type="button"
+                                onClick={(e) => openStandardById(std.replacedByStandardId, e)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold transition max-w-full"
+                              >
+                                <Link2 size={12} className="shrink-0" />
+                                <span className="truncate">Ir para nova norma: {std.replacedByStandardName || 'Ver nova norma'}</span>
+                                <ArrowRight size={12} className="shrink-0" />
+                              </button>
+                            </div>
+                          )}
                         </div>
 
-                        <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                        <div className="flex flex-wrap items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
                           {hasActiveNotif && (
                             <button
                               type="button"
@@ -1735,7 +2284,7 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                           )}
                           <button
                             type="button"
-                            onClick={() => startEdit(std, true)}
+                            onClick={() => startUpdateNorm(std)}
                             className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-bold transition flex items-center gap-1"
                           >
                             <RefreshCw size={12} /> Atualizar
@@ -1935,9 +2484,9 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                                 <Star size={16} className={isFav ? "fill-amber-400 text-amber-400" : ""} />
                               </button>
                               <button 
-                                onClick={() => startEdit(std, true)}
+                                onClick={() => startUpdateNorm(std)}
                                 className="p-1 text-slate-300 hover:text-amber-600 transition"
-                                title="Registrar atualização da norma (Revogado ou Vigente com Alterações)"
+                                title="Registrar atualização da norma (preserva esta e cria a nova norma)"
                               >
                                 <RefreshCw size={14} />
                               </button>
@@ -1964,9 +2513,39 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                           </h4>
 
                           {/* Summary */}
-                          <p className="text-xs text-slate-500 font-medium leading-relaxed line-clamp-2 mb-4">
-                            {std.updateSummary && isHighlighted ? std.updateSummary : (std.theme || std.summary)}
+                          <p className="text-xs text-slate-500 font-medium leading-relaxed line-clamp-2 mb-3">
+                            {std.updateSummary && (isHighlighted || std.replacedByStandardId) ? std.updateSummary : (std.theme || std.summary)}
                           </p>
+
+                          {/* Link direto para a nova norma (quando esta norma foi alterada/revogada) */}
+                          {std.replacedByStandardId && (
+                            <button
+                              type="button"
+                              onClick={(e) => openStandardById(std.replacedByStandardId, e)}
+                              className="mb-3 w-full px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold transition flex items-center justify-between gap-2 text-left"
+                            >
+                              <span className="truncate flex items-center gap-1.5">
+                                <Link2 size={12} className="shrink-0" />
+                                <span className="truncate">Nova norma: {std.replacedByStandardName || 'Abrir'}</span>
+                              </span>
+                              <ArrowRight size={12} className="shrink-0" />
+                            </button>
+                          )}
+
+                          {/* Link reverso para a norma anterior (quando esta norma substitui/atualiza uma antiga) */}
+                          {std.replacesStandardId && (
+                            <button
+                              type="button"
+                              onClick={(e) => openStandardById(std.replacesStandardId, e)}
+                              className="mb-3 w-full px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-bold transition flex items-center justify-between gap-2 text-left"
+                            >
+                              <span className="truncate flex items-center gap-1.5">
+                                <History size={12} className="shrink-0 text-slate-400" />
+                                <span className="truncate">Atualiza: {std.replacesStandardName || 'Norma anterior'}</span>
+                              </span>
+                              <ChevronRight size={12} className="shrink-0 text-slate-400" />
+                            </button>
+                          )}
                         </div>
 
                         {/* Footer Date */}
@@ -2156,21 +2735,21 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
       )}
 
       {/* 4. DETAILED STANDARD VIEW MODAL */}
-      {detailedStandard && (
+      {activeDetailedStandard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-2xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${getStatusBadge(detailedStandard.status).className}`}>
-                    {getStatusBadge(detailedStandard.status).label}
+                  <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${getStatusBadge(activeDetailedStandard.status).className}`}>
+                    {getStatusBadge(activeDetailedStandard.status).label}
                   </span>
                   <span className="text-[10px] font-black uppercase text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-100">
-                    {detailedStandard.type}
+                    {activeDetailedStandard.type}
                   </span>
                 </div>
                 <h3 className="text-base font-black text-slate-900 uppercase tracking-tight mt-1.5">
-                  {detailedStandard.name}
+                  {activeDetailedStandard.name}
                 </h3>
               </div>
               <button onClick={() => setDetailedStandard(null)} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-full transition">
@@ -2179,49 +2758,82 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
             </div>
 
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-              {isHighlightedOneYear(detailedStandard.lastUpdatedAt) && (
-                <div className={`p-4 rounded-2xl border space-y-1.5 ${
-                  isRevokedStatus(detailedStandard.status)
+              {(isHighlightedOneYear(activeDetailedStandard.lastUpdatedAt) || activeDetailedStandard.replacedByStandardId) && (
+                <div className={`p-4 rounded-2xl border space-y-2.5 ${
+                  isRevokedStatus(activeDetailedStandard.status)
                     ? 'bg-rose-50/80 border-rose-200 text-rose-900'
                     : 'bg-amber-50/80 border-amber-200 text-amber-950'
                 }`}>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5">
-                      <RefreshCw size={13} /> Norma Atualizada em {formatDateBr(detailedStandard.lastUpdatedAt)}
-                    </span>
-                    <span className="text-[10px] font-bold opacity-85">
-                      Em destaque por 1 ano (até {getHighlightExpiryBr(detailedStandard.lastUpdatedAt)})
-                    </span>
+                  {activeDetailedStandard.lastUpdatedAt && (
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                        <RefreshCw size={13} /> Norma Atualizada em {formatDateBr(activeDetailedStandard.lastUpdatedAt)}
+                      </span>
+                      {isHighlightedOneYear(activeDetailedStandard.lastUpdatedAt) && (
+                        <span className="text-[10px] font-bold opacity-85">
+                          Em destaque por 1 ano (até {getHighlightExpiryBr(activeDetailedStandard.lastUpdatedAt)})
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {activeDetailedStandard.updateSummary && (
+                    <p className="text-xs font-medium">{activeDetailedStandard.updateSummary}</p>
+                  )}
+                  {activeDetailedStandard.updatedBy && (
+                    <p className="text-[11px] opacity-80">Registrado por: {activeDetailedStandard.updatedBy}</p>
+                  )}
+                  {activeDetailedStandard.replacedByStandardId && (
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => openStandardById(activeDetailedStandard.replacedByStandardId)}
+                        className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition shadow-xs"
+                      >
+                        <Link2 size={13} />
+                        <span>Ir para a nova norma: {activeDetailedStandard.replacedByStandardName || 'Abrir nova norma'}</span>
+                        <ArrowRight size={13} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeDetailedStandard.replacesStandardId && (
+                <div className="p-3.5 rounded-2xl border border-emerald-200 bg-emerald-50/60 flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-xs text-emerald-950 font-medium">
+                    Esta norma atualiza/substitui a norma anterior:{' '}
+                    <strong className="font-black">{activeDetailedStandard.replacesStandardName}</strong>
                   </div>
-                  {detailedStandard.updateSummary && (
-                    <p className="text-xs font-medium">{detailedStandard.updateSummary}</p>
-                  )}
-                  {detailedStandard.updatedBy && (
-                    <p className="text-[11px] opacity-80">Registrado por: {detailedStandard.updatedBy}</p>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => openStandardById(activeDetailedStandard.replacesStandardId)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-extrabold transition"
+                  >
+                    <History size={12} /> Ver norma anterior
+                  </button>
                 </div>
               )}
 
               <div>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Tema / Assunto Geral:</span>
-                <p className="text-xs font-bold text-teal-800 uppercase">{detailedStandard.theme}</p>
+                <p className="text-xs font-bold text-teal-800 uppercase">{activeDetailedStandard.theme}</p>
               </div>
 
               <div>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Resumo / Diretrizes:</span>
                 <p className="text-xs text-slate-600 font-medium leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                  {detailedStandard.summary}
+                  {activeDetailedStandard.summary}
                 </p>
               </div>
 
-              {detailedStandard.updateHistory && detailedStandard.updateHistory.length > 0 && (
+              {activeDetailedStandard.updateHistory && activeDetailedStandard.updateHistory.length > 0 && (
                 <div>
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 flex items-center gap-1">
                     <History size={12} /> Histórico de Atualizações
                   </span>
                   <div className="space-y-2">
-                    {detailedStandard.updateHistory.map(entry => (
-                      <div key={entry.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-xs space-y-1">
+                    {activeDetailedStandard.updateHistory.map(entry => (
+                      <div key={entry.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-xs space-y-1.5">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${getStatusBadge(entry.newStatus).className}`}>
                             {getStatusBadge(entry.newStatus).label}
@@ -2231,16 +2843,27 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
                           </span>
                         </div>
                         {entry.summary && <p className="text-slate-700 font-medium">{entry.summary}</p>}
+                        {entry.replacedByStandardId && (
+                          <button
+                            type="button"
+                            onClick={() => openStandardById(entry.replacedByStandardId)}
+                            className="inline-flex items-center gap-1.5 text-[11px] font-extrabold text-emerald-700 hover:text-emerald-900 hover:underline"
+                          >
+                            <Link2 size={11} />
+                            Ir para nova norma: {entry.replacedByStandardName || 'Abrir'}
+                            <ArrowRight size={11} />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {detailedStandard.documentLink && (
+              {activeDetailedStandard.documentLink && (
                 <div className="pt-2">
                   <a 
-                    href={detailedStandard.documentLink} 
+                    href={activeDetailedStandard.documentLink} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-teal-50 text-teal-800 hover:bg-teal-100 rounded-xl text-xs font-bold transition border border-teal-100"
@@ -2255,9 +2878,9 @@ const RegulatoryStandardsManager: React.FC<RegulatoryStandardsManagerProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  const target = detailedStandard;
+                  const target = activeDetailedStandard;
                   setDetailedStandard(null);
-                  startEdit(target, true);
+                  startUpdateNorm(target);
                 }}
                 className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl font-bold uppercase text-xs tracking-wider transition flex items-center gap-1.5"
               >

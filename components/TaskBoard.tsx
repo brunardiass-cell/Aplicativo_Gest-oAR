@@ -24,11 +24,12 @@ import { RetroactiveImportModal } from './RetroactiveImportModal';
 import { TaskCompletionModal } from './TaskCompletionModal';
 import { CriticalAlertModal } from './CriticalAlertModal';
 import { RegisterActionAsActivityModal } from './RegisterActionAsActivityModal';
+import { ActivityNotificationModal, ActivityNotificationConfig } from './ActivityNotificationModal';
 import {
   sendCriticalActivityAlert,
   cancelCriticalAlert,
   calculateAlertDate,
-  resolveProfileOwnerEmail,
+  resolveProfileCandidateEmails,
   sendActivityNotificationEmail
 } from '../services/emailService';
 import { 
@@ -338,44 +339,52 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
   // Campos específicos para Relatório no salvamento rápido
   const [quickReportReviewer, setQuickReportReviewer] = useState('');
   const [quickReportInReview, setQuickReportInReview] = useState(true);
-  const [quickNotifyEnabled, setQuickNotifyEnabled] = useState(false);
+  const [quickNotifyConfig, setQuickNotifyConfig] = useState<{
+    enabled: boolean;
+    leadDays: number;
+    recipientEmail: string;
+  }>({ enabled: false, leadDays: 1, recipientEmail: '' });
+  const [notificationModalTarget, setNotificationModalTarget] = useState<
+    | { mode: 'quick' }
+    | { mode: 'task'; task: Task }
+    | null
+  >(null);
 
   const profileOwnerName = selectedProfile?.name || (currentUser !== 'Todos' ? currentUser : 'Usuário');
-  const profileOwnerEmail = useMemo(
-    () => resolveProfileOwnerEmail(profileOwnerName, appUsers, activeUserEmail),
+  const candidateEmails = useMemo(
+    () => resolveProfileCandidateEmails(profileOwnerName, appUsers, activeUserEmail),
     [profileOwnerName, appUsers, activeUserEmail]
   );
+  const profileOwnerEmail = candidateEmails.suggestedEmail;
 
-  const handleToggleTaskNotification = (task: Task) => {
-    const nextEnabled = !task.emailNotificationEnabled;
-    const recipient = profileOwnerEmail || task.emailNotificationRecipient || '';
-    if (nextEnabled && !recipient) {
-      void sendActivityNotificationEmail({
-        activityId: task.id,
-        activityTitle: task.activity,
-        sourceType: 'task',
-        projectName: task.project,
-        dueDate: task.completionDate,
-        status: task.status,
-        recipientEmail: '',
-        recipientName: profileOwnerName,
-        mode: 'enabled'
+  const handleSaveNotificationModal = (config: ActivityNotificationConfig) => {
+    if (!notificationModalTarget) return;
+
+    if (notificationModalTarget.mode === 'quick') {
+      setQuickNotifyConfig({
+        enabled: config.enabled,
+        leadDays: config.leadDays,
+        recipientEmail: config.recipientEmail
       });
+      setNotificationModalTarget(null);
       return;
     }
 
+    const task = notificationModalTarget.task;
     const nowIso = new Date().toISOString();
     const updatedTask: Task = {
       ...task,
-      emailNotificationEnabled: nextEnabled,
-      emailNotificationRecipient: nextEnabled ? recipient : task.emailNotificationRecipient,
-      emailNotificationProfileName: nextEnabled ? profileOwnerName : task.emailNotificationProfileName,
-      emailNotificationEnabledAt: nextEnabled ? nowIso : undefined
+      emailNotificationEnabled: config.enabled,
+      emailNotificationLeadDays: config.leadDays,
+      emailNotificationRecipient: config.enabled ? config.recipientEmail : task.emailNotificationRecipient,
+      emailNotificationProfileName: config.enabled ? profileOwnerName : task.emailNotificationProfileName,
+      emailNotificationEnabledAt: config.enabled ? nowIso : undefined
     };
 
     onSaveTask(updatedTask);
+    setNotificationModalTarget(null);
 
-    if (nextEnabled) {
+    if (config.enabled) {
       void sendActivityNotificationEmail({
         activityId: updatedTask.id,
         activityTitle: updatedTask.activity,
@@ -383,7 +392,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         projectName: updatedTask.project,
         dueDate: updatedTask.completionDate,
         status: updatedTask.status,
-        recipientEmail: recipient,
+        leadDays: config.leadDays,
+        recipientEmail: config.recipientEmail,
         recipientName: profileOwnerName,
         mode: 'enabled'
       });
@@ -887,15 +897,16 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
       isRegulatoryContribution: isMeeting ? (quickMeetingLinkedStandards.length > 0) : false,
       fileLinks: isMeeting ? quickMeetingFileLinks : undefined,
       linkedRegulatoryStandardIds: isMeeting ? quickMeetingLinkedStandards : undefined,
-      emailNotificationEnabled: quickNotifyEnabled && Boolean(profileOwnerEmail),
-      emailNotificationRecipient: quickNotifyEnabled && profileOwnerEmail ? profileOwnerEmail : undefined,
-      emailNotificationProfileName: quickNotifyEnabled && profileOwnerEmail ? profileOwnerName : undefined,
-      emailNotificationEnabledAt: quickNotifyEnabled && profileOwnerEmail ? now.toISOString() : undefined
+      emailNotificationEnabled: quickNotifyConfig.enabled && Boolean(quickNotifyConfig.recipientEmail || profileOwnerEmail),
+      emailNotificationLeadDays: quickNotifyConfig.enabled ? quickNotifyConfig.leadDays : undefined,
+      emailNotificationRecipient: quickNotifyConfig.enabled ? (quickNotifyConfig.recipientEmail || profileOwnerEmail) : undefined,
+      emailNotificationProfileName: quickNotifyConfig.enabled ? profileOwnerName : undefined,
+      emailNotificationEnabledAt: quickNotifyConfig.enabled ? now.toISOString() : undefined
     };
 
     onSaveTask(newTask);
 
-    if (quickNotifyEnabled) {
+    if (quickNotifyConfig.enabled) {
       void sendActivityNotificationEmail({
         activityId: newTask.id,
         activityTitle: newTask.activity,
@@ -903,7 +914,8 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         projectName: newTask.project,
         dueDate: newTask.completionDate,
         status: newTask.status,
-        recipientEmail: profileOwnerEmail,
+        leadDays: quickNotifyConfig.leadDays,
+        recipientEmail: quickNotifyConfig.recipientEmail || profileOwnerEmail,
         recipientName: profileOwnerName,
         mode: 'enabled'
       });
@@ -981,7 +993,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         actionItems: []
       }
     ]);
-    setQuickNotifyEnabled(false);
+    setQuickNotifyConfig({ enabled: false, leadDays: 1, recipientEmail: '' });
     setIsSavingQuick(false);
   };
 
@@ -2575,22 +2587,24 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setQuickNotifyEnabled(prev => !prev)}
+                    onClick={() => setNotificationModalTarget({ mode: 'quick' })}
                     title={
-                      profileOwnerEmail
-                        ? quickNotifyEnabled
-                          ? `Notificação por e-mail ativada para ${profileOwnerEmail}`
-                          : `Ativar notificação por e-mail para ${profileOwnerEmail}`
-                        : 'Cadastre um e-mail para este perfil em Controle de Acesso para receber notificações'
+                      quickNotifyConfig.enabled
+                        ? `Notificação configurada (${quickNotifyConfig.leadDays}d antes) para ${quickNotifyConfig.recipientEmail || profileOwnerEmail}. Clique para editar.`
+                        : 'Configurar notificação por e-mail (antecedência e destinatário)'
                     }
                     className={`px-3 py-2 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 ${
-                      quickNotifyEnabled
+                      quickNotifyConfig.enabled
                         ? 'bg-amber-50 border-amber-300 text-amber-700 shadow-2xs'
                         : 'bg-white border-slate-200 text-slate-500 hover:bg-amber-50/60 hover:text-amber-700 hover:border-amber-200'
                     }`}
                   >
-                    {quickNotifyEnabled ? <BellRing size={14} className="text-amber-600" /> : <Bell size={14} />}
-                    <span className="hidden sm:inline">{quickNotifyEnabled ? 'Notificar: Sim' : 'Notificar'}</span>
+                    {quickNotifyConfig.enabled ? <BellRing size={14} className="text-amber-600" /> : <Bell size={14} />}
+                    <span className="hidden sm:inline">
+                      {quickNotifyConfig.enabled
+                        ? `Notificar (${quickNotifyConfig.leadDays === 0 ? 'no dia' : `${quickNotifyConfig.leadDays}d`})`
+                        : 'Notificar'}
+                    </span>
                   </button>
 
                   <button
@@ -3026,20 +3040,27 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleToggleTaskNotification(task);
+                        setNotificationModalTarget({ mode: 'task', task });
                       }}
-                      className={`w-8 h-8 rounded-xl border flex items-center justify-center transition ${
+                      className={`h-8 rounded-xl border flex items-center justify-center gap-1 transition ${
                         task.emailNotificationEnabled
-                          ? 'bg-amber-50 border-amber-300 text-amber-600 hover:bg-amber-100 shadow-2xs'
-                          : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-600'
+                          ? 'px-2 bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100 shadow-2xs'
+                          : 'w-8 bg-slate-50 border-slate-200 text-slate-400 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-600'
                       }`}
                       title={
                         task.emailNotificationEnabled
-                          ? `Notificação ativa para ${task.emailNotificationRecipient || profileOwnerEmail || 'este perfil'}. Clique para desativar.`
-                          : `Ativar notificação por e-mail (${profileOwnerEmail || 'e-mail do perfil'})`
+                          ? `Notificação ativa (${task.emailNotificationLeadDays ?? 1}d antes) para ${task.emailNotificationRecipient || profileOwnerEmail || 'este perfil'}. Clique para configurar ou desativar.`
+                          : 'Configurar notificação por e-mail (1 dia, 7 dias ou outro)'
                       }
                     >
-                      {task.emailNotificationEnabled ? <BellRing size={15} /> : <Bell size={15} />}
+                      {task.emailNotificationEnabled ? (
+                        <>
+                          <BellRing size={14} className="text-amber-600 shrink-0" />
+                          <span className="text-[10px] font-black">{task.emailNotificationLeadDays ?? 1}d</span>
+                        </>
+                      ) : (
+                        <Bell size={15} />
+                      )}
                     </button>
 
                     {/* 4.5 VISUALIZAR ATIVIDADE, DESCRIÇÃO E NOTAS (OLHINHO) */}
@@ -3792,6 +3813,35 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({
         </div>
       )}
 
+      <ActivityNotificationModal
+        isOpen={Boolean(notificationModalTarget)}
+        activityTitle={
+          notificationModalTarget?.mode === 'task'
+            ? notificationModalTarget.task.activity
+            : quickText.trim() || 'Nova atividade em Notas Rápidas'
+        }
+        dueDate={notificationModalTarget?.mode === 'task' ? notificationModalTarget.task.completionDate : undefined}
+        initialEnabled={
+          notificationModalTarget?.mode === 'task'
+            ? Boolean(notificationModalTarget.task.emailNotificationEnabled)
+            : quickNotifyConfig.enabled
+        }
+        initialLeadDays={
+          notificationModalTarget?.mode === 'task'
+            ? notificationModalTarget.task.emailNotificationLeadDays ?? 1
+            : quickNotifyConfig.leadDays
+        }
+        initialEmail={
+          notificationModalTarget?.mode === 'task'
+            ? notificationModalTarget.task.emailNotificationRecipient || ''
+            : quickNotifyConfig.recipientEmail
+        }
+        suggestedEmail={candidateEmails.suggestedEmail}
+        profileEmails={candidateEmails.profileEmails}
+        allRegisteredEmails={candidateEmails.allRegisteredEmails}
+        onClose={() => setNotificationModalTarget(null)}
+        onSave={handleSaveNotificationModal}
+      />
     </div>
   );
 };

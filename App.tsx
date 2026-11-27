@@ -40,7 +40,8 @@ import ProjectGanttView from './components/ProjectGanttView';
 import ProjectActivityMap from './components/ProjectActivityMap';
 import PreSaveConfirmationModal from './components/PreSaveConfirmationModal';
 import ComiteGestorView from './components/ComiteGestorView';
-import { sendNewProjectEmail, resolveProfileOwnerEmail, sendActivityNotificationEmail } from './services/emailService';
+import { sendNewProjectEmail, resolveProfileCandidateEmails, sendActivityNotificationEmail } from './services/emailService';
+import type { ActivityNotificationConfig } from './components/ActivityNotificationModal';
 import { notificationService } from './services/notificationService';
 import { pushNotificationService, showLocalNotification } from './services/pushNotificationService';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
@@ -2580,35 +2581,22 @@ const App: React.FC = () => {
   const uniqueAssigneesForMicroTasks = useMemo(() => ['Todos', ...Array.from(new Set(allMicroTasksForUser.map(m => m.assignee)))], [allMicroTasksForUser]);
 
   const activeProfileOwnerName = selectedProfile?.name || account?.name || 'Usuário';
-  const activeProfileOwnerEmail = useMemo(
-    () => resolveProfileOwnerEmail(selectedProfile?.name, appUsers, account?.username),
+  const activeProfileEmailOptions = useMemo(
+    () => resolveProfileCandidateEmails(selectedProfile?.name, appUsers, account?.username),
     [selectedProfile?.name, appUsers, account?.username]
   );
+  const activeProfileOwnerEmail = activeProfileEmailOptions.suggestedEmail;
 
-  const handleToggleMicroNotification = useCallback((projectId: string, macroId: string, microId: string) => {
+  const handleSaveMicroNotification = useCallback((
+    projectId: string,
+    macroId: string,
+    microId: string,
+    config: ActivityNotificationConfig
+  ) => {
     const targetProject = projects.find(p => p.id === projectId);
     const targetMacro = targetProject?.macroActivities?.find(m => m.id === macroId);
     const targetMicro = targetMacro?.microActivities?.find(mic => mic.id === microId);
     if (!targetProject || !targetMacro || !targetMicro) return;
-
-    const nextEnabled = !targetMicro.emailNotificationEnabled;
-    const recipient = activeProfileOwnerEmail || targetMicro.emailNotificationRecipient || '';
-
-    if (nextEnabled && !recipient) {
-      void sendActivityNotificationEmail({
-        activityId: targetMicro.id,
-        activityTitle: targetMicro.name,
-        sourceType: 'microactivity',
-        projectName: targetProject.name,
-        macroName: targetMacro.name,
-        dueDate: targetMicro.dueDate,
-        status: targetMicro.status,
-        recipientEmail: '',
-        recipientName: activeProfileOwnerName,
-        mode: 'enabled'
-      });
-      return;
-    }
 
     const nowIso = new Date().toISOString();
     setProjects(prev =>
@@ -2624,10 +2612,11 @@ const App: React.FC = () => {
                 mic.id === microId
                   ? {
                       ...mic,
-                      emailNotificationEnabled: nextEnabled,
-                      emailNotificationRecipient: nextEnabled ? recipient : mic.emailNotificationRecipient,
-                      emailNotificationProfileName: nextEnabled ? activeProfileOwnerName : mic.emailNotificationProfileName,
-                      emailNotificationEnabledAt: nextEnabled ? nowIso : undefined
+                      emailNotificationEnabled: config.enabled,
+                      emailNotificationLeadDays: config.leadDays,
+                      emailNotificationRecipient: config.enabled ? config.recipientEmail : mic.emailNotificationRecipient,
+                      emailNotificationProfileName: config.enabled ? activeProfileOwnerName : mic.emailNotificationProfileName,
+                      emailNotificationEnabledAt: config.enabled ? nowIso : undefined
                     }
                   : mic
               )
@@ -2638,7 +2627,7 @@ const App: React.FC = () => {
     );
     setDataDirty();
 
-    if (nextEnabled) {
+    if (config.enabled) {
       void sendActivityNotificationEmail({
         activityId: targetMicro.id,
         activityTitle: targetMicro.name,
@@ -2647,27 +2636,36 @@ const App: React.FC = () => {
         macroName: targetMacro.name,
         dueDate: targetMicro.dueDate,
         status: targetMicro.status,
-        recipientEmail: recipient,
+        leadDays: config.leadDays,
+        recipientEmail: config.recipientEmail,
         recipientName: activeProfileOwnerName,
         mode: 'enabled'
       });
     }
-  }, [projects, activeProfileOwnerEmail, activeProfileOwnerName]);
+  }, [projects, activeProfileOwnerName]);
 
   // Lembretes automáticos diários para atividades/microatividades marcadas com o sininho pelo dono do perfil
   useEffect(() => {
-    if (!selectedProfile || !activeProfileOwnerEmail) return;
+    if (!selectedProfile) return;
+    const ownerEmailsLower = new Set(
+      [...activeProfileEmailOptions.profileEmails, ...activeProfileEmailOptions.allRegisteredEmails]
+        .filter(Boolean)
+        .map(e => e.toLowerCase())
+    );
+    if (ownerEmailsLower.size === 0) return;
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const twoDaysAhead = new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000);
 
     tasks.forEach(t => {
       if (t.deleted || !t.emailNotificationEnabled || t.status === 'Concluída' || t.status === 'Não Aplicável') return;
       const recipient = t.emailNotificationRecipient || activeProfileOwnerEmail;
-      if (recipient.toLowerCase() !== activeProfileOwnerEmail.toLowerCase()) return;
+      if (!recipient || !ownerEmailsLower.has(recipient.toLowerCase())) return;
       if (!t.completionDate) return;
+      const leadDays = typeof t.emailNotificationLeadDays === 'number' ? t.emailNotificationLeadDays : 1;
+      const triggerLimit = new Date(today.getTime() + Math.max(0, leadDays) * 24 * 60 * 60 * 1000);
       const due = new Date(t.completionDate + 'T00:00:00');
-      if (!Number.isNaN(due.getTime()) && due <= twoDaysAhead) {
+      if (!Number.isNaN(due.getTime()) && due <= triggerLimit) {
         void sendActivityNotificationEmail({
           activityId: t.id,
           activityTitle: t.activity,
@@ -2675,6 +2673,7 @@ const App: React.FC = () => {
           projectName: t.project,
           dueDate: t.completionDate,
           status: t.status,
+          leadDays,
           recipientEmail: recipient,
           recipientName: t.emailNotificationProfileName || activeProfileOwnerName,
           mode: 'reminder'
@@ -2688,10 +2687,12 @@ const App: React.FC = () => {
         (macro.microActivities || []).forEach(mic => {
           if (!mic.emailNotificationEnabled || mic.status === 'Concluído e aprovado') return;
           const recipient = mic.emailNotificationRecipient || activeProfileOwnerEmail;
-          if (recipient.toLowerCase() !== activeProfileOwnerEmail.toLowerCase()) return;
+          if (!recipient || !ownerEmailsLower.has(recipient.toLowerCase())) return;
           if (!mic.dueDate) return;
+          const leadDays = typeof mic.emailNotificationLeadDays === 'number' ? mic.emailNotificationLeadDays : 1;
+          const triggerLimit = new Date(today.getTime() + Math.max(0, leadDays) * 24 * 60 * 60 * 1000);
           const due = new Date(mic.dueDate + 'T00:00:00');
-          if (!Number.isNaN(due.getTime()) && due <= twoDaysAhead) {
+          if (!Number.isNaN(due.getTime()) && due <= triggerLimit) {
             void sendActivityNotificationEmail({
               activityId: mic.id,
               activityTitle: mic.name,
@@ -2700,6 +2701,7 @@ const App: React.FC = () => {
               macroName: macro.name,
               dueDate: mic.dueDate,
               status: mic.status,
+              leadDays,
               recipientEmail: recipient,
               recipientName: mic.emailNotificationProfileName || activeProfileOwnerName,
               mode: 'reminder'
@@ -2708,7 +2710,7 @@ const App: React.FC = () => {
         });
       });
     });
-  }, [selectedProfile, activeProfileOwnerEmail, activeProfileOwnerName, tasks, projects]);
+  }, [selectedProfile, activeProfileEmailOptions, activeProfileOwnerEmail, activeProfileOwnerName, tasks, projects]);
 
 
   if (isLoading) {
@@ -3225,8 +3227,10 @@ const App: React.FC = () => {
               <ProjectTaskBoard 
                 microTasks={microTasksForBoard} 
                 onNavigateToProject={handleNavigateToProject}
-                onToggleMicroNotification={handleToggleMicroNotification}
+                onSaveMicroNotification={handleSaveMicroNotification}
                 profileOwnerEmail={activeProfileOwnerEmail}
+                profileEmails={activeProfileEmailOptions.profileEmails}
+                allRegisteredEmails={activeProfileEmailOptions.allRegisteredEmails}
                 projectFilter={projTask_projectFilter}
                 onProjectFilterChange={setProjTask_projectFilter}
                 uniqueProjects={uniqueProjectsForMicroTasks}
